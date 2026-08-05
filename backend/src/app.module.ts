@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { RequestsModule } from './modules/requests/requests.module';
@@ -9,9 +10,13 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { UsersModule } from './modules/users/users.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { ChecklistExecutionsModule } from './modules/checklist-executions/checklist-executions.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     PrismaModule,
     EquipmentModule,
     RequestsModule,
@@ -22,6 +27,7 @@ import { ChecklistExecutionsModule } from './modules/checklist-executions/checkl
     UsersModule,
     AttachmentsModule,
     ChecklistExecutionsModule,
+    AuthModule,
   ],
 })
 export class AppModule {}
