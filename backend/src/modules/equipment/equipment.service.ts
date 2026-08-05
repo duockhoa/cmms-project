@@ -6,7 +6,7 @@ import { UpdateEquipmentDto } from './dto/equipment.dto';
 export class EquipmentService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(query?: { search?: string; category?: string; status?: string; location?: string }) {
+  async findAll(query?: { search?: string; category?: string; status?: string; location?: string; page?: string; limit?: string }) {
     const where: any = {};
     if (query?.search) {
       where.OR = [
@@ -19,6 +19,44 @@ export class EquipmentService {
     if (query?.status) where.status = query.status;
     if (query?.location) where.location = query.location;
 
+    // Check if pagination parameters are provided
+    if (query?.page || query?.limit) {
+      const page = Math.max(1, parseInt(query.page || '1', 10));
+      const limit = Math.max(1, parseInt(query.limit || '10', 10));
+      const skip = (page - 1) * limit;
+
+      const [total, data] = await Promise.all([
+        this.prisma.equipment.count({ where }),
+        this.prisma.equipment.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            schedules: {
+              where: { status: 'ACTIVE' },
+              orderBy: { nextDueDate: 'asc' },
+              take: 1,
+            },
+            _count: {
+              select: { requests: true, workOrders: true, schedules: true }
+            }
+          }
+        })
+      ]);
+
+      return {
+        data,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
+    }
+
+    // Default legacy behavior: return raw array
     return this.prisma.equipment.findMany({
       where,
       orderBy: { createdAt: 'desc' },

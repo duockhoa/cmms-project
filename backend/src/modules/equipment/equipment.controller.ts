@@ -12,8 +12,10 @@ export class EquipmentController {
     @Query('category') category?: string,
     @Query('status') status?: string,
     @Query('location') location?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.equipmentService.findAll({ search, category, status, location });
+    return this.equipmentService.findAll({ search, category, status, location, page, limit });
   }
 
   @Get(':id')
