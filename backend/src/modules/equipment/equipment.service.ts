@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UpdateEquipmentDto } from './dto/equipment.dto';
 
 @Injectable()
 export class EquipmentService {
@@ -82,9 +83,30 @@ export class EquipmentService {
     return this.prisma.equipment.create({ data });
   }
 
-  async update(id: string, data: any) {
-    await this.findOne(id);
-    return this.prisma.equipment.update({ where: { id }, data });
+  async update(id: string, data: UpdateEquipmentDto) {
+    const item = await this.prisma.equipment.findUnique({ where: { id } });
+    if (!item) throw new NotFoundException('Không tìm thấy thiết bị');
+
+    if (item.version !== data.expectedVersion) {
+      throw new ConflictException('Xung đột đồng thời: Thiết bị đã bị thay đổi bởi phiên làm việc khác.');
+    }
+
+    const { expectedVersion, ...updateData } = data;
+
+    try {
+      return await this.prisma.equipment.update({
+        where: { id, version: expectedVersion },
+        data: {
+          ...updateData,
+          version: { increment: 1 }
+        }
+      });
+    } catch (err: any) {
+      if (err.code === 'P2025') {
+        throw new ConflictException('Xung đột đồng thời: Thiết bị đã bị thay đổi bởi phiên làm việc khác.');
+      }
+      throw err;
+    }
   }
 
   async remove(id: string) {

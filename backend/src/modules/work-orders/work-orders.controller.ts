@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkOrdersService } from './work-orders.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { MaterialReturnDto } from '../inventory/dto/inventory.dto';
@@ -102,11 +103,13 @@ export class WorkOrdersController {
 
   // Material Return (Phase 3.6)
   @Post(':workOrderId/material-returns')
+  @UseGuards(JwtAuthGuard)
   materialReturn(
     @Param('workOrderId') workOrderId: string,
     @Body() body: MaterialReturnDto,
+    @Req() req: any,
   ) {
-    return this.inventoryService.materialReturn(workOrderId, body);
+    return this.inventoryService.materialReturn(workOrderId, body, req.user.id);
   }
 
   @Delete(':id')
