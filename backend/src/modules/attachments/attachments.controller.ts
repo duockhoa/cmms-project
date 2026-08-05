@@ -57,6 +57,17 @@ export class AttachmentsController {
     return res.sendFile(fileInfo.fullPath);
   }
 
+  @Get(':id/view')
+  async viewFile(@Param('id') id: string, @Res() res: Response) {
+    const fileInfo = await this.attachmentsService.downloadFile(id);
+    res.setHeader('Content-Type', fileInfo.fileType);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(fileInfo.originalName)}"`
+    );
+    return res.sendFile(fileInfo.fullPath);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteFile(
