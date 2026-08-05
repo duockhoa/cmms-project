@@ -1,0 +1,111 @@
+import { AnalyticsService } from './analytics.service';
+import { KpiEngineService } from './services/kpi-engine.service';
+import { AnalyticsAuditAdapter } from './adapters/analytics-audit.adapter';
+import { KpiQueryDto } from './dto/kpi-query.dto';
+export declare class AnalyticsController {
+    private readonly analyticsService;
+    private readonly kpiEngineService;
+    private readonly auditAdapter;
+    constructor(analyticsService: AnalyticsService, kpiEngineService: KpiEngineService, auditAdapter: AnalyticsAuditAdapter);
+    getDashboardSummary(): Promise<{
+        kpi: {
+            totalEquipment: number;
+            operationalEquipment: number;
+            underMaintenanceEquipment: number;
+            incidentEquipment: number;
+            pendingRequests: number;
+            activeWorkOrders: number;
+            completedWorkOrders: number;
+            totalCost: number;
+            lowStockItems: number;
+        };
+        recentRequests: ({
+            equipment: {
+                version: number;
+                id: string;
+                status: string;
+                createdAt: Date;
+                name: string;
+                updatedAt: Date;
+                code: string;
+                category: string;
+                location: string;
+                purchaseDate: Date | null;
+                warrantyPeriod: string | null;
+                image: string | null;
+                serialNumber: string | null;
+                specs: string | null;
+                notes: string | null;
+                currentOperatingHours: number;
+                isActive: boolean;
+            };
+        } & {
+            version: number;
+            id: string;
+            requestCode: string;
+            equipmentId: string;
+            title: string;
+            description: string;
+            priority: string;
+            status: string;
+            reporterName: string;
+            department: string | null;
+            images: string | null;
+            rejectedReason: string | null;
+            returnedReason: string | null;
+            cancelledReason: string | null;
+            cancelledAt: Date | null;
+            cancelledById: string | null;
+            createdAt: Date;
+        })[];
+        urgentWorkOrders: ({
+            equipment: {
+                version: number;
+                id: string;
+                status: string;
+                createdAt: Date;
+                name: string;
+                updatedAt: Date;
+                code: string;
+                category: string;
+                location: string;
+                purchaseDate: Date | null;
+                warrantyPeriod: string | null;
+                image: string | null;
+                serialNumber: string | null;
+                specs: string | null;
+                notes: string | null;
+                currentOperatingHours: number;
+                isActive: boolean;
+            };
+        } & {
+            totalCost: number;
+            version: number;
+            scheduledDueMeter: number | null;
+            id: string;
+            equipmentId: string;
+            title: string;
+            description: string;
+            priority: string;
+            status: string;
+            createdAt: Date;
+            orderCode: string;
+            requestId: string | null;
+            technicianName: string | null;
+            plannedStartDate: Date | null;
+            plannedEndDate: Date | null;
+            actualStartDate: Date | null;
+            actualEndDate: Date | null;
+            failureCause: string | null;
+            solution: string | null;
+            updatedAt: Date;
+            completedAt: Date | null;
+            verifiedAt: Date | null;
+            closedAt: Date | null;
+            scheduleId: string | null;
+            scheduledDueDate: Date | null;
+            generationKey: string | null;
+        })[];
+    }>;
+    getKpiSummary(query: KpiQueryDto, req: any): Promise<import("./contracts/analytics-response.contract").AnalyticsResponseDto<import("./services/kpi-engine.service").KpiSummaryData>>;
+}

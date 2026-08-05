@@ -1,0 +1,335 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum TechnicianStatus {
+  AVAILABLE
+  BUSY
+  ON_LEAVE
+}
+
+enum ChecklistExecutionStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum ChecklistExecutionResult {
+  PASSED
+  FAILED
+}
+
+enum ChecklistItemStatus {
+  NOT_CHECKED
+  PASSED
+  FAILED
+  NA
+}
+
+model User {
+  id                    String                 @id @default(uuid())
+  name                  String
+  email                 String                 @unique
+  role                  String                 @default("TECHNICIAN") // ADMIN, MANAGER, TECHNICIAN, OPERATOR
+  specialty             String?
+  status                TechnicianStatus       @default(AVAILABLE)
+  department            String?
+  avatar                String?
+  isActive              Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  version               Int                    @default(1)
+  checklistExecutions   ChecklistExecution[]   @relation("ExecutedByChecklists")
+  cancelledChecklists   ChecklistExecution[]   @relation("CancelledByChecklists")
+  attachments           Attachment[]
+  cancelledRequests     MaintenanceRequest[]   @relation("RequestCancelledBy")
+  workflowActions       WorkflowHistory[]      @relation("WorkflowActedBy")
+  inventoryTransactions InventoryTransaction[] @relation("InventoryTxActedBy")
+  createdSchedules      MaintenanceSchedule[]  @relation("ScheduleCreatedBy")
+  assignedSchedules     MaintenanceSchedule[]  @relation("ScheduleAssignedTechnician")
+  pausedSchedules       MaintenanceSchedule[]  @relation("SchedulePausedBy")
+  cancelledSchedules    MaintenanceSchedule[]  @relation("ScheduleCancelledBy")
+  scheduleHistories     ScheduleHistory[]      @relation("ScheduleHistoryActedBy")
+}
+
+model Equipment {
+  id                    String                @id @default(uuid())
+  code                  String                @unique
+  name                  String
+  category              String // Máy phay, Máy nén khí, Băng tải, Máy hàn...
+  location              String // Xưởng A, Xưởng B, Phòng sạch...
+  status                String                @default("OPERATIONAL") // OPERATIONAL, UNDER_MAINTENANCE, INCIDENT, DISCOMMISSIONED
+  purchaseDate          DateTime?
+  warrantyPeriod        String? // "24 tháng", "12 tháng"...
+  image                 String?
+  serialNumber          String?
+  specs                 String? // JSON or Text description
+  notes                 String?
+  currentOperatingHours Float                 @default(0)
+  isActive              Boolean               @default(true)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  version               Int                   @default(1)
+  requests              MaintenanceRequest[]
+  workOrders            WorkOrder[]
+  schedules             MaintenanceSchedule[]
+}
+
+model MaintenanceRequest {
+  id              String      @id @default(uuid())
+  requestCode     String      @unique
+  equipmentId     String
+  equipment       Equipment   @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  title           String
+  description     String
+  priority        String      @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status          String      @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED, CANCELLED
+  reporterName    String
+  department      String?
+  images          String? // [LEGACY] JSON array of image URLs
+  rejectedReason  String?
+  returnedReason  String?
+  cancelledReason String?
+  cancelledAt     DateTime?
+  cancelledById   String?
+  cancelledBy     User?       @relation("RequestCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  createdAt       DateTime    @default(now())
+  version         Int         @default(1)
+  workOrders      WorkOrder[]
+}
+
+model WorkOrder {
+  id                  String                 @id @default(uuid())
+  orderCode           String                 @unique
+  equipmentId         String
+  equipment           Equipment              @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  requestId           String?                @unique
+  request             MaintenanceRequest?    @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  title               String
+  description         String
+  priority            String                 @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status              String                 @default("PENDING") // PENDING, IN_PROGRESS, INSPECTION, COMPLETED, VERIFIED, CLOSED, CANCELLED
+  technicianName      String?
+  plannedStartDate    DateTime?
+  plannedEndDate      DateTime?
+  actualStartDate     DateTime?
+  actualEndDate       DateTime?
+  failureCause        String?
+  solution            String?
+  totalCost           Float                  @default(0)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  version             Int                    @default(1)
+  completedAt         DateTime?
+  verifiedAt          DateTime?
+  closedAt            DateTime?
+  scheduleId          String?
+  schedule            MaintenanceSchedule?   @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  scheduledDueDate    DateTime?
+  scheduledDueMeter   Float?
+  generationKey       String?                @unique
+  items               WorkOrderItem[]
+  transactions        InventoryTransaction[]
+  checklistExecutions ChecklistExecution[]
+  scheduleHistories   ScheduleHistory[]      @relation("ScheduleHistoryWorkOrder")
+
+  @@unique([scheduleId, scheduledDueDate])
+  @@index([scheduleId])
+}
+
+model WorkOrderItem {
+  id              String                 @id @default(uuid())
+  workOrderId     String
+  workOrder       WorkOrder              @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem          @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Int                    @default(1)
+  unitPrice       Float                  @default(0)
+  transactions    InventoryTransaction[]
+}
+
+model MaintenanceSchedule {
+  id                       String            @id @default(uuid())
+  scheduleCode             String            @unique
+  title                    String
+  description              String?
+  equipmentId              String
+  equipment                Equipment         @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+  status                   String            @default("DRAFT") // DRAFT, ACTIVE, PAUSED, COMPLETED, CANCELLED
+  frequencyType            String // DAILY, WEEKLY, MONTHLY, OPERATING_HOURS, QUARTERLY, YEARLY
+  frequencyInterval        Int               @default(1)
+  startDate                DateTime
+  nextDueDate              DateTime?
+  lastGeneratedAt          DateTime?
+  lastCompletedAt          DateTime?
+  endDate                  DateTime?
+  estimatedDurationMinutes Int?
+  defaultPriority          String            @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  assignedTechnicianId     String?
+  assignedTechnician       User?             @relation("ScheduleAssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
+  createdById              String
+  createdBy                User              @relation("ScheduleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  version                  Int               @default(1)
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  pausedAt                 DateTime?
+  pausedById               String?
+  pausedBy                 User?             @relation("SchedulePausedBy", fields: [pausedById], references: [id], onDelete: SetNull)
+  pauseReason              String?
+  cancelledAt              DateTime?
+  cancelledById            String?
+  cancelledBy              User?             @relation("ScheduleCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelReason             String?
+  leadTimeDays             Int               @default(0)
+  autoGenerate             Boolean           @default(true)
+  notes                    String?
+  checklistJson            String?
+  anchorDayOfMonth         Int?
+  lastTriggerMeter         Float?
+  nextDueMeter             Float?
+  workOrders               WorkOrder[]
+  history                  ScheduleHistory[]
+
+  @@index([status, nextDueDate])
+  @@index([equipmentId])
+  @@index([assignedTechnicianId])
+  @@index([frequencyType])
+}
+
+model ScheduleHistory {
+  id            String              @id @default(uuid())
+  scheduleId    String
+  schedule      MaintenanceSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  action        String // CREATE, UPDATE, ACTIVATE, PAUSE, RESUME, COMPLETE, CANCEL, GENERATE_WORK_ORDER
+  fromStatus    String?
+  toStatus      String?
+  reason        String?
+  actedById     String?
+  actedBy       User?               @relation("ScheduleHistoryActedBy", fields: [actedById], references: [id], onDelete: SetNull)
+  versionBefore Int?
+  versionAfter  Int?
+  workOrderId   String?
+  workOrder     WorkOrder?          @relation("ScheduleHistoryWorkOrder", fields: [workOrderId], references: [id], onDelete: SetNull)
+  createdAt     DateTime            @default(now())
+
+  @@index([scheduleId, createdAt])
+}
+
+model InventoryItem {
+  id           String                 @id @default(uuid())
+  itemCode     String                 @unique
+  name         String
+  category     String // Linh kiện điện, Cơ khí, Dầu mỡ, Vòng bi...
+  quantity     Int                    @default(0)
+  unit         String // Cái, Bộ, Lít, Kg...
+  minQuantity  Int                    @default(5)
+  unitPrice    Float                  @default(0)
+  location     String? // Kệ A1, Kho 2...
+  isActive     Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  version      Int                    @default(1)
+  workItems    WorkOrderItem[]
+  transactions InventoryTransaction[]
+}
+
+model WorkflowHistory {
+  id                   String   @id @default(uuid())
+  entityType           String
+  entityId             String
+  action               String
+  fromStatus           String?
+  toStatus             String?
+  performedById        String?
+  actedById            String?
+  actedBy              User?    @relation("WorkflowActedBy", fields: [actedById], references: [id], onDelete: SetNull)
+  comment              String?
+  reason               String?
+  metadata             String?
+  requestVersionBefore Int?
+  requestVersionAfter  Int?
+  createdAt            DateTime @default(now())
+}
+
+model InventoryTransaction {
+  id                     String         @id @default(uuid())
+  inventoryItemId        String
+  inventoryItem          InventoryItem  @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  workOrderId            String?
+  workOrder              WorkOrder?     @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  workOrderItemId        String?
+  workOrderItem          WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: SetNull)
+  transactionType        String // "ISSUE", "RETURN", "ADJUST_IN", "ADJUST_OUT"
+  quantity               Int
+  unitPrice              Float
+  totalAmount            Float
+  quantityBefore         Int
+  quantityAfter          Int
+  reason                 String?
+  reference              String?
+  referenceCode          String?
+  actedById              String?
+  actedBy                User?          @relation("InventoryTxActedBy", fields: [actedById], references: [id], onDelete: SetNull)
+  inventoryVersionBefore Int?
+  inventoryVersionAfter  Int?
+  clientTransactionId    String?        @unique
+  createdAt              DateTime       @default(now())
+  issueKey               String?        @unique
+}
+
+model Attachment {
+  id           String    @id @default(uuid())
+  entityType   String // "Equipment", "MaintenanceRequest", "WorkOrder", "ChecklistExecutionItem"
+  entityId     String // ID thực thể cha
+  fileName     String // Tên tệp lưu trữ UUID (ví dụ: a1b2c3d4.pdf)
+  originalName String // Tên gốc của tệp (ví dụ: huong_dan.pdf)
+  fileType     String // MIME type
+  fileSize     Int // Kích thước (bytes)
+  storagePath  String // Đường dẫn tương đối (uploads/a1b2c3d4.pdf)
+  uploadedById String? // ID của User tải lên
+  uploadedBy   User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  description  String? // Mô tả file
+  checksum     String // Mã SHA-256 hash của tệp để kiểm tra toàn vẹn
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  version      Int       @default(1)
+  createdAt    DateTime  @default(now())
+
+  @@index([entityType, entityId])
+}
+
+model ChecklistExecution {
+  id              String                    @id @default(uuid())
+  workOrderId     String
+  workOrder       WorkOrder                 @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  executedById    String?
+  executedBy      User?                     @relation("ExecutedByChecklists", fields: [executedById], references: [id], onDelete: SetNull)
+  cancelledById   String?
+  cancelledBy     User?                     @relation("CancelledByChecklists", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelledAt     DateTime?
+  cancelReason    String?
+  startedAt       DateTime                  @default(now())
+  completedAt     DateTime?
+  templateVersion Int                       @default(1)
+  status          ChecklistExecutionStatus  @default(DRAFT)
+  result          ChecklistExecutionResult?
+  version         Int                       @default(1)
+  items           ChecklistExecutionItem[]
+}
+
+model ChecklistExecutionItem {
+  id          String              @id @default(uuid())
+  executionId String
+  execution   ChecklistExecution  @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  itemIndex   Int
+  itemText    String
+  status      ChecklistItemStatus @default(NOT_CHECKED)
+  comment     String?
+  createdAt   DateTime            @default(now())
+
+  @@unique([executionId, itemIndex])
+}

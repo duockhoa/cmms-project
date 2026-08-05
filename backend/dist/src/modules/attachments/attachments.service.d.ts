@@ -1,0 +1,82 @@
+import { PrismaService } from '../../prisma/prisma.service';
+export declare class AttachmentsService {
+    private readonly prisma;
+    private readonly uploadDir;
+    private readonly allowedMimes;
+    constructor(prisma: PrismaService);
+    private validateMagicNumber;
+    private validateParentEntity;
+    uploadFile(file: any, entityType: string, entityId: string, uploadedById?: string, description?: string): Promise<{
+        id: string;
+        createdAt: Date;
+        version: number;
+        description: string | null;
+        entityType: string;
+        entityId: string;
+        fileName: string;
+        originalName: string;
+        fileType: string;
+        fileSize: number;
+        storagePath: string;
+        checksum: string;
+        isDeleted: boolean;
+        deletedAt: Date | null;
+        uploadedById: string | null;
+    }>;
+    getFileDetails(id: string): Promise<{
+        id: string;
+        createdAt: Date;
+        version: number;
+        description: string | null;
+        entityType: string;
+        entityId: string;
+        fileName: string;
+        originalName: string;
+        fileType: string;
+        fileSize: number;
+        storagePath: string;
+        checksum: string;
+        isDeleted: boolean;
+        deletedAt: Date | null;
+        uploadedById: string | null;
+    }>;
+    downloadFile(id: string): Promise<{
+        fullPath: string;
+        originalName: string;
+        fileType: string;
+    }>;
+    getAttachmentsForEntity(entityType: string, entityId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        version: number;
+        description: string | null;
+        entityType: string;
+        entityId: string;
+        fileName: string;
+        originalName: string;
+        fileType: string;
+        fileSize: number;
+        storagePath: string;
+        checksum: string;
+        isDeleted: boolean;
+        deletedAt: Date | null;
+        uploadedById: string | null;
+    }[]>;
+    deleteFile(id: string, expectedVersion: number): Promise<{
+        id: string;
+        createdAt: Date;
+        version: number;
+        description: string | null;
+        entityType: string;
+        entityId: string;
+        fileName: string;
+        originalName: string;
+        fileType: string;
+        fileSize: number;
+        storagePath: string;
+        checksum: string;
+        isDeleted: boolean;
+        deletedAt: Date | null;
+        uploadedById: string | null;
+    }>;
+}

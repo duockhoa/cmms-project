@@ -1,0 +1,20 @@
+export const SCHEDULE_STATUS = {
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  PAUSED: 'PAUSED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+
+export type ScheduleStatus = typeof SCHEDULE_STATUS[keyof typeof SCHEDULE_STATUS];
+
+export const SCHEDULE_FREQUENCY_TYPE = {
+  DAILY: 'DAILY',
+  WEEKLY: 'WEEKLY',
+  MONTHLY: 'MONTHLY',
+  QUARTERLY: 'QUARTERLY',
+  YEARLY: 'YEARLY',
+  OPERATING_HOURS: 'OPERATING_HOURS',
+} as const;
+
+export type ScheduleFrequencyType = typeof SCHEDULE_FREQUENCY_TYPE[keyof typeof SCHEDULE_FREQUENCY_TYPE];
