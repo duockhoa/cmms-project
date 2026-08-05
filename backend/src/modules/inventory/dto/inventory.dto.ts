@@ -63,10 +63,6 @@ export class AdjustInDto {
   @IsNumber()
   expectedVersion: number;
 
-  @IsString()
-  @IsNotEmpty({ message: 'Người thực hiện (actedById) là bắt buộc' })
-  actedById: string;
-
   @IsOptional()
   @IsString()
   clientTransactionId?: string;
@@ -87,10 +83,6 @@ export class AdjustOutDto {
 
   @IsNumber()
   expectedVersion: number;
-
-  @IsString()
-  @IsNotEmpty({ message: 'Người thực hiện (actedById) là bắt buộc' })
-  actedById: string;
 
   @IsOptional()
   @IsString()
@@ -119,10 +111,6 @@ export class MaterialReturnDto {
 
   @IsNumber()
   expectedWorkOrderVersion: number;
-
-  @IsString()
-  @IsNotEmpty({ message: 'Người thực hiện (actedById) là bắt buộc' })
-  actedById: string;
 
   @IsOptional()
   @IsString()

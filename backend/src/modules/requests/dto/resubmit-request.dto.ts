@@ -4,10 +4,6 @@ export class ResubmitRequestDto {
   @IsNumber()
   expectedVersion: number;
 
-  @IsString()
-  @IsNotEmpty()
-  actedById: string;
-
   @IsOptional()
   @IsString()
   comment?: string;

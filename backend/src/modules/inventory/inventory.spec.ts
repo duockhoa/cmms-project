@@ -88,14 +88,13 @@ describe('Inventory Module', () => {
         reason: 'Kiểm kê phát hiện thừa Spec',
         referenceCode: 'KK-2026-IN-SPEC',
         expectedVersion: 1,
-        actedById: validActorId,
-      });
+      }, validActorId);
       expect(adjInRes.quantity).toBe(15);
       expect(adjInRes.version).toBe(2);
 
       let threwAdjInZero = false;
       try {
-        await inventoryService.adjustIn(invItem.id, { quantity: 0, reason: 'Test', expectedVersion: 2, actedById: validActorId });
+        await inventoryService.adjustIn(invItem.id, { quantity: 0, reason: 'Test', expectedVersion: 2 }, validActorId);
       } catch (e: any) {
         threwAdjInZero = true;
         expect(e.status).toBe(400);
@@ -107,8 +106,7 @@ describe('Inventory Module', () => {
         reason: 'Kiểm kê phát hiện thiếu Spec',
         referenceCode: 'KK-2026-OUT-SPEC',
         expectedVersion: 2,
-        actedById: validActorId,
-      });
+      }, validActorId);
       expect(adjOutRes.quantity).toBe(11);
       expect(adjOutRes.version).toBe(3);
 
@@ -130,7 +128,7 @@ describe('Inventory Module', () => {
 
       const inPromises = [];
       for (let i = 0; i < 10; i++) {
-        inPromises.push(inventoryService.adjustIn(itemConcIn.id, { quantity: 5, reason: `Conc in ${i}`, expectedVersion: 1, actedById: validActorId }).catch(err => err));
+        inPromises.push(inventoryService.adjustIn(itemConcIn.id, { quantity: 5, reason: `Conc in ${i}`, expectedVersion: 1 }, validActorId).catch(err => err));
       }
       const inResults = await Promise.all(inPromises);
       const inSuccesses = inResults.filter((res) => res.id && res.quantity === 15);

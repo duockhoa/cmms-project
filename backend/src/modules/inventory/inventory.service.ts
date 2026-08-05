@@ -130,7 +130,7 @@ export class InventoryService {
   }
 
   // ─── ADJUST IN (PHASE 3.6) ───
-  async adjustIn(itemId: string, dto: AdjustInDto) {
+  async adjustIn(itemId: string, dto: AdjustInDto, actorId: string) {
     if (!dto.quantity || dto.quantity <= 0) {
       throw new BadRequestException('Số lượng điều chỉnh tăng phải lớn hơn 0');
     }
@@ -156,7 +156,7 @@ export class InventoryService {
       if (!item) throw new NotFoundException('Không tìm thấy vật tư');
       if (!item.isActive) throw new BadRequestException('Vật tư đã bị vô hiệu hóa');
 
-      await this.validateActedBy(tx, dto.actedById);
+      await this.validateActedBy(tx, actorId);
 
       if (item.version !== dto.expectedVersion) {
         throw new ConflictException('Xung đột đồng thời: Vật tư đã bị sửa đổi bởi người dùng khác.');
@@ -190,7 +190,7 @@ export class InventoryService {
           reason: dto.reason.trim(),
           referenceCode: dto.referenceCode || null,
           reference: dto.referenceCode ? `Điều chỉnh tăng: ${dto.referenceCode}` : 'Điều chỉnh tăng tồn kho',
-          actedById: dto.actedById.trim(),
+          actedById: actorId.trim(),
           inventoryVersionBefore: dto.expectedVersion,
           inventoryVersionAfter: dto.expectedVersion + 1,
           clientTransactionId: dto.clientTransactionId || null,
@@ -202,7 +202,7 @@ export class InventoryService {
   }
 
   // ─── ADJUST OUT (PHASE 3.6) ───
-  async adjustOut(itemId: string, dto: AdjustOutDto) {
+  async adjustOut(itemId: string, dto: AdjustOutDto, actorId: string) {
     if (!dto.quantity || dto.quantity <= 0) {
       throw new BadRequestException('Số lượng điều chỉnh giảm phải lớn hơn 0');
     }
@@ -228,7 +228,7 @@ export class InventoryService {
       if (!item) throw new NotFoundException('Không tìm thấy vật tư');
       if (!item.isActive) throw new BadRequestException('Vật tư đã bị vô hiệu hóa');
 
-      await this.validateActedBy(tx, dto.actedById);
+      await this.validateActedBy(tx, actorId);
 
       if (item.version !== dto.expectedVersion) {
         throw new ConflictException('Xung đột đồng thời: Vật tư đã bị sửa đổi bởi người dùng khác.');
@@ -266,7 +266,7 @@ export class InventoryService {
           reason: dto.reason.trim(),
           referenceCode: dto.referenceCode || null,
           reference: dto.referenceCode ? `Điều chỉnh giảm: ${dto.referenceCode}` : 'Điều chỉnh giảm tồn kho',
-          actedById: dto.actedById.trim(),
+          actedById: actorId.trim(),
           inventoryVersionBefore: dto.expectedVersion,
           inventoryVersionAfter: dto.expectedVersion + 1,
           clientTransactionId: dto.clientTransactionId || null,
@@ -278,7 +278,7 @@ export class InventoryService {
   }
 
   // ─── MATERIAL RETURN FROM WORK ORDER (PHASE 3.6) ───
-  async materialReturn(workOrderId: string, dto: MaterialReturnDto) {
+  async materialReturn(workOrderId: string, dto: MaterialReturnDto, actorId: string) {
     if (!dto.quantity || dto.quantity <= 0) {
       throw new BadRequestException('Số lượng trả vật tư phải lớn hơn 0');
     }
@@ -332,7 +332,7 @@ export class InventoryService {
         throw new ConflictException('Xung đột đồng thời tồn kho vật tư. Vui lòng tải lại dữ liệu.');
       }
 
-      await this.validateActedBy(tx, dto.actedById);
+      await this.validateActedBy(tx, actorId);
 
       // Check workOrderItem
       const woItem = wo.items.find((i) => i.id === dto.workOrderItemId);
@@ -411,7 +411,7 @@ export class InventoryService {
           quantityBefore,
           quantityAfter,
           reason: dto.reason.trim(),
-          actedById: dto.actedById.trim(),
+          actedById: actorId.trim(),
           inventoryVersionBefore: dto.expectedInventoryVersion,
           inventoryVersionAfter: dto.expectedInventoryVersion + 1,
           clientTransactionId: dto.clientTransactionId || null,

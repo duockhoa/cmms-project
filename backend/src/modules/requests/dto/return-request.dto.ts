@@ -7,8 +7,4 @@ export class ReturnRequestDto {
   @IsString()
   @IsNotEmpty()
   reason: string;
-
-  @IsString()
-  @IsNotEmpty()
-  actedById: string;
 }

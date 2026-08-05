@@ -83,14 +83,13 @@ describe('Requests Module', () => {
       const returned = await requestsService.returnRequest(req.id, {
         reason: 'Thông tin sự cố chưa đầy đủ',
         expectedVersion: req.version,
-        actedById: validActorId,
-      });
+      }, validActorId);
       expect(returned.status).toBe('RETURNED');
       expect(returned.returnedReason).toBe('Thông tin sự cố chưa đầy đủ');
 
       let threwNoReason = false;
       try {
-        await requestsService.returnRequest(req.id, { reason: '', expectedVersion: returned.version, actedById: validActorId });
+        await requestsService.returnRequest(req.id, { reason: '', expectedVersion: returned.version }, validActorId);
       } catch (e: any) {
         threwNoReason = true;
         expect(e.status).toBe(400);
@@ -99,19 +98,17 @@ describe('Requests Module', () => {
 
       const resubmitted = await requestsService.resubmitRequest(returned.id, {
         expectedVersion: returned.version,
-        actedById: validActorId,
         comment: 'Đã bổ sung mô tả chi tiết',
         updatedFields: { description: 'Rò rỉ dầu thủy lực từ mối nối ống – Bổ sung: khu vực van điều khiển' },
-      });
+      }, validActorId);
       expect(resubmitted.status).toBe('PENDING');
       expect(resubmitted.description).toContain('khu vực van điều khiển');
 
-      const returned2 = await requestsService.returnRequest(resubmitted.id, { reason: 'Cần ảnh minh chứng', expectedVersion: resubmitted.version, actedById: validActorId });
+      const returned2 = await requestsService.returnRequest(resubmitted.id, { reason: 'Cần ảnh minh chứng', expectedVersion: resubmitted.version }, validActorId);
       const cancelled = await requestsService.cancelRequest(returned2.id, {
         reason: 'Sự cố đã tự khắc phục',
         expectedVersion: returned2.version,
-        actedById: validActorId,
-      });
+      }, validActorId);
       expect(cancelled.status).toBe('CANCELLED');
     });
 

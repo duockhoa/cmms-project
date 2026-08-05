@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { CreateInventoryItemDto, AdjustInventoryStockDto, AdjustInDto, AdjustOutDto, UpdateInventoryItemDto } from './dto/inventory.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('api/inventory')
+@UseGuards(JwtAuthGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
@@ -53,24 +55,24 @@ export class InventoryController {
 
   // Adjust In (Phase 3.6)
   @Post('items/:itemId/adjust-in')
-  adjustIn(@Param('itemId') itemId: string, @Body() body: AdjustInDto) {
-    return this.inventoryService.adjustIn(itemId, body);
+  adjustIn(@Param('itemId') itemId: string, @Body() body: AdjustInDto, @Req() req: any) {
+    return this.inventoryService.adjustIn(itemId, body, req.user.id);
   }
 
   @Post(':id/adjust-in')
-  adjustInAlias(@Param('id') id: string, @Body() body: AdjustInDto) {
-    return this.inventoryService.adjustIn(id, body);
+  adjustInAlias(@Param('id') id: string, @Body() body: AdjustInDto, @Req() req: any) {
+    return this.inventoryService.adjustIn(id, body, req.user.id);
   }
 
   // Adjust Out (Phase 3.6)
   @Post('items/:itemId/adjust-out')
-  adjustOut(@Param('itemId') itemId: string, @Body() body: AdjustOutDto) {
-    return this.inventoryService.adjustOut(itemId, body);
+  adjustOut(@Param('itemId') itemId: string, @Body() body: AdjustOutDto, @Req() req: any) {
+    return this.inventoryService.adjustOut(itemId, body, req.user.id);
   }
 
   @Post(':id/adjust-out')
-  adjustOutAlias(@Param('id') id: string, @Body() body: AdjustOutDto) {
-    return this.inventoryService.adjustOut(id, body);
+  adjustOutAlias(@Param('id') id: string, @Body() body: AdjustOutDto, @Req() req: any) {
+    return this.inventoryService.adjustOut(id, body, req.user.id);
   }
 
   @Delete(':id')

@@ -7,8 +7,4 @@ export class CancelRequestDto {
   @IsString()
   @IsNotEmpty()
   reason: string;
-
-  @IsString()
-  @IsNotEmpty()
-  actedById: string;
 }

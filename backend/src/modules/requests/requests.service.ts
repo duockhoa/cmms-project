@@ -206,7 +206,7 @@ export class RequestsService {
   }
 
   // ─── RETURN REQUEST ───
-  async returnRequest(id: string, body: { reason: string; expectedVersion: number; actedById: string }) {
+  async returnRequest(id: string, body: { reason: string; expectedVersion: number }, actorId: string) {
     if (!body.reason || body.reason.trim() === '') {
       throw new BadRequestException('Lý do trả lại (reason) là bắt buộc.');
     }
@@ -231,8 +231,8 @@ export class RequestsService {
         throw new ConflictException('Không thể trả lại yêu cầu đã sinh Work Order.');
       }
 
-      // Validate actedById
-      await this.validateActedBy(tx, body.actedById);
+      // Validate actorId
+      await this.validateActedBy(tx, actorId);
 
       try {
         const updated = await tx.maintenanceRequest.update({
@@ -254,7 +254,7 @@ export class RequestsService {
             toStatus: 'RETURNED',
             reason: body.reason.trim(),
             comment: 'Trả lại yêu cầu để bổ sung thông tin',
-            actedById: body.actedById || null,
+            actedById: actorId || null,
             requestVersionBefore: body.expectedVersion,
             requestVersionAfter: body.expectedVersion + 1,
           },
@@ -273,7 +273,7 @@ export class RequestsService {
   // ─── RESUBMIT REQUEST ───
   private static RESUBMIT_WHITELIST = ['title', 'description', 'priority', 'reporterName', 'department', 'images'];
 
-  async resubmitRequest(id: string, body: { expectedVersion: number; actedById: string; comment?: string; updatedFields?: Record<string, any> }) {
+  async resubmitRequest(id: string, body: { expectedVersion: number; comment?: string; updatedFields?: Record<string, any> }, actorId: string) {
     return this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
@@ -294,8 +294,8 @@ export class RequestsService {
         throw new ConflictException('Không thể tái gửi yêu cầu đã sinh Work Order.');
       }
 
-      // Validate actedById
-      await this.validateActedBy(tx, body.actedById);
+      // Validate actorId
+      await this.validateActedBy(tx, actorId);
 
       // Filter only whitelisted fields
       const updateData: any = {
@@ -327,7 +327,7 @@ export class RequestsService {
             fromStatus: 'RETURNED',
             toStatus: 'PENDING',
             comment: body.comment || 'Tái gửi yêu cầu sau khi bổ sung thông tin',
-            actedById: body.actedById || null,
+            actedById: actorId || null,
             requestVersionBefore: body.expectedVersion,
             requestVersionAfter: body.expectedVersion + 1,
           },
@@ -344,7 +344,7 @@ export class RequestsService {
   }
 
   // ─── CANCEL RETURNED REQUEST ───
-  async cancelRequest(id: string, body: { reason: string; expectedVersion: number; actedById: string }) {
+  async cancelRequest(id: string, body: { reason: string; expectedVersion: number }, actorId: string) {
     if (!body.reason || body.reason.trim() === '') {
       throw new BadRequestException('Lý do hủy (reason) là bắt buộc.');
     }
@@ -369,8 +369,8 @@ export class RequestsService {
         throw new ConflictException('Không thể hủy yêu cầu đã sinh Work Order.');
       }
 
-      // Validate actedById
-      await this.validateActedBy(tx, body.actedById);
+      // Validate actorId
+      await this.validateActedBy(tx, actorId);
 
       try {
         const updated = await tx.maintenanceRequest.update({
@@ -379,7 +379,7 @@ export class RequestsService {
             status: 'CANCELLED',
             cancelledReason: body.reason.trim(),
             cancelledAt: new Date(),
-            cancelledById: body.actedById || null,
+            cancelledById: actorId || null,
             version: { increment: 1 },
           },
           include: { equipment: true, workOrders: true },
@@ -394,7 +394,7 @@ export class RequestsService {
             toStatus: 'CANCELLED',
             reason: body.reason.trim(),
             comment: 'Hủy yêu cầu sửa chữa',
-            actedById: body.actedById || null,
+            actedById: actorId || null,
             requestVersionBefore: body.expectedVersion,
             requestVersionAfter: body.expectedVersion + 1,
           },

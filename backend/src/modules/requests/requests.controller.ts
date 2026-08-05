@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { RequestsService } from './requests.service';
 import { CreateMaintenanceRequestDto } from './dto/create-request.dto';
 import { ApproveMaintenanceRequestDto } from './dto/approve-request.dto';
@@ -6,8 +6,10 @@ import { RejectMaintenanceRequestDto } from './dto/reject-request.dto';
 import { ReturnRequestDto } from './dto/return-request.dto';
 import { ResubmitRequestDto } from './dto/resubmit-request.dto';
 import { CancelRequestDto } from './dto/cancel-request.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('api/requests')
+@UseGuards(JwtAuthGuard)
 export class RequestsController {
   constructor(private readonly requestsService: RequestsService) {}
 
@@ -46,17 +48,17 @@ export class RequestsController {
   }
 
   @Post(':id/return')
-  returnRequest(@Param('id') id: string, @Body() body: ReturnRequestDto) {
-    return this.requestsService.returnRequest(id, body);
+  returnRequest(@Param('id') id: string, @Body() body: ReturnRequestDto, @Req() req: any) {
+    return this.requestsService.returnRequest(id, body, req.user.id);
   }
 
   @Post(':id/resubmit')
-  resubmitRequest(@Param('id') id: string, @Body() body: ResubmitRequestDto) {
-    return this.requestsService.resubmitRequest(id, body);
+  resubmitRequest(@Param('id') id: string, @Body() body: ResubmitRequestDto, @Req() req: any) {
+    return this.requestsService.resubmitRequest(id, body, req.user.id);
   }
 
   @Post(':id/cancel')
-  cancelRequest(@Param('id') id: string, @Body() body: CancelRequestDto) {
-    return this.requestsService.cancelRequest(id, body);
+  cancelRequest(@Param('id') id: string, @Body() body: CancelRequestDto, @Req() req: any) {
+    return this.requestsService.cancelRequest(id, body, req.user.id);
   }
 }
