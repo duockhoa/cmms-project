@@ -8,8 +8,11 @@ import { KpiEngineService } from './services/kpi-engine.service';
 import { classifyWorkOrder } from './utils/kpi-classifier.utility';
 import { WORK_ORDER_CLASSIFICATION } from './analytics.constants';
 import { PrismaService } from '../../prisma/prisma.service';
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+
+jest.setTimeout(30000);
 
 describe('Analytics Module', () => {
   let app: any;
@@ -18,7 +21,6 @@ describe('Analytics Module', () => {
   let scopeService: AnalyticsScopeService;
   let kpiEngineService: KpiEngineService;
   const testDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'test-an.db');
-  const devDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'dev.db');
 
   beforeAll(async () => {
     if (fs.existsSync(testDbPath)) {
@@ -26,13 +28,38 @@ describe('Analytics Module', () => {
         fs.unlinkSync(testDbPath);
       } catch (e) {}
     }
-    fs.copyFileSync(devDbPath, testDbPath);
+
+    execSync('npx prisma db push --accept-data-loss', {
+      env: { ...process.env, DATABASE_URL: `file:./test-an.db` },
+      stdio: 'inherit',
+    });
 
     app = await NestFactory.createApplicationContext(AppModule);
     prisma = app.get(PrismaService);
     dateWindowService = app.get(AnalyticsDateWindowService);
     scopeService = app.get(AnalyticsScopeService);
     kpiEngineService = app.get(KpiEngineService);
+
+    // Seed dynamic data
+    await prisma.user.create({
+      data: {
+        id: 'admin-id',
+        name: 'Admin User',
+        email: 'admin@company.com',
+        role: 'ADMIN',
+        isActive: true,
+      },
+    });
+
+    await prisma.user.create({
+      data: {
+        id: 'tech-id',
+        name: 'Technician User',
+        email: 'tech@company.com',
+        role: 'TECHNICIAN',
+        isActive: true,
+      },
+    });
   });
 
   afterAll(async () => {

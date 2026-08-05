@@ -5,27 +5,58 @@ import { AppModule } from '../../app.module';
 import { WorkOrdersService } from './work-orders.service';
 import { WorkOrderStateMachine } from './work-order-state-machine';
 import { PrismaService } from '../../prisma/prisma.service';
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+
+jest.setTimeout(30000);
 
 describe('Work Orders Module', () => {
   let app: any;
   let prisma: PrismaService;
   let workOrdersService: WorkOrdersService;
   const testDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'test-wo.db');
-  const devDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'dev.db');
 
   beforeAll(async () => {
+    // 1. Remove old test database
     if (fs.existsSync(testDbPath)) {
       try {
         fs.unlinkSync(testDbPath);
       } catch (e) {}
     }
-    fs.copyFileSync(devDbPath, testDbPath);
+
+    // 2. Initialize fresh database schema from prisma schema
+    execSync('npx prisma db push --accept-data-loss', {
+      env: { ...process.env, DATABASE_URL: `file:./test-wo.db` },
+      stdio: 'inherit',
+    });
 
     app = await NestFactory.createApplicationContext(AppModule);
     prisma = app.get(PrismaService);
     workOrdersService = app.get(WorkOrdersService);
+
+    // 3. Dynamic Seeding of essential test environment data
+    await prisma.user.create({
+      data: {
+        id: 'tech-user-id',
+        name: 'Tech Test User',
+        email: 'tech-test@company.com',
+        role: 'TECHNICIAN',
+        status: 'AVAILABLE',
+        isActive: true,
+      },
+    });
+
+    await prisma.equipment.create({
+      data: {
+        id: 'equipment-test-id',
+        code: 'EQ-TEST-WO',
+        name: 'Thiết bị Test Spec',
+        category: 'Cơ khí',
+        location: 'Xưởng A',
+        isActive: true,
+      },
+    });
   });
 
   afterAll(async () => {
@@ -66,11 +97,10 @@ describe('Work Orders Module', () => {
         },
       });
 
-      const equipment = await prisma.equipment.findFirst();
       const wo = await prisma.workOrder.create({
         data: {
           orderCode: 'WO-SPEC-STOCK',
-          equipmentId: equipment!.id,
+          equipmentId: 'equipment-test-id',
           title: 'WO Spec Stock',
           description: 'Desc',
           status: 'IN_PROGRESS',
@@ -102,22 +132,21 @@ describe('Work Orders Module', () => {
     });
 
     it('should enforce optimistic locking', async () => {
-      const equipment = await prisma.equipment.findFirst();
       const wo = await prisma.workOrder.create({
         data: {
           orderCode: 'WO-SPEC-LOCK',
-          equipmentId: equipment!.id,
+          equipmentId: 'equipment-test-id',
           title: 'WO Spec Lock',
           description: 'Desc',
           status: 'PENDING',
         },
       });
 
-      await workOrdersService.assign(wo.id, { technicianName: 'User A Tech', expectedVersion: 1 });
+      await workOrdersService.assign(wo.id, { technicianName: 'Tech Test User', expectedVersion: 1 });
 
       let threwLockError = false;
       try {
-        await workOrdersService.assign(wo.id, { technicianName: 'User B Tech', expectedVersion: 1 });
+        await workOrdersService.assign(wo.id, { technicianName: 'Other Tech User', expectedVersion: 1 });
       } catch (e: any) {
         threwLockError = true;
         expect(e.status).toBe(409);
@@ -128,7 +157,6 @@ describe('Work Orders Module', () => {
 
   describe('3. CONCURRENT TESTS', () => {
     it('should complete only 1 work order concurrently', async () => {
-      const equipment = await prisma.equipment.findFirst();
       const item = await prisma.inventoryItem.create({
         data: {
           itemCode: 'WO-CONC-SPEC-ITEM',
@@ -142,7 +170,7 @@ describe('Work Orders Module', () => {
       const wo = await prisma.workOrder.create({
         data: {
           orderCode: 'WO-CONC-SPEC-COMP',
-          equipmentId: equipment!.id,
+          equipmentId: 'equipment-test-id',
           title: 'WO Concurrent Complete Spec',
           description: 'Desc',
           status: 'IN_PROGRESS',

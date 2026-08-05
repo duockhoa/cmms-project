@@ -8,7 +8,7 @@
     "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "db:push": "prisma db push",
     "db:seed": "ts-node prisma/seed.ts",
-    "test": "jest"
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

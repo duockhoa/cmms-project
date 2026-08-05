@@ -4,15 +4,17 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { RequestsService } from './requests.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+
+jest.setTimeout(30000);
 
 describe('Requests Module', () => {
   let app: any;
   let prisma: PrismaService;
   let requestsService: RequestsService;
   const testDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'test-req.db');
-  const devDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'dev.db');
 
   beforeAll(async () => {
     if (fs.existsSync(testDbPath)) {
@@ -20,11 +22,38 @@ describe('Requests Module', () => {
         fs.unlinkSync(testDbPath);
       } catch (e) {}
     }
-    fs.copyFileSync(devDbPath, testDbPath);
+
+    execSync('npx prisma db push --accept-data-loss', {
+      env: { ...process.env, DATABASE_URL: `file:./test-req.db` },
+      stdio: 'inherit',
+    });
 
     app = await NestFactory.createApplicationContext(AppModule);
     prisma = app.get(PrismaService);
     requestsService = app.get(RequestsService);
+
+    // Seed dynamic data
+    await prisma.user.create({
+      data: {
+        id: 'req-tech-user',
+        name: 'Tech Tester',
+        email: 'tech@company.com',
+        role: 'TECHNICIAN',
+        status: 'AVAILABLE',
+        isActive: true,
+      },
+    });
+
+    await prisma.equipment.create({
+      data: {
+        id: 'req-eq-test-id',
+        code: 'EQ-TEST-REQ',
+        name: 'Thiết bị Test Spec Req',
+        category: 'Cơ khí',
+        location: 'Xưởng A',
+        isActive: true,
+      },
+    });
   });
 
   afterAll(async () => {
@@ -40,12 +69,10 @@ describe('Requests Module', () => {
 
   describe('INTEGRATION TESTS: Request Return / Resubmit / Cancel', () => {
     it('should complete workflow transition and validate rules', async () => {
-      const eq = await prisma.equipment.findFirst();
-      const activeUser = await prisma.user.findFirst({ where: { isActive: true } });
-      const validActorId = activeUser!.id;
+      const validActorId = 'req-tech-user';
 
       const req = await requestsService.create({
-        equipmentId: eq!.id,
+        equipmentId: 'req-eq-test-id',
         title: 'Máy bơm rò rỉ spec test',
         description: 'Rò rỉ dầu thủy lực từ mối nối ống',
         priority: 'HIGH',
@@ -89,8 +116,7 @@ describe('Requests Module', () => {
     });
 
     it('should rollback transaction on simulated error', async () => {
-      const eq = await prisma.equipment.findFirst();
-      const pendReqFault = await requestsService.create({ equipmentId: eq!.id, title: 'T20 Fault Spec Rollback', description: 'Fault test', priority: 'LOW', reporterName: 'Tester' });
+      const pendReqFault = await requestsService.create({ equipmentId: 'req-eq-test-id', title: 'T20 Fault Spec Rollback', description: 'Fault test', priority: 'LOW', reporterName: 'Tester' });
       const versionBefore = pendReqFault.version;
       let txRolledBack = false;
 
@@ -117,11 +143,10 @@ describe('Requests Module', () => {
 
   describe('CONCURRENT TESTS', () => {
     it('should allow only exactly one approval concurrently', async () => {
-      const eq = await prisma.equipment.findFirst();
       const newReq = await prisma.maintenanceRequest.create({
         data: {
           requestCode: 'REQ-CONCURRENT-SPEC',
-          equipmentId: eq!.id,
+          equipmentId: 'req-eq-test-id',
           title: 'Req Concurrent Spec',
           description: 'Desc',
           status: 'PENDING',

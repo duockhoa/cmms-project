@@ -4,15 +4,17 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { InventoryService } from './inventory.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+
+jest.setTimeout(30000);
 
 describe('Inventory Module', () => {
   let app: any;
   let prisma: PrismaService;
   let inventoryService: InventoryService;
   const testDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'test-inv.db');
-  const devDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'dev.db');
 
   beforeAll(async () => {
     if (fs.existsSync(testDbPath)) {
@@ -20,11 +22,38 @@ describe('Inventory Module', () => {
         fs.unlinkSync(testDbPath);
       } catch (e) {}
     }
-    fs.copyFileSync(devDbPath, testDbPath);
+
+    execSync('npx prisma db push --accept-data-loss', {
+      env: { ...process.env, DATABASE_URL: `file:./test-inv.db` },
+      stdio: 'inherit',
+    });
 
     app = await NestFactory.createApplicationContext(AppModule);
     prisma = app.get(PrismaService);
     inventoryService = app.get(InventoryService);
+
+    // Seed dynamic data
+    await prisma.user.create({
+      data: {
+        id: 'inv-tech-user',
+        name: 'Inv Tester',
+        email: 'invtech@company.com',
+        role: 'TECHNICIAN',
+        status: 'AVAILABLE',
+        isActive: true,
+      },
+    });
+
+    await prisma.equipment.create({
+      data: {
+        id: 'inv-eq-test-id',
+        code: 'EQ-TEST-INV',
+        name: 'Thiết bị Test Spec Inv',
+        category: 'Cơ khí',
+        location: 'Xưởng A',
+        isActive: true,
+      },
+    });
   });
 
   afterAll(async () => {
@@ -40,8 +69,7 @@ describe('Inventory Module', () => {
 
   describe('INTEGRATION TESTS: Inventory Adjustment & Material Return', () => {
     it('should adjust stock levels and log transaction metadata accurately', async () => {
-      const activeUser = await prisma.user.findFirst({ where: { isActive: true } });
-      const validActorId = activeUser!.id;
+      const validActorId = 'inv-tech-user';
 
       const invItem = await prisma.inventoryItem.create({
         data: {
@@ -95,14 +123,14 @@ describe('Inventory Module', () => {
 
   describe('CONCURRENT TESTS', () => {
     it('should adjust stock concurrently keeping consistency', async () => {
-      const activeUser = await prisma.user.findFirst({ where: { isActive: true } });
+      const validActorId = 'inv-tech-user';
       const itemConcIn = await prisma.inventoryItem.create({
         data: { itemCode: `SPEC-CONC-IN-${Date.now()}`, name: 'Conc In Item', category: 'Cơ khí', quantity: 10, unit: 'Cái', unitPrice: 100, version: 1 },
       });
 
       const inPromises = [];
       for (let i = 0; i < 10; i++) {
-        inPromises.push(inventoryService.adjustIn(itemConcIn.id, { quantity: 5, reason: `Conc in ${i}`, expectedVersion: 1, actedById: activeUser!.id }).catch(err => err));
+        inPromises.push(inventoryService.adjustIn(itemConcIn.id, { quantity: 5, reason: `Conc in ${i}`, expectedVersion: 1, actedById: validActorId }).catch(err => err));
       }
       const inResults = await Promise.all(inPromises);
       const inSuccesses = inResults.filter((res) => res.id && res.quantity === 15);

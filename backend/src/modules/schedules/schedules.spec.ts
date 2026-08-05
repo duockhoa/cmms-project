@@ -4,15 +4,17 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { SchedulesService } from './schedules.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+
+jest.setTimeout(30000);
 
 describe('Schedules Module', () => {
   let app: any;
   let prisma: PrismaService;
   let schedulesService: SchedulesService;
   const testDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'test-sched.db');
-  const devDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'dev.db');
 
   beforeAll(async () => {
     if (fs.existsSync(testDbPath)) {
@@ -20,11 +22,38 @@ describe('Schedules Module', () => {
         fs.unlinkSync(testDbPath);
       } catch (e) {}
     }
-    fs.copyFileSync(devDbPath, testDbPath);
+
+    execSync('npx prisma db push --accept-data-loss', {
+      env: { ...process.env, DATABASE_URL: `file:./test-sched.db` },
+      stdio: 'inherit',
+    });
 
     app = await NestFactory.createApplicationContext(AppModule);
     prisma = app.get(PrismaService);
     schedulesService = app.get(SchedulesService);
+
+    // Seed dynamic data
+    await prisma.user.create({
+      data: {
+        id: 'sched-tech-user',
+        name: 'Sched Tester',
+        email: 'schedtech@company.com',
+        role: 'TECHNICIAN',
+        status: 'AVAILABLE',
+        isActive: true,
+      },
+    });
+
+    await prisma.equipment.create({
+      data: {
+        id: 'sched-eq-test-id',
+        code: 'EQ-TEST-SCHED',
+        name: 'Thiết bị Test Spec Sched',
+        category: 'Cơ khí',
+        location: 'Xưởng A',
+        isActive: true,
+      },
+    });
   });
 
   afterAll(async () => {
@@ -61,39 +90,37 @@ describe('Schedules Module', () => {
     });
 
     it('should create and transition schedule states', async () => {
-      const equipment = await prisma.equipment.findFirst();
-      const activeUser = await prisma.user.findFirst({ where: { isActive: true } });
+      const validActorId = 'sched-tech-user';
 
       const schedule = await schedulesService.create({
         title: 'Bảo trì hàng ngày Spec',
-        equipmentId: equipment!.id,
+        equipmentId: 'sched-eq-test-id',
         frequencyType: 'DAILY',
         frequencyInterval: 3,
         startDate: new Date('2026-08-01T00:00:00.000Z').toISOString(),
-        createdById: activeUser!.id,
+        createdById: validActorId,
       });
       expect(schedule.status).toBe('DRAFT');
 
-      const active = await schedulesService.activate(schedule.id, { expectedVersion: 1, actedById: activeUser!.id });
+      const active = await schedulesService.activate(schedule.id, { expectedVersion: 1, actedById: validActorId });
       expect(active.status).toBe('ACTIVE');
 
-      const paused = await schedulesService.pause(schedule.id, { reason: 'Bảo trì máy xưởng Spec', expectedVersion: 2, actedById: activeUser!.id });
+      const paused = await schedulesService.pause(schedule.id, { reason: 'Bảo trì máy xưởng Spec', expectedVersion: 2, actedById: validActorId });
       expect(paused.status).toBe('PAUSED');
     });
   });
 
   describe('CONCURRENT TESTS', () => {
     it('should only generate exactly one Work Order concurrently from same Schedule', async () => {
-      const activeUser = await prisma.user.findFirst({ where: { isActive: true } });
-      const equipment = await prisma.equipment.findFirst();
+      const validActorId = 'sched-tech-user';
       const schedule = await prisma.maintenanceSchedule.create({
         data: {
           scheduleCode: `MS-CONC-SPEC-${Date.now()}`,
           title: 'Sched Concurrent Spec',
-          equipmentId: equipment!.id,
+          equipmentId: 'sched-eq-test-id',
           frequencyType: 'MONTHLY',
           frequencyInterval: 1,
-          createdById: activeUser!.id,
+          createdById: validActorId,
           startDate: new Date('2026-08-01T00:00:00.000Z'),
           status: 'ACTIVE',
           nextDueDate: new Date('2026-08-01T00:00:00.000Z'),
@@ -104,7 +131,7 @@ describe('Schedules Module', () => {
 
       const promises = [];
       for (let i = 0; i < 10; i++) {
-        promises.push(schedulesService.generateWorkOrder(schedule.id, { expectedVersion: 1, actedById: activeUser!.id }).catch(err => err));
+        promises.push(schedulesService.generateWorkOrder(schedule.id, { expectedVersion: 1, actedById: validActorId }).catch(err => err));
       }
 
       const resultsArray = await Promise.all(promises);
