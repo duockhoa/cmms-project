@@ -101,7 +101,7 @@ __decorate([
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, inventory_dto_1.UpdateInventoryItemDto]),
     __metadata("design:returntype", void 0)
 ], InventoryController.prototype, "update", null);
 __decorate([

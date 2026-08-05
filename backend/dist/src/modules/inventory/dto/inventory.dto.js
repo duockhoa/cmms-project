@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MaterialReturnDto = exports.AdjustOutDto = exports.AdjustInDto = exports.AdjustInventoryStockDto = exports.CreateInventoryItemDto = void 0;
+exports.UpdateInventoryItemDto = exports.MaterialReturnDto = exports.AdjustOutDto = exports.AdjustInDto = exports.AdjustInventoryStockDto = exports.CreateInventoryItemDto = void 0;
 const class_validator_1 = require("class-validator");
 class CreateInventoryItemDto {
 }
@@ -175,4 +175,50 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], MaterialReturnDto.prototype, "clientTransactionId", void 0);
+class UpdateInventoryItemDto {
+}
+exports.UpdateInventoryItemDto = UpdateInventoryItemDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateInventoryItemDto.prototype, "name", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateInventoryItemDto.prototype, "category", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateInventoryItemDto.prototype, "quantity", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateInventoryItemDto.prototype, "unit", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateInventoryItemDto.prototype, "minQuantity", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateInventoryItemDto.prototype, "unitPrice", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateInventoryItemDto.prototype, "location", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.IsNotEmpty)({ message: 'expectedVersion là bắt buộc' }),
+    __metadata("design:type", Number)
+], UpdateInventoryItemDto.prototype, "expectedVersion", void 0);
 //# sourceMappingURL=inventory.dto.js.map

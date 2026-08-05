@@ -128,3 +128,40 @@ export class MaterialReturnDto {
   @IsString()
   clientTransactionId?: string;
 }
+
+export class UpdateInventoryItemDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  category?: string;
+
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  quantity?: number;
+
+  @IsString()
+  @IsOptional()
+  unit?: string;
+
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  minQuantity?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  unitPrice?: number;
+
+  @IsString()
+  @IsOptional()
+  location?: string;
+
+  @IsInt()
+  @IsNotEmpty({ message: 'expectedVersion là bắt buộc' })
+  expectedVersion: number;
+}

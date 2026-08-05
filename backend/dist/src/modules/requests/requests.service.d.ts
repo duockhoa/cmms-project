@@ -9,35 +9,16 @@ export declare class RequestsService {
         priority?: string;
         search?: string;
     }): Promise<({
-        equipment: {
-            id: string;
-            createdAt: Date;
-            code: string;
-            name: string;
-            category: string;
-            location: string;
-            status: string;
-            purchaseDate: Date | null;
-            warrantyPeriod: string | null;
-            image: string | null;
-            serialNumber: string | null;
-            specs: string | null;
-            notes: string | null;
-            currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
-        };
         workOrders: {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            updatedAt: Date;
+            createdAt: Date;
             version: number;
-            equipmentId: string;
+            updatedAt: Date;
+            title: string;
             description: string;
             priority: string;
+            equipmentId: string;
             orderCode: string;
             technicianName: string | null;
             plannedStartDate: Date | null;
@@ -56,15 +37,33 @@ export declare class RequestsService {
             requestId: string | null;
             scheduleId: string | null;
         }[];
+        equipment: {
+            id: string;
+            name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
+            category: string;
+            location: string;
+            updatedAt: Date;
+            code: string;
+            purchaseDate: Date | null;
+            warrantyPeriod: string | null;
+            image: string | null;
+            serialNumber: string | null;
+            specs: string | null;
+            notes: string | null;
+            currentOperatingHours: number;
+        };
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        version: number;
         department: string | null;
+        createdAt: Date;
+        version: number;
         requestCode: string;
-        equipmentId: string;
+        title: string;
         description: string;
         priority: string;
         reporterName: string;
@@ -73,38 +72,20 @@ export declare class RequestsService {
         returnedReason: string | null;
         cancelledReason: string | null;
         cancelledAt: Date | null;
+        equipmentId: string;
         cancelledById: string | null;
     })[]>;
     findOne(id: string): Promise<{
-        equipment: {
-            id: string;
-            createdAt: Date;
-            code: string;
-            name: string;
-            category: string;
-            location: string;
-            status: string;
-            purchaseDate: Date | null;
-            warrantyPeriod: string | null;
-            image: string | null;
-            serialNumber: string | null;
-            specs: string | null;
-            notes: string | null;
-            currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
-        };
         workOrders: {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            updatedAt: Date;
+            createdAt: Date;
             version: number;
-            equipmentId: string;
+            updatedAt: Date;
+            title: string;
             description: string;
             priority: string;
+            equipmentId: string;
             orderCode: string;
             technicianName: string | null;
             plannedStartDate: Date | null;
@@ -123,15 +104,33 @@ export declare class RequestsService {
             requestId: string | null;
             scheduleId: string | null;
         }[];
+        equipment: {
+            id: string;
+            name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
+            category: string;
+            location: string;
+            updatedAt: Date;
+            code: string;
+            purchaseDate: Date | null;
+            warrantyPeriod: string | null;
+            image: string | null;
+            serialNumber: string | null;
+            specs: string | null;
+            notes: string | null;
+            currentOperatingHours: number;
+        };
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        version: number;
         department: string | null;
+        createdAt: Date;
+        version: number;
         requestCode: string;
-        equipmentId: string;
+        title: string;
         description: string;
         priority: string;
         reporterName: string;
@@ -140,17 +139,21 @@ export declare class RequestsService {
         returnedReason: string | null;
         cancelledReason: string | null;
         cancelledAt: Date | null;
+        equipmentId: string;
         cancelledById: string | null;
     }>;
     create(data: any): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -158,19 +161,15 @@ export declare class RequestsService {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        version: number;
         department: string | null;
+        createdAt: Date;
+        version: number;
         requestCode: string;
-        equipmentId: string;
+        title: string;
         description: string;
         priority: string;
         reporterName: string;
@@ -179,6 +178,7 @@ export declare class RequestsService {
         returnedReason: string | null;
         cancelledReason: string | null;
         cancelledAt: Date | null;
+        equipmentId: string;
         cancelledById: string | null;
     }>;
     approve(id: string, body: {
@@ -187,13 +187,12 @@ export declare class RequestsService {
     }): Promise<{
         request: {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            version: number;
             department: string | null;
+            createdAt: Date;
+            version: number;
             requestCode: string;
-            equipmentId: string;
+            title: string;
             description: string;
             priority: string;
             reporterName: string;
@@ -202,18 +201,19 @@ export declare class RequestsService {
             returnedReason: string | null;
             cancelledReason: string | null;
             cancelledAt: Date | null;
+            equipmentId: string;
             cancelledById: string | null;
         };
         workOrder: {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            updatedAt: Date;
+            createdAt: Date;
             version: number;
-            equipmentId: string;
+            updatedAt: Date;
+            title: string;
             description: string;
             priority: string;
+            equipmentId: string;
             orderCode: string;
             technicianName: string | null;
             plannedStartDate: Date | null;
@@ -237,13 +237,12 @@ export declare class RequestsService {
         reason?: string;
     }): Promise<{
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        version: number;
         department: string | null;
+        createdAt: Date;
+        version: number;
         requestCode: string;
-        equipmentId: string;
+        title: string;
         description: string;
         priority: string;
         reporterName: string;
@@ -252,6 +251,7 @@ export declare class RequestsService {
         returnedReason: string | null;
         cancelledReason: string | null;
         cancelledAt: Date | null;
+        equipmentId: string;
         cancelledById: string | null;
     }>;
     private validateActedBy;
@@ -260,35 +260,16 @@ export declare class RequestsService {
         expectedVersion: number;
         actedById: string;
     }): Promise<{
-        equipment: {
-            id: string;
-            createdAt: Date;
-            code: string;
-            name: string;
-            category: string;
-            location: string;
-            status: string;
-            purchaseDate: Date | null;
-            warrantyPeriod: string | null;
-            image: string | null;
-            serialNumber: string | null;
-            specs: string | null;
-            notes: string | null;
-            currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
-        };
         workOrders: {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            updatedAt: Date;
+            createdAt: Date;
             version: number;
-            equipmentId: string;
+            updatedAt: Date;
+            title: string;
             description: string;
             priority: string;
+            equipmentId: string;
             orderCode: string;
             technicianName: string | null;
             plannedStartDate: Date | null;
@@ -307,15 +288,33 @@ export declare class RequestsService {
             requestId: string | null;
             scheduleId: string | null;
         }[];
+        equipment: {
+            id: string;
+            name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
+            category: string;
+            location: string;
+            updatedAt: Date;
+            code: string;
+            purchaseDate: Date | null;
+            warrantyPeriod: string | null;
+            image: string | null;
+            serialNumber: string | null;
+            specs: string | null;
+            notes: string | null;
+            currentOperatingHours: number;
+        };
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        version: number;
         department: string | null;
+        createdAt: Date;
+        version: number;
         requestCode: string;
-        equipmentId: string;
+        title: string;
         description: string;
         priority: string;
         reporterName: string;
@@ -324,6 +323,7 @@ export declare class RequestsService {
         returnedReason: string | null;
         cancelledReason: string | null;
         cancelledAt: Date | null;
+        equipmentId: string;
         cancelledById: string | null;
     }>;
     private static RESUBMIT_WHITELIST;
@@ -333,35 +333,16 @@ export declare class RequestsService {
         comment?: string;
         updatedFields?: Record<string, any>;
     }): Promise<{
-        equipment: {
-            id: string;
-            createdAt: Date;
-            code: string;
-            name: string;
-            category: string;
-            location: string;
-            status: string;
-            purchaseDate: Date | null;
-            warrantyPeriod: string | null;
-            image: string | null;
-            serialNumber: string | null;
-            specs: string | null;
-            notes: string | null;
-            currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
-        };
         workOrders: {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            updatedAt: Date;
+            createdAt: Date;
             version: number;
-            equipmentId: string;
+            updatedAt: Date;
+            title: string;
             description: string;
             priority: string;
+            equipmentId: string;
             orderCode: string;
             technicianName: string | null;
             plannedStartDate: Date | null;
@@ -380,15 +361,33 @@ export declare class RequestsService {
             requestId: string | null;
             scheduleId: string | null;
         }[];
+        equipment: {
+            id: string;
+            name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
+            category: string;
+            location: string;
+            updatedAt: Date;
+            code: string;
+            purchaseDate: Date | null;
+            warrantyPeriod: string | null;
+            image: string | null;
+            serialNumber: string | null;
+            specs: string | null;
+            notes: string | null;
+            currentOperatingHours: number;
+        };
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        version: number;
         department: string | null;
+        createdAt: Date;
+        version: number;
         requestCode: string;
-        equipmentId: string;
+        title: string;
         description: string;
         priority: string;
         reporterName: string;
@@ -397,6 +396,7 @@ export declare class RequestsService {
         returnedReason: string | null;
         cancelledReason: string | null;
         cancelledAt: Date | null;
+        equipmentId: string;
         cancelledById: string | null;
     }>;
     cancelRequest(id: string, body: {
@@ -404,35 +404,16 @@ export declare class RequestsService {
         expectedVersion: number;
         actedById: string;
     }): Promise<{
-        equipment: {
-            id: string;
-            createdAt: Date;
-            code: string;
-            name: string;
-            category: string;
-            location: string;
-            status: string;
-            purchaseDate: Date | null;
-            warrantyPeriod: string | null;
-            image: string | null;
-            serialNumber: string | null;
-            specs: string | null;
-            notes: string | null;
-            currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
-        };
         workOrders: {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            updatedAt: Date;
+            createdAt: Date;
             version: number;
-            equipmentId: string;
+            updatedAt: Date;
+            title: string;
             description: string;
             priority: string;
+            equipmentId: string;
             orderCode: string;
             technicianName: string | null;
             plannedStartDate: Date | null;
@@ -451,15 +432,33 @@ export declare class RequestsService {
             requestId: string | null;
             scheduleId: string | null;
         }[];
+        equipment: {
+            id: string;
+            name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
+            category: string;
+            location: string;
+            updatedAt: Date;
+            code: string;
+            purchaseDate: Date | null;
+            warrantyPeriod: string | null;
+            image: string | null;
+            serialNumber: string | null;
+            specs: string | null;
+            notes: string | null;
+            currentOperatingHours: number;
+        };
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        version: number;
         department: string | null;
+        createdAt: Date;
+        version: number;
         requestCode: string;
-        equipmentId: string;
+        title: string;
         description: string;
         priority: string;
         reporterName: string;
@@ -468,6 +467,7 @@ export declare class RequestsService {
         returnedReason: string | null;
         cancelledReason: string | null;
         cancelledAt: Date | null;
+        equipmentId: string;
         cancelledById: string | null;
     }>;
     getHistory(requestId: string): Promise<{
@@ -475,13 +475,13 @@ export declare class RequestsService {
         createdAt: Date;
         entityType: string;
         entityId: string;
-        comment: string | null;
-        reason: string | null;
         action: string;
         fromStatus: string | null;
         toStatus: string | null;
         performedById: string | null;
         actedById: string | null;
+        comment: string | null;
+        reason: string | null;
         metadata: string | null;
         requestVersionBefore: number | null;
         requestVersionAfter: number | null;

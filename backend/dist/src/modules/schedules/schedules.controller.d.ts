@@ -340,8 +340,8 @@ export declare class SchedulesController {
         action: string;
         fromStatus: string | null;
         toStatus: string | null;
-        reason: string | null;
         actedById: string | null;
+        reason: string | null;
         versionBefore: number | null;
         versionAfter: number | null;
     })[]>;

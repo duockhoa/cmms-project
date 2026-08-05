@@ -9,12 +9,15 @@ export declare class WorkOrdersController {
     findAll(status?: string, priority?: string, search?: string, equipmentId?: string): Promise<({
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -22,19 +25,15 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         request: {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            version: number;
             department: string | null;
+            createdAt: Date;
+            version: number;
             requestCode: string;
-            equipmentId: string;
+            title: string;
             description: string;
             priority: string;
             reporterName: string;
@@ -43,23 +42,24 @@ export declare class WorkOrdersController {
             returnedReason: string | null;
             cancelledReason: string | null;
             cancelledAt: Date | null;
+            equipmentId: string;
             cancelledById: string | null;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -70,14 +70,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -99,12 +99,15 @@ export declare class WorkOrdersController {
     findOne(id: string): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -112,19 +115,15 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         request: {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            version: number;
             department: string | null;
+            createdAt: Date;
+            version: number;
             requestCode: string;
-            equipmentId: string;
+            title: string;
             description: string;
             priority: string;
             reporterName: string;
@@ -133,23 +132,24 @@ export declare class WorkOrdersController {
             returnedReason: string | null;
             cancelledReason: string | null;
             cancelledAt: Date | null;
+            equipmentId: string;
             cancelledById: string | null;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -160,14 +160,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -189,31 +189,31 @@ export declare class WorkOrdersController {
     getWorkOrderTransactions(workOrderId: string): Promise<({
         inventoryItem: {
             id: string;
-            createdAt: Date;
             name: string;
-            category: string;
-            location: string | null;
             isActive: boolean;
-            updatedAt: Date;
+            createdAt: Date;
             version: number;
-            unit: string;
             itemCode: string;
+            category: string;
             quantity: number;
+            unit: string;
             minQuantity: number;
             unitPrice: number;
+            location: string | null;
+            updatedAt: Date;
         };
         actedBy: {
             id: string;
-            createdAt: Date;
             name: string;
-            status: import(".prisma/client").$Enums.TechnicianStatus;
-            isActive: boolean;
-            version: number;
             email: string;
             role: string;
             specialty: string | null;
+            status: import(".prisma/client").$Enums.TechnicianStatus;
             department: string | null;
             avatar: string | null;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
         };
     } & {
         id: string;
@@ -222,30 +222,30 @@ export declare class WorkOrdersController {
         unitPrice: number;
         workOrderId: string | null;
         inventoryItemId: string;
-        reason: string | null;
         actedById: string | null;
+        reason: string | null;
+        referenceCode: string | null;
+        clientTransactionId: string | null;
         workOrderItemId: string | null;
+        issueKey: string | null;
         transactionType: string;
         totalAmount: number;
         quantityBefore: number;
         quantityAfter: number;
         reference: string | null;
-        referenceCode: string | null;
         inventoryVersionBefore: number | null;
         inventoryVersionAfter: number | null;
-        clientTransactionId: string | null;
-        issueKey: string | null;
     })[]>;
     create(data: CreateWorkOrderDto): Promise<{
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -267,12 +267,15 @@ export declare class WorkOrdersController {
     updateStatus(id: string, body: any): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -280,25 +283,22 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -309,14 +309,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -338,12 +338,15 @@ export declare class WorkOrdersController {
     assign(id: string, body: AssignWorkOrderDto): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -351,25 +354,22 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -380,14 +380,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -409,12 +409,15 @@ export declare class WorkOrdersController {
     start(id: string, body: StartWorkOrderDto): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -422,25 +425,22 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -451,14 +451,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -480,12 +480,15 @@ export declare class WorkOrdersController {
     pause(id: string, body: PauseWorkOrderDto): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -493,25 +496,22 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -522,14 +522,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -551,12 +551,15 @@ export declare class WorkOrdersController {
     resume(id: string, body: ResumeWorkOrderDto): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -564,25 +567,22 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -593,14 +593,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -622,12 +622,15 @@ export declare class WorkOrdersController {
     complete(id: string, body: CompleteWorkOrderDto): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -635,25 +638,22 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -664,14 +664,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -693,12 +693,15 @@ export declare class WorkOrdersController {
     verify(id: string, body: VerifyWorkOrderDto): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -706,25 +709,22 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -735,14 +735,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -764,12 +764,15 @@ export declare class WorkOrdersController {
     close(id: string, body: CloseWorkOrderDto): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -777,25 +780,22 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -806,14 +806,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -835,12 +835,15 @@ export declare class WorkOrdersController {
     cancel(id: string, body: CancelWorkOrderDto): Promise<{
         equipment: {
             id: string;
-            createdAt: Date;
-            code: string;
             name: string;
+            status: string;
+            isActive: boolean;
+            createdAt: Date;
+            version: number;
             category: string;
             location: string;
-            status: string;
+            updatedAt: Date;
+            code: string;
             purchaseDate: Date | null;
             warrantyPeriod: string | null;
             image: string | null;
@@ -848,25 +851,22 @@ export declare class WorkOrdersController {
             specs: string | null;
             notes: string | null;
             currentOperatingHours: number;
-            isActive: boolean;
-            updatedAt: Date;
-            version: number;
         };
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -877,14 +877,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -907,18 +907,18 @@ export declare class WorkOrdersController {
         items: ({
             inventoryItem: {
                 id: string;
-                createdAt: Date;
                 name: string;
-                category: string;
-                location: string | null;
                 isActive: boolean;
-                updatedAt: Date;
+                createdAt: Date;
                 version: number;
-                unit: string;
                 itemCode: string;
+                category: string;
                 quantity: number;
+                unit: string;
                 minQuantity: number;
                 unitPrice: number;
+                location: string | null;
+                updatedAt: Date;
             };
         } & {
             id: string;
@@ -929,14 +929,14 @@ export declare class WorkOrdersController {
         })[];
     } & {
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;
@@ -963,32 +963,32 @@ export declare class WorkOrdersController {
             unitPrice: number;
             workOrderId: string | null;
             inventoryItemId: string;
-            reason: string | null;
             actedById: string | null;
+            reason: string | null;
+            referenceCode: string | null;
+            clientTransactionId: string | null;
             workOrderItemId: string | null;
+            issueKey: string | null;
             transactionType: string;
             totalAmount: number;
             quantityBefore: number;
             quantityAfter: number;
             reference: string | null;
-            referenceCode: string | null;
             inventoryVersionBefore: number | null;
             inventoryVersionAfter: number | null;
-            clientTransactionId: string | null;
-            issueKey: string | null;
         };
         returnableQuantityRemaining: number;
     }>;
     remove(id: string): Promise<{
         id: string;
-        createdAt: Date;
-        title: string;
         status: string;
-        updatedAt: Date;
+        createdAt: Date;
         version: number;
-        equipmentId: string;
+        updatedAt: Date;
+        title: string;
         description: string;
         priority: string;
+        equipmentId: string;
         orderCode: string;
         technicianName: string | null;
         plannedStartDate: Date | null;

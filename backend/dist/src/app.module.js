@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
 const prisma_module_1 = require("./prisma/prisma.module");
 const equipment_module_1 = require("./modules/equipment/equipment.module");
 const requests_module_1 = require("./modules/requests/requests.module");
@@ -18,12 +19,16 @@ const analytics_module_1 = require("./modules/analytics/analytics.module");
 const users_module_1 = require("./modules/users/users.module");
 const attachments_module_1 = require("./modules/attachments/attachments.module");
 const checklist_executions_module_1 = require("./modules/checklist-executions/checklist-executions.module");
+const auth_module_1 = require("./modules/auth/auth.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            config_1.ConfigModule.forRoot({
+                isGlobal: true,
+            }),
             prisma_module_1.PrismaModule,
             equipment_module_1.EquipmentModule,
             requests_module_1.RequestsModule,
@@ -34,6 +39,7 @@ exports.AppModule = AppModule = __decorate([
             users_module_1.UsersModule,
             attachments_module_1.AttachmentsModule,
             checklist_executions_module_1.ChecklistExecutionsModule,
+            auth_module_1.AuthModule,
         ],
     })
 ], AppModule);

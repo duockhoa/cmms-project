@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
-import { CreateInventoryItemDto, AdjustInventoryStockDto, AdjustInDto, AdjustOutDto } from './dto/inventory.dto';
+import { CreateInventoryItemDto, AdjustInventoryStockDto, AdjustInDto, AdjustOutDto, UpdateInventoryItemDto } from './dto/inventory.dto';
 
 @Controller('api/inventory')
 export class InventoryController {
@@ -42,7 +42,7 @@ export class InventoryController {
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() data: any) {
+  update(@Param('id') id: string, @Body() data: UpdateInventoryItemDto) {
     return this.inventoryService.update(id, data);
   }
 

@@ -18,10 +18,10 @@ export declare class AttachmentsService {
         fileType: string;
         fileSize: number;
         storagePath: string;
+        uploadedById: string | null;
         checksum: string;
         isDeleted: boolean;
         deletedAt: Date | null;
-        uploadedById: string | null;
     }>;
     getFileDetails(id: string): Promise<{
         id: string;
@@ -35,10 +35,10 @@ export declare class AttachmentsService {
         fileType: string;
         fileSize: number;
         storagePath: string;
+        uploadedById: string | null;
         checksum: string;
         isDeleted: boolean;
         deletedAt: Date | null;
-        uploadedById: string | null;
     }>;
     downloadFile(id: string): Promise<{
         fullPath: string;
@@ -57,10 +57,10 @@ export declare class AttachmentsService {
         fileType: string;
         fileSize: number;
         storagePath: string;
+        uploadedById: string | null;
         checksum: string;
         isDeleted: boolean;
         deletedAt: Date | null;
-        uploadedById: string | null;
     }[]>;
     deleteFile(id: string, expectedVersion: number): Promise<{
         id: string;
@@ -74,9 +74,9 @@ export declare class AttachmentsService {
         fileType: string;
         fileSize: number;
         storagePath: string;
+        uploadedById: string | null;
         checksum: string;
         isDeleted: boolean;
         deletedAt: Date | null;
-        uploadedById: string | null;
     }>;
 }

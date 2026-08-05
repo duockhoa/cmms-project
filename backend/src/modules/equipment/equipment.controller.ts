@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { EquipmentService } from './equipment.service';
+import { CreateEquipmentDto, UpdateEquipmentDto } from './dto/equipment.dto';
 
 @Controller('api/equipment')
 export class EquipmentController {
@@ -21,12 +22,12 @@ export class EquipmentController {
   }
 
   @Post()
-  create(@Body() data: any) {
+  create(@Body() data: CreateEquipmentDto) {
     return this.equipmentService.create(data);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() data: any) {
+  update(@Param('id') id: string, @Body() data: UpdateEquipmentDto) {
     return this.equipmentService.update(id, data);
   }
 

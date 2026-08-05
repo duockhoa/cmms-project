@@ -38,3 +38,13 @@ export declare class MaterialReturnDto {
     actedById: string;
     clientTransactionId?: string;
 }
+export declare class UpdateInventoryItemDto {
+    name?: string;
+    category?: string;
+    quantity?: number;
+    unit?: string;
+    minQuantity?: number;
+    unitPrice?: number;
+    location?: string;
+    expectedVersion: number;
+}

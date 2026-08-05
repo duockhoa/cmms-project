@@ -15,10 +15,10 @@ export declare class AttachmentsController {
         fileType: string;
         fileSize: number;
         storagePath: string;
+        uploadedById: string | null;
         checksum: string;
         isDeleted: boolean;
         deletedAt: Date | null;
-        uploadedById: string | null;
     }>;
     getAttachments(entityType: string, entityId: string): Promise<{
         id: string;
@@ -32,11 +32,11 @@ export declare class AttachmentsController {
         fileType: string;
         fileSize: number;
         storagePath: string;
+        uploadedById: string | null;
         checksum: string;
         isDeleted: boolean;
         deletedAt: Date | null;
-        uploadedById: string | null;
     }[]>;
-    downloadFile(id: string, res: Response): Promise<any>;
+    downloadFile(id: string, res: Response): Promise<void>;
     deleteFile(id: string, expectedVersionStr: string): Promise<void>;
 }

@@ -17,12 +17,15 @@ export declare class AnalyticsService {
         recentRequests: ({
             equipment: {
                 id: string;
-                createdAt: Date;
-                code: string;
                 name: string;
+                status: string;
+                isActive: boolean;
+                createdAt: Date;
+                version: number;
                 category: string;
                 location: string;
-                status: string;
+                updatedAt: Date;
+                code: string;
                 purchaseDate: Date | null;
                 warrantyPeriod: string | null;
                 image: string | null;
@@ -30,19 +33,15 @@ export declare class AnalyticsService {
                 specs: string | null;
                 notes: string | null;
                 currentOperatingHours: number;
-                isActive: boolean;
-                updatedAt: Date;
-                version: number;
             };
         } & {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            version: number;
             department: string | null;
+            createdAt: Date;
+            version: number;
             requestCode: string;
-            equipmentId: string;
+            title: string;
             description: string;
             priority: string;
             reporterName: string;
@@ -51,17 +50,21 @@ export declare class AnalyticsService {
             returnedReason: string | null;
             cancelledReason: string | null;
             cancelledAt: Date | null;
+            equipmentId: string;
             cancelledById: string | null;
         })[];
         urgentWorkOrders: ({
             equipment: {
                 id: string;
-                createdAt: Date;
-                code: string;
                 name: string;
+                status: string;
+                isActive: boolean;
+                createdAt: Date;
+                version: number;
                 category: string;
                 location: string;
-                status: string;
+                updatedAt: Date;
+                code: string;
                 purchaseDate: Date | null;
                 warrantyPeriod: string | null;
                 image: string | null;
@@ -69,20 +72,17 @@ export declare class AnalyticsService {
                 specs: string | null;
                 notes: string | null;
                 currentOperatingHours: number;
-                isActive: boolean;
-                updatedAt: Date;
-                version: number;
             };
         } & {
             id: string;
-            createdAt: Date;
-            title: string;
             status: string;
-            updatedAt: Date;
+            createdAt: Date;
             version: number;
-            equipmentId: string;
+            updatedAt: Date;
+            title: string;
             description: string;
             priority: string;
+            equipmentId: string;
             orderCode: string;
             technicianName: string | null;
             plannedStartDate: Date | null;
