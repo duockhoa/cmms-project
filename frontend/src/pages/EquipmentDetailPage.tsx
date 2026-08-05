@@ -119,14 +119,14 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
       {/* Quick Info Grid */}
       <div className="kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '24px' }}>
         {[
-          { label: 'Ngày lắp đặt', value: data.purchaseDate ? new Date(data.purchaseDate).toLocaleDateString('vi-VN') : '2021-03-15' },
-          { label: 'Hãng sản xuất', value: 'Atlas Copco' },
-          { label: 'Model', value: 'GA90+' },
-          { label: 'Serial Number', value: data.serialNumber || 'AC-2023-4521' },
-          { label: 'Vị trí', value: data.location },
-          { label: 'Người phụ trách', value: 'Nguyễn Văn Minh' },
-          { label: 'Giá trị tài sản', value: '850.000.000 ₫' },
-          { label: 'Tuổi thiết bị', value: data.warrantyPeriod || '5 năm' },
+          { label: 'Ngày lắp đặt', value: data.purchaseDate ? new Date(data.purchaseDate).toLocaleDateString('vi-VN') : '---' },
+          { label: 'Hãng sản xuất', value: '---' },
+          { label: 'Model', value: '---' },
+          { label: 'Serial Number', value: data.serialNumber || '---' },
+          { label: 'Vị trí', value: data.location || '---' },
+          { label: 'Người phụ trách', value: '---' },
+          { label: 'Giá trị tài sản', value: '---' },
+          { label: 'Hạn bảo hành', value: data.warrantyPeriod || '---' },
         ].map((info, idx) => (
           <div key={idx} className="kpi-card" style={{ padding: '12px 16px', minWidth: 'unset', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>{info.label}</span>
@@ -171,18 +171,10 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', fontSize: '13px' }}>
                   {[
-                    { label: 'Hãng sản xuất', val: 'Atlas Copco' },
-                    { label: 'Model', val: 'GA90+' },
-                    { label: 'Công suất', val: '90 kW' },
-                    { label: 'Áp suất tối đa', val: '10 bar' },
-                    { label: 'Lưu lượng khí', val: '15.8 m³/min' },
-                    { label: 'Nguồn điện', val: '380V / 50Hz / 3Pha' },
-                    { label: 'Trọng lượng', val: '2.300 kg' },
-                    { label: 'Nhiệt độ hoạt động', val: '-10°C - +45°C' },
-                    { label: 'Mức ồn', val: '72 dB(A)' },
-                    { label: 'Loại dầu', val: 'Roto Z 32' },
-                    { label: 'Dung tích dầu', val: '20 lít' },
-                    { label: 'Xuất xứ', val: 'Bỉ' },
+                    { label: 'Hãng sản xuất', val: '---' },
+                    { label: 'Model', val: '---' },
+                    { label: 'Thông số', val: data.specs || '---' },
+                    { label: 'Ghi chú', val: data.notes || '---' },
                   ].map((spec, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>{spec.label}</span>
