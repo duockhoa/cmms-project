@@ -60,8 +60,8 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
   const logsList = (data.logs || []).map((l: any) => ({
     title: l.action === 'CREATE' ? 'Tạo yêu cầu' : l.action === 'COMPLETE' ? 'Bảo trì hoàn thành' : l.action,
     desc: l.comment || l.reason || 'Nhật ký hoạt động thiết bị',
-    meta: `👤 ${l.actedBy?.name || 'Hệ thống'} • 📅 ${new Date(l.createdAt).toLocaleString('vi-VN')}`,
-    icon: l.action === 'CREATE' ? '➕' : l.action === 'COMPLETE' ? '✅' : '⚙️',
+    meta: `${l.actedBy?.name || 'Hệ thống'} • ${new Date(l.createdAt).toLocaleString('vi-VN')}`,
+    icon: l.action === 'CREATE' ? 'New' : l.action === 'COMPLETE' ? 'Done' : 'Info',
     color: l.action === 'CREATE' ? '#2563eb' : l.action === 'COMPLETE' ? '#16a34a' : '#d97706'
   }));
 
@@ -368,9 +368,9 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
                     </div>
                     <h4 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--text-primary)' }}>{wo.title}</h4>
                     <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      <span>👤 {wo.technicianName || 'Chưa phân công'}</span>
-                      <span>⏱️ {wo.actualEndDate ? 'Đã hoàn thành' : 'Đang xử lý'}</span>
-                      <span>💰 {wo.totalCost ? wo.totalCost.toLocaleString('vi-VN') + ' ₫' : '0 ₫'}</span>
+                      <span>Người phụ trách: {wo.technicianName || 'Chưa phân công'}</span>
+                      <span>Trạng thái: {wo.actualEndDate ? 'Đã hoàn thành' : 'Đang xử lý'}</span>
+                      <span>Chi phí: {wo.totalCost ? wo.totalCost.toLocaleString('vi-VN') + ' ₫' : '0 ₫'}</span>
                     </div>
                   </div>
                 ))}
@@ -464,10 +464,8 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
                         {sch.description}
                       </p>
                     )}
-                    <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      <span>📅 {sch.nextDueDate ? new Date(sch.nextDueDate).toLocaleDateString('vi-VN') : 'Chưa đến hạn'}</span>
-                      <span>👤 {sch.assignedTechnician?.name || 'Chưa phân công'}</span>
-                    </div>
+                      <span>Đến hạn: {sch.nextDueDate ? new Date(sch.nextDueDate).toLocaleDateString('vi-VN') : 'Chưa đến hạn'}</span>
+                      <span>Kỹ thuật viên: {sch.assignedTechnician?.name || 'Chưa phân công'}</span>
                   </div>
                 </div>
               ))}
@@ -501,7 +499,7 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
         ) : activeSubTab === 'Phụ tùng' ? (
           <div style={{ padding: '24px 0' }}>
             <div className="card" style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 16px 0', color: 'var(--text-primary)' }}>⚙️ Danh sách phụ tùng</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 16px 0', color: 'var(--text-primary)' }}>Danh sách phụ tùng</h3>
               
               <div className="table-wrapper">
                 <table className="custom-table" style={{ fontSize: '13px' }}>
