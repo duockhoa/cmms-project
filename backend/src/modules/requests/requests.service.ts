@@ -9,7 +9,7 @@ export class RequestsService {
     private equipmentStatus: EquipmentStatusService,
   ) {}
 
-  async findAll(query?: { status?: string; priority?: string; search?: string }) {
+  async findAll(query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string }) {
     const where: any = {};
     if (query?.status) where.status = query.status;
     if (query?.priority) where.priority = query.priority;
@@ -19,6 +19,36 @@ export class RequestsService {
         { requestCode: { contains: query.search } },
         { reporterName: { contains: query.search } },
       ];
+    }
+
+    if (query?.page || query?.limit) {
+      const page = Math.max(1, parseInt(query.page || '1', 10));
+      const limit = Math.max(1, parseInt(query.limit || '10', 10));
+      const skip = (page - 1) * limit;
+
+      const [total, data] = await Promise.all([
+        this.prisma.maintenanceRequest.count({ where }),
+        this.prisma.maintenanceRequest.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            equipment: true,
+            workOrders: true,
+          },
+        })
+      ]);
+
+      return {
+        data,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
     }
 
     return this.prisma.maintenanceRequest.findMany({

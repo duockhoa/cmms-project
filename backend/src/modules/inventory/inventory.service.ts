@@ -20,7 +20,7 @@ export class InventoryService {
     }
   }
 
-  async findAll(query?: { category?: string; search?: string }) {
+  async findAll(query?: { category?: string; search?: string; page?: string; limit?: string }) {
     const where: any = {};
     if (query?.category) where.category = query.category;
     if (query?.search) {
@@ -28,6 +28,32 @@ export class InventoryService {
         { name: { contains: query.search } },
         { itemCode: { contains: query.search } },
       ];
+    }
+
+    if (query?.page || query?.limit) {
+      const page = Math.max(1, parseInt(query.page || '1', 10));
+      const limit = Math.max(1, parseInt(query.limit || '10', 10));
+      const skip = (page - 1) * limit;
+
+      const [total, data] = await Promise.all([
+        this.prisma.inventoryItem.count({ where }),
+        this.prisma.inventoryItem.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        })
+      ]);
+
+      return {
+        data,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
     }
 
     return this.prisma.inventoryItem.findMany({

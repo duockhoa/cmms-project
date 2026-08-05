@@ -12,8 +12,10 @@ export class InventoryController {
   findAll(
     @Query('category') category?: string,
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.inventoryService.findAll({ category, search });
+    return this.inventoryService.findAll({ category, search, page, limit });
   }
 
   @Get(':id')

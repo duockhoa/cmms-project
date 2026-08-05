@@ -18,8 +18,10 @@ export class RequestsController {
     @Query('status') status?: string,
     @Query('priority') priority?: string,
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.requestsService.findAll({ status, priority, search });
+    return this.requestsService.findAll({ status, priority, search, page, limit });
   }
 
   @Get(':id')

@@ -29,8 +29,10 @@ export class WorkOrdersController {
     @Query('priority') priority?: string,
     @Query('search') search?: string,
     @Query('equipmentId') equipmentId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.workOrdersService.findAll({ status, priority, search, equipmentId });
+    return this.workOrdersService.findAll({ status, priority, search, equipmentId, page, limit });
   }
 
   @Get(':id')
