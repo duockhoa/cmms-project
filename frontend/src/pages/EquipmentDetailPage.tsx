@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBadge } from '../components/common/Badge';
-import { ArrowLeft, Cpu, Edit, Plus, Wrench, Settings, FileText, BookOpen, Clock, Activity, MessageSquare, Calendar } from 'lucide-react';
+import { 
+  ArrowLeft, Cpu, Edit, Plus, Wrench, Settings, FileText, BookOpen, Clock, Activity, MessageSquare, Calendar, X, Eye, Download 
+} from 'lucide-react';
+
+const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
 interface EquipmentDetailPageProps {
   item: any;
@@ -12,9 +16,22 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
   const [loading, setLoading] = useState(true);
   const [detailData, setDetailData] = useState<any>(null);
 
-  useEffect(() => {
+  // States for Specs management (Dynamic multi-row inputs)
+  const [showSpecModal, setShowSpecModal] = useState(false);
+  const [tempSpecs, setTempSpecs] = useState<{ key: string; val: string }[]>([]);
+
+  // States for Spare Parts mapping
+  const [showPartModal, setShowPartModal] = useState(false);
+  const [selectedPartId, setSelectedPartId] = useState('');
+  const [partMinQty, setPartMinQty] = useState(1);
+
+  // States for SOP Preview
+  const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState('');
+
+  const fetchDetail = () => {
     setLoading(true);
-    fetch(`/api/equipment/${item.id}`)
+    fetch(`${API_BASE}/api/equipment/${item.id}`)
       .then(res => {
         if (!res.ok) throw new Error('Không thể tải chi tiết thiết bị');
         return res.json();
@@ -27,6 +44,10 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
         console.error(err);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchDetail();
   }, [item.id]);
 
   const subTabs = ['Tổng quan', 'Lịch sử sửa chữa', 'Lịch bảo trì', 'Phụ tùng', 'SOP & Tài liệu', 'Nhật ký'];
@@ -40,22 +61,107 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
   }
 
   const data = detailData || item;
-
   const workOrdersList = data.workOrders || [];
-
   const schedulesList = data.schedules || [];
-
-  const sparePartsList = (data.spareParts || []).map((p: any) => ({
-    name: p.name,
-    itemCode: p.itemCode,
-    quantity: p.quantity,
-    minQuantity: p.minQuantity,
-    lastChange: '---',
-    life: '---',
-    unitPrice: p.unitPrice
-  })).slice(0, 6);
-
+  const sparePartsList = data.spareParts || [];
   const attachmentsList = data.attachments || [];
+
+  // Parse specs dynamically
+  let parsedSpecs: Record<string, string> = {};
+  try {
+    if (data.specs) {
+      parsedSpecs = JSON.parse(data.specs);
+    }
+  } catch (e) {
+    parsedSpecs = { 'Thông số': data.specs };
+  }
+
+  const handleAddSpec = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Construct new specs from temporary inputs
+    const newSpecs: Record<string, string> = {};
+    for (const item of tempSpecs) {
+      if (item.key.trim() && item.val.trim()) {
+        newSpecs[item.key.trim()] = item.val.trim();
+      }
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/equipment/${data.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: data.version,
+          specs: JSON.stringify(newSpecs)
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Lỗi cập nhật thông số');
+      }
+
+      setShowSpecModal(false);
+      fetchDetail();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const openSpecsModal = () => {
+    // Populate modal with existing specs as rows
+    const rows = Object.entries(parsedSpecs).map(([key, val]) => ({ key, val }));
+    setTempSpecs(rows.length > 0 ? rows : [{ key: '', val: '' }]);
+    setShowSpecModal(true);
+  };
+
+  const handleLinkPart = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPartId) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/equipment/${data.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: data.version,
+          notes: data.notes
+        })
+      });
+
+      if (!res.ok) throw new Error('Không thể liên kết phụ tùng');
+      setShowPartModal(false);
+      fetchDetail();
+      alert('Đã liên kết phụ tùng thành công (giả lập trên DB)');
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('entityType', 'Equipment');
+    formData.append('entityId', data.id);
+    formData.append('description', 'Tài liệu SOP');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/attachments`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) throw new Error('Lỗi khi tải lên tài liệu');
+      alert('Tải lên tài liệu thành công');
+      fetchDetail();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   const logsList = (data.logs || []).map((l: any) => ({
     title: l.action === 'CREATE' ? 'Tạo yêu cầu' : l.action === 'COMPLETE' ? 'Bảo trì hoàn thành' : l.action,
@@ -98,21 +204,12 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: '22px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{data.name}</h1>
               <StatusBadge status={data.status} />
-              <span className="badge badge-info" style={{ fontSize: '11px' }}>{data.category}</span>
             </div>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
               Mã: <strong>{data.code}</strong> <span style={{ margin: '0 8px' }}>|</span> 
-              Số Serial: <strong>{data.serialNumber || 'AC-2023-4521'}</strong>
-            </p>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              {data.specs || 'Máy nén khí trục vít chính cho dây chuyền sản xuất'}
+              Số Serial: <strong>{data.serialNumber || '---'}</strong>
             </p>
           </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-secondary"><Edit size={14} /> Chỉnh sửa</button>
-          <button className="btn btn-primary"><Plus size={14} /> Tạo Work Order</button>
         </div>
       </div>
 
@@ -120,12 +217,8 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
       <div className="kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '24px' }}>
         {[
           { label: 'Ngày lắp đặt', value: data.purchaseDate ? new Date(data.purchaseDate).toLocaleDateString('vi-VN') : '---' },
-          { label: 'Hãng sản xuất', value: '---' },
-          { label: 'Model', value: '---' },
           { label: 'Serial Number', value: data.serialNumber || '---' },
           { label: 'Vị trí', value: data.location || '---' },
-          { label: 'Người phụ trách', value: '---' },
-          { label: 'Giá trị tài sản', value: '---' },
           { label: 'Hạn bảo hành', value: data.warrantyPeriod || '---' },
         ].map((info, idx) => (
           <div key={idx} className="kpi-card" style={{ padding: '12px 16px', minWidth: 'unset', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -162,196 +255,50 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
         {/* Tab content */}
         {activeSubTab === 'Tổng quan' ? (
           <div>
-            <div className="responsive-detail-grid">
+            <div className="responsive-detail-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', padding: '20px 0' }}>
               {/* Technical Specifications */}
               <div className="card" style={{ padding: '20px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <Settings size={16} color="var(--text-muted)" />
-                  <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0 }}>Thông số kỹ thuật</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Settings size={16} color="var(--text-muted)" />
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0 }}>Thông số kỹ thuật</h3>
+                  </div>
+                  <button 
+                    onClick={openSpecsModal}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '12px', padding: '4px 8px' }}
+                  >
+                    + Thiết lập thông số
+                  </button>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', fontSize: '13px' }}>
-                  {[
-                    { label: 'Hãng sản xuất', val: '---' },
-                    { label: 'Model', val: '---' },
-                    { label: 'Thông số', val: data.specs || '---' },
-                    { label: 'Ghi chú', val: data.notes || '---' },
-                  ].map((spec, idx) => (
+                  {Object.entries(parsedSpecs).map(([key, val], idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>{spec.label}</span>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{spec.val}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{key}</span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{val}</span>
                     </div>
                   ))}
-                </div>
-              </div>
-
-              {/* Equipment Condition / Life */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div className="card" style={{ padding: '20px', flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                    <Activity size={16} color="var(--text-muted)" />
-                    <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0 }}>Tình trạng thiết bị</h3>
-                  </div>
-                  
-                  {/* Equipment Image Placeholder */}
-                  <div style={{
-                    height: '160px',
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px dashed var(--border-color)',
-                    borderRadius: 'var(--radius-md)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--text-muted)',
-                    fontSize: '12px',
-                    gap: '8px',
-                    marginBottom: '16px'
-                  }}>
-                    <Wrench size={32} style={{ opacity: 0.5 }} />
-                    <span>Ảnh thiết bị</span>
-                  </div>
-
-                  {/* Overall status info */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-                    <div className="flex-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>Tình trạng tổng thể</span>
-                      <StatusBadge status={data.status} />
+                  {Object.keys(parsedSpecs).length === 0 && (
+                    <div style={{ gridColumn: '1 / -1', color: 'var(--text-muted)', textAlign: 'center' }}>
+                      Chưa cập nhật thông số kỹ thuật nào
                     </div>
-                    <div className="flex-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>Tuổi thọ còn lại</span>
-                      <span style={{ fontWeight: 600 }}>~10 năm</span>
-                    </div>
-                    {/* Progress bar */}
-                    <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--border-color)', borderRadius: '4px', overflow: 'hidden', margin: '4px 0' }}>
-                      <div style={{ width: '80%', height: '100%', backgroundColor: 'var(--primary)' }}></div>
-                    </div>
-                    <div className="flex-between" style={{ marginTop: '4px' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Bảo trì gần nhất</span>
-                      <span style={{ fontWeight: 600 }}>2026-05-20</span>
-                    </div>
-                    <div className="flex-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>Bảo trì tiếp theo</span>
-                      <span style={{ fontWeight: 600 }}>
-                        {data.schedules?.[0]?.nextDueDate 
-                          ? new Date(data.schedules[0].nextDueDate).toLocaleDateString('vi-VN') 
-                          : 'Chưa lập lịch'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom KPI Indicators */}
-            <div className="responsive-kpi-grid">
-              {[
-                { label: 'Tổng số lần sửa chữa', value: '2', color: '#2563eb' },
-                { label: 'Tổng downtime', value: '7h', color: '#d97706' },
-                { label: 'MTTR', value: '3.5h', color: '#7c3aed' },
-                { label: 'MTBF', value: '183 ngày', color: '#16a34a' },
-                { label: 'Chi phí bảo trì', value: '7.000.000 ₫', color: '#dc2626' },
-              ].map((kpi, idx) => (
-                <div key={idx} className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderLeft: `4px solid ${kpi.color}`, padding: '12px 16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: kpi.color }}></div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>{kpi.label}</span>
-                  </div>
-                  <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px' }}>{kpi.value}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* 12-Month Maintenance Chart Card */}
-            <div className="card" style={{ marginBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-                <Clock size={16} color="var(--text-muted)" />
-                <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0 }}>Biểu đồ bảo trì 12 tháng</h3>
-              </div>
-
-              {/* Custom Stylized CSS Chart */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '10px 0' }}>
-                <div style={{ display: 'flex', height: '140px', alignItems: 'flex-end', justifyContent: 'space-between', gap: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', position: 'relative' }}>
-                  {/* Grid background lines */}
-                  {[0, 1, 2, 3, 4].map((gridLine) => (
-                    <div key={gridLine} style={{
-                      position: 'absolute', left: 0, right: 0, 
-                      bottom: `${(gridLine / 4) * 100}%`,
-                      borderBottom: '1px dashed var(--border-color)',
-                      opacity: 0.3, zIndex: 1
-                    }}></div>
-                  ))}
-
-                  {/* Bars */}
-                  {[
-                    { label: 'T7/25', bars: [{ val: 1, col: '#2563eb' }] },
-                    { label: 'T8/25', bars: [{ val: 1, col: '#2563eb' }, { val: 1, col: '#d97706' }] },
-                    { label: 'T9/25', bars: [] },
-                    { label: 'T10/25', bars: [{ val: 1, col: '#2563eb' }] },
-                    { label: 'T11/25', bars: [] },
-                    { label: 'T12/25', bars: [{ val: 1, col: '#2563eb' }] },
-                    { label: 'T1/26', bars: [{ val: 1, col: '#d97706' }] },
-                    { label: 'T2/26', bars: [] },
-                    { label: 'T3/26', bars: [] },
-                    { label: 'T4/26', bars: [] },
-                    { label: 'T5/26', bars: [] },
-                    { label: 'T6/26', bars: [{ val: 1, col: '#d97706' }, { val: 1, col: '#dc2626' }] },
-                  ].map((barGroup, idx) => (
-                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, zIndex: 2 }}>
-                      <div style={{ display: 'flex', gap: '4px', height: '100px', alignItems: 'flex-end' }}>
-                        {barGroup.bars.map((bar, bIdx) => (
-                          <div 
-                            key={bIdx} 
-                            style={{ 
-                              width: '16px', 
-                              height: `${(bar.val / 2) * 80}px`, 
-                              backgroundColor: bar.col, 
-                              borderRadius: '3px 3px 0 0',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                            }}
-                            title={`${bar.col === '#2563eb' ? 'Sửa chữa' : bar.col === '#d97706' ? 'Downtime' : 'Chi phí'}`}
-                          ></div>
-                        ))}
-                        {barGroup.bars.length === 0 && <div style={{ height: '2px' }}></div>}
-                      </div>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', fontWeight: 500 }}>{barGroup.label}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Chart Legend */}
-                <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#2563eb' }}></div>
-                    <span>Sửa chữa (lần)</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#d97706' }}></div>
-                    <span>Downtime (giờ)</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#dc2626' }}></div>
-                    <span>Chi phí (triệu ₫)</span>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         ) : activeSubTab === 'Lịch sử sửa chữa' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', padding: '24px 0' }}>
-            {/* Timeline bảo trì */}
             <div className="card" style={{ padding: '20px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--text-primary)' }}>Timeline bảo trì</h3>
-              
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative', paddingLeft: '20px' }}>
-                {/* Vertical line */}
                 <div style={{ position: 'absolute', left: '4px', top: '8px', bottom: '8px', width: '2px', backgroundColor: 'var(--border-color)' }}></div>
-
                 {workOrdersList.length === 0 ? (
                   <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>
-                    Không có lịch sử sửa chữa
+                    Không có lịch sử sửa chữa nào
                   </div>
-                ) : workOrdersList.map((wo: any) => (
-                  <div key={wo.id} style={{ position: 'relative' }}>
+                ) : workOrdersList.map((wo: any, idx: number) => (
+                  <div key={wo.id || idx} style={{ position: 'relative' }}>
                     <div style={{
                       position: 'absolute', left: '-20px', top: '4px',
                       width: '10px', height: '10px', borderRadius: '50%',
@@ -370,137 +317,46 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
                     <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                       <span>Người phụ trách: {wo.technicianName || 'Chưa phân công'}</span>
                       <span>Trạng thái: {wo.actualEndDate ? 'Đã hoàn thành' : 'Đang xử lý'}</span>
-                      <span>Chi phí: {wo.totalCost ? wo.totalCost.toLocaleString('vi-VN') + ' ₫' : '0 ₫'}</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Work Order liên quan */}
-            <div className="card" style={{ padding: '20px' }}>
-              <div className="flex-between" style={{ marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Work Order liên quan</h3>
-                <select className="form-select" style={{ width: '120px', height: '32px', padding: '0 8px', fontSize: '12px' }}>
-                  <option>Tất cả</option>
-                </select>
-              </div>
-
-              <div className="table-wrapper">
-                <table className="custom-table" style={{ fontSize: '13px' }}>
-                  <thead>
-                    <tr>
-                      <th>Mã</th>
-                      <th>Tiêu đề</th>
-                      <th>Loại</th>
-                      <th>Mức ưu tiên</th>
-                      <th>Trạng thái</th>
-                      <th>Phân công</th>
-                      <th>Ngày tạo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {workOrdersList.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '16px 0' }}>
-                          Không có dữ liệu Work Order liên quan
-                        </td>
-                      </tr>
-                    ) : workOrdersList.map((wo: any) => (
-                      <tr key={wo.id}>
-                        <td style={{ fontWeight: 700 }}>{wo.orderCode}</td>
-                        <td style={{ fontWeight: 600 }}>{wo.title}</td>
-                        <td>
-                          <span className="badge badge-secondary" style={{ fontSize: '11px' }}>
-                            {wo.requestId ? 'Yêu cầu sửa chữa' : 'Bảo trì định kỳ'}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`badge ${wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'badge-danger' : 'badge-info'}`} style={{ fontSize: '11px' }}>
-                            {wo.priority}
-                          </span>
-                        </td>
-                        <td><span className="badge badge-neutral" style={{ fontSize: '11px' }}>{wo.status}</span></td>
-                        <td>{wo.technicianName || 'Chưa phân công'}</td>
-                        <td>{new Date(wo.createdAt).toLocaleDateString('vi-VN')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </div>
         ) : activeSubTab === 'Lịch bảo trì' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', padding: '24px 0' }}>
-            {/* Kế hoạch bảo trì */}
+          <div style={{ padding: '24px 0' }}>
             <div className="card" style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 16px 0', color: 'var(--text-primary)' }}>Kế hoạch bảo trì</h3>
-              
-              {schedulesList.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>
-                  Không có kế hoạch bảo trì nào được thiết lập
-                </div>
-              ) : schedulesList.map((sch: any) => (
-                <div key={sch.id} style={{
-                  display: 'flex', gap: '16px', padding: '16px',
-                  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-                  borderRadius: '8px', alignItems: 'center', marginBottom: '12px'
-                }}>
-                  <div style={{
-                    width: '36px', height: '36px', borderRadius: '8px',
-                    backgroundColor: '#eff6ff', color: '#2563eb',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <Calendar size={18} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{sch.title}</span>
-                      <span className="badge badge-warning" style={{ fontSize: '10px' }}>{sch.status}</span>
-                      <span className="badge badge-info" style={{ fontSize: '10px' }}>{sch.frequencyType}</span>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--text-primary)' }}>Kế hoạch bảo trì phòng ngừa định kỳ</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {schedulesList.map((sch: any) => (
+                  <div key={sch.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{sch.title}</span>
+                        <span className="badge badge-warning" style={{ fontSize: '10px' }}>{sch.status}</span>
+                        <span className="badge badge-info" style={{ fontSize: '10px' }}>{sch.frequencyType}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        <span>Đến hạn: {sch.nextDueDate ? new Date(sch.nextDueDate).toLocaleDateString('vi-VN') : 'Chưa đến hạn'}</span>
+                      </div>
                     </div>
-                    {sch.description && (
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                        {sch.description}
-                      </p>
-                    )}
-                      <span>Đến hạn: {sch.nextDueDate ? new Date(sch.nextDueDate).toLocaleDateString('vi-VN') : 'Chưa đến hạn'}</span>
-                      <span>Kỹ thuật viên: {sch.assignedTechnician?.name || 'Chưa phân công'}</span>
                   </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Lịch bảo trì tháng */}
-            <div className="card" style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--text-primary)' }}>Lịch bảo trì tháng 7/2026</h3>
-              
-              {/* Calendar Grid */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', backgroundColor: 'var(--border-color)' }}>
-                {/* Week Header */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', backgroundColor: 'var(--bg-secondary)', textAlign: 'center', fontWeight: 700, fontSize: '12px', padding: '10px 0' }}>
-                  <span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span>
-                </div>
-                {/* Days */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', backgroundColor: '#ffffff', rowGap: '16px', padding: '16px 0', textAlign: 'center', fontSize: '13px' }}>
-                  <span>1</span>
-                  <span style={{ backgroundColor: '#2563eb', color: '#ffffff', borderRadius: '4px', padding: '2px 0', fontWeight: 700 }}>2</span>
-                  <span>3</span><span>4</span><span>5</span><span>6</span><span>7</span>
-                  <span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span>
-                  <span>15</span><span>16</span><span>17</span><span>18</span><span>19</span>
-                  <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', borderRadius: '4px', padding: '2px 0', fontWeight: 700, border: '1px solid #bfdbfe' }}>20<div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#2563eb', margin: '2px auto 0 auto' }}></div></span>
-                  <span>21</span>
-                  <span>22</span><span>23</span><span>24</span><span>25</span><span>26</span><span>27</span><span>28</span>
-                  <span>29</span><span>30</span><span>31</span>
-                </div>
+                ))}
               </div>
             </div>
           </div>
         ) : activeSubTab === 'Phụ tùng' ? (
           <div style={{ padding: '24px 0' }}>
             <div className="card" style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 16px 0', color: 'var(--text-primary)' }}>Danh sách phụ tùng</h3>
-              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Danh sách phụ tùng liên kết</h3>
+                <button 
+                  onClick={() => setShowPartModal(true)}
+                  className="btn btn-primary btn-sm"
+                >
+                  + Liên kết phụ tùng
+                </button>
+              </div>
               <div className="table-wrapper">
                 <table className="custom-table" style={{ fontSize: '13px' }}>
                   <thead>
@@ -508,44 +364,24 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
                       <th>Tên phụ tùng</th>
                       <th>Mã phụ tùng</th>
                       <th>Tồn kho</th>
-                      <th>Lần thay gần nhất</th>
-                      <th>Tuổi thọ</th>
                       <th>Đơn giá</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sparePartsList.length === 0 ? (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '16px 0' }}>
+                        <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '16px 0' }}>
                           Không có phụ tùng liên kết với thiết bị này
                         </td>
                       </tr>
-                    ) : sparePartsList.map((part: any, idx: number) => {
-                      const low = part.quantity <= part.minQuantity;
-                      const progress = Math.min(100, (part.quantity / (part.minQuantity * 2 || 1)) * 100) + '%';
-                      return (
-                        <tr key={idx}>
-                          <td style={{ fontWeight: 600 }}>{part.name}</td>
-                          <td style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>{part.itemCode}</td>
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '150px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-                                <span>{part.quantity} / {part.minQuantity} tối thiểu</span>
-                                {low && <span className="badge badge-danger" style={{ fontSize: '9px', padding: '1px 4px' }}>Thấp</span>}
-                              </div>
-                              <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
-                                <div style={{ width: progress, height: '100%', backgroundColor: low ? '#dc2626' : '#2563eb' }}></div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>{part.lastChange}</td>
-                          <td>{part.life}</td>
-                          <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                            {part.unitPrice ? part.unitPrice.toLocaleString('vi-VN') + ' ₫' : '0 ₫'}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    ) : sparePartsList.map((part: any, idx: number) => (
+                      <tr key={part.id || idx}>
+                        <td style={{ fontWeight: 600 }}>{part.name}</td>
+                        <td style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>{part.itemCode || '---'}</td>
+                        <td>{part.quantity}</td>
+                        <td style={{ fontWeight: 600 }}>{part.unitPrice ? part.unitPrice.toLocaleString('vi-VN') + ' ₫' : '---'}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -553,10 +389,18 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
           </div>
         ) : activeSubTab === 'SOP & Tài liệu' ? (
           <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ width: '150px' }}>
-              <select className="form-select" style={{ height: '32px', fontSize: '12px' }}>
-                <option>Tất cả</option>
-              </select>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ width: '150px' }}>
+                <select className="form-select" style={{ height: '32px', fontSize: '12px' }}>
+                  <option>Tất cả tài liệu</option>
+                </select>
+              </div>
+              <div>
+                <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  + Tải lên tài liệu
+                  <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} />
+                </label>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
@@ -565,46 +409,45 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
                   Không có tài liệu hoặc SOP nào được tải lên cho thiết bị này
                 </div>
               ) : attachmentsList.map((doc: any, idx: number) => {
-                const isVideo = doc.originalName.endsWith('.mp4');
-                const isPdf = doc.originalName.endsWith('.pdf');
                 const sizeStr = doc.fileSize > 1024 * 1024 
                   ? (doc.fileSize / (1024 * 1024)).toFixed(1) + ' MB' 
                   : (doc.fileSize / 1024).toFixed(0) + ' KB';
+                const fileUrl = `${API_BASE}/api/attachments/${doc.id}/download`;
+
                 return (
                   <div key={doc.id || idx} className="card" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                       <div style={{
                         width: '36px', height: '36px', borderRadius: '6px',
-                        backgroundColor: isVideo ? '#fdf2f8' : isPdf ? '#f0fdf4' : '#eff6ff',
-                        color: isVideo ? '#db2777' : isPdf ? '#16a34a' : '#2563eb',
+                        backgroundColor: '#f0fdf4',
+                        color: '#16a34a',
                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                       }}>
                         <FileText size={18} />
                       </div>
                       <div>
                         <h4 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{doc.originalName}</h4>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                          <span className="badge badge-secondary" style={{ fontSize: '9px', padding: '1px 6px' }}>{doc.description || 'Tài liệu'}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                          <span className="badge badge-secondary" style={{ fontSize: '9px', padding: '1px 6px' }}>{doc.description || 'SOP'}</span>
                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sizeStr}</span>
                         </div>
-                        <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-                          {new Date(doc.createdAt).toLocaleDateString('vi-VN')} • {doc.uploadedBy?.name || 'Hệ thống'}
-                        </p>
                       </div>
                     </div>
-                    <button 
-                      className="btn btn-secondary btn-sm"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '12px' }}
-                      onClick={() => {
-                        if (doc.id.startsWith('doc-mock')) {
-                          alert(`Bắt đầu tải file mock: ${doc.originalName}`);
-                        } else {
-                          window.open(`/api/attachments/${doc.id}/download`, '_blank');
-                        }
-                      }}
-                    >
-                      📥 Tải
-                    </button>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button 
+                        className="btn btn-secondary btn-sm" 
+                        title="Xem trực tiếp"
+                        onClick={() => {
+                          setPreviewFileUrl(fileUrl);
+                          setPreviewFileName(doc.originalName);
+                        }}
+                      >
+                        <Eye size={14} />
+                      </button>
+                      <a href={fileUrl} className="btn btn-secondary btn-sm" title="Tải về" target="_blank" rel="noreferrer">
+                        <Download size={14} />
+                      </a>
+                    </div>
                   </div>
                 );
               })}
@@ -613,26 +456,14 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
         ) : (
           <div style={{ padding: '24px 0' }}>
             <div className="card" style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--text-primary)' }}>⚡ Nhật ký hoạt động</h3>
-              
+              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--text-primary)' }}>Nhật ký hoạt động</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative', paddingLeft: '24px' }}>
                 <div style={{ position: 'absolute', left: '6px', top: '8px', bottom: '8px', width: '2px', backgroundColor: 'var(--border-color)' }}></div>
-                
-                {logsList.length === 0 ? (
-                  <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>
-                    Không có nhật ký hoạt động nào
-                  </div>
-                ) : logsList.map((log: any, idx: number) => (
+                {logsList.map((log: any, idx: number) => (
                   <div key={idx} style={{ position: 'relative' }}>
-                    <div style={{
-                      position: 'absolute', left: '-24px', top: '2px',
-                      width: '14px', height: '14px', borderRadius: '50%',
-                      backgroundColor: '#ffffff', border: `2px solid ${log.color}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px'
-                    }}></div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
                       <div>
-                        <h4 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{log.icon} {log.title}</h4>
+                        <h4 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{log.title}</h4>
                         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>{log.desc}</p>
                       </div>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{log.meta}</span>
@@ -644,6 +475,223 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
           </div>
         )}
       </div>
+
+      {/* Modal - Thêm/Sửa Thông Số Kỹ Thuật Nhiều Dòng */}
+      {showSpecModal && (
+        <div style={{ 
+          position: 'fixed', inset: 0, 
+          backgroundColor: 'rgba(15, 23, 42, 0.4)', 
+          backdropFilter: 'blur(8px)', 
+          display: 'flex', alignItems: 'center', justifyContent: 'center', 
+          zIndex: 1000 
+        }}>
+          <div className="card" style={{ 
+            width: '540px', 
+            padding: '28px', 
+            borderRadius: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            display: 'flex', flexDirection: 'column', gap: '20px',
+            backgroundColor: 'var(--bg-primary)',
+            maxHeight: '80vh',
+            overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>Thiết lập thông số kỹ thuật</h3>
+              <button 
+                onClick={() => setShowSpecModal(false)} 
+                style={{ 
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-secondary)', padding: '6px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                onMouseOver={e => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
+                onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleAddSpec} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {tempSpecs.map((spec, index) => (
+                  <div key={index} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Tên thông số (ví dụ: Điện áp)" 
+                      value={spec.key} 
+                      onChange={e => {
+                        const updated = [...tempSpecs];
+                        updated[index].key = e.target.value;
+                        setTempSpecs(updated);
+                      }} 
+                      required 
+                      style={{ flex: 1, borderRadius: '8px', padding: '8px 12px', border: '1px solid var(--border-color)', fontSize: '13px' }}
+                    />
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Giá trị (ví dụ: 380V)" 
+                      value={spec.val} 
+                      onChange={e => {
+                        const updated = [...tempSpecs];
+                        updated[index].val = e.target.value;
+                        setTempSpecs(updated);
+                      }} 
+                      required 
+                      style={{ flex: 1, borderRadius: '8px', padding: '8px 12px', border: '1px solid var(--border-color)', fontSize: '13px' }}
+                    />
+                    <button 
+                      type="button" 
+                      style={{ 
+                        background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', 
+                        padding: '6px', borderRadius: '4px', display: 'flex', alignItems: 'center' 
+                      }}
+                      onClick={() => {
+                        setTempSpecs(tempSpecs.filter((_, i) => i !== index));
+                      }}
+                      title="Xóa dòng"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button 
+                type="button" 
+                className="btn btn-secondary btn-sm"
+                style={{ alignSelf: 'flex-start', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={() => setTempSpecs([...tempSpecs, { key: '', val: '' }])}
+              >
+                <Plus size={14} /> Thêm dòng mới
+              </button>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary btn-sm" 
+                  onClick={() => setShowSpecModal(false)}
+                  style={{ borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 600 }}
+                >
+                  Hủy bỏ
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary btn-sm"
+                  style={{ borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 600, backgroundColor: '#2563eb', color: '#ffffff', border: 'none' }}
+                >
+                  Lưu tất cả
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal - Liên kết Phụ tùng */}
+      {showPartModal && (
+        <div style={{ 
+          position: 'fixed', inset: 0, 
+          backgroundColor: 'rgba(15, 23, 42, 0.4)', 
+          backdropFilter: 'blur(8px)', 
+          display: 'flex', alignItems: 'center', justifyContent: 'center', 
+          zIndex: 1000 
+        }}>
+          <div className="card" style={{ 
+            width: '420px', 
+            padding: '28px', 
+            borderRadius: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            display: 'flex', flexDirection: 'column', gap: '20px',
+            backgroundColor: 'var(--bg-primary)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>Liên kết phụ tùng</h3>
+              <button 
+                onClick={() => setShowPartModal(false)} 
+                style={{ 
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-secondary)', padding: '6px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                onMouseOver={e => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
+                onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleLinkPart} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Chọn phụ tùng</label>
+                <select 
+                  className="form-select" 
+                  value={selectedPartId} 
+                  onChange={e => setSelectedPartId(e.target.value)} 
+                  required
+                  style={{ borderRadius: '8px', padding: '10px 12px', border: '1px solid var(--border-color)', fontSize: '13px', width: '100%' }}
+                >
+                  <option value="">-- Chọn phụ tùng từ kho --</option>
+                  <option value="part-1">Vòng bi SKF 6204</option>
+                  <option value="part-2">Dây curoa đai răng</option>
+                  <option value="part-3">Dầu bôi trơn Roto-Inject</option>
+                </select>
+              </div>
+              <div>
+                <label className="form-label" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Định mức tối thiểu</label>
+                <input 
+                  type="number" 
+                  className="form-control" 
+                  value={partMinQty} 
+                  onChange={e => setPartMinQty(parseInt(e.target.value, 10))} 
+                  min={1} 
+                  required 
+                  style={{ borderRadius: '8px', padding: '10px 12px', border: '1px solid var(--border-color)', fontSize: '13px' }}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary btn-sm" 
+                  onClick={() => setShowPartModal(false)}
+                  style={{ borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 600 }}
+                >
+                  Hủy bỏ
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary btn-sm"
+                  style={{ borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 600, backgroundColor: '#2563eb', color: '#ffffff', border: 'none' }}
+                >
+                  Xác nhận
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal - Preview Tài liệu SOP */}
+      {previewFileUrl && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' }}>
+          <div className="card" style={{ width: '80%', height: '80%', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-primary)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>Xem trực tiếp: {previewFileName}</h3>
+              <button onClick={() => setPreviewFileUrl(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ flex: 1, border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
+              <iframe 
+                src={previewFileUrl} 
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title="SOP Preview Frame"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

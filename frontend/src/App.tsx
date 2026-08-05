@@ -12,6 +12,16 @@ import { MaintenancePage } from './pages/MaintenancePage';
 import { TechniciansPage } from './pages/TechniciansPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AboutPage } from './pages/AboutPage';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 export function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -35,32 +45,34 @@ export function App() {
   }, []);
 
   return (
-    <div className={`app-container ${!sidebarOpen ? 'sidebar-collapsed' : ''}`}>
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        collapsed={!sidebarOpen} 
-        onCloseSidebar={() => setSidebarOpen(false)}
-      />
-      
-      <div className="main-content">
-        <Navbar theme={theme} setTheme={setTheme} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+    <QueryClientProvider client={queryClient}>
+      <div className={`app-container ${!sidebarOpen ? 'sidebar-collapsed' : ''}`}>
+        <Sidebar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          collapsed={!sidebarOpen} 
+          onCloseSidebar={() => setSidebarOpen(false)}
+        />
         
-        <main className="page-body">
-          {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} />}
-          {activeTab === 'equipment' && <EquipmentPage />}
-          {activeTab === 'work-orders' && <WorkOrdersPage />}
-          {activeTab === 'checklists' && <ChecklistsPage />}
-          {activeTab === 'spare-parts' && <SparePartsPage />}
-          {activeTab === 'reports' && <ReportsPage />}
-          {activeTab === 'users' && <UsersPage />}
-          {activeTab === 'maintenance' && <MaintenancePage />}
-          {activeTab === 'technicians' && <TechniciansPage />}
-          {activeTab === 'settings' && <SettingsPage />}
-          {activeTab === 'about' && <AboutPage setActiveTab={setActiveTab} />}
-        </main>
+        <div className="main-content">
+          <Navbar theme={theme} setTheme={setTheme} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+          
+          <main className="page-body">
+            {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} />}
+            {activeTab === 'equipment' && <EquipmentPage />}
+            {activeTab === 'work-orders' && <WorkOrdersPage />}
+            {activeTab === 'checklists' && <ChecklistsPage />}
+            {activeTab === 'spare-parts' && <SparePartsPage />}
+            {activeTab === 'reports' && <ReportsPage />}
+            {activeTab === 'users' && <UsersPage />}
+            {activeTab === 'maintenance' && <MaintenancePage />}
+            {activeTab === 'technicians' && <TechniciansPage />}
+            {activeTab === 'settings' && <SettingsPage />}
+            {activeTab === 'about' && <AboutPage setActiveTab={setActiveTab} />}
+          </main>
+        </div>
       </div>
-    </div>
+    </QueryClientProvider>
   );
 }
 
