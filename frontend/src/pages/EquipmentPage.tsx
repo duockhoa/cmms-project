@@ -7,6 +7,16 @@ import { EquipmentDetailPage } from './EquipmentDetailPage';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
+const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-user-id': 'tech-demo-id',
+    'x-test-user-id': 'tech-demo-id',
+    ...options.headers
+  };
+  return fetch(url, { ...options, headers });
+};
+
 export const EquipmentPage: React.FC = () => {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +50,6 @@ export const EquipmentPage: React.FC = () => {
   const loadEquipment = async () => {
     try {
       setLoading(true);
-      // Fetch with page and limit parameters
       const url = new URL(`${API_BASE}/api/equipment`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
@@ -48,17 +57,15 @@ export const EquipmentPage: React.FC = () => {
       if (categoryFilter) url.searchParams.append('category', categoryFilter);
       if (statusFilter) url.searchParams.append('status', statusFilter);
 
-      const response = await fetch(url.toString());
+      const response = await fetchWithAuth(url.toString());
       if (!response.ok) throw new Error('Không thể tải danh sách thiết bị');
       const result = await response.json();
 
-      // Backward compatible mapping
       if (result && result.data && Array.isArray(result.data)) {
         setEquipment(result.data);
         setTotal(result.meta.total);
         setTotalPages(result.meta.totalPages);
       } else if (Array.isArray(result)) {
-        // Fallback to plain array
         setEquipment(result);
         setTotal(result.length);
         setTotalPages(1);
@@ -74,7 +81,6 @@ export const EquipmentPage: React.FC = () => {
     loadEquipment();
   }, [search, categoryFilter, statusFilter, page]);
 
-  // Reset page when filter changes
   useEffect(() => {
     setPage(1);
   }, [search, categoryFilter, statusFilter]);
@@ -82,10 +88,15 @@ export const EquipmentPage: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE}/api/equipment`, {
+      // Auto-generate code if empty
+      const finalFormData = {
+        ...formData,
+        code: formData.code.trim() || `EQ-${Date.now().toString().slice(-4)}`
+      };
+
+      const res = await fetchWithAuth(`${API_BASE}/api/equipment`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(finalFormData)
       });
       if (!res.ok) throw new Error('Không thể tạo thiết bị');
       setIsAddOpen(false);
@@ -99,7 +110,7 @@ export const EquipmentPage: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (confirm('Xóa thiết bị này?')) {
       try {
-        const res = await fetch(`${API_BASE}/api/equipment/${id}`, {
+        const res = await fetchWithAuth(`${API_BASE}/api/equipment/${id}`, {
           method: 'DELETE'
         });
         if (!res.ok) throw new Error('Không thể xóa thiết bị');
@@ -114,7 +125,6 @@ export const EquipmentPage: React.FC = () => {
     return <EquipmentDetailPage item={detailItem} onBack={() => setDetailItem(null)} />;
   }
 
-  // Calculate items range
   const startItem = (page - 1) * limit + 1;
   const endItem = Math.min(page * limit, total);
 

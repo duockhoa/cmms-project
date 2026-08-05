@@ -1,13 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { Modal } from '../components/common/Modal';
-import { Plus, AlertCircle, ArrowUpRight, ArrowDownRight, Trash2, History, RefreshCw } from 'lucide-react';
+import { Plus, AlertCircle, ArrowUpRight, ArrowDownRight, Trash2, History, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+
+const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+
+const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-user-id': 'tech-demo-id',
+    'x-test-user-id': 'tech-demo-id',
+    ...options.headers
+  };
+  return fetch(url, { ...options, headers });
+};
 
 export const InventoryPage: React.FC = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -38,12 +56,29 @@ export const InventoryPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [invRes, userRes] = await Promise.all([
-        api.getInventory({ search }),
-        api.getUsers().catch(() => []),
-      ]);
-      setInventory(invRes);
+
+      const userRes = await api.getUsers().catch(() => []);
       setUsers(userRes);
+
+      // Fetch Inventory with pagination params
+      const url = new URL(`${API_BASE}/api/inventory`);
+      url.searchParams.append('page', page.toString());
+      url.searchParams.append('limit', limit.toString());
+      if (search) url.searchParams.append('search', search);
+
+      const response = await fetchWithAuth(url.toString());
+      if (!response.ok) throw new Error('Không thể tải danh sách vật tư');
+      const result = await response.json();
+
+      if (result && result.data && Array.isArray(result.data)) {
+        setInventory(result.data);
+        setTotal(result.meta.total);
+        setTotalPages(result.meta.totalPages);
+      } else if (Array.isArray(result)) {
+        setInventory(result);
+        setTotal(result.length);
+        setTotalPages(1);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -53,17 +88,20 @@ export const InventoryPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [search]);
+  }, [search, page]);
 
-  const getActiveUserId = () => {
-    const active = users.find((u: any) => u.isActive);
-    return active ? active.id : (users[0]?.id || 'user-id');
-  };
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.createInventory(formData);
+      const res = await fetchWithAuth(`${API_BASE}/api/inventory`, {
+        method: 'POST',
+        body: JSON.stringify(formData)
+      });
+      if (!res.ok) throw new Error('Không thể thêm vật tư');
       setIsAddOpen(false);
       loadData();
     } catch (err) {
@@ -75,24 +113,26 @@ export const InventoryPage: React.FC = () => {
     e.preventDefault();
     if (!adjustInModalItem) return;
     try {
-      await api.adjustIn(adjustInModalItem.id, {
-        quantity: Number(adjustInForm.quantity),
-        reason: adjustInForm.reason.trim(),
-        referenceCode: adjustInForm.referenceCode.trim() || undefined,
-        expectedVersion: adjustInModalItem.version,
-        actedById: getActiveUserId(),
+      const res = await fetchWithAuth(`${API_BASE}/api/inventory/items/${adjustInModalItem.id}/adjust-in`, {
+        method: 'POST',
+        body: JSON.stringify({
+          quantity: Number(adjustInForm.quantity),
+          reason: adjustInForm.reason.trim(),
+          referenceCode: adjustInForm.referenceCode.trim() || undefined,
+          expectedVersion: adjustInModalItem.version,
+        })
       });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Lỗi điều chỉnh tăng');
+      }
+
       setAdjustInModalItem(null);
       alert('Đã điều chỉnh tăng tồn kho thành công!');
       loadData();
     } catch (err: any) {
-      if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Dữ liệu tồn kho đã được người khác cập nhật! Vui lòng tải lại dữ liệu.');
-        setAdjustInModalItem(null);
-        loadData();
-      } else {
-        alert(`Lỗi điều chỉnh tăng: ${err.message || 'Không thể thực hiện'}`);
-      }
+      alert(err.message);
     }
   };
 
@@ -100,221 +140,275 @@ export const InventoryPage: React.FC = () => {
     e.preventDefault();
     if (!adjustOutModalItem) return;
     try {
-      await api.adjustOut(adjustOutModalItem.id, {
-        quantity: Number(adjustOutForm.quantity),
-        reason: adjustOutForm.reason.trim(),
-        referenceCode: adjustOutForm.referenceCode.trim() || undefined,
-        expectedVersion: adjustOutModalItem.version,
-        actedById: getActiveUserId(),
+      const res = await fetchWithAuth(`${API_BASE}/api/inventory/items/${adjustOutModalItem.id}/adjust-out`, {
+        method: 'POST',
+        body: JSON.stringify({
+          quantity: Number(adjustOutForm.quantity),
+          reason: adjustOutForm.reason.trim(),
+          referenceCode: adjustOutForm.referenceCode.trim() || undefined,
+          expectedVersion: adjustOutModalItem.version,
+        })
       });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Lỗi điều chỉnh giảm');
+      }
+
       setAdjustOutModalItem(null);
       alert('Đã điều chỉnh giảm tồn kho thành công!');
       loadData();
     } catch (err: any) {
-      if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Dữ liệu tồn kho đã được người khác cập nhật! Vui lòng tải lại dữ liệu.');
-        setAdjustOutModalItem(null);
-        loadData();
-      } else {
-        alert(`Lỗi điều chỉnh giảm: ${err.message || 'Không thể thực hiện'}`);
-      }
+      alert(err.message);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Xóa vật tư này khỏi hệ thống?')) {
-      try {
-        await api.deleteInventory(id);
-        loadData();
-      } catch (err: any) {
-        alert(err.message || 'Không thể xóa vật tư');
-      }
-    }
-  };
-
-  const openHistory = async (item: any) => {
+  const openHistoryModal = async (item: any) => {
     setHistoryItem(item);
     setTxLoading(true);
     try {
-      const res = await api.getInventoryTransactions(item.id);
-      setTxHistory(res.data || []);
+      const res = await fetchWithAuth(`${API_BASE}/api/inventory/items/${item.id}/transactions`);
+      if (!res.ok) throw new Error('Không thể tải lịch sử giao dịch');
+      const data = await res.json();
+      setTxHistory(data);
     } catch (err) {
       console.error(err);
-      setTxHistory([]);
     } finally {
       setTxLoading(false);
     }
   };
 
+  const startItem = (page - 1) * limit + 1;
+  const endItem = Math.min(page * limit, total);
+
   return (
     <div>
-      <div className="flex-between mb-4">
+      <div className="page-header">
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Kho Vật tư & Phụ tùng Thay thế</h1>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-            Quản lý định mức tồn kho phụ tùng bảo trì, điều chỉnh tồn kho và theo dõi lịch sử giao dịch.
-          </p>
+          <h1 className="page-title">Quản lý kho vật tư (Inventory)</h1>
+          <p className="page-subtitle">Quản lý tồn kho phụ tùng, thiết bị thay thế và giao dịch kho</p>
         </div>
         <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Nhập thêm Vật tư mới
+          <Plus size={16} /> Thêm vật tư mới
         </button>
       </div>
 
-      <div className="card mb-4 flex-between">
-        <input
-          type="text"
-          className="form-input"
-          style={{ maxWidth: '300px' }}
-          placeholder="Tìm theo mã vật tư, tên linh kiện..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-          Tổng danh mục: <strong>{inventory.length}</strong> vật tư
+      {/* Filter Bar */}
+      <div className="card mb-4" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+          <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            className="form-input"
+            style={{ paddingLeft: '34px' }}
+            placeholder="Tìm theo tên vật tư, mã SKU..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
       </div>
 
+      {/* Table */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh mục kho vật tư...</div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách vật tư...</div>
       ) : (
-        <div className="table-wrapper">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Mã Vật tư</th>
-                <th>Tên Vật tư / Linh kiện</th>
-                <th>Phân loại</th>
-                <th>Tồn kho hiện tại</th>
-                <th>Đơn giá</th>
-                <th>Vị trí lưu kho</th>
-                <th>Cảnh báo Tồn</th>
-                <th style={{ textAlign: 'center' }}>Thao tác Kho</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inventory.map((item) => {
-                const isLow = item.quantity <= item.minQuantity;
-                return (
-                  <tr key={item.id}>
-                    <td style={{ fontWeight: 800, color: 'var(--accent-primary)' }}>{item.itemCode}</td>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{item.name}</div>
-                    </td>
-                    <td>{item.category}</td>
-                    <td style={{ fontWeight: 800, fontSize: '15px' }}>
-                      {item.quantity} <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-muted)' }}>{item.unit}</span>
-                    </td>
-                    <td style={{ fontWeight: 600, color: 'var(--success)' }}>
-                      {item.unitPrice?.toLocaleString('vi-VN')} đ
-                    </td>
-                    <td>{item.location || '---'}</td>
-                    <td>
-                      {isLow ? (
-                        <span className="badge badge-danger">
-                          <AlertCircle size={12} /> Cảnh báo: Sắp hết (Tối thiểu {item.minQuantity})
-                        </span>
-                      ) : (
-                        <span className="badge badge-success">An toàn</span>
-                      )}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <button
-                          className="btn btn-success btn-sm"
-                          onClick={() => {
-                            setAdjustInModalItem(item);
-                            setAdjustInForm({ quantity: 1, reason: '', referenceCode: '' });
-                          }}
-                          title="Điều chỉnh Tăng Tồn Kho"
-                        >
-                          <ArrowUpRight size={14} /> Điều chỉnh tăng
-                        </button>
-
-                        <button
-                          className="btn btn-warning btn-sm"
-                          onClick={() => {
-                            setAdjustOutModalItem(item);
-                            setAdjustOutForm({ quantity: 1, reason: '', referenceCode: '' });
-                          }}
-                          title="Điều chỉnh Giảm Tồn Kho"
-                        >
-                          <ArrowDownRight size={14} /> Điều chỉnh giảm
-                        </button>
-
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => openHistory(item)}
-                          title="Lịch sử Giao dịch Kho"
-                        >
-                          <History size={14} /> Lịch sử
-                        </button>
-
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(item.id)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+        <div>
+          <div className="table-wrapper">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Mã vật tư</th>
+                  <th>Tên phụ tùng / Vật tư</th>
+                  <th>Loại</th>
+                  <th>Số lượng</th>
+                  <th>Mức tối thiểu</th>
+                  <th>Vị trí kệ</th>
+                  <th>Đơn giá</th>
+                  <th style={{ textAlign: 'center' }}>Thao tác điều chỉnh</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventory.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
+                      Không tìm thấy phụ tùng hoặc vật tư nào
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ) : inventory.map((item) => {
+                  const isLowStock = item.quantity <= item.minQuantity;
+                  return (
+                    <tr key={item.id}>
+                      <td style={{ fontWeight: 700, fontFamily: 'monospace' }}>{item.itemCode}</td>
+                      <td style={{ fontWeight: 600 }}>{item.name}</td>
+                      <td>{item.category}</td>
+                      <td style={{ fontWeight: 700, color: isLowStock ? '#dc2626' : 'inherit' }}>
+                        {item.quantity} {item.unit}
+                        {isLowStock && (
+                          <span className="badge badge-danger" style={{ fontSize: '9px', marginLeft: '6px', padding: '2px 6px' }}>
+                            Sắp hết
+                          </span>
+                        )}
+                      </td>
+                      <td>{item.minQuantity} {item.unit}</td>
+                      <td>{item.location || '---'}</td>
+                      <td style={{ fontWeight: 600 }}>{item.unitPrice ? item.unitPrice.toLocaleString('vi-VN') + ' ₫' : '---'}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <button 
+                            className="btn btn-secondary btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', color: '#16a34a' }}
+                            title="Điều chỉnh Tăng"
+                            onClick={() => {
+                              setAdjustInModalItem(item);
+                              setAdjustInForm({ quantity: 1, reason: 'Kiểm kê định kỳ phát hiện thừa', referenceCode: '' });
+                            }}
+                          >
+                            <ArrowUpRight size={14} />
+                          </button>
+                          <button 
+                            className="btn btn-secondary btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', color: '#dc2626' }}
+                            title="Điều chỉnh Giảm"
+                            onClick={() => {
+                              setAdjustOutModalItem(item);
+                              setAdjustOutForm({ quantity: 1, reason: 'Kiểm kê định kỳ phát hiện thiếu', referenceCode: '' });
+                            }}
+                          >
+                            <ArrowDownRight size={14} />
+                          </button>
+                          <button 
+                            className="btn btn-secondary btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px' }}
+                            title="Lịch sử giao dịch"
+                            onClick={() => openHistoryModal(item)}
+                          >
+                            <History size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Controls */}
+          {total > 0 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginTop: '16px', 
+              padding: '12px 16px', 
+              border: '1px solid var(--border-color)', 
+              borderRadius: '8px', 
+              backgroundColor: 'var(--bg-secondary)' 
+            }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Hiển thị <strong>{startItem}-{endItem}</strong> trong tổng số <strong>{total}</strong> vật tư phụ tùng
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  disabled={page === 1}
+                  onClick={() => setPage(page - 1)}
+                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
+                >
+                  <ChevronLeft size={14} /> Trang trước
+                </button>
+                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pNum) => (
+                  <button 
+                    key={pNum} 
+                    className={`btn btn-sm ${page === pNum ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setPage(pNum)}
+                    style={{ 
+                      minWidth: '32px', 
+                      height: '32px', 
+                      padding: 0, 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      backgroundColor: page === pNum ? '#2563eb' : 'transparent',
+                      color: page === pNum ? '#ffffff' : 'var(--text-primary)',
+                      border: page === pNum ? 'none' : '1px solid var(--border-color)'
+                    }}
+                  >
+                    {pNum}
+                  </button>
+                ))}
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  disabled={page === totalPages}
+                  onClick={() => setPage(page + 1)}
+                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
+                >
+                  Trang sau <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Add Inventory Item Modal */}
-      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Thêm Vật tư / Phụ tùng mới">
+      {/* Modal Add Item */}
+      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Thêm vật tư phụ tùng mới">
         <form onSubmit={handleCreate}>
+          <div className="form-group">
+            <label className="form-label">Tên phụ tùng *</label>
+            <input type="text" className="form-input" required placeholder="Ví dụ: Vòng bi SKF" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+          </div>
+
           <div className="grid-2">
             <div className="form-group">
-              <label className="form-label">Tên Vật tư / Linh kiện *</label>
-              <input type="text" className="form-input" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Vòng bi SKF 6205, Dầu thủy lực..." />
+              <label className="form-label">Mã SKU *</label>
+              <input type="text" className="form-input" required placeholder="Mã định danh vật tư" value={formData.itemCode} onChange={(e) => setFormData({ ...formData, itemCode: e.target.value })} />
             </div>
             <div className="form-group">
-              <label className="form-label">Phân loại</label>
-              <input type="text" className="form-input" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} placeholder="Cơ khí, Linh kiện điện, Dầu mỡ..." />
+              <label className="form-label">Loại</label>
+              <select className="form-select" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
+                <option value="Cơ khí">Cơ khí</option>
+                <option value="Điện">Điện</option>
+                <option value="Vật tư chung">Vật tư chung</option>
+              </select>
             </div>
           </div>
 
           <div className="grid-2">
             <div className="form-group">
-              <label className="form-label">Số lượng ban đầu</label>
-              <input type="number" className="form-input" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })} />
+              <label className="form-label">Tồn ban đầu</label>
+              <input type="number" className="form-input" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value, 10) })} />
             </div>
             <div className="form-group">
-              <label className="form-label">Đơn vị tính</label>
-              <input type="text" className="form-input" value={formData.unit} onChange={(e) => setFormData({ ...formData, unit: e.target.value })} placeholder="Cái, Lít, Bộ, Mét..." />
+              <label className="form-label">Mức tối thiểu</label>
+              <input type="number" className="form-input" value={formData.minQuantity} onChange={(e) => setFormData({ ...formData, minQuantity: parseInt(e.target.value, 10) })} />
             </div>
           </div>
 
           <div className="grid-2">
             <div className="form-group">
-              <label className="form-label">Đơn giá (VNĐ)</label>
-              <input type="number" className="form-input" value={formData.unitPrice} onChange={(e) => setFormData({ ...formData, unitPrice: Number(e.target.value) })} />
+              <label className="form-label">Vị trí kệ</label>
+              <input type="text" className="form-input" placeholder="Ví dụ: Kệ A-02" value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} />
             </div>
             <div className="form-group">
-              <label className="form-label">Vị trí lưu kho</label>
-              <input type="text" className="form-input" value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} placeholder="Kệ A-01, Kho Dầu..." />
+              <label className="form-label">Đơn giá (₫)</label>
+              <input type="number" className="form-input" value={formData.unitPrice} onChange={(e) => setFormData({ ...formData, unitPrice: parseInt(e.target.value, 10) })} />
             </div>
           </div>
 
           <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
             <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)}>Hủy</button>
-            <button type="submit" className="btn btn-primary">Lưu Vật tư</button>
+            <button type="submit" className="btn btn-primary">Xác nhận</button>
           </div>
         </form>
       </Modal>
 
       {/* Adjust In Modal */}
       {adjustInModalItem && (
-        <Modal isOpen={!!adjustInModalItem} onClose={() => setAdjustInModalItem(null)} title={`Điều chỉnh TĂNG tồn kho: ${adjustInModalItem.name}`}>
+        <Modal isOpen={!!adjustInModalItem} onClose={() => setAdjustInModalItem(null)} title={`Tăng tồn kho: ${adjustInModalItem.name}`}>
           <form onSubmit={handleAdjustInSubmit}>
-            <p className="mb-4">
-              <strong>Tồn hiện tại:</strong> {adjustInModalItem.quantity} {adjustInModalItem.unit} | <strong>Version:</strong> {adjustInModalItem.version}
-            </p>
-
             <div className="form-group">
-              <label className="form-label">Số lượng tăng thêm (+)*</label>
+              <label className="form-label">Số lượng tăng thêm *</label>
               <input
                 type="number"
                 min="1"
@@ -324,21 +418,18 @@ export const InventoryPage: React.FC = () => {
                 onChange={(e) => setAdjustInForm({ ...adjustInForm, quantity: Math.max(1, Number(e.target.value)) })}
               />
             </div>
-
             <div className="form-group">
-              <label className="form-label">Lý do điều chỉnh tăng *</label>
+              <label className="form-label">Lý do điều chỉnh *</label>
               <input
                 type="text"
                 className="form-input"
                 required
                 value={adjustInForm.reason}
                 onChange={(e) => setAdjustInForm({ ...adjustInForm, reason: e.target.value })}
-                placeholder="Kiểm kê phát hiện thừa, Nhập bù vật tư..."
               />
             </div>
-
             <div className="form-group">
-              <label className="form-label">Mã tham chiếu / Số biên bản (tùy chọn)</label>
+              <label className="form-label">Mã chứng từ tham chiếu (Không bắt buộc)</label>
               <input
                 type="text"
                 className="form-input"
@@ -347,7 +438,6 @@ export const InventoryPage: React.FC = () => {
                 placeholder="KK-2026-001..."
               />
             </div>
-
             <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setAdjustInModalItem(null)}>Hủy</button>
               <button type="submit" className="btn btn-success">
@@ -360,14 +450,10 @@ export const InventoryPage: React.FC = () => {
 
       {/* Adjust Out Modal */}
       {adjustOutModalItem && (
-        <Modal isOpen={!!adjustOutModalItem} onClose={() => setAdjustOutModalItem(null)} title={`Điều chỉnh GIẢM tồn kho: ${adjustOutModalItem.name}`}>
+        <Modal isOpen={!!adjustOutModalItem} onClose={() => setAdjustOutModalItem(null)} title={`Giảm tồn kho: ${adjustOutModalItem.name}`}>
           <form onSubmit={handleAdjustOutSubmit}>
-            <p className="mb-4">
-              <strong>Tồn hiện tại:</strong> {adjustOutModalItem.quantity} {adjustOutModalItem.unit} | <strong>Version:</strong> {adjustOutModalItem.version}
-            </p>
-
             <div className="form-group">
-              <label className="form-label">Số lượng giảm (-)*</label>
+              <label className="form-label">Số lượng giảm đi *</label>
               <input
                 type="number"
                 min="1"
@@ -375,24 +461,21 @@ export const InventoryPage: React.FC = () => {
                 className="form-input"
                 required
                 value={adjustOutForm.quantity}
-                onChange={(e) => setAdjustOutForm({ ...adjustOutForm, quantity: Math.max(1, Number(e.target.value)) })}
+                onChange={(e) => setAdjustOutForm({ ...adjustOutForm, quantity: Math.min(adjustOutModalItem.quantity, Math.max(1, Number(e.target.value))) })}
               />
             </div>
-
             <div className="form-group">
-              <label className="form-label">Lý do điều chỉnh giảm *</label>
+              <label className="form-label">Lý do điều chỉnh *</label>
               <input
                 type="text"
                 className="form-input"
                 required
                 value={adjustOutForm.reason}
                 onChange={(e) => setAdjustOutForm({ ...adjustOutForm, reason: e.target.value })}
-                placeholder="Kiểm kê phát hiện thiếu, Hư hỏng thanh lý..."
               />
             </div>
-
             <div className="form-group">
-              <label className="form-label">Mã tham chiếu / Số biên bản (tùy chọn)</label>
+              <label className="form-label">Mã chứng từ tham chiếu (Không bắt buộc)</label>
               <input
                 type="text"
                 className="form-input"
@@ -401,7 +484,6 @@ export const InventoryPage: React.FC = () => {
                 placeholder="KK-2026-002..."
               />
             </div>
-
             <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setAdjustOutModalItem(null)}>Hủy</button>
               <button type="submit" className="btn btn-warning">

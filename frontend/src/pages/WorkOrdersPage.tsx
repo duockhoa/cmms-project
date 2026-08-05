@@ -3,7 +3,19 @@ import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { ChecklistManager } from '../components/common/ChecklistManager';
-import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+
+const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-user-id': 'tech-demo-id',
+    'x-test-user-id': 'tech-demo-id',
+    ...options.headers
+  };
+  return fetch(url, { ...options, headers });
+};
 
 export const WorkOrdersPage: React.FC = () => {
   const [workOrders, setWorkOrders] = useState<any[]>([]);
@@ -11,7 +23,13 @@ export const WorkOrdersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  // Modal
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Modal states
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [statusDropdownId, setStatusDropdownId] = useState<string | null>(null);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
@@ -46,18 +64,39 @@ export const WorkOrdersPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [woRes, eqRes, techRes, userRes] = await Promise.all([
-        api.getWorkOrders({ search }),
+
+      // Fetch dynamic users and tech lists
+      const [eqRes, techRes, userRes] = await Promise.all([
         api.getEquipment(),
         api.getUsers({ role: 'TECHNICIAN' }),
         api.getUsers().catch(() => []),
       ]);
-      setWorkOrders(woRes);
       setEquipmentList(eqRes);
       setTechniciansList(techRes);
       setUsers(userRes);
+
       if (eqRes.length > 0 && !formData.equipmentId) {
         setFormData((prev) => ({ ...prev, equipmentId: eqRes[0].id }));
+      }
+
+      // Fetch Work Orders with pagination
+      const url = new URL(`${API_BASE}/api/work-orders`);
+      url.searchParams.append('page', page.toString());
+      url.searchParams.append('limit', limit.toString());
+      if (search) url.searchParams.append('search', search);
+
+      const response = await fetchWithAuth(url.toString());
+      if (!response.ok) throw new Error('Không thể tải danh sách Work Orders');
+      const result = await response.json();
+
+      if (result && result.data && Array.isArray(result.data)) {
+        setWorkOrders(result.data);
+        setTotal(result.meta.total);
+        setTotalPages(result.meta.totalPages);
+      } else if (Array.isArray(result)) {
+        setWorkOrders(result);
+        setTotal(result.length);
+        setTotalPages(1);
       }
     } catch (err) {
       console.error(err);
@@ -68,17 +107,21 @@ export const WorkOrdersPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [search]);
+  }, [search, page]);
 
-  const getActiveUserId = () => {
-    const active = users.find((u: any) => u.isActive);
-    return active ? active.id : (users[0]?.id || 'user-id');
-  };
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.createWorkOrder(formData);
+      const res = await fetchWithAuth(`${API_BASE}/api/work-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (!res.ok) throw new Error('Không thể tạo phiếu bảo trì');
       setIsAddOpen(false);
       loadData();
     } catch (err) {
@@ -88,17 +131,19 @@ export const WorkOrdersPage: React.FC = () => {
 
   const handleStatusChange = async (id: string, newStatus: string, expectedVersion: number) => {
     try {
-      await api.updateWorkOrderStatus(id, { status: newStatus, expectedVersion });
+      const res = await fetchWithAuth(`${API_BASE}/api/work-orders/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, expectedVersion })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Lỗi đổi trạng thái');
+      }
       setStatusDropdownId(null);
       loadData();
     } catch (err: any) {
-      if (err.message && err.message.includes('INSUFFICIENT_STOCK')) {
-        alert('Lỗi: Kho không đủ vật tư dự phòng để hoàn thành công việc!');
-      } else if (err.message && (err.message.includes('sửa đổi') || err.message.includes('Xung đột') || err.message.includes('Conflict'))) {
-        alert('Xung đột đồng thời: Bản ghi đã bị thay đổi bởi người dùng khác. Vui lòng tải lại trang.');
-      } else {
-        alert(`Lỗi đổi trạng thái: ${err.message || 'Yêu cầu không hợp lệ'}`);
-      }
+      alert(err.message);
     }
   };
 
@@ -106,118 +151,181 @@ export const WorkOrdersPage: React.FC = () => {
     setSelectedMaterialWO(wo);
     setMaterialLoading(true);
     try {
-      const txs = await api.getWorkOrderInventoryTransactions(wo.id);
-      setWoTransactions(txs || []);
+      const res = await fetchWithAuth(`${API_BASE}/api/work-orders/${wo.id}/inventory-transactions`);
+      if (!res.ok) throw new Error('Không thể tải lịch sử xuất nhập vật tư');
+      const txs = await res.json();
+      setWoTransactions(txs);
     } catch (err) {
       console.error(err);
-      setWoTransactions([]);
     } finally {
       setMaterialLoading(false);
     }
   };
 
-  const calculateItemReturnable = (woItem: any) => {
-    const issued = woTransactions
-      .filter((t) => t.workOrderItemId === woItem.id && t.transactionType === 'ISSUE')
+  const handleReturnClick = (woItem: any) => {
+    const txs = woTransactions;
+    const totalIssued = txs
+      .filter((t) => t.transactionType === 'ISSUE' && t.workOrderItemId === woItem.id)
       .reduce((sum, t) => sum + t.quantity, 0);
-    const returned = woTransactions
-      .filter((t) => t.workOrderItemId === woItem.id && t.transactionType === 'RETURN')
-      .reduce((sum, t) => sum + t.quantity, 0);
-    return {
-      issued: issued || woItem.quantity, // fallback to woItem.quantity if issue transactions created before Phase 3.6
-      returned,
-      returnable: Math.max(0, (issued || woItem.quantity) - returned),
-    };
-  };
 
-  const openReturnForm = (woItem: any, returnableQty: number) => {
-    setReturnItemTarget({
-      woItem,
-      returnableQty,
-    });
-    setReturnQuantity(Math.min(1, returnableQty));
-    setReturnReason('');
+    const totalReturned = txs
+      .filter((t) => t.transactionType === 'RETURN' && t.workOrderItemId === woItem.id)
+      .reduce((sum, t) => sum + t.quantity, 0);
+
+    const returnableQty = totalIssued - totalReturned;
+
+    if (totalIssued === 0) {
+      alert('Vật tư này chưa từng được xuất (ISSUE) cho phiếu bảo trì này.');
+      return;
+    }
+    if (returnableQty <= 0) {
+      alert('Vật tư này đã được trả hết.');
+      return;
+    }
+
+    setReturnItemTarget({ woItem, returnableQty });
+    setReturnQuantity(1);
+    setReturnReason('Vật tư dư thừa sau khi sửa chữa');
   };
 
   const handleReturnSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!returnItemTarget || !selectedMaterialWO) return;
-    try {
-      const invItem = await api.getInventory().then((items: any[]) => items.find((i: any) => i.id === returnItemTarget.woItem.inventoryItemId));
-      const expectedInvVer = invItem ? invItem.version : 1;
 
-      await api.returnWorkOrderMaterial(selectedMaterialWO.id, {
-        inventoryItemId: returnItemTarget.woItem.inventoryItemId,
-        workOrderItemId: returnItemTarget.woItem.id,
-        quantity: Number(returnQuantity),
-        reason: returnReason.trim(),
-        expectedInventoryVersion: expectedInvVer,
-        expectedWorkOrderVersion: selectedMaterialWO.version,
-        actedById: getActiveUserId(),
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/api/work-orders/${selectedMaterialWO.id}/material-returns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inventoryItemId: returnItemTarget.woItem.inventoryItemId,
+          quantity: returnQuantity,
+          reason: returnReason,
+          workOrderItemId: returnItemTarget.woItem.id,
+          expectedInventoryVersion: returnItemTarget.woItem.inventoryItem.version,
+          expectedWorkOrderVersion: selectedMaterialWO.version
+        })
       });
 
-      alert('Trả vật tư về kho thành công!');
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Lỗi trả vật tư');
+      }
+
+      alert('Đã trả vật tư về kho thành công!');
       setReturnItemTarget(null);
-      // Reload WO transactions and main WO list
       openMaterialModal(selectedMaterialWO);
       loadData();
     } catch (err: any) {
-      if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Có xung đột đồng thời do người khác cập nhật! Vui lòng tải lại trang.');
-        setReturnItemTarget(null);
-        loadData();
-      } else {
-        alert(`Lỗi trả vật tư: ${err.message || 'Không thể thực hiện'}`);
-      }
+      alert(err.message);
     }
   };
+
+  const startItem = (page - 1) * limit + 1;
+  const endItem = Math.min(page * limit, total);
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Work Order</h1>
-          <p className="page-subtitle">Quản lý yêu cầu bảo trì, sửa chữa và kiểm tra</p>
+          <h1 className="page-title">Phiếu bảo trì (Work Orders)</h1>
+          <p className="page-subtitle">Quản lý lệnh sửa chữa và vật tư liên quan</p>
         </div>
         <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Tạo Work Order
+          <Plus size={16} /> Tạo phiếu mới
         </button>
       </div>
 
-      {/* Requests Table */}
+      {/* Filter Bar */}
+      <div className="card mb-4" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+          <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            className="form-input"
+            style={{ paddingLeft: '34px' }}
+            placeholder="Tìm kiếm phiếu, mã thiết bị, kỹ thuật viên..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Table */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách Work Order...</div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách phiếu bảo trì...</div>
       ) : (
-        <div className="table-wrapper">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Mã WO</th>
-                <th>Tiêu đề / Mô tả</th>
-                <th>Thiết bị</th>
-                <th>Người phụ trách</th>
-                <th>Độ ưu tiên</th>
-                <th>Trạng thái</th>
-                <th style={{ textAlign: 'center' }}>Vật tư & Checklist</th>
-                <th style={{ textAlign: 'center' }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {workOrders.map((wo) => (
-                <tr key={wo.id}>
-                  <td style={{ fontWeight: 800, color: 'var(--primary)' }}>{wo.orderCode}</td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{wo.title}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{wo.description}</div>
-                  </td>
-                  <td>{wo.equipment?.name || '---'}</td>
-                  <td>{wo.technicianName || '---'}</td>
-                  <td><StatusBadge status={wo.priority} /></td>
-                  <td><StatusBadge status={wo.status} /></td>
-                  <td style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
+        <div>
+          <div className="table-wrapper">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Mã phiếu</th>
+                  <th>Tiêu đề bảo trì</th>
+                  <th>Thiết bị</th>
+                  <th>Trạng thái</th>
+                  <th>Độ ưu tiên</th>
+                  <th>Kỹ thuật viên</th>
+                  <th style={{ textAlign: 'center' }}>Vật tư</th>
+                  <th style={{ textAlign: 'center' }}>Checklist</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
+                      Không có phiếu bảo trì nào được tìm thấy
+                    </td>
+                  </tr>
+                ) : workOrders.map((wo) => (
+                  <tr key={wo.id}>
+                    <td style={{ fontWeight: 700 }}>{wo.orderCode}</td>
+                    <td style={{ fontWeight: 600 }}>{wo.title}</td>
+                    <td>{wo.equipment?.name || '---'}</td>
+                    <td>
+                      <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <button 
+                          className="btn btn-secondary btn-sm"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px' }}
+                          onClick={() => setStatusDropdownId(statusDropdownId === wo.id ? null : wo.id)}
+                        >
+                          <StatusBadge status={wo.status} />
+                          <ChevronDown size={12} />
+                        </button>
+                        {statusDropdownId === wo.id && (
+                          <div className="action-dropdown" style={{
+                            position: 'absolute', left: 0, top: '28px', zIndex: 1000,
+                            backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                            borderRadius: '4px', width: '150px', padding: '4px 0', boxShadow: 'var(--shadow-md)'
+                          }}>
+                            {['ASSIGNED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'VERIFIED', 'CLOSED', 'CANCELLED'].map((st) => (
+                              <button
+                                key={st}
+                                onClick={() => handleStatusChange(wo.id, st, wo.version)}
+                                style={{ display: 'block', width: '100%', padding: '6px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '12px' }}
+                              >
+                                {st}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td><span className={`badge badge-${wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'danger' : 'warning'}`}>{wo.priority}</span></td>
+                    <td>{wo.technicianName || 'Chưa phân công'}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button 
+                        className="btn btn-secondary btn-sm" 
+                        title="Quản lý Vật tư"
+                        onClick={() => openMaterialModal(wo)}
+                      >
+                        <Package size={14} /> ({wo.items?.length || 0})
+                      </button>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button 
+                        className="btn btn-secondary btn-sm" 
+                        title="Thực thi Checklist"
                         onClick={() => {
                           setSelectedChecklistWO(wo);
                           setIsChecklistOpen(true);
@@ -225,177 +333,117 @@ export const WorkOrdersPage: React.FC = () => {
                       >
                         Checklist
                       </button>
+                    </td>
+                    <td>---</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => openMaterialModal(wo)}
-                        style={{ color: 'var(--primary)' }}
-                      >
-                        <Package size={13} /> Vật tư ({wo.items?.length || 0})
-                      </button>
-                    </div>
-                  </td>
-                  <td style={{ textAlign: 'center', position: 'relative' }}>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setStatusDropdownId(statusDropdownId === wo.id ? null : wo.id)}
-                    >
-                      Đổi trạng thái <ChevronDown size={14} />
-                    </button>
-
-                    {statusDropdownId === wo.id && (
-                      <div style={{
-                        position: 'absolute', right: 0, top: '100%', zIndex: 10,
-                        backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                        borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-md)',
-                        padding: '4px', display: 'flex', flexDirection: 'column', gap: '2px', width: '140px'
-                      }}>
-                        <button className="btn btn-secondary btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => handleStatusChange(wo.id, 'IN_PROGRESS', wo.version)}>Đang thực hiện</button>
-                        <button className="btn btn-secondary btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => handleStatusChange(wo.id, 'INSPECTION', wo.version)}>Nghiệm thu</button>
-                        <button className="btn btn-secondary btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => handleStatusChange(wo.id, 'COMPLETED', wo.version)}>Hoàn thành</button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Pagination Controls */}
+          {total > 0 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginTop: '16px', 
+              padding: '12px 16px', 
+              border: '1px solid var(--border-color)', 
+              borderRadius: '8px', 
+              backgroundColor: 'var(--bg-secondary)' 
+            }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Hiển thị <strong>{startItem}-{endItem}</strong> trong tổng số <strong>{total}</strong> phiếu bảo trì
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  disabled={page === 1}
+                  onClick={() => setPage(page - 1)}
+                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
+                >
+                  <ChevronLeft size={14} /> Trang trước
+                </button>
+                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pNum) => (
+                  <button 
+                    key={pNum} 
+                    className={`btn btn-sm ${page === pNum ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setPage(pNum)}
+                    style={{ 
+                      minWidth: '32px', 
+                      height: '32px', 
+                      padding: 0, 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      backgroundColor: page === pNum ? '#2563eb' : 'transparent',
+                      color: page === pNum ? '#ffffff' : 'var(--text-primary)',
+                      border: page === pNum ? 'none' : '1px solid var(--border-color)'
+                    }}
+                  >
+                    {pNum}
+                  </button>
+                ))}
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  disabled={page === totalPages}
+                  onClick={() => setPage(page + 1)}
+                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
+                >
+                  Trang sau <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Modal Create Work Order */}
-      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Tạo Work Order">
-        <form onSubmit={handleCreate}>
-          <div className="form-group">
-            <label className="form-label">Tiêu đề *</label>
-            <input type="text" className="form-input" required placeholder="Mô tả ngắn gọn công việc" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} />
-          </div>
-
-          <div className="grid-2">
-            <div className="form-group">
-              <label className="form-label">Thiết bị *</label>
-              <select className="form-select" required value={formData.equipmentId} onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value })}>
-                {equipmentList.map((eq) => (
-                  <option key={eq.id} value={eq.id}>[{eq.code}] {eq.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Loại Work Order</label>
-              <select className="form-select" value={formData.workOrderType} onChange={(e) => setFormData({ ...formData, workOrderType: e.target.value })}>
-                <option value="Sửa chữa">Sửa chữa</option>
-                <option value="Bảo trì phòng ngừa">Bảo trì phòng ngừa</option>
-                <option value="Kiểm tra">Kiểm tra</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid-2">
-            <div className="form-group">
-              <label className="form-label">Mức ưu tiên</label>
-              <select className="form-select" value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })}>
-                <option value="MEDIUM">Trung bình</option>
-                <option value="HIGH">Cao</option>
-                <option value="URGENT">Khẩn cấp</option>
-                <option value="LOW">Thấp</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Kỹ thuật viên</label>
-              <select
-                className="form-select"
-                value={formData.technicianName}
-                onChange={(e) => setFormData({ ...formData, technicianName: e.target.value })}
-              >
-                <option value="">-- Chưa phân công --</option>
-                {techniciansList.map(tech => (
-                  <option key={tech.id} value={tech.name}>{tech.name} ({tech.specialty || 'Chưa cập nhật'})</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Mô tả sự cố/công việc *</label>
-            <textarea className="form-textarea" rows={3} required placeholder="Mô tả chi tiết vấn đề hoặc công việc cần thực hiện..." value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
-          </div>
-
-          <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)}>Hủy</button>
-            <button type="submit" className="btn btn-primary">Tạo Work Order</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Modal Checklist Execution */}
-      {selectedChecklistWO && (
-        <Modal
-          isOpen={isChecklistOpen}
-          onClose={() => {
-            setIsChecklistOpen(false);
-            setSelectedChecklistWO(null);
-          }}
-          title={`Checklist bảo trì - ${selectedChecklistWO.orderCode}`}
+      {/* Checklist execution Modal */}
+      {isChecklistOpen && selectedChecklistWO && (
+        <Modal 
+          isOpen={isChecklistOpen} 
+          onClose={() => setIsChecklistOpen(false)} 
+          title={`Thực thi checklist: ${selectedChecklistWO.orderCode}`}
         >
-          <div style={{ padding: '4px' }}>
-            <ChecklistManager
-              workOrderId={selectedChecklistWO.id}
-              workOrderStatus={selectedChecklistWO.status}
-              onStatusChange={loadData}
-            />
-          </div>
+          <ChecklistManager workOrderId={selectedChecklistWO.id} workOrderStatus={selectedChecklistWO.status} />
         </Modal>
       )}
 
-      {/* Modal Material & Material Return */}
+      {/* Material & Returns Modal */}
       {selectedMaterialWO && (
         <Modal
           isOpen={!!selectedMaterialWO}
           onClose={() => setSelectedMaterialWO(null)}
-          title={`Vật tư & Trả vật tư - ${selectedMaterialWO.orderCode}`}
+          title={`Quản lý vật tư: ${selectedMaterialWO.orderCode}`}
         >
-          <div>
-            <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '10px' }}>Danh sách Vật tư đính kèm WO:</h4>
-
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>Danh mục phụ tùng liên kết bảo trì:</h4>
             {materialLoading ? (
-              <div style={{ textAlign: 'center', padding: '20px' }}>
-                <RefreshCw size={16} className="animate-spin" style={{ color: 'var(--primary)' }} /> Đang tải dữ liệu vật tư...
-              </div>
-            ) : !selectedMaterialWO.items || selectedMaterialWO.items.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                Phiếu bảo trì này chưa gắn vật tư.
-              </div>
+              <div>Đang tải thông tin...</div>
             ) : (
-              <div className="table-wrapper mb-4">
+              <div className="table-wrapper">
                 <table className="custom-table" style={{ fontSize: '13px' }}>
                   <thead>
                     <tr>
-                      <th>Vật tư</th>
-                      <th>Đã Xuất (ISSUE)</th>
-                      <th>Đã Trả (RETURN)</th>
-                      <th>Còn thể trả</th>
+                      <th>Tên vật tư</th>
+                      <th>Số lượng định mức</th>
+                      <th>Đơn giá</th>
                       <th style={{ textAlign: 'center' }}>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedMaterialWO.items.map((woItem: any) => {
-                      const { issued, returned, returnable } = calculateItemReturnable(woItem);
-                      const isReturnDisabled =
-                        returnable <= 0 ||
-                        selectedMaterialWO.status === 'CANCELLED' ||
-                        selectedMaterialWO.status === 'CLOSED';
-
+                    {(selectedMaterialWO.items || []).map((item: any) => {
                       return (
-                        <tr key={woItem.id}>
-                          <td style={{ fontWeight: 600 }}>{woItem.inventoryItem?.name || woItem.inventoryItemId}</td>
-                          <td style={{ fontWeight: 700 }}>{issued}</td>
-                          <td style={{ color: 'var(--warning)', fontWeight: 700 }}>{returned}</td>
-                          <td style={{ color: 'var(--success)', fontWeight: 800 }}>{returnable}</td>
+                        <tr key={item.id}>
+                          <td style={{ fontWeight: 600 }}>{item.inventoryItem?.name}</td>
+                          <td>{item.quantity}</td>
+                          <td>{item.unitPrice ? item.unitPrice.toLocaleString('vi-VN') + ' ₫' : '---'}</td>
                           <td style={{ textAlign: 'center' }}>
-                            <button
+                            <button 
                               className="btn btn-warning btn-sm"
-                              disabled={isReturnDisabled}
-                              onClick={() => openReturnForm(woItem, returnable)}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', fontSize: '12px' }}
+                              onClick={() => handleReturnClick(item)}
                             >
                               <RotateCcw size={13} /> Trả vật tư
                             </button>

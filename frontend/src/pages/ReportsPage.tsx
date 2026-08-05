@@ -15,13 +15,9 @@ export const ReportsPage: React.FC = () => {
   const loadReportData = async () => {
     try {
       setLoading(true);
-      const users = await api.getUsers().catch(() => []);
-      const activeUser = users.find((u: any) => u.isActive) || users[0];
-      const actedById = activeUser?.id || '';
-
       const [dash, kpis] = await Promise.all([
         api.getDashboard(),
-        actedById ? api.getKpis({ actedById }) : Promise.resolve(null),
+        api.getKpis(),
       ]);
       setDashboardData(dash);
       setKpiData(kpis);

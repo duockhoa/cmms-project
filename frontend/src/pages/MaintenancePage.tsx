@@ -1,32 +1,75 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
-import { Calendar, History } from 'lucide-react';
+import { Calendar, History, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+
+const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-user-id': 'tech-demo-id',
+    'x-test-user-id': 'tech-demo-id',
+    ...options.headers
+  };
+  return fetch(url, { ...options, headers });
+};
 
 export const MaintenancePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'schedule' | 'history'>('schedule');
   const [schedules, setSchedules] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api.getSchedules().then((res) => {
+  // Pagination states for history list
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch dynamic active schedules
+      const res = await api.getSchedules();
       if (res && Array.isArray(res)) {
         setSchedules(res);
       } else if (res && Array.isArray(res.data)) {
         setSchedules(res.data);
       }
-    });
 
-    api.getWorkOrders().then((res) => {
-      if (res && Array.isArray(res)) {
-        const completed = res.filter((wo: any) => ['COMPLETED', 'VERIFIED', 'CLOSED'].includes(wo.status));
+      // Fetch work orders with pagination
+      const url = new URL(`${API_BASE}/api/work-orders`);
+      url.searchParams.append('page', page.toString());
+      url.searchParams.append('limit', limit.toString());
+      url.searchParams.append('status', 'COMPLETED'); // Filtering done in client legacy or endpoint query
+
+      const response = await fetchWithAuth(url.toString());
+      if (!response.ok) throw new Error('Không thể tải lịch sử bảo trì');
+      const result = await response.json();
+
+      if (result && result.data && Array.isArray(result.data)) {
+        const completed = result.data.filter((wo: any) => ['COMPLETED', 'VERIFIED', 'CLOSED'].includes(wo.status));
         setHistory(completed);
-      } else if (res && res.data && Array.isArray(res.data)) {
-        const completed = res.data.filter((wo: any) => ['COMPLETED', 'VERIFIED', 'CLOSED'].includes(wo.status));
+        setTotal(result.meta.total);
+        setTotalPages(result.meta.totalPages);
+      } else if (Array.isArray(result)) {
+        const completed = result.filter((wo: any) => ['COMPLETED', 'VERIFIED', 'CLOSED'].includes(wo.status));
         setHistory(completed);
+        setTotal(completed.length);
+        setTotalPages(1);
       }
-    });
-  }, []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [page, activeTab]);
 
   const activeSchedulesCount = schedules.filter((s: any) => s.status === 'ACTIVE').length;
   const overdueCount = schedules.filter((s: any) => s.status === 'ACTIVE' && s.nextDueDate && new Date(s.nextDueDate) < new Date()).length;
@@ -38,8 +81,11 @@ export const MaintenancePage: React.FC = () => {
       const hrs = (new Date(item.actualEndDate).getTime() - new Date(item.actualStartDate).getTime()) / (1000 * 60 * 60);
       return sum + (hrs > 0 ? hrs : 2);
     }
-    return sum + 2; // Default 2 hours estimate if missing
+    return sum + 2;
   }, 0);
+
+  const startItem = (page - 1) * limit + 1;
+  const endItem = Math.min(page * limit, total);
 
   return (
     <div>
@@ -62,11 +108,13 @@ export const MaintenancePage: React.FC = () => {
           className={`btn ${activeTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('history')}
         >
-          <History size={14} /> Lịch sử ({history.length})
+          <History size={14} /> Lịch sử ({total})
         </button>
       </div>
 
-      {activeTab === 'schedule' ? (
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải dữ liệu...</div>
+      ) : activeTab === 'schedule' ? (
         <div>
           <div className="kpi-row">
             <div className="kpi-card">
@@ -131,7 +179,7 @@ export const MaintenancePage: React.FC = () => {
             </div>
             <div className="kpi-card">
               <div className="kpi-card-title">Số lần bảo trì</div>
-              <div className="kpi-card-value">{history.length}</div>
+              <div className="kpi-card-value">{total}</div>
             </div>
           </div>
 
@@ -148,7 +196,13 @@ export const MaintenancePage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {history.map((wo) => (
+                {history.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
+                      Chưa có lịch sử bảo trì hoàn thành nào
+                    </td>
+                  </tr>
+                ) : history.map((wo) => (
                   <tr key={wo.id}>
                     <td>{wo.completedAt ? new Date(wo.completedAt).toLocaleDateString('vi-VN') : new Date(wo.updatedAt).toLocaleDateString('vi-VN')}</td>
                     <td style={{ fontWeight: 600 }}>{wo.equipment?.name || '---'}</td>
@@ -165,6 +219,62 @@ export const MaintenancePage: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {total > 0 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginTop: '16px', 
+              padding: '12px 16px', 
+              border: '1px solid var(--border-color)', 
+              borderRadius: '8px', 
+              backgroundColor: 'var(--bg-secondary)' 
+            }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Hiển thị <strong>{startItem}-{endItem}</strong> trong tổng số <strong>{total}</strong> phiếu bảo trì hoàn thành
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  disabled={page === 1}
+                  onClick={() => setPage(page - 1)}
+                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
+                >
+                  <ChevronLeft size={14} /> Trang trước
+                </button>
+                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pNum) => (
+                  <button 
+                    key={pNum} 
+                    className={`btn btn-sm ${page === pNum ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setPage(pNum)}
+                    style={{ 
+                      minWidth: '32px', 
+                      height: '32px', 
+                      padding: 0, 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      backgroundColor: page === pNum ? '#2563eb' : 'transparent',
+                      color: page === pNum ? '#ffffff' : 'var(--text-primary)',
+                      border: page === pNum ? 'none' : '1px solid var(--border-color)'
+                    }}
+                  >
+                    {pNum}
+                  </button>
+                ))}
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  disabled={page === totalPages}
+                  onClick={() => setPage(page + 1)}
+                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
+                >
+                  Trang sau <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

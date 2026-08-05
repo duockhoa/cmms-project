@@ -5,6 +5,8 @@ async function request(endpoint: string, options: RequestInit = {}) {
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
+      'x-user-id': 'tech-demo-id',
+      'x-test-user-id': 'tech-demo-id',
       ...options.headers,
     },
     ...options,
