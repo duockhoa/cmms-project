@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 
 interface EquipmentFormModalProps {
@@ -13,12 +13,14 @@ interface EquipmentFormModalProps {
     specs: string;
     code: string;
   }) => void;
+  initialData?: any;
 }
 
 export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
+  initialData,
 }) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -29,6 +31,32 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     specs: '',
     code: '',
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setFormData({
+          name: initialData.name || '',
+          category: initialData.category || 'Cơ khí',
+          status: initialData.status || 'OPERATIONAL',
+          location: initialData.location || '',
+          serialNumber: initialData.serialNumber || '',
+          specs: initialData.specs || '',
+          code: initialData.code || '',
+        });
+      } else {
+        setFormData({
+          name: '',
+          category: 'Cơ khí',
+          status: 'OPERATIONAL',
+          location: '',
+          serialNumber: '',
+          specs: '',
+          code: '',
+        });
+      }
+    }
+  }, [initialData, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,9 +76,36 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     });
   };
 
+  const isEdit = !!initialData;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Thêm thiết bị mới">
+    <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? "Chỉnh sửa thiết bị" : "Thêm thiết bị mới"}>
       <form onSubmit={handleSubmit}>
+        {isEdit && (
+          <div className="form-group">
+            <label className="form-label">Mã thiết bị (Không thể sửa)</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              disabled 
+              value={formData.code} 
+            />
+          </div>
+        )}
+        
+        {!isEdit && (
+          <div className="form-group">
+            <label className="form-label">Mã thiết bị (Để trống tự sinh)</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              placeholder="Nhập mã thiết bị (ví dụ: EQ-0001)" 
+              value={formData.code} 
+              onChange={(e) => setFormData({ ...formData, code: e.target.value })} 
+            />
+          </div>
+        )}
+
         <div className="form-group">
           <label className="form-label">Tên thiết bị *</label>
           <input 
@@ -126,7 +181,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
 
         <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
           <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
-          <button type="submit" className="btn btn-primary">Thêm mới</button>
+          <button type="submit" className="btn btn-primary">{isEdit ? "Lưu thay đổi" : "Thêm mới"}</button>
         </div>
       </form>
     </Modal>

@@ -14,6 +14,7 @@ import { TechniciansPage } from './pages/TechniciansPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AboutPage } from './pages/AboutPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,8 +47,10 @@ export function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <div className={`app-container ${!sidebarOpen ? 'sidebar-collapsed' : ''}`}>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <div className={`app-container ${!sidebarOpen ? 'sidebar-collapsed' : ''}`}>
+
           <Sidebar 
             collapsed={!sidebarOpen} 
             onCloseSidebar={() => setSidebarOpen(false)}
@@ -76,6 +79,7 @@ export function App() {
           </div>
         </div>
       </BrowserRouter>
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 }

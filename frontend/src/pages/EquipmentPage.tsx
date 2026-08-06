@@ -26,6 +26,7 @@ export const EquipmentPage: React.FC = () => {
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editItem, setEditItem] = useState<any>(null);
   const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
 
   const loadEquipment = async () => {
@@ -66,18 +67,49 @@ export const EquipmentPage: React.FC = () => {
     setPage(1);
   }, [search, categoryFilter, statusFilter]);
 
-  const handleCreate = async (finalFormData: any) => {
+  const handleFormSubmit = async (finalFormData: any) => {
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment`, {
-        method: 'POST',
-        body: JSON.stringify(finalFormData)
-      });
-      if (!res.ok) throw new Error('Không thể tạo thiết bị');
-      setIsAddOpen(false);
+      if (editItem) {
+        // Edit mode: PATCH
+        const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment/${editItem.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: finalFormData.name,
+            category: finalFormData.category,
+            status: finalFormData.status,
+            location: finalFormData.location,
+            serialNumber: finalFormData.serialNumber,
+            specs: finalFormData.specs,
+            expectedVersion: editItem.version,
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || 'Không thể chỉnh sửa thiết bị');
+        }
+        alert('Cập nhật thiết bị thành công!');
+      } else {
+        // Create mode: POST
+        const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment`, {
+          method: 'POST',
+          body: JSON.stringify(finalFormData)
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || 'Không thể tạo thiết bị');
+        }
+        alert('Thêm thiết bị mới thành công!');
+      }
+      handleCloseModal();
       loadEquipment();
-    } catch (err) {
-      alert('Lỗi tạo thiết bị!');
+    } catch (err: any) {
+      alert(err.message || 'Có lỗi xảy ra!');
     }
+  };
+
+  const handleCloseModal = () => {
+    setIsAddOpen(false);
+    setEditItem(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -212,7 +244,7 @@ export const EquipmentPage: React.FC = () => {
                             <Eye size={12} /> Xem chi tiết
                           </button>
                           <button 
-                            onClick={() => { alert('Tính năng chỉnh sửa thiết bị đang phát triển.'); setActiveActionMenu(null); }}
+                            onClick={() => { setEditItem(item); setIsAddOpen(true); setActiveActionMenu(null); }}
                             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
                           >
                             <Edit size={12} /> Chỉnh sửa
@@ -290,11 +322,12 @@ export const EquipmentPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Add Equipment */}
+      {/* Modal Add/Edit Equipment */}
       <EquipmentFormModal 
         isOpen={isAddOpen} 
-        onClose={() => setIsAddOpen(false)} 
-        onSubmit={handleCreate} 
+        onClose={handleCloseModal} 
+        onSubmit={handleFormSubmit} 
+        initialData={editItem}
       />
     </div>
   );

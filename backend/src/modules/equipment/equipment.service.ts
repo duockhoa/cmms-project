@@ -7,7 +7,7 @@ export class EquipmentService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(query?: { search?: string; category?: string; status?: string; location?: string; page?: string; limit?: string }) {
-    const where: any = {};
+    const where: any = { isActive: true };
     if (query?.search) {
       where.OR = [
         { name: { contains: query.search } },
@@ -149,6 +149,9 @@ export class EquipmentService {
 
   async remove(id: string) {
     await this.findOne(id);
-    return this.prisma.equipment.delete({ where: { id } });
+    return this.prisma.equipment.update({
+      where: { id },
+      data: { isActive: false },
+    });
   }
 }
