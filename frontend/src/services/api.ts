@@ -1,5 +1,16 @@
 const API_BASE = 'http://localhost:3001/api/v1';
 
+export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-user-id': 'tech-demo-id',
+    'x-test-user-id': 'tech-demo-id',
+    ...options.headers
+  };
+  return fetch(url, { ...options, headers });
+};
+
+
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
   const config: RequestInit = {

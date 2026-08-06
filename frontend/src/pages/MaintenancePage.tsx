@@ -1,19 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import { api, fetchWithAuth } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Calendar, History, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
-
-const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
-  const headers = {
-    'Content-Type': 'application/json',
-    'x-user-id': 'tech-demo-id',
-    'x-test-user-id': 'tech-demo-id',
-    ...options.headers
-  };
-  return fetch(url, { ...options, headers });
-};
 
 export const MaintenancePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'schedule' | 'history'>('schedule');

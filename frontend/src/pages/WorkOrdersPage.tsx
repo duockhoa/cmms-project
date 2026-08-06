@@ -1,21 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import { api, fetchWithAuth } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { ChecklistManager } from '../components/common/ChecklistManager';
 import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
-
-const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
-  const headers = {
-    'Content-Type': 'application/json',
-    'x-user-id': 'tech-demo-id',
-    'x-test-user-id': 'tech-demo-id',
-    ...options.headers
-  };
-  return fetch(url, { ...options, headers });
-};
 
 export const WorkOrdersPage: React.FC = () => {
   const [workOrders, setWorkOrders] = useState<any[]>([]);

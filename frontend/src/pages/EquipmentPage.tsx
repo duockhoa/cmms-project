@@ -1,21 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import { api, fetchWithAuth } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRight } from 'lucide-react';
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
-
-const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
-  const headers = {
-    'Content-Type': 'application/json',
-    'x-user-id': 'tech-demo-id',
-    'x-test-user-id': 'tech-demo-id',
-    ...options.headers
-  };
-  return fetch(url, { ...options, headers });
-};
 
 export const EquipmentPage: React.FC = () => {
   const [equipment, setEquipment] = useState<any[]>([]);
