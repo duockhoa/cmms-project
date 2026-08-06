@@ -1,4 +1,5 @@
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Cpu,
@@ -10,18 +11,15 @@ import {
   Calendar,
   UserCheck,
   Settings,
-  ShieldCheck,
   Info,
 } from 'lucide-react';
 
 interface SidebarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
   collapsed: boolean;
   onCloseSidebar?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, collapsed, onCloseSidebar }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },
     { id: 'equipment', label: 'Thiết bị', icon: Cpu },
@@ -42,23 +40,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, colla
       <nav style={{ padding: '12px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeTab === item.id;
+          const targetPath = item.id === 'dashboard' ? '/' : `/${item.id}`;
           return (
-            <button
+            <NavLink
               key={item.id}
+              to={targetPath}
               onClick={() => {
-                setActiveTab(item.id);
                 if (window.innerWidth <= 768) {
                   onCloseSidebar?.();
                 }
               }}
-              style={{
+              style={({ isActive }) => ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
                 padding: '9px 12px',
                 borderRadius: 'var(--radius-sm)',
-                border: 'none',
+                textDecoration: 'none',
                 backgroundColor: isActive ? 'var(--bg-hover)' : 'transparent',
                 color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                 fontWeight: isActive ? 600 : 500,
@@ -66,11 +64,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, colla
                 cursor: 'pointer',
                 textAlign: 'left',
                 transition: 'all 0.1s ease',
-              }}
+              })}
             >
-              <Icon size={16} color={isActive ? 'var(--text-primary)' : 'var(--text-muted)'} />
-              <span>{item.label}</span>
-            </button>
+              {({ isActive }) => (
+                <>
+                  <Icon size={16} color={isActive ? 'var(--text-primary)' : 'var(--text-muted)'} />
+                  <span>{item.label}</span>
+                </>
+              )}
+            </NavLink>
           );
         })}
       </nav>

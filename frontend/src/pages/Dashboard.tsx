@@ -2,12 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Cpu, AlertTriangle, Calendar, CheckCircle2, ArrowUpRight, BellRing } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-interface DashboardProps {
-  setActiveTab: (tab: string) => void;
-}
-
-export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
+export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -153,7 +151,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
         <div className="card">
           <div className="flex-between mb-4">
             <h4 style={{ fontSize: '14px', fontWeight: 700 }}>Yêu cầu sửa chữa gần đây</h4>
-            <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('work-orders')}>Xem tất cả</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => navigate('/work-orders')}>Xem tất cả</button>
           </div>
           <div className="table-wrapper">
             <table className="custom-table">
@@ -183,7 +181,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
         <div className="card">
           <div className="flex-between mb-4">
             <h4 style={{ fontSize: '14px', fontWeight: 700 }}>Lịch bảo trì sắp tới</h4>
-            <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('maintenance')}>Xem tất cả</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => navigate('/maintenance')}>Xem tất cả</button>
           </div>
           <div className="table-wrapper">
             <table className="custom-table">

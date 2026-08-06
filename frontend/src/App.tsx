@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
 import { Navbar } from './components/layout/Navbar';
 import { Dashboard } from './pages/Dashboard';
@@ -24,7 +25,6 @@ const queryClient = new QueryClient({
 });
 
 export function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [theme, setTheme] = useState('light');
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
 
@@ -46,32 +46,36 @@ export function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className={`app-container ${!sidebarOpen ? 'sidebar-collapsed' : ''}`}>
-        <Sidebar 
-          activeTab={activeTab} 
-          setActiveTab={setActiveTab} 
-          collapsed={!sidebarOpen} 
-          onCloseSidebar={() => setSidebarOpen(false)}
-        />
-        
-        <div className="main-content">
-          <Navbar theme={theme} setTheme={setTheme} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <BrowserRouter>
+        <div className={`app-container ${!sidebarOpen ? 'sidebar-collapsed' : ''}`}>
+          <Sidebar 
+            collapsed={!sidebarOpen} 
+            onCloseSidebar={() => setSidebarOpen(false)}
+          />
           
-          <main className="page-body">
-            {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} />}
-            {activeTab === 'equipment' && <EquipmentPage />}
-            {activeTab === 'work-orders' && <WorkOrdersPage />}
-            {activeTab === 'checklists' && <ChecklistsPage />}
-            {activeTab === 'spare-parts' && <SparePartsPage />}
-            {activeTab === 'reports' && <ReportsPage />}
-            {activeTab === 'users' && <UsersPage />}
-            {activeTab === 'maintenance' && <MaintenancePage />}
-            {activeTab === 'technicians' && <TechniciansPage />}
-            {activeTab === 'settings' && <SettingsPage />}
-            {activeTab === 'about' && <AboutPage setActiveTab={setActiveTab} />}
-          </main>
+          <div className="main-content">
+            <Navbar theme={theme} setTheme={setTheme} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+            
+            <main className="page-body">
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/equipment" element={<EquipmentPage />} />
+                <Route path="/equipment/:id" element={<EquipmentPage />} />
+                <Route path="/work-orders" element={<WorkOrdersPage />} />
+                <Route path="/checklists" element={<ChecklistsPage />} />
+                <Route path="/spare-parts" element={<SparePartsPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/users" element={<UsersPage />} />
+                <Route path="/maintenance" element={<MaintenancePage />} />
+                <Route path="/technicians" element={<TechniciansPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/about" element={<AboutPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </main>
+          </div>
         </div>
-      </div>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }

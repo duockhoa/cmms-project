@@ -1,10 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-interface AboutPageProps {
-  setActiveTab: (tab: string) => void;
-}
+export const AboutPage: React.FC = () => {
+  const navigate = useNavigate();
 
-export const AboutPage: React.FC<AboutPageProps> = ({ setActiveTab }) => {
   return (
     <div style={{
       minHeight: 'calc(100vh - 120px)',
@@ -77,7 +76,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ setActiveTab }) => {
           Góp ý
         </button>
         <button
-          onClick={() => setActiveTab('dashboard')}
+          onClick={() => navigate('/')}
           style={{
             padding: '10px 28px',
             borderRadius: '8px',

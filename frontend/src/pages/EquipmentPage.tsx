@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api, fetchWithAuth } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
@@ -8,6 +9,8 @@ import { EquipmentDetailPage } from './EquipmentDetailPage';
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
 export const EquipmentPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [equipment, setEquipment] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -22,7 +25,6 @@ export const EquipmentPage: React.FC = () => {
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [detailItem, setDetailItem] = useState<any>(null);
   const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
 
   // Form State
@@ -111,8 +113,8 @@ export const EquipmentPage: React.FC = () => {
     }
   };
 
-  if (detailItem) {
-    return <EquipmentDetailPage item={detailItem} onBack={() => setDetailItem(null)} />;
+  if (id) {
+    return <EquipmentDetailPage item={{ id }} onBack={() => navigate('/equipment')} />;
   }
 
   const startItem = (page - 1) * limit + 1;
@@ -189,7 +191,7 @@ export const EquipmentPage: React.FC = () => {
                 ) : equipment.map((item) => (
                   <tr 
                     key={item.id} 
-                    onClick={() => setDetailItem(item)}
+                    onClick={() => navigate(`/equipment/${item.id}`)}
                     style={{ cursor: 'pointer' }}
                     onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
                     onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -223,7 +225,7 @@ export const EquipmentPage: React.FC = () => {
                           zIndex: 100, display: 'flex', flexDirection: 'column', width: '130px', padding: '4px 0'
                         }}>
                           <button 
-                            onClick={() => { setDetailItem(item); setActiveActionMenu(null); }}
+                            onClick={() => { navigate(`/equipment/${item.id}`); setActiveActionMenu(null); }}
                             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
                           >
                             <Eye size={12} /> Xem chi tiết
