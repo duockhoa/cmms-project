@@ -11,6 +11,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { ChecklistExecutionsModule } from './modules/checklist-executions/checklist-executions.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AuthModule } from './modules/auth/auth.module';
     AttachmentsModule,
     ChecklistExecutionsModule,
     AuthModule,
+    HealthModule,
   ],
 })
 export class AppModule {}
