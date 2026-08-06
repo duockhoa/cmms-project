@@ -3,6 +3,13 @@ import { StatusBadge } from '../components/common/Badge';
 import { 
   ArrowLeft, Cpu, Edit, Plus, Wrench, Settings, FileText, BookOpen, Clock, Activity, MessageSquare, Calendar, X, Eye, Download 
 } from 'lucide-react';
+import { OverviewTab } from '../components/equipment/OverviewTab';
+import { RepairHistoryTab } from '../components/equipment/RepairHistoryTab';
+import { MaintenanceSchedulesTab } from '../components/equipment/MaintenanceSchedulesTab';
+import { SparePartsTab } from '../components/equipment/SparePartsTab';
+import { DocumentsTab } from '../components/equipment/DocumentsTab';
+import { QRCodeTab } from '../components/equipment/QRCodeTab';
+import { LogsTab } from '../components/equipment/LogsTab';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
@@ -270,308 +277,32 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
         </div>
 
         {/* Tab content */}
-        {activeSubTab === 'Tổng quan' ? (
-          <div>
-            <div className="responsive-detail-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', padding: '20px 0' }}>
-              {/* Technical Specifications */}
-              <div className="card" style={{ padding: '20px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Settings size={16} color="var(--text-muted)" />
-                    <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0 }}>Thông số kỹ thuật</h3>
-                  </div>
-                  <button 
-                    onClick={openSpecsModal}
-                    className="btn btn-secondary btn-sm"
-                    style={{ fontSize: '12px', padding: '4px 8px' }}
-                  >
-                    + Thiết lập thông số
-                  </button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', fontSize: '13px' }}>
-                  {Object.entries(parsedSpecs).map(([key, val], idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>{key}</span>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{val}</span>
-                    </div>
-                  ))}
-                  {Object.keys(parsedSpecs).length === 0 && (
-                    <div style={{ gridColumn: '1 / -1', color: 'var(--text-muted)', textAlign: 'center' }}>
-                      Chưa cập nhật thông số kỹ thuật nào
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : activeSubTab === 'Lịch sử sửa chữa' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', padding: '24px 0' }}>
-            <div className="card" style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--text-primary)' }}>Timeline bảo trì</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative', paddingLeft: '20px' }}>
-                <div style={{ position: 'absolute', left: '4px', top: '8px', bottom: '8px', width: '2px', backgroundColor: 'var(--border-color)' }}></div>
-                {workOrdersList.length === 0 ? (
-                  <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>
-                    Không có lịch sử sửa chữa nào
-                  </div>
-                ) : workOrdersList.map((wo: any, idx: number) => (
-                  <div key={wo.id || idx} style={{ position: 'relative' }}>
-                    <div style={{
-                      position: 'absolute', left: '-20px', top: '4px',
-                      width: '10px', height: '10px', borderRadius: '50%',
-                      backgroundColor: wo.priority === 'HIGH' || wo.priority === 'URGENT' ? '#d97706' : '#16a34a',
-                      border: '2px solid #ffffff'
-                    }}></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                      <span className={`badge ${wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
-                        {wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'Sửa chữa' : 'Phòng ngừa'}
-                      </span>
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                        {new Date(wo.createdAt).toLocaleDateString('vi-VN')}
-                      </span>
-                    </div>
-                    <h4 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--text-primary)' }}>{wo.title}</h4>
-                    <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      <span>Người phụ trách: {wo.technicianName || 'Chưa phân công'}</span>
-                      <span>Trạng thái: {wo.actualEndDate ? 'Đã hoàn thành' : 'Đang xử lý'}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : activeSubTab === 'Lịch bảo trì' ? (
-          <div style={{ padding: '24px 0' }}>
-            <div className="card" style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--text-primary)' }}>Kế hoạch bảo trì phòng ngừa định kỳ</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {schedulesList.map((sch: any) => (
-                  <div key={sch.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{sch.title}</span>
-                        <span className="badge badge-warning" style={{ fontSize: '10px' }}>{sch.status}</span>
-                        <span className="badge badge-info" style={{ fontSize: '10px' }}>{sch.frequencyType}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        <span>Đến hạn: {sch.nextDueDate ? new Date(sch.nextDueDate).toLocaleDateString('vi-VN') : 'Chưa đến hạn'}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : activeSubTab === 'Phụ tùng' ? (
-          <div style={{ padding: '24px 0' }}>
-            <div className="card" style={{ padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Danh sách phụ tùng liên kết</h3>
-                <button 
-                  onClick={() => setShowPartModal(true)}
-                  className="btn btn-primary btn-sm"
-                >
-                  + Liên kết phụ tùng
-                </button>
-              </div>
-              <div className="table-wrapper">
-                <table className="custom-table" style={{ fontSize: '13px' }}>
-                  <thead>
-                    <tr>
-                      <th>Tên phụ tùng</th>
-                      <th>Mã phụ tùng</th>
-                      <th>Tồn kho</th>
-                      <th>Đơn giá</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sparePartsList.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '16px 0' }}>
-                          Không có phụ tùng liên kết với thiết bị này
-                        </td>
-                      </tr>
-                    ) : sparePartsList.map((part: any, idx: number) => (
-                      <tr key={part.id || idx}>
-                        <td style={{ fontWeight: 600 }}>{part.name}</td>
-                        <td style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>{part.itemCode || '---'}</td>
-                        <td>{part.quantity}</td>
-                        <td style={{ fontWeight: 600 }}>{part.unitPrice ? part.unitPrice.toLocaleString('vi-VN') + ' ₫' : '---'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        ) : activeSubTab === 'SOP & Tài liệu' ? (
-          <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ width: '150px' }}>
-                <select className="form-select" style={{ height: '32px', fontSize: '12px' }}>
-                  <option>Tất cả tài liệu</option>
-                </select>
-              </div>
-              <div>
-                <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  + Tải lên tài liệu
-                  <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} />
-                </label>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-              {attachmentsList.length === 0 ? (
-                <div className="card" style={{ padding: '24px', textAlign: 'center', gridColumn: '1 / -1', color: 'var(--text-muted)', fontSize: '13px' }}>
-                  Không có tài liệu hoặc SOP nào được tải lên cho thiết bị này
-                </div>
-              ) : attachmentsList.map((doc: any, idx: number) => {
-                const sizeStr = doc.fileSize > 1024 * 1024 
-                  ? (doc.fileSize / (1024 * 1024)).toFixed(1) + ' MB' 
-                  : (doc.fileSize / 1024).toFixed(0) + ' KB';
-                const downloadUrl = `${API_BASE}/api/v1/attachments/${doc.id}/download`;
-                const viewUrl = `${API_BASE}/api/v1/attachments/${doc.id}/view`;
-
-                return (
-                  <div key={doc.id || idx} className="card" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                      <div style={{
-                        width: '36px', height: '36px', borderRadius: '6px',
-                        backgroundColor: '#f0fdf4',
-                        color: '#16a34a',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                      }}>
-                        <FileText size={18} />
-                      </div>
-                      <div>
-                        <h4 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{doc.originalName}</h4>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                          <span className="badge badge-secondary" style={{ fontSize: '9px', padding: '1px 6px' }}>{doc.description || 'SOP'}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sizeStr}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button 
-                        className="btn btn-secondary btn-sm" 
-                        title="Xem trực tiếp"
-                        onClick={() => {
-                          setPreviewFileUrl(viewUrl);
-                          setPreviewFileName(doc.originalName);
-                        }}
-                      >
-                        <Eye size={14} />
-                      </button>
-                      <a href={downloadUrl} className="btn btn-secondary btn-sm" title="Tải về" target="_blank" rel="noreferrer">
-                        <Download size={14} />
-                      </a>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : activeSubTab === 'Mã QR' ? (
-          <div style={{ padding: '24px 0', display: 'flex', justifyContent: 'center' }}>
-            <div className="card" style={{ 
-              width: '320px', 
-              padding: '24px', 
-              textAlign: 'center', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              gap: '16px',
-              backgroundColor: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '12px'
-            }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Mã QR nhận diện thiết bị</h3>
-              <div style={{ 
-                padding: '16px', 
-                backgroundColor: '#ffffff', 
-                borderRadius: '8px', 
-                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}>
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`cmms-equipment:${data.id}`)}`}
-                  alt={`QR Code ${data.code}`}
-                  style={{ width: '200px', height: '200px' }}
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>{data.name}</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'monospace', fontWeight: 600 }}>{data.code}</span>
-              </div>
-              <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '8px' }}>
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  style={{ flex: 1, fontSize: '12px', padding: '8px' }}
-                  onClick={() => {
-                    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`cmms-equipment:${data.id}`)}`;
-                    window.open(qrUrl, '_blank');
-                  }}
-                >
-                  Tải ảnh QR
-                </button>
-                <button 
-                  className="btn btn-primary btn-sm" 
-                  style={{ flex: 1, fontSize: '12px', padding: '8px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none' }}
-                  onClick={() => {
-                    const printWindow = window.open('', '_blank');
-                    if (printWindow) {
-                      printWindow.document.write(`
-                        <html>
-                          <head>
-                            <title>In nhãn QR - ${data.code}</title>
-                            <style>
-                              body { font-family: sans-serif; text-align: center; padding: 40px; }
-                              .label-container { border: 2px dashed #000; padding: 20px; display: inline-block; border-radius: 8px; }
-                              img { width: 200px; height: 200px; }
-                              h2 { margin: 10px 0 5px 0; }
-                              p { margin: 0; font-family: monospace; font-size: 14px; font-weight: bold; }
-                            </style>
-                          </head>
-                          <body onload="window.print(); window.close();">
-                            <div class="label-container">
-                              <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`cmms-equipment:${data.id}`)}" />
-                              <h2>${data.name}</h2>
-                              <p>${data.code}</p>
-                            </div>
-                          </body>
-                        </html>
-                      `);
-                      printWindow.document.close();
-                    }
-                  }}
-                >
-                  In nhãn QR
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: '24px 0' }}>
-            <div className="card" style={{ padding: '20px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--text-primary)' }}>Nhật ký hoạt động</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative', paddingLeft: '24px' }}>
-                <div style={{ position: 'absolute', left: '6px', top: '8px', bottom: '8px', width: '2px', backgroundColor: 'var(--border-color)' }}></div>
-                {logsList.map((log: any, idx: number) => (
-                  <div key={idx} style={{ position: 'relative' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                      <div>
-                        <h4 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{log.title}</h4>
-                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>{log.desc}</p>
-                      </div>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{log.meta}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+        {activeSubTab === 'Tổng quan' && (
+          <OverviewTab parsedSpecs={parsedSpecs} openSpecsModal={openSpecsModal} />
+        )}
+        {activeSubTab === 'Lịch sử sửa chữa' && (
+          <RepairHistoryTab workOrdersList={workOrdersList} />
+        )}
+        {activeSubTab === 'Lịch bảo trì' && (
+          <MaintenanceSchedulesTab schedulesList={schedulesList} />
+        )}
+        {activeSubTab === 'Phụ tùng' && (
+          <SparePartsTab sparePartsList={sparePartsList} setShowPartModal={setShowPartModal} />
+        )}
+        {activeSubTab === 'SOP & Tài liệu' && (
+          <DocumentsTab 
+            attachmentsList={attachmentsList} 
+            handleFileUpload={handleFileUpload} 
+            setPreviewFileUrl={setPreviewFileUrl}
+            setPreviewFileName={setPreviewFileName}
+            API_BASE={API_BASE}
+          />
+        )}
+        {activeSubTab === 'Mã QR' && (
+          <QRCodeTab data={data} />
+        )}
+        {activeSubTab === 'Nhật ký' && (
+          <LogsTab logsList={logsList} />
         )}
       </div>
 
