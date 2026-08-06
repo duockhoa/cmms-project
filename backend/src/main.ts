@@ -24,6 +24,9 @@ async function bootstrap() {
     }),
   );
 
+  // API versioning - all routes prefixed with /api/v1
+  app.setGlobalPrefix('api/v1');
+
   const port = configService.get<number>('PORT') || 3001;
   await app.listen(port);
   console.log(`🚀 NestJS Backend server listening on http://localhost:${port}`);

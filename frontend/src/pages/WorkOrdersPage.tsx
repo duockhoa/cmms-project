@@ -80,7 +80,7 @@ export const WorkOrdersPage: React.FC = () => {
       }
 
       // Fetch Work Orders with pagination
-      const url = new URL(`${API_BASE}/api/work-orders`);
+      const url = new URL(`${API_BASE}/api/v1/work-orders`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
       if (search) url.searchParams.append('search', search);
@@ -116,7 +116,7 @@ export const WorkOrdersPage: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/work-orders`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/work-orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -131,7 +131,7 @@ export const WorkOrdersPage: React.FC = () => {
 
   const handleStatusChange = async (id: string, newStatus: string, expectedVersion: number) => {
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/work-orders/${id}/status`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/work-orders/${id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, expectedVersion })
@@ -151,7 +151,7 @@ export const WorkOrdersPage: React.FC = () => {
     setSelectedMaterialWO(wo);
     setMaterialLoading(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/work-orders/${wo.id}/inventory-transactions`);
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/work-orders/${wo.id}/inventory-transactions`);
       if (!res.ok) throw new Error('Không thể tải lịch sử xuất nhập vật tư');
       const txs = await res.json();
       setWoTransactions(txs);
@@ -193,7 +193,7 @@ export const WorkOrdersPage: React.FC = () => {
     if (!returnItemTarget || !selectedMaterialWO) return;
 
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/work-orders/${selectedMaterialWO.id}/material-returns`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/work-orders/${selectedMaterialWO.id}/material-returns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

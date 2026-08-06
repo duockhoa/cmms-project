@@ -61,7 +61,7 @@ export const InventoryPage: React.FC = () => {
       setUsers(userRes);
 
       // Fetch Inventory with pagination params
-      const url = new URL(`${API_BASE}/api/inventory`);
+      const url = new URL(`${API_BASE}/api/v1/inventory`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
       if (search) url.searchParams.append('search', search);
@@ -97,7 +97,7 @@ export const InventoryPage: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/inventory`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/inventory`, {
         method: 'POST',
         body: JSON.stringify(formData)
       });
@@ -113,7 +113,7 @@ export const InventoryPage: React.FC = () => {
     e.preventDefault();
     if (!adjustInModalItem) return;
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/inventory/items/${adjustInModalItem.id}/adjust-in`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/inventory/${adjustInModalItem.id}/adjust-in`, {
         method: 'POST',
         body: JSON.stringify({
           quantity: Number(adjustInForm.quantity),
@@ -140,7 +140,7 @@ export const InventoryPage: React.FC = () => {
     e.preventDefault();
     if (!adjustOutModalItem) return;
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/inventory/items/${adjustOutModalItem.id}/adjust-out`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/inventory/${adjustOutModalItem.id}/adjust-out`, {
         method: 'POST',
         body: JSON.stringify({
           quantity: Number(adjustOutForm.quantity),
@@ -167,7 +167,7 @@ export const InventoryPage: React.FC = () => {
     setHistoryItem(item);
     setTxLoading(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/inventory/items/${item.id}/transactions`);
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/inventory/${item.id}/transactions`);
       if (!res.ok) throw new Error('Không thể tải lịch sử giao dịch');
       const data = await res.json();
       setTxHistory(data);

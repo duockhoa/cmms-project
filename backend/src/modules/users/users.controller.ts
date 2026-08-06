@@ -1,9 +1,11 @@
-import { Controller, Get, Patch, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateTechnicalProfileDto } from './dto/update-technical-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-@Controller('api/users')
+@Controller('users')
+@UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

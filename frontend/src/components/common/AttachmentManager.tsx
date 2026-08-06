@@ -207,7 +207,7 @@ export const AttachmentManager: React.FC<AttachmentManagerProps> = ({
 
                 <div style={{ display: 'flex', gap: '4px', marginLeft: '12px' }}>
                   <a
-                    href={`http://localhost:3001/api/attachments/${att.id}/download`}
+                    href={`http://localhost:3001/api/v1/attachments/${att.id}/download`}
                     target="_blank"
                     rel="noreferrer"
                     className="btn btn-secondary btn-sm"

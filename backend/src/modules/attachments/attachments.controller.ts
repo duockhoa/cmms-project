@@ -8,6 +8,7 @@ import {
   Body,
   UploadedFile,
   UseInterceptors,
+  UseGuards,
   Res,
   HttpCode,
   HttpStatus,
@@ -15,8 +16,10 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { AttachmentsService } from './attachments.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-@Controller('api/attachments')
+@Controller('attachments')
+@UseGuards(JwtAuthGuard)
 export class AttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 

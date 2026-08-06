@@ -50,7 +50,7 @@ export const EquipmentPage: React.FC = () => {
   const loadEquipment = async () => {
     try {
       setLoading(true);
-      const url = new URL(`${API_BASE}/api/equipment`);
+      const url = new URL(`${API_BASE}/api/v1/equipment`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
       if (search) url.searchParams.append('search', search);
@@ -94,7 +94,7 @@ export const EquipmentPage: React.FC = () => {
         code: formData.code.trim() || `EQ-${Date.now().toString().slice(-4)}`
       };
 
-      const res = await fetchWithAuth(`${API_BASE}/api/equipment`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment`, {
         method: 'POST',
         body: JSON.stringify(finalFormData)
       });
@@ -110,7 +110,7 @@ export const EquipmentPage: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (confirm('Xóa thiết bị này?')) {
       try {
-        const res = await fetchWithAuth(`${API_BASE}/api/equipment/${id}`, {
+        const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment/${id}`, {
           method: 'DELETE'
         });
         if (!res.ok) throw new Error('Không thể xóa thiết bị');

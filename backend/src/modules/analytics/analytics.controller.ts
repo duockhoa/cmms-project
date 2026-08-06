@@ -4,8 +4,10 @@ import { KpiEngineService } from './services/kpi-engine.service';
 import { AnalyticsAuditAdapter } from './adapters/analytics-audit.adapter';
 import { AnalyticsPermissionGuard } from './guards/analytics-permission.guard';
 import { KpiQueryDto } from './dto/kpi-query.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-@Controller('api/analytics')
+@Controller('analytics')
+@UseGuards(JwtAuthGuard)
 export class AnalyticsController {
   constructor(
     private readonly analyticsService: AnalyticsService,

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Req, HttpCode, HttpStatus, Patch } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkOrdersService } from './work-orders.service';
 import { InventoryService } from '../inventory/inventory.service';
@@ -16,7 +16,8 @@ import {
   AddWorkOrderItemDto,
 } from './dto/work-orders.dto';
 
-@Controller('api/work-orders')
+@Controller('work-orders')
+@UseGuards(JwtAuthGuard)
 export class WorkOrdersController {
   constructor(
     private readonly workOrdersService: WorkOrdersService,
@@ -46,14 +47,15 @@ export class WorkOrdersController {
   }
 
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   create(@Body() data: CreateWorkOrderDto) {
     return this.workOrdersService.create(data);
   }
 
   /**
-   * @deprecated Use explicit action endpoints (/assign, /start, etc.) instead
+   * @deprecated Use PATCH :id with { status: '...' } instead
    */
-  @Put(':id/status')
+  @Patch(':id/status')
   updateStatus(@Param('id') id: string, @Body() body: any) {
     return this.workOrdersService.updateStatusLegacy(id, body);
   }
@@ -105,7 +107,7 @@ export class WorkOrdersController {
 
   // Material Return (Phase 3.6)
   @Post(':workOrderId/material-returns')
-  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
   materialReturn(
     @Param('workOrderId') workOrderId: string,
     @Body() body: MaterialReturnDto,
@@ -115,6 +117,7 @@ export class WorkOrdersController {
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {
     return this.workOrdersService.remove(id);
   }

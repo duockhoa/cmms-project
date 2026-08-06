@@ -40,7 +40,7 @@ export const MaintenancePage: React.FC = () => {
       }
 
       // Fetch work orders with pagination
-      const url = new URL(`${API_BASE}/api/work-orders`);
+      const url = new URL(`${API_BASE}/api/v1/work-orders`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
       url.searchParams.append('status', 'COMPLETED'); // Filtering done in client legacy or endpoint query

@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req, HttpCode, HttpStatus } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { CreateInventoryItemDto, AdjustInventoryStockDto, AdjustInDto, AdjustOutDto, UpdateInventoryItemDto } from './dto/inventory.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-@Controller('api/inventory')
+@Controller('inventory')
 @UseGuards(JwtAuthGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
@@ -23,17 +23,8 @@ export class InventoryController {
     return this.inventoryService.findOne(id);
   }
 
-  // Transactions list for item
-  @Get('items/:itemId/transactions')
-  getItemTransactions(
-    @Param('itemId') itemId: string,
-    @Query() query: any,
-  ) {
-    return this.inventoryService.getItemTransactions(itemId, query);
-  }
-
   @Get(':id/transactions')
-  getItemTransactionsAlias(
+  getItemTransactions(
     @Param('id') id: string,
     @Query() query: any,
   ) {
@@ -41,11 +32,12 @@ export class InventoryController {
   }
 
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   create(@Body() data: CreateInventoryItemDto) {
     return this.inventoryService.create(data);
   }
 
-  @Put(':id')
+  @Patch(':id')
   update(@Param('id') id: string, @Body() data: UpdateInventoryItemDto) {
     return this.inventoryService.update(id, data);
   }
@@ -56,28 +48,21 @@ export class InventoryController {
   }
 
   // Adjust In (Phase 3.6)
-  @Post('items/:itemId/adjust-in')
-  adjustIn(@Param('itemId') itemId: string, @Body() body: AdjustInDto, @Req() req: any) {
-    return this.inventoryService.adjustIn(itemId, body, req.user.id);
-  }
-
   @Post(':id/adjust-in')
-  adjustInAlias(@Param('id') id: string, @Body() body: AdjustInDto, @Req() req: any) {
+  @HttpCode(HttpStatus.CREATED)
+  adjustIn(@Param('id') id: string, @Body() body: AdjustInDto, @Req() req: any) {
     return this.inventoryService.adjustIn(id, body, req.user.id);
   }
 
   // Adjust Out (Phase 3.6)
-  @Post('items/:itemId/adjust-out')
-  adjustOut(@Param('itemId') itemId: string, @Body() body: AdjustOutDto, @Req() req: any) {
-    return this.inventoryService.adjustOut(itemId, body, req.user.id);
-  }
-
   @Post(':id/adjust-out')
-  adjustOutAlias(@Param('id') id: string, @Body() body: AdjustOutDto, @Req() req: any) {
+  @HttpCode(HttpStatus.CREATED)
+  adjustOut(@Param('id') id: string, @Body() body: AdjustOutDto, @Req() req: any) {
     return this.inventoryService.adjustOut(id, body, req.user.id);
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {
     return this.inventoryService.remove(id);
   }

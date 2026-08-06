@@ -31,7 +31,12 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
 
   const fetchDetail = () => {
     setLoading(true);
-    fetch(`${API_BASE}/api/equipment/${item.id}`)
+    fetch(`${API_BASE}/api/v1/equipment/${item.id}`, {
+      headers: {
+        'x-user-id': 'tech-demo-id',
+        'x-test-user-id': 'tech-demo-id',
+      }
+    })
       .then(res => {
         if (!res.ok) throw new Error('Không thể tải chi tiết thiết bị');
         return res.json();
@@ -88,9 +93,13 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/equipment/${data.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(`${API_BASE}/api/v1/equipment/${data.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'tech-demo-id',
+          'x-test-user-id': 'tech-demo-id',
+        },
         body: JSON.stringify({
           expectedVersion: data.version,
           specs: JSON.stringify(newSpecs)
@@ -121,9 +130,13 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     if (!selectedPartId) return;
 
     try {
-      const res = await fetch(`${API_BASE}/api/equipment/${data.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(`${API_BASE}/api/v1/equipment/${data.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'tech-demo-id',
+          'x-test-user-id': 'tech-demo-id',
+        },
         body: JSON.stringify({
           expectedVersion: data.version,
           notes: data.notes
@@ -150,8 +163,12 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     formData.append('description', 'Tài liệu SOP');
 
     try {
-      const res = await fetch(`${API_BASE}/api/attachments`, {
+      const res = await fetch(`${API_BASE}/api/v1/attachments`, {
         method: 'POST',
+        headers: {
+          'x-user-id': 'tech-demo-id',
+          'x-test-user-id': 'tech-demo-id',
+        },
         body: formData
       });
 
@@ -412,8 +429,8 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
                 const sizeStr = doc.fileSize > 1024 * 1024 
                   ? (doc.fileSize / (1024 * 1024)).toFixed(1) + ' MB' 
                   : (doc.fileSize / 1024).toFixed(0) + ' KB';
-                const downloadUrl = `${API_BASE}/api/attachments/${doc.id}/download`;
-                const viewUrl = `${API_BASE}/api/attachments/${doc.id}/view`;
+                const downloadUrl = `${API_BASE}/api/v1/attachments/${doc.id}/download`;
+                const viewUrl = `${API_BASE}/api/v1/attachments/${doc.id}/view`;
 
                 return (
                   <div key={doc.id || idx} className="card" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>

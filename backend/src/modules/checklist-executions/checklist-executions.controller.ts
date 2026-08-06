@@ -1,15 +1,18 @@
-import { Controller, Post, Get, Patch, Param, Body } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Param, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ChecklistExecutionsService } from './checklist-executions.service';
 import { CreateChecklistExecutionDto } from './dto/create-checklist-execution.dto';
 import { PatchChecklistItemDto } from './dto/patch-checklist-item.dto';
 import { CompleteChecklistExecutionDto } from './dto/complete-checklist-execution.dto';
 import { CancelChecklistExecutionDto } from './dto/cancel-checklist-execution.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-@Controller('api')
+@Controller()
+@UseGuards(JwtAuthGuard)
 export class ChecklistExecutionsController {
   constructor(private readonly checklistService: ChecklistExecutionsService) {}
 
   @Post('work-orders/:id/checklist-executions')
+  @HttpCode(HttpStatus.CREATED)
   async createExecution(
     @Param('id') workOrderId: string,
     @Body() dto: CreateChecklistExecutionDto

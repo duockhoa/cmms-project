@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = 'http://localhost:3001/api/v1';
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
@@ -40,7 +40,7 @@ export const api = {
   },
   getEquipmentById: (id: string) => request(`/equipment/${id}`),
   createEquipment: (data: any) => request('/equipment', { method: 'POST', body: JSON.stringify(data) }),
-  updateEquipment: (id: string, data: any) => request(`/equipment/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateEquipment: (id: string, data: any) => request(`/equipment/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteEquipment: (id: string) => request(`/equipment/${id}`, { method: 'DELETE' }),
 
   // Maintenance Requests
@@ -71,7 +71,7 @@ export const api = {
   getWorkOrderById: (id: string) => request(`/work-orders/${id}`),
   createWorkOrder: (data: any) => request('/work-orders', { method: 'POST', body: JSON.stringify(data) }),
   updateWorkOrderStatus: (id: string, body: { status: string; expectedVersion?: number; failureCause?: string; solution?: string; technicianName?: string }) =>
-    request(`/work-orders/${id}/status`, { method: 'PUT', body: JSON.stringify(body) }),
+    request(`/work-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) }),
   addWorkOrderItem: (id: string, item: { inventoryItemId: string; quantity: number }) =>
     request(`/work-orders/${id}/items`, { method: 'POST', body: JSON.stringify(item) }),
   deleteWorkOrder: (id: string) => request(`/work-orders/${id}`, { method: 'DELETE' }),
@@ -98,16 +98,16 @@ export const api = {
     return request(`/inventory${query ? `?${query}` : ''}`);
   },
   createInventory: (data: any) => request('/inventory', { method: 'POST', body: JSON.stringify(data) }),
-  updateInventory: (id: string, data: any) => request(`/inventory/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateInventory: (id: string, data: any) => request(`/inventory/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   adjustInventoryStock: (id: string, changeQuantity: number) =>
     request(`/inventory/${id}/adjust`, { method: 'POST', body: JSON.stringify({ changeQuantity }) }),
   adjustIn: (itemId: string, body: any) =>
-    request(`/inventory/items/${itemId}/adjust-in`, { method: 'POST', body: JSON.stringify(body) }),
+    request(`/inventory/${itemId}/adjust-in`, { method: 'POST', body: JSON.stringify(body) }),
   adjustOut: (itemId: string, body: any) =>
-    request(`/inventory/items/${itemId}/adjust-out`, { method: 'POST', body: JSON.stringify(body) }),
+    request(`/inventory/${itemId}/adjust-out`, { method: 'POST', body: JSON.stringify(body) }),
   getInventoryTransactions: (itemId: string, query?: any) => {
     const q = new URLSearchParams(query as any).toString();
-    return request(`/inventory/items/${itemId}/transactions${q ? `?${q}` : ''}`);
+    return request(`/inventory/${itemId}/transactions${q ? `?${q}` : ''}`);
   },
   deleteInventory: (id: string) => request(`/inventory/${id}`, { method: 'DELETE' }),
 
@@ -133,8 +133,12 @@ export const api = {
   deleteAttachment: (id: string) =>
     request(`/attachments/${id}`, { method: 'DELETE' }),
   uploadAttachment: (formData: FormData) => {
-    return fetch('http://localhost:3001/api/attachments', {
+    return fetch(`${API_BASE}/attachments`, {
       method: 'POST',
+      headers: {
+        'x-user-id': 'tech-demo-id',
+        'x-test-user-id': 'tech-demo-id',
+      },
       body: formData,
     }).then(async (res) => {
       if (!res.ok) {

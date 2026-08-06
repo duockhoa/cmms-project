@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { SchedulesService } from './schedules.service';
 import {
   CreateScheduleDto,
@@ -9,8 +9,10 @@ import {
   CancelScheduleDto,
   GenerateWorkOrderDto,
 } from './dto/schedules.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-@Controller('api/maintenance-schedules')
+@Controller('maintenance-schedules')
+@UseGuards(JwtAuthGuard)
 export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
 
@@ -35,6 +37,7 @@ export class SchedulesController {
   }
 
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateScheduleDto) {
     return this.schedulesService.create(dto);
   }
@@ -65,16 +68,13 @@ export class SchedulesController {
   }
 
   @Post(':id/generate-work-order')
+  @HttpCode(HttpStatus.CREATED)
   generateWorkOrder(@Param('id') id: string, @Body() dto: GenerateWorkOrderDto) {
     return this.schedulesService.generateWorkOrder(id, dto);
   }
 
-  @Post(':id/generate')
-  generateWorkOrderAlias(@Param('id') id: string, @Body() dto: GenerateWorkOrderDto) {
-    return this.schedulesService.generateWorkOrder(id, dto);
-  }
-
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {
     return this.schedulesService.remove(id);
   }

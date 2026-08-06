@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Req, HttpCode, HttpStatus } from '@nestjs/common';
 import { RequestsService } from './requests.service';
 import { CreateMaintenanceRequestDto } from './dto/create-request.dto';
 import { ApproveMaintenanceRequestDto } from './dto/approve-request.dto';
@@ -8,7 +8,7 @@ import { ResubmitRequestDto } from './dto/resubmit-request.dto';
 import { CancelRequestDto } from './dto/cancel-request.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-@Controller('api/requests')
+@Controller('requests')
 @UseGuards(JwtAuthGuard)
 export class RequestsController {
   constructor(private readonly requestsService: RequestsService) {}
@@ -35,6 +35,7 @@ export class RequestsController {
   }
 
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   create(@Body() data: CreateMaintenanceRequestDto) {
     return this.requestsService.create(data);
   }
