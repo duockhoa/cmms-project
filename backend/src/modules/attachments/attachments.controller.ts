@@ -17,6 +17,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { AttachmentsService } from './attachments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { FileValidationPipe } from '../../common/pipes/file-validation.pipe';
 
 @Controller('attachments')
 @UseGuards(JwtAuthGuard)
@@ -26,7 +27,7 @@ export class AttachmentsController {
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
-    @UploadedFile() file: any,
+    @UploadedFile(FileValidationPipe) file: any,
     @Body('entityType') entityType: string,
     @Body('entityId') entityId: string,
     @Body('uploadedById') uploadedById?: string,

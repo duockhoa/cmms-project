@@ -198,3 +198,103 @@
 [2026-08-06T01:42:06.594Z] [INFO] [RoutesResolver] HealthController {/api/v1/health}:
 [2026-08-06T01:42:06.595Z] [INFO] [RouterExplorer] Mapped {/api/v1/health, GET} route
 [2026-08-06T01:42:06.600Z] [INFO] [NestApplication] Nest application successfully started
+[2026-08-06T01:44:00.519Z] [INFO] [NestFactory] Starting Nest application...
+[2026-08-06T01:44:00.540Z] [INFO] [InstanceLoader] AppModule dependencies initialized
+[2026-08-06T01:44:00.544Z] [INFO] [InstanceLoader] PrismaModule dependencies initialized
+[2026-08-06T01:44:00.545Z] [INFO] [InstanceLoader] PassportModule dependencies initialized
+[2026-08-06T01:44:00.549Z] [INFO] [InstanceLoader] ConfigHostModule dependencies initialized
+[2026-08-06T01:44:00.550Z] [INFO] [InstanceLoader] HealthModule dependencies initialized
+[2026-08-06T01:44:00.552Z] [INFO] [InstanceLoader] ConfigModule dependencies initialized
+[2026-08-06T01:44:00.552Z] [INFO] [InstanceLoader] ConfigModule dependencies initialized
+[2026-08-06T01:44:00.556Z] [INFO] [InstanceLoader] EquipmentModule dependencies initialized
+[2026-08-06T01:44:00.557Z] [INFO] [InstanceLoader] InventoryModule dependencies initialized
+[2026-08-06T01:44:00.558Z] [INFO] [InstanceLoader] SchedulesModule dependencies initialized
+[2026-08-06T01:44:00.558Z] [INFO] [InstanceLoader] UsersModule dependencies initialized
+[2026-08-06T01:44:00.558Z] [INFO] [InstanceLoader] AttachmentsModule dependencies initialized
+[2026-08-06T01:44:00.559Z] [INFO] [InstanceLoader] ChecklistExecutionsModule dependencies initialized
+[2026-08-06T01:44:00.559Z] [INFO] [InstanceLoader] RequestsModule dependencies initialized
+[2026-08-06T01:44:00.560Z] [INFO] [InstanceLoader] AnalyticsModule dependencies initialized
+[2026-08-06T01:44:00.560Z] [INFO] [InstanceLoader] WorkOrdersModule dependencies initialized
+[2026-08-06T01:44:00.560Z] [INFO] [InstanceLoader] AuthModule dependencies initialized
+[2026-08-06T01:44:00.566Z] [INFO] [RoutesResolver] EquipmentController {/api/v1/equipment}:
+[2026-08-06T01:44:00.570Z] [INFO] [RouterExplorer] Mapped {/api/v1/equipment, GET} route
+[2026-08-06T01:44:00.571Z] [INFO] [RouterExplorer] Mapped {/api/v1/equipment/:id, GET} route
+[2026-08-06T01:44:00.572Z] [INFO] [RouterExplorer] Mapped {/api/v1/equipment, POST} route
+[2026-08-06T01:44:00.573Z] [INFO] [RouterExplorer] Mapped {/api/v1/equipment/:id, PATCH} route
+[2026-08-06T01:44:00.573Z] [INFO] [RouterExplorer] Mapped {/api/v1/equipment/:id, DELETE} route
+[2026-08-06T01:44:00.574Z] [INFO] [RoutesResolver] RequestsController {/api/v1/requests}:
+[2026-08-06T01:44:00.574Z] [INFO] [RouterExplorer] Mapped {/api/v1/requests, GET} route
+[2026-08-06T01:44:00.575Z] [INFO] [RouterExplorer] Mapped {/api/v1/requests/:id, GET} route
+[2026-08-06T01:44:00.575Z] [INFO] [RouterExplorer] Mapped {/api/v1/requests/:id/history, GET} route
+[2026-08-06T01:44:00.576Z] [INFO] [RouterExplorer] Mapped {/api/v1/requests, POST} route
+[2026-08-06T01:44:00.576Z] [INFO] [RouterExplorer] Mapped {/api/v1/requests/:id/approve, POST} route
+[2026-08-06T01:44:00.577Z] [INFO] [RouterExplorer] Mapped {/api/v1/requests/:id/reject, POST} route
+[2026-08-06T01:44:00.577Z] [INFO] [RouterExplorer] Mapped {/api/v1/requests/:id/return, POST} route
+[2026-08-06T01:44:00.578Z] [INFO] [RouterExplorer] Mapped {/api/v1/requests/:id/resubmit, POST} route
+[2026-08-06T01:44:00.578Z] [INFO] [RouterExplorer] Mapped {/api/v1/requests/:id/cancel, POST} route
+[2026-08-06T01:44:00.578Z] [INFO] [RoutesResolver] WorkOrdersController {/api/v1/work-orders}:
+[2026-08-06T01:44:00.579Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders, GET} route
+[2026-08-06T01:44:00.579Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id, GET} route
+[2026-08-06T01:44:00.579Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:workOrderId/inventory-transactions, GET} route
+[2026-08-06T01:44:00.579Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders, POST} route
+[2026-08-06T01:44:00.580Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/status, PATCH} route
+[2026-08-06T01:44:00.580Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/assign, POST} route
+[2026-08-06T01:44:00.581Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/start, POST} route
+[2026-08-06T01:44:00.581Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/pause, POST} route
+[2026-08-06T01:44:00.582Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/resume, POST} route
+[2026-08-06T01:44:00.582Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/complete, POST} route
+[2026-08-06T01:44:00.583Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/verify, POST} route
+[2026-08-06T01:44:00.583Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/close, POST} route
+[2026-08-06T01:44:00.583Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/cancel, POST} route
+[2026-08-06T01:44:00.584Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/items, POST} route
+[2026-08-06T01:44:00.584Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:workOrderId/material-returns, POST} route
+[2026-08-06T01:44:00.585Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id, DELETE} route
+[2026-08-06T01:44:00.585Z] [INFO] [RoutesResolver] InventoryController {/api/v1/inventory}:
+[2026-08-06T01:44:00.586Z] [INFO] [RouterExplorer] Mapped {/api/v1/inventory, GET} route
+[2026-08-06T01:44:00.586Z] [INFO] [RouterExplorer] Mapped {/api/v1/inventory/:id, GET} route
+[2026-08-06T01:44:00.586Z] [INFO] [RouterExplorer] Mapped {/api/v1/inventory/:id/transactions, GET} route
+[2026-08-06T01:44:00.587Z] [INFO] [RouterExplorer] Mapped {/api/v1/inventory, POST} route
+[2026-08-06T01:44:00.587Z] [INFO] [RouterExplorer] Mapped {/api/v1/inventory/:id, PATCH} route
+[2026-08-06T01:44:00.587Z] [INFO] [RouterExplorer] Mapped {/api/v1/inventory/:id/adjust, POST} route
+[2026-08-06T01:44:00.588Z] [INFO] [RouterExplorer] Mapped {/api/v1/inventory/:id/adjust-in, POST} route
+[2026-08-06T01:44:00.588Z] [INFO] [RouterExplorer] Mapped {/api/v1/inventory/:id/adjust-out, POST} route
+[2026-08-06T01:44:00.588Z] [INFO] [RouterExplorer] Mapped {/api/v1/inventory/:id, DELETE} route
+[2026-08-06T01:44:00.589Z] [INFO] [RoutesResolver] SchedulesController {/api/v1/maintenance-schedules}:
+[2026-08-06T01:44:00.589Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules, GET} route
+[2026-08-06T01:44:00.589Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/process-due, POST} route
+[2026-08-06T01:44:00.590Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/:id, GET} route
+[2026-08-06T01:44:00.590Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/:id/history, GET} route
+[2026-08-06T01:44:00.590Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules, POST} route
+[2026-08-06T01:44:00.591Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/:id, PATCH} route
+[2026-08-06T01:44:00.591Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/:id/activate, POST} route
+[2026-08-06T01:44:00.592Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/:id/pause, POST} route
+[2026-08-06T01:44:00.592Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/:id/complete, POST} route
+[2026-08-06T01:44:00.593Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/:id/cancel, POST} route
+[2026-08-06T01:44:00.593Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/:id/generate-work-order, POST} route
+[2026-08-06T01:44:00.594Z] [INFO] [RouterExplorer] Mapped {/api/v1/maintenance-schedules/:id, DELETE} route
+[2026-08-06T01:44:00.594Z] [INFO] [RoutesResolver] AnalyticsController {/api/v1/analytics}:
+[2026-08-06T01:44:00.595Z] [INFO] [RouterExplorer] Mapped {/api/v1/analytics/dashboard, GET} route
+[2026-08-06T01:44:00.595Z] [INFO] [RouterExplorer] Mapped {/api/v1/analytics/kpis, GET} route
+[2026-08-06T01:44:00.596Z] [INFO] [RoutesResolver] UsersController {/api/v1/users}:
+[2026-08-06T01:44:00.596Z] [INFO] [RouterExplorer] Mapped {/api/v1/users, GET} route
+[2026-08-06T01:44:00.597Z] [INFO] [RouterExplorer] Mapped {/api/v1/users/:id, GET} route
+[2026-08-06T01:44:00.597Z] [INFO] [RouterExplorer] Mapped {/api/v1/users/:id/technical-profile, PATCH} route
+[2026-08-06T01:44:00.598Z] [INFO] [RouterExplorer] Mapped {/api/v1/users/:id/availability, PATCH} route
+[2026-08-06T01:44:00.599Z] [INFO] [RoutesResolver] AttachmentsController {/api/v1/attachments}:
+[2026-08-06T01:44:00.599Z] [INFO] [RouterExplorer] Mapped {/api/v1/attachments, POST} route
+[2026-08-06T01:44:00.600Z] [INFO] [RouterExplorer] Mapped {/api/v1/attachments, GET} route
+[2026-08-06T01:44:00.600Z] [INFO] [RouterExplorer] Mapped {/api/v1/attachments/:id/download, GET} route
+[2026-08-06T01:44:00.601Z] [INFO] [RouterExplorer] Mapped {/api/v1/attachments/:id/view, GET} route
+[2026-08-06T01:44:00.601Z] [INFO] [RouterExplorer] Mapped {/api/v1/attachments/:id, DELETE} route
+[2026-08-06T01:44:00.601Z] [INFO] [RoutesResolver] ChecklistExecutionsController {/api/v1}:
+[2026-08-06T01:44:00.601Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/checklist-executions, POST} route
+[2026-08-06T01:44:00.602Z] [INFO] [RouterExplorer] Mapped {/api/v1/work-orders/:id/checklist-executions, GET} route
+[2026-08-06T01:44:00.602Z] [INFO] [RouterExplorer] Mapped {/api/v1/checklist-executions/:executionId, GET} route
+[2026-08-06T01:44:00.602Z] [INFO] [RouterExplorer] Mapped {/api/v1/checklist-executions/:executionId/items, PATCH} route
+[2026-08-06T01:44:00.603Z] [INFO] [RouterExplorer] Mapped {/api/v1/checklist-executions/:executionId/complete, POST} route
+[2026-08-06T01:44:00.603Z] [INFO] [RouterExplorer] Mapped {/api/v1/checklist-executions/:executionId/cancel, POST} route
+[2026-08-06T01:44:00.603Z] [INFO] [RoutesResolver] AuthController {/api/v1/auth}:
+[2026-08-06T01:44:00.603Z] [INFO] [RouterExplorer] Mapped {/api/v1/auth/me, GET} route
+[2026-08-06T01:44:00.604Z] [INFO] [RoutesResolver] HealthController {/api/v1/health}:
+[2026-08-06T01:44:00.604Z] [INFO] [RouterExplorer] Mapped {/api/v1/health, GET} route
+[2026-08-06T01:44:00.611Z] [INFO] [NestApplication] Nest application successfully started
