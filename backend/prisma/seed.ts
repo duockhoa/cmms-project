@@ -5,14 +5,28 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seed...');
 
-  // Clean DB
+  // Temporarily drop triggers to allow cleaning the DB
+  await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS prevent_delete_workflow_history`).catch(() => {});
+  await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS prevent_update_workflow_history`).catch(() => {});
+
+  // Clean DB in correct order to avoid foreign key constraints
+  await prisma.checklistExecutionItem.deleteMany();
+  await prisma.checklistExecution.deleteMany();
   await prisma.workOrderItem.deleteMany();
+  await prisma.inventoryTransaction.deleteMany();
+  await prisma.workflowHistory.deleteMany();
+  await prisma.attachment.deleteMany();
+  await prisma.scheduleHistory.deleteMany();
   await prisma.workOrder.deleteMany();
   await prisma.maintenanceRequest.deleteMany();
   await prisma.maintenanceSchedule.deleteMany();
   await prisma.equipment.deleteMany();
   await prisma.inventoryItem.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.systemSetting.deleteMany();
+  await prisma.productionLine.deleteMany();
+  await prisma.location.deleteMany();
+  await prisma.equipmentCategory.deleteMany();
 
   // Create Users
   const userAdmin = await prisma.user.create({
@@ -270,6 +284,61 @@ async function main() {
       ]),
     },
   });
+
+  // Seed system settings
+  await prisma.systemSetting.createMany({
+    data: [
+      { key: 'WARNING_LEAD_DAYS', value: '7' },
+      { key: 'COMPANY_NAME', value: 'Công ty Cổ phần Dược Khoa' },
+      { key: 'SYSTEM_ABBREVIATION', value: 'DKPHARMA-CMMS' },
+    ],
+  });
+
+  // Seed equipment categories
+  await prisma.equipmentCategory.createMany({
+    data: [
+      { code: 'COKHI', name: 'Cơ khí', description: 'Các thiết bị truyền động cơ học, bồn khuấy, máy nén...' },
+      { code: 'DIEN', name: 'Điện', description: 'Hệ thống điện động lực, tủ phân phối, biến áp...' },
+      { code: 'TUDONG', name: 'Điện - Tự động hóa', description: 'Các hệ thống điều khiển PLC, SCADA, cảm biến...' },
+      { code: 'SANXUAT', name: 'Sản xuất', description: 'Dây chuyền bao phim, máy ép vỉ, máy đóng tuýp...' },
+    ],
+  });
+
+  // Seed locations
+  await prisma.location.createMany({
+    data: [
+      { code: 'XUONG_A', name: 'Xưởng sản xuất A', description: 'Khu vực chính chế biến dược liệu' },
+      { code: 'XUONG_B', name: 'Xưởng sản xuất B', description: 'Khu vực đóng gói và dán nhãn thành phẩm' },
+      { code: 'PHONG_SACH', name: 'Phòng sạch cấp độ D', description: 'Khu vực pha chế và vô trùng' },
+      { code: 'KHO_KHO', name: 'Kho nguyên liệu khô', description: 'Nơi lưu kho bao bì, phụ liệu' },
+    ],
+  });
+
+  // Seed production lines
+  await prisma.productionLine.createMany({
+    data: [
+      { code: 'DC_NANG', name: 'Dây chuyền viên nang', description: 'Hệ thống đóng nang tự động' },
+      { code: 'DC_NEN', name: 'Dây chuyền viên nén', description: 'Máy dập viên và bao phim xoay tròn' },
+      { code: 'DC_DONGGOI', name: 'Dây chuyền đóng gói', description: 'Máy ép vỉ nhôm-nhôm, nhôm-pvc' },
+    ],
+  });
+
+  // Re-apply database triggers for WorkflowHistory immutability
+  await prisma.$executeRawUnsafe(`
+    CREATE TRIGGER IF NOT EXISTS prevent_update_workflow_history
+    BEFORE UPDATE ON WorkflowHistory
+    BEGIN
+        SELECT RAISE(FAIL, 'WorkflowHistory is immutable and cannot be updated.');
+    END;
+  `).catch(() => {});
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TRIGGER IF NOT EXISTS prevent_delete_workflow_history
+    BEFORE DELETE ON WorkflowHistory
+    BEGIN
+        SELECT RAISE(FAIL, 'WorkflowHistory is immutable and cannot be deleted.');
+    END;
+  `).catch(() => {});
 
   console.log('✅ Seed data successfully populated!');
 }

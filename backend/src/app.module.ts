@@ -12,6 +12,7 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { ChecklistExecutionsModule } from './modules/checklist-executions/checklist-executions.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { HealthModule } from './modules/health/health.module';
     ChecklistExecutionsModule,
     AuthModule,
     HealthModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}

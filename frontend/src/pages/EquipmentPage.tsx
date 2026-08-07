@@ -20,6 +20,7 @@ export const EquipmentPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -65,6 +66,14 @@ export const EquipmentPage: React.FC = () => {
   useEffect(() => {
     loadEquipment();
   }, [search, categoryFilter, statusFilter, page]);
+
+  useEffect(() => {
+    // Fetch categories for filter dropdown on mount
+    fetchWithAuth(`${API_BASE}/api/v1/equipment-categories`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setCategoriesList(data))
+      .catch(err => console.error(err));
+  }, []);
 
   useEffect(() => {
     setPage(1);
@@ -168,10 +177,9 @@ export const EquipmentPage: React.FC = () => {
 
         <select className="form-select" style={{ width: '160px' }} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
           <option value="">Tất cả loại</option>
-          <option value="Cơ khí">Cơ khí</option>
-          <option value="Điện">Điện</option>
-          <option value="Điện - Tự động hóa">Điện - Tự động hóa</option>
-          <option value="Sản xuất">Sản xuất</option>
+          {categoriesList.map((cat: any) => (
+            <option key={cat.id} value={cat.name}>{cat.name}</option>
+          ))}
         </select>
 
         <select className="form-select" style={{ width: '160px' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
