@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { Plus, Search, UserCheck, Shield, Lock, Edit, Trash2, RefreshCw } from 'lucide-react';
+import { useToast } from '../components/common/Toast';
 
 export const UsersPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -10,6 +11,7 @@ export const UsersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const toast = useToast();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -47,6 +49,7 @@ export const UsersPage: React.FC = () => {
       },
     ]);
     setIsAddOpen(false);
+    toast.success('Thành công', 'Đã thêm thành viên mới.');
     setFormData({ name: '', email: '', role: 'TECHNICIAN', department: 'Tổ Bảo trì Xưởng A', phone: '' });
   };
 

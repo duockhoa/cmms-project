@@ -58,7 +58,7 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
   const handleStartNew = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTechId) {
-      alert('Vui lòng chọn kỹ thuật viên thực hiện!');
+      toast.warning('Thiếu thông tin', 'Vui lòng chọn kỹ thuật viên thực hiện!');
       return;
     }
 
@@ -116,7 +116,7 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
       );
     } catch (err: any) {
       console.error(err);
-      alert(`Cập nhật thất bại: ${err.message || 'Lỗi xung đột phiên làm việc'}`);
+      toast.error('Cập nhật thất bại', err.message || 'Lỗi xung đột phiên làm việc');
       loadData(); // Reload to get fresh version
     }
   };

@@ -49,7 +49,7 @@ export const AttachmentManager: React.FC<AttachmentManagerProps> = ({
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       if (file.size > 10 * 1024 * 1024) {
-        alert('Kích thước tệp vượt quá giới hạn 10MB!');
+        toast.warning('Tệp quá lớn', 'Kích thước tệp vượt quá giới hạn 10MB!');
         return;
       }
       setSelectedFile(file);

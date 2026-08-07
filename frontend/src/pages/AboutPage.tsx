@@ -1,8 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../components/common/Toast';
 
 export const AboutPage: React.FC = () => {
   const navigate = useNavigate();
+  const toast = useToast();
 
   return (
     <div style={{
@@ -53,7 +55,7 @@ export const AboutPage: React.FC = () => {
       {/* Action Buttons Block */}
       <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px' }}>
         <button
-          onClick={() => alert('Cảm ơn ý kiến đóng góp của bạn!')}
+          onClick={() => toast.success('Đóng góp ý kiến', 'Cảm ơn ý kiến đóng góp của bạn!')}
           style={{
             padding: '10px 24px',
             borderRadius: '8px',

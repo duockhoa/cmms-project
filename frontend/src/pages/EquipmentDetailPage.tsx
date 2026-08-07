@@ -3,6 +3,7 @@ import { StatusBadge } from '../components/common/Badge';
 import { 
   ArrowLeft, Cpu, Edit, Plus, Wrench, Settings, FileText, BookOpen, Clock, Activity, MessageSquare, Calendar, X, Eye, Download 
 } from 'lucide-react';
+import { useToast } from '../components/common/Toast';
 import { OverviewTab } from '../components/equipment/OverviewTab';
 import { RepairHistoryTab } from '../components/equipment/RepairHistoryTab';
 import { MaintenanceSchedulesTab } from '../components/equipment/MaintenanceSchedulesTab';
@@ -22,6 +23,7 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
   const [activeSubTab, setActiveSubTab] = useState('Tổng quan');
   const [loading, setLoading] = useState(true);
   const [detailData, setDetailData] = useState<any>(null);
+  const toast = useToast();
 
   // States for Specs management (Dynamic multi-row inputs)
   const [showSpecModal, setShowSpecModal] = useState(false);
@@ -119,9 +121,10 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
       }
 
       setShowSpecModal(false);
+      toast.success('Thành công', 'Đã cập nhật thông số thiết bị.');
       fetchDetail();
     } catch (err: any) {
-      alert(err.message);
+      toast.error('Lỗi', err.message || 'Lỗi cập nhật thông số');
     }
   };
 
@@ -153,9 +156,9 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
       if (!res.ok) throw new Error('Không thể liên kết phụ tùng');
       setShowPartModal(false);
       fetchDetail();
-      alert('Đã liên kết phụ tùng thành công (giả lập trên DB)');
+      toast.success('Thành công', 'Đã liên kết phụ tùng thành công.');
     } catch (err: any) {
-      alert(err.message);
+      toast.error('Lỗi', err.message || 'Không thể liên kết phụ tùng');
     }
   };
 
@@ -180,10 +183,10 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
       });
 
       if (!res.ok) throw new Error('Lỗi khi tải lên tài liệu');
-      alert('Tải lên tài liệu thành công');
+      toast.success('Thành công', 'Tải lên tài liệu thành công.');
       fetchDetail();
     } catch (err: any) {
-      alert(err.message);
+      toast.error('Lỗi', err.message || 'Lỗi khi tải lên tài liệu');
     }
   };
 

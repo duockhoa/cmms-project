@@ -3,12 +3,14 @@ import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { Plus, Search, CheckSquare, PlayCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { useToast } from '../components/common/Toast';
 
 export const ChecklistsPage: React.FC = () => {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [runnerItem, setRunnerItem] = useState<any>(null);
+  const toast = useToast();
 
   // Runner state
   const [runnerResults, setRunnerResults] = useState<{ [key: number]: boolean }>({});
@@ -51,7 +53,7 @@ export const ChecklistsPage: React.FC = () => {
     const total = (runnerItem.items || []).length;
     const passed = Object.values(runnerResults).filter(Boolean).length;
     const score = total > 0 ? Math.round((passed / total) * 100) : 100;
-    alert(`Đã hoàn tất kiểm tra Checklist "${runnerItem.title}"!\nKết quả: ${passed}/${total} mục ĐẠT (${score}%).`);
+    toast.success('Hoàn tất Checklist', `Kiểm tra "${runnerItem.title}" hoàn thành. Kết quả: ${passed}/${total} mục ĐẠT (${score}%).`);
     setRunnerItem(null);
   };
 

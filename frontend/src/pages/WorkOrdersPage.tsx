@@ -115,6 +115,7 @@ export const WorkOrdersPage: React.FC = () => {
       });
       if (!res.ok) throw new Error('Không thể tạo phiếu bảo trì');
       setIsAddOpen(false);
+      toast.success('Thành công', 'Đã tạo phiếu bảo trì mới.');
       loadData();
     } catch (err) {
       toast.error('Lỗi', 'Không thể tạo phiếu bảo trì!');
@@ -133,6 +134,7 @@ export const WorkOrdersPage: React.FC = () => {
         throw new Error(errData.message || 'Lỗi đổi trạng thái');
       }
       setStatusDropdownId(null);
+      toast.success('Thành công', 'Đã cập nhật trạng thái phiếu bảo trì.');
       loadData();
     } catch (err: any) {
       toast.error('Đổi trạng thái thất bại', err.message);
