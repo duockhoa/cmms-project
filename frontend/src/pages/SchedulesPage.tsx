@@ -15,6 +15,7 @@ import {
   Edit2,
   Trash2,
 } from 'lucide-react';
+import { useToast, useConfirmDialog } from '../components/common/Toast';
 
 export const SchedulesPage: React.FC = () => {
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -22,6 +23,8 @@ export const SchedulesPage: React.FC = () => {
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
 
   // Filters & Search
   const [search, setSearch] = useState('');
@@ -104,10 +107,10 @@ export const SchedulesPage: React.FC = () => {
         createdById: getActiveUserId(),
       });
       setIsAddOpen(false);
-      alert('Tạo kế hoạch bảo trì định kỳ thành công!');
+      toast.success('Thành công', 'Tạo kế hoạch bảo trì định kỳ thành công!');
       loadData();
     } catch (err: any) {
-      alert(`Lỗi tạo lịch bảo trì: ${err.message || 'Không thể thực hiện'}`);
+      toast.error('Lỗi tạo lịch bảo trì', err.message || 'Không thể thực hiện');
     }
   };
 
@@ -131,15 +134,15 @@ export const SchedulesPage: React.FC = () => {
         actedById: getActiveUserId(),
       });
       setEditTarget(null);
-      alert('Cập nhật kế hoạch bảo trì thành công!');
+      toast.success('Thành công', 'Cập nhật kế hoạch bảo trì thành công!');
       loadData();
     } catch (err: any) {
       if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Dữ liệu lịch bảo trì đã bị người khác cập nhật! Vui lòng tải lại dữ liệu.');
+        toast.warning('Xung đột dữ liệu', 'Dữ liệu lịch bảo trì đã bị người khác cập nhật! Vui lòng tải lại dữ liệu.');
         setEditTarget(null);
         loadData();
       } else {
-        alert(`Lỗi cập nhật: ${err.message || 'Không thể thực hiện'}`);
+        toast.error('Lỗi cập nhật', err.message || 'Không thể thực hiện');
       }
     }
   };
@@ -150,14 +153,14 @@ export const SchedulesPage: React.FC = () => {
         expectedVersion: sch.version,
         actedById: getActiveUserId(),
       });
-      alert('Đã kích hoạt kế hoạch bảo trì thành công!');
+      toast.success('Thành công', 'Đã kích hoạt kế hoạch bảo trì thành công!');
       loadData();
     } catch (err: any) {
       if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Có xung đột dữ liệu! Vui lòng tải lại trang.');
+        toast.warning('Xung đột dữ liệu', 'Có xung đột dữ liệu! Vui lòng tải lại trang.');
         loadData();
       } else {
-        alert(`Lỗi kích hoạt: ${err.message || 'Không thể thực hiện'}`);
+        toast.error('Lỗi kích hoạt', err.message || 'Không thể thực hiện');
       }
     }
   };
@@ -172,15 +175,15 @@ export const SchedulesPage: React.FC = () => {
         actedById: getActiveUserId(),
       });
       setPauseTarget(null);
-      alert('Đã tạm dừng kế hoạch bảo trì thành công!');
+      toast.success('Thành công', 'Đã tạm dừng kế hoạch bảo trì thành công!');
       loadData();
     } catch (err: any) {
       if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Có xung đột dữ liệu! Vui lòng tải lại trang.');
+        toast.warning('Xung đột dữ liệu', 'Có xung đột dữ liệu! Vui lòng tải lại trang.');
         setPauseTarget(null);
         loadData();
       } else {
-        alert(`Lỗi tạm dừng: ${err.message || 'Không thể thực hiện'}`);
+        toast.error('Lỗi tạm dừng', err.message || 'Không thể thực hiện');
       }
     }
   };
@@ -195,15 +198,15 @@ export const SchedulesPage: React.FC = () => {
         actedById: getActiveUserId(),
       });
       setCompleteTarget(null);
-      alert('Đã hoàn thành kế hoạch bảo trì thành công!');
+      toast.success('Thành công', 'Đã hoàn thành kế hoạch bảo trì thành công!');
       loadData();
     } catch (err: any) {
       if (err.message?.includes('409') || err.message?.includes('Work Order mở')) {
-        alert(`Lỗi: ${err.message}`);
+        toast.error('Lỗi hoàn thành', err.message);
         setCompleteTarget(null);
         loadData();
       } else {
-        alert(`Lỗi hoàn thành: ${err.message || 'Không thể thực hiện'}`);
+        toast.error('Lỗi hoàn thành', err.message || 'Không thể thực hiện');
       }
     }
   };
@@ -218,30 +221,30 @@ export const SchedulesPage: React.FC = () => {
         actedById: getActiveUserId(),
       });
       setCancelTarget(null);
-      alert('Đã hủy kế hoạch bảo trì thành công!');
+      toast.success('Thành công', 'Đã hủy kế hoạch bảo trì thành công!');
       loadData();
     } catch (err: any) {
       if (err.message?.includes('409') || err.message?.includes('Work Order mở')) {
-        alert(`Lỗi: ${err.message}`);
+        toast.error('Lỗi hủy', err.message);
         setCancelTarget(null);
         loadData();
       } else {
-        alert(`Lỗi hủy kế hoạch: ${err.message || 'Không thể thực hiện'}`);
+        toast.error('Lỗi hủy kế hoạch', err.message || 'Không thể thực hiện');
       }
     }
   };
-
   const handleGenerateWO = async (sch: any) => {
-    if (confirm(`Phát sinh ngay 1 Work Order từ lịch [${sch.scheduleCode}]?`)) {
+    const ok = await confirm('Phát sinh Work Order', `Phát sinh ngay 1 Work Order từ lịch [${sch.scheduleCode}]?`, { confirmText: 'Phát sinh', type: 'info' });
+    if (ok) {
       try {
         const res = await api.generateWorkOrderFromSchedule(sch.id, {
           expectedVersion: sch.version,
           actedById: getActiveUserId(),
         });
-        alert(`Thành công! Đã sinh Work Order ${res.orderCode}.`);
+        toast.success('Thành công', `Đã sinh Work Order ${res.orderCode}.`);
         loadData();
       } catch (err: any) {
-        alert(`Lỗi sinh phiếu Work Order: ${err.message || 'Không thể thực hiện'}`);
+        toast.error('Lỗi', err.message || 'Không thể thực hiện');
       }
     }
   };

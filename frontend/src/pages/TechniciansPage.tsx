@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { Phone, Mail, CheckCircle, Clock, UserCheck, Search, Edit2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Modal } from '../components/common/Modal';
+import { useToast } from '../components/common/Toast';
 
 export const TechniciansPage: React.FC = () => {
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   // Filters
   const [search, setSearch] = useState('');
@@ -42,11 +44,12 @@ export const TechniciansPage: React.FC = () => {
     try {
       await api.updateUserAvailability(id, { status: newStatus, expectedVersion });
       loadData();
+      toast.success('Cập nhật trạng thái', 'Đã cập nhật trạng thái kỹ thuật viên.');
     } catch (err: any) {
       if (err.message && (err.message.includes('Xung đột') || err.message.includes('Conflict'))) {
-        alert('Xung đột đồng thời: Thông tin kỹ thuật viên đã được cập nhật bởi người khác. Vui lòng tải lại.');
+        toast.warning('Xung đột đồng thời', 'Thông tin kỹ thuật viên đã được cập nhật bởi người khác. Vui lòng tải lại.');
       } else {
-        alert(`Lỗi cập nhật trạng thái: ${err.message || 'Yêu cầu không hợp lệ'}`);
+        toast.error('Lỗi', `Lỗi cập nhật trạng thái: ${err.message || 'Yêu cầu không hợp lệ'}`);
       }
     }
   };
@@ -70,12 +73,13 @@ export const TechniciansPage: React.FC = () => {
         expectedVersion: editingTech.version,
       });
       setEditingTech(null);
+      toast.success('Cập nhật hồ sơ', 'Hồ sơ kỹ thuật viên đã được lưu.');
       loadData();
     } catch (err: any) {
       if (err.message && (err.message.includes('Xung đột') || err.message.includes('Conflict'))) {
-        alert('Xung đột đồng thời: Thông tin kỹ thuật viên đã được cập nhật bởi người khác. Vui lòng tải lại.');
+        toast.warning('Xung đột đồng thời', 'Thông tin kỹ thuật viên đã được cập nhật bởi người khác. Vui lòng tải lại.');
       } else {
-        alert(`Lỗi cập nhật hồ sơ: ${err.message || 'Yêu cầu không hợp lệ'}`);
+        toast.error('Lỗi', `Lỗi cập nhật hồ sơ: ${err.message || 'Yêu cầu không hợp lệ'}`);
       }
     }
   };

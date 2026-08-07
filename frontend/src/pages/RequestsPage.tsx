@@ -3,11 +3,13 @@ import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw } from 'lucide-react';
+import { useToast } from '../components/common/Toast';
 
 export const RequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
   const [statusFilter, setStatusFilter] = useState('');
 
   // Modals
@@ -81,7 +83,7 @@ export const RequestsPage: React.FC = () => {
       });
       loadData();
     } catch (err) {
-      alert('Lỗi tạo yêu cầu!');
+      toast.error('Lỗi', 'Không thể tạo yêu cầu bảo trì!');
     }
   };
 
@@ -90,14 +92,14 @@ export const RequestsPage: React.FC = () => {
     try {
       await api.approveRequest(approveModalReq.id, { technicianName });
       setApproveModalReq(null);
-      alert('Đã phê duyệt yêu cầu & Tự động tạo Phiếu Bảo Trì (Work Order) thành công!');
+      toast.success('Phê duyệt thành công', 'Đã phê duyệt yêu cầu & tự động tạo Phiếu Bảo Trì.');
       loadData();
     } catch (err: any) {
       if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Phiên làm việc đã lỗi thời. Vui lòng tải lại dữ liệu mới nhất.');
+        toast.warning('Xung đột dữ liệu', 'Phiên làm việc đã lỗi thời. Dữ liệu sẽ được tải lại.');
         loadData();
       } else {
-        alert('Lỗi phê duyệt yêu cầu');
+        toast.error('Lỗi phê duyệt', err.message || 'Không thể phê duyệt yêu cầu');
       }
     }
   };
@@ -119,14 +121,14 @@ export const RequestsPage: React.FC = () => {
         expectedVersion: req.version,
         actedById: getActiveUserId(),
       });
-      alert('Đã trả lại yêu cầu thành công.');
+      toast.success('Trả lại thành công', 'Đã trả lại yêu cầu để bổ sung thông tin.');
       loadData();
     } catch (err: any) {
       if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Có người khác vừa cập nhật yêu cầu này. Dữ liệu sẽ được tải lại.');
+        toast.warning('Xung đột dữ liệu', 'Có người khác vừa cập nhật yêu cầu này. Dữ liệu sẽ được tải lại.');
         loadData();
       } else {
-        alert(`Lỗi: ${err.message || 'Không thể trả lại yêu cầu'}`);
+        toast.error('Lỗi', err.message || 'Không thể trả lại yêu cầu');
       }
     }
   };
@@ -151,15 +153,15 @@ export const RequestsPage: React.FC = () => {
         updatedFields: resubmitFields,
       });
       setResubmitReq(null);
-      alert('Đã tái gửi yêu cầu thành công.');
+      toast.success('Tái gửi thành công', 'Đã tái gửi yêu cầu với thông tin bổ sung.');
       loadData();
     } catch (err: any) {
       if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Có người khác vừa cập nhật yêu cầu này. Dữ liệu sẽ được tải lại.');
+        toast.warning('Xung đột dữ liệu', 'Có người khác vừa cập nhật yêu cầu này. Dữ liệu sẽ được tải lại.');
         setResubmitReq(null);
         loadData();
       } else {
-        alert(`Lỗi: ${err.message || 'Không thể tái gửi yêu cầu'}`);
+        toast.error('Lỗi', err.message || 'Không thể tái gửi yêu cầu');
       }
     }
   };
@@ -173,14 +175,14 @@ export const RequestsPage: React.FC = () => {
         expectedVersion: req.version,
         actedById: getActiveUserId(),
       });
-      alert('Đã hủy yêu cầu thành công.');
+      toast.success('Hủy thành công', 'Đã hủy yêu cầu bảo trì.');
       loadData();
     } catch (err: any) {
       if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        alert('Có người khác vừa cập nhật yêu cầu này. Dữ liệu sẽ được tải lại.');
+        toast.warning('Xung đột dữ liệu', 'Có người khác vừa cập nhật yêu cầu này. Dữ liệu sẽ được tải lại.');
         loadData();
       } else {
-        alert(`Lỗi: ${err.message || 'Không thể hủy yêu cầu'}`);
+        toast.error('Lỗi', err.message || 'Không thể hủy yêu cầu');
       }
     }
   };

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { Paperclip, Download, Trash2, Upload, AlertCircle, RefreshCw, FileText, Image } from 'lucide-react';
+import { useToast, useConfirmDialog } from './Toast';
 
 interface AttachmentManagerProps {
   entityType: string;
@@ -23,6 +24,8 @@ export const AttachmentManager: React.FC<AttachmentManagerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
 
   const loadAttachments = async () => {
     setLoading(true);
@@ -76,10 +79,11 @@ export const AttachmentManager: React.FC<AttachmentManagerProps> = ({
       setSelectedFile(null);
       setDescription('');
       loadAttachments();
+      toast.success('Thành công', 'Đã tải lên tệp đính kèm.');
       if (onUploadSuccess) onUploadSuccess();
     } catch (err: any) {
       console.error(err);
-      alert(`Upload thất bại: ${err.message || 'Lỗi không xác định'}`);
+      toast.error('Tải lên thất bại', err.message || 'Lỗi không xác định');
     } finally {
       setUploading(false);
     }
@@ -87,14 +91,16 @@ export const AttachmentManager: React.FC<AttachmentManagerProps> = ({
 
   const handleDelete = async (id: string) => {
     if (disabled) return;
-    if (!window.confirm('Bạn có chắc chắn muốn xóa tệp đính kèm này?')) return;
+    const ok = await confirm('Xóa tệp đính kèm', 'Bạn có chắc chắn muốn xóa tệp đính kèm này?', { confirmText: 'Xóa', type: 'danger' });
+    if (!ok) return;
 
     try {
       await api.deleteAttachment(id);
+      toast.success('Thành công', 'Đã xóa tệp đính kèm.');
       loadAttachments();
     } catch (err: any) {
       console.error(err);
-      alert(`Xóa thất bại: ${err.message || 'Lỗi không xác định'}`);
+      toast.error('Xóa thất bại', err.message || 'Lỗi không xác định');
     }
   };
 

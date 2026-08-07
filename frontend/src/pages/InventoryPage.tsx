@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, fetchWithAuth } from '../services/api';
 import { Modal } from '../components/common/Modal';
 import { Plus, AlertCircle, ArrowUpRight, ArrowDownRight, Trash2, History, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { useToast } from '../components/common/Toast';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
@@ -10,6 +11,7 @@ export const InventoryPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const toast = useToast();
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -93,9 +95,10 @@ export const InventoryPage: React.FC = () => {
       });
       if (!res.ok) throw new Error('Không thể thêm vật tư');
       setIsAddOpen(false);
+      toast.success('Thành công', 'Đã thêm vật tư mới vào kho.');
       loadData();
-    } catch (err) {
-      alert('Lỗi thêm vật tư kho!');
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Lỗi thêm vật tư kho!');
     }
   };
 
@@ -119,10 +122,10 @@ export const InventoryPage: React.FC = () => {
       }
 
       setAdjustInModalItem(null);
-      alert('Đã điều chỉnh tăng tồn kho thành công!');
+      toast.success('Thành công', 'Đã điều chỉnh tăng tồn kho.');
       loadData();
     } catch (err: any) {
-      alert(err.message);
+      toast.error('Lỗi điều chỉnh tăng', err.message);
     }
   };
 
@@ -146,10 +149,10 @@ export const InventoryPage: React.FC = () => {
       }
 
       setAdjustOutModalItem(null);
-      alert('Đã điều chỉnh giảm tồn kho thành công!');
+      toast.success('Thành công', 'Đã điều chỉnh giảm tồn kho.');
       loadData();
     } catch (err: any) {
-      alert(err.message);
+      toast.error('Lỗi điều chỉnh giảm', err.message);
     }
   };
 

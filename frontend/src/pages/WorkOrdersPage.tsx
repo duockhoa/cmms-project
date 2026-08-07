@@ -4,6 +4,7 @@ import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { ChecklistManager } from '../components/common/ChecklistManager';
 import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useToast } from '../components/common/Toast';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
@@ -11,6 +12,7 @@ export const WorkOrdersPage: React.FC = () => {
   const [workOrders, setWorkOrders] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
   const [search, setSearch] = useState('');
 
   // Pagination states
@@ -115,7 +117,7 @@ export const WorkOrdersPage: React.FC = () => {
       setIsAddOpen(false);
       loadData();
     } catch (err) {
-      alert('Lỗi tạo Work Order!');
+      toast.error('Lỗi', 'Không thể tạo phiếu bảo trì!');
     }
   };
 
@@ -133,7 +135,7 @@ export const WorkOrdersPage: React.FC = () => {
       setStatusDropdownId(null);
       loadData();
     } catch (err: any) {
-      alert(err.message);
+      toast.error('Đổi trạng thái thất bại', err.message);
     }
   };
 
@@ -165,11 +167,11 @@ export const WorkOrdersPage: React.FC = () => {
     const returnableQty = totalIssued - totalReturned;
 
     if (totalIssued === 0) {
-      alert('Vật tư này chưa từng được xuất (ISSUE) cho phiếu bảo trì này.');
+      toast.warning('Không thể trả', 'Vật tư này chưa từng được xuất cho phiếu bảo trì này.');
       return;
     }
     if (returnableQty <= 0) {
-      alert('Vật tư này đã được trả hết.');
+      toast.info('Đã trả hết', 'Vật tư này đã được trả hết.');
       return;
     }
 
@@ -201,12 +203,12 @@ export const WorkOrdersPage: React.FC = () => {
         throw new Error(errData.message || 'Lỗi trả vật tư');
       }
 
-      alert('Đã trả vật tư về kho thành công!');
+      toast.success('Trả vật tư thành công', 'Đã trả vật tư về kho.');
       setReturnItemTarget(null);
       openMaterialModal(selectedMaterialWO);
       loadData();
     } catch (err: any) {
-      alert(err.message);
+      toast.error('Lỗi trả vật tư', err.message);
     }
   };
 

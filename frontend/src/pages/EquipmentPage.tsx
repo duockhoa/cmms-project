@@ -6,12 +6,15 @@ import { Modal } from '../components/common/Modal';
 import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRight } from 'lucide-react';
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
+import { useToast, useConfirmDialog } from '../components/common/Toast';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
 export const EquipmentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const [equipment, setEquipment] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -87,7 +90,7 @@ export const EquipmentPage: React.FC = () => {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.message || 'Không thể chỉnh sửa thiết bị');
         }
-        alert('Cập nhật thiết bị thành công!');
+        toast.success('Cập nhật thành công', 'Thông tin thiết bị đã được cập nhật.');
       } else {
         // Create mode: POST
         const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment`, {
@@ -98,12 +101,12 @@ export const EquipmentPage: React.FC = () => {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.message || 'Không thể tạo thiết bị');
         }
-        alert('Thêm thiết bị mới thành công!');
+        toast.success('Thêm thành công', 'Thiết bị mới đã được tạo.');
       }
       handleCloseModal();
       loadEquipment();
     } catch (err: any) {
-      alert(err.message || 'Có lỗi xảy ra!');
+      toast.error('Thao tác thất bại', err.message || 'Có lỗi xảy ra!');
     }
   };
 
@@ -112,17 +115,21 @@ export const EquipmentPage: React.FC = () => {
     setEditItem(null);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Xóa thiết bị này?')) {
-      try {
-        const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment/${id}`, {
-          method: 'DELETE'
-        });
-        if (!res.ok) throw new Error('Không thể xóa thiết bị');
-        loadEquipment();
-      } catch (err: any) {
-        alert(err.message);
+  const handleDelete = async (eqId: string) => {
+    const ok = await confirm('Xóa thiết bị', 'Thiết bị sẽ bị vô hiệu hóa và không còn hiển thị trong danh sách. Bạn có chắc chắn?', { confirmText: 'Xóa', type: 'danger' });
+    if (!ok) return;
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment/${eqId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Lỗi xóa thiết bị (HTTP ${res.status})`);
       }
+      toast.success('Đã xóa', 'Thiết bị đã được xóa khỏi hệ thống.');
+      loadEquipment();
+    } catch (err: any) {
+      toast.error('Xóa thất bại', err.message || 'Có lỗi xảy ra khi xóa thiết bị');
     }
   };
 

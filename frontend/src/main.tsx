@@ -3,11 +3,21 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
-// Automatically unregister any stale service workers (from previous localhost projects)
+// Automatically unregister any stale service workers (from previous localhost projects) and reload to apply
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister();
+    if (registrations.length > 0) {
+      Promise.all(registrations.map(r => r.unregister())).then(() => {
+        if (window.caches) {
+          caches.keys().then((keys) => {
+            Promise.all(keys.map(k => caches.delete(k))).then(() => {
+              window.location.reload();
+            });
+          });
+        } else {
+          window.location.reload();
+        }
+      });
     }
   });
 }

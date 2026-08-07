@@ -15,6 +15,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { AboutPage } from './pages/AboutPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { ToastProvider } from './components/common/Toast';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,7 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
+        <ToastProvider>
         <BrowserRouter>
           <div className={`app-container ${!sidebarOpen ? 'sidebar-collapsed' : ''}`}>
 
@@ -79,6 +81,7 @@ export function App() {
           </div>
         </div>
       </BrowserRouter>
+        </ToastProvider>
       </ErrorBoundary>
     </QueryClientProvider>
   );

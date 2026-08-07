@@ -3,12 +3,14 @@ import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { Plus, Search, AlertCircle } from 'lucide-react';
+import { useToast } from '../components/common/Toast';
 
 export const SparePartsPage: React.FC = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const toast = useToast();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -41,9 +43,10 @@ export const SparePartsPage: React.FC = () => {
     try {
       await api.createInventory(formData);
       setIsAddOpen(false);
+      toast.success('Thành công', 'Đã thêm phụ tùng mới.');
       loadData();
-    } catch (err) {
-      alert('Lỗi thêm phụ tùng!');
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Lỗi thêm phụ tùng!');
     }
   };
 

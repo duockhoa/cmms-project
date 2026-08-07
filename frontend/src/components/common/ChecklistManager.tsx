@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { AttachmentManager } from './AttachmentManager';
 import { CheckCircle, AlertTriangle, XCircle, Play, AlertCircle, RefreshCw, Paperclip, FileText } from 'lucide-react';
+import { useToast, useConfirmDialog } from './Toast';
 
 interface ChecklistManagerProps {
   workOrderId: string;
@@ -18,6 +19,8 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
 
   // New Execution Form
   const [selectedTechId, setSelectedTechId] = useState('');
@@ -75,10 +78,11 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
       });
 
       setActiveExec(newExec);
+      toast.success('Thành công', 'Khởi tạo checklist mới thành công.');
       loadData();
     } catch (err: any) {
       console.error(err);
-      alert(`Khởi tạo checklist thất bại: ${err.message || 'Lỗi không xác định'}`);
+      toast.error('Lỗi', `Khởi tạo checklist thất bại: ${err.message || 'Lỗi không xác định'}`);
     } finally {
       setCreating(false);
     }
@@ -125,28 +129,29 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
       (it: any) => it.status === 'FAILED' && (!it.comment || it.comment.trim() === '')
     );
     if (failedWithoutComment) {
-      alert('Tất cả các đầu mục bị FAILED bắt buộc phải có giải trình comment!');
+      toast.warning('Cảnh báo', 'Tất cả các đầu mục bị FAILED bắt buộc phải có giải trình comment!');
       return;
     }
 
     const hasNotChecked = activeExec.items.some((it: any) => it.status === 'NOT_CHECKED');
     if (hasNotChecked) {
-      alert('Vui lòng hoàn thành kiểm tra toàn bộ đầu mục (không để NOT_CHECKED) trước khi hoàn tất!');
+      toast.warning('Chưa hoàn thành', 'Vui lòng hoàn thành kiểm tra toàn bộ đầu mục (không để NOT_CHECKED) trước khi hoàn tất!');
       return;
     }
 
-    if (!window.confirm('Bạn có chắc chắn muốn hoàn tất lượt thực hiện Checklist này?')) return;
+    const ok = await confirm('Hoàn tất Checklist', 'Bạn có chắc chắn muốn hoàn tất lượt thực hiện Checklist này?', { confirmText: 'Hoàn tất', type: 'info' });
+    if (!ok) return;
 
     try {
       const completed = await api.completeChecklistExecution(activeExec.id, {
         expectedVersion: activeExec.version,
       });
-      alert(`Đã hoàn tất Checklist! Kết quả tổng hợp: ${completed.result === 'PASSED' ? 'ĐẠT (PASSED)' : 'HỎNG (FAILED)'}`);
+      toast.success('Đã hoàn tất', `Kết quả tổng hợp: ${completed.result === 'PASSED' ? 'ĐẠT (PASSED)' : 'HỎNG (FAILED)'}`);
       loadData();
       if (onStatusChange) onStatusChange();
     } catch (err: any) {
       console.error(err);
-      alert(`Hoàn tất thất bại: ${err.message || 'Lỗi xung đột phiên làm việc'}`);
+      toast.error('Hoàn tất thất bại', err.message || 'Lỗi xung đột phiên làm việc');
       loadData();
     }
   };
@@ -161,11 +166,11 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
         expectedVersion: activeExec.version,
         reason: reason.trim(),
       });
-      alert('Đã hủy lượt thực hiện checklist.');
+      toast.success('Thành công', 'Đã hủy lượt thực hiện checklist.');
       loadData();
     } catch (err: any) {
       console.error(err);
-      alert(`Hủy thất bại: ${err.message || 'Lỗi xung đột phiên làm việc'}`);
+      toast.error('Hủy thất bại', err.message || 'Lỗi xung đột phiên làm việc');
       loadData();
     }
   };
