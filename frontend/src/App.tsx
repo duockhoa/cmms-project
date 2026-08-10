@@ -4,6 +4,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { Navbar } from './components/layout/Navbar';
 import { Dashboard } from './pages/Dashboard';
 import { EquipmentPage } from './pages/EquipmentPage';
+import { RequestsPage } from './pages/RequestsPage';
 import { WorkOrdersPage } from './pages/WorkOrdersPage';
 import { ChecklistsPage } from './pages/ChecklistsPage';
 import { SparePartsPage } from './pages/SparePartsPage';
@@ -66,6 +67,7 @@ export function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/equipment" element={<EquipmentPage />} />
                 <Route path="/equipment/:id" element={<EquipmentPage />} />
+                <Route path="/requests" element={<RequestsPage />} />
                 <Route path="/work-orders" element={<WorkOrdersPage />} />
                 <Route path="/checklists" element={<ChecklistsPage />} />
                 <Route path="/spare-parts" element={<SparePartsPage />} />

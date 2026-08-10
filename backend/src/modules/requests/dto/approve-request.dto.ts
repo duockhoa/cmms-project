@@ -8,4 +8,9 @@ export class ApproveMaintenanceRequestDto {
   @IsString()
   @IsOptional()
   note?: string;
+
+  @IsString()
+  @IsOptional()
+  handlerTeam?: string; // 'XUONG' hoặc 'CO_DIEN'
 }
+

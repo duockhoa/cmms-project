@@ -37,8 +37,8 @@ export class EquipmentController {
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string) {
     await this.equipmentService.remove(id);
-    return { message: 'Thiết bị đã được xóa thành công' };
   }
 }

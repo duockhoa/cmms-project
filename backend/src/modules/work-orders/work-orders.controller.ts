@@ -56,48 +56,49 @@ export class WorkOrdersController {
    * @deprecated Use PATCH :id with { status: '...' } instead
    */
   @Patch(':id/status')
-  updateStatus(@Param('id') id: string, @Body() body: any) {
-    return this.workOrdersService.updateStatusLegacy(id, body);
+  @Post(':id/status')
+  updateStatus(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return this.workOrdersService.updateStatusLegacy(id, body, req.user);
   }
 
   @Post(':id/assign')
-  assign(@Param('id') id: string, @Body() body: AssignWorkOrderDto) {
-    return this.workOrdersService.assign(id, body);
+  assign(@Param('id') id: string, @Body() body: AssignWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.assign(id, body, req.user);
   }
 
   @Post(':id/start')
-  start(@Param('id') id: string, @Body() body: StartWorkOrderDto) {
-    return this.workOrdersService.start(id, body);
+  start(@Param('id') id: string, @Body() body: StartWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.start(id, body, req.user);
   }
 
   @Post(':id/pause')
-  pause(@Param('id') id: string, @Body() body: PauseWorkOrderDto) {
-    return this.workOrdersService.pause(id, body);
+  pause(@Param('id') id: string, @Body() body: PauseWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.pause(id, body, req.user);
   }
 
   @Post(':id/resume')
-  resume(@Param('id') id: string, @Body() body: ResumeWorkOrderDto) {
-    return this.workOrdersService.resume(id, body);
+  resume(@Param('id') id: string, @Body() body: ResumeWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.resume(id, body, req.user);
   }
 
   @Post(':id/complete')
-  complete(@Param('id') id: string, @Body() body: CompleteWorkOrderDto) {
-    return this.workOrdersService.complete(id, body);
+  complete(@Param('id') id: string, @Body() body: CompleteWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.complete(id, body, req.user);
   }
 
   @Post(':id/verify')
-  verify(@Param('id') id: string, @Body() body: VerifyWorkOrderDto) {
-    return this.workOrdersService.verify(id, body);
+  verify(@Param('id') id: string, @Body() body: VerifyWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.verify(id, body, req.user);
   }
 
   @Post(':id/close')
-  close(@Param('id') id: string, @Body() body: CloseWorkOrderDto) {
-    return this.workOrdersService.close(id, body);
+  close(@Param('id') id: string, @Body() body: CloseWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.close(id, body, req.user);
   }
 
   @Post(':id/cancel')
-  cancel(@Param('id') id: string, @Body() body: CancelWorkOrderDto) {
-    return this.workOrdersService.cancel(id, body);
+  cancel(@Param('id') id: string, @Body() body: CancelWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.cancel(id, body, req.user);
   }
 
   @Post(':id/items')

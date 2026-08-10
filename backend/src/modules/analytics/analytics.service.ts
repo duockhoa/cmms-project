@@ -40,6 +40,31 @@ export class AnalyticsService {
       include: { equipment: true },
     });
 
+    // Calculate 4-hour overdue incident requests (priority: HIGH or URGENT, created > 4h ago, and not yet RESOLVED/CLOSED)
+    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const overdueIncidents4hCount = await this.prisma.maintenanceRequest.count({
+      where: {
+        priority: { in: ['HIGH', 'URGENT'] },
+        createdAt: { lt: fourHoursAgo },
+        status: { notIn: ['REJECTED', 'CANCELLED'] },
+        // A request is considered unresolved if it has no work orders or all linked work orders are not CLOSED/CANCELLED
+        OR: [
+          {
+            workOrders: {
+              none: {}
+            }
+          },
+          {
+            workOrders: {
+              some: {
+                status: { notIn: ['CLOSED', 'CANCELLED'] }
+              }
+            }
+          }
+        ]
+      }
+    });
+
     return {
       kpi: {
         totalEquipment,
@@ -51,6 +76,7 @@ export class AnalyticsService {
         completedWorkOrders,
         totalCost: totalMaintenanceCostResult._sum.totalCost || 0,
         lowStockItems,
+        overdueIncidents4hCount,
       },
       recentRequests,
       urgentWorkOrders,

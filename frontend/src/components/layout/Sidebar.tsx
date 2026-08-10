@@ -12,6 +12,7 @@ import {
   UserCheck,
   Settings,
   Info,
+  AlertCircle,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -23,7 +24,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
   const menuItems = [
     { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },
     { id: 'equipment', label: 'Thiết bị', icon: Cpu },
-    { id: 'work-orders', label: 'Yêu cầu sửa chữa', icon: Wrench },
+    { id: 'requests', label: 'Báo cáo sự cố', icon: AlertCircle },
+    { id: 'work-orders', label: 'Phiếu bảo trì (WO)', icon: Wrench },
     { id: 'checklists', label: 'Checklist bảo trì', icon: CheckSquare },
     { id: 'spare-parts', label: 'Kho phụ tùng', icon: Package },
     { id: 'reports', label: 'Báo cáo & Phân tích', icon: BarChart3 },

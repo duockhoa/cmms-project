@@ -125,6 +125,12 @@ export const Dashboard: React.FC = () => {
             <BellRing size={16} /> Thông báo gần đây
           </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '12px' }}>
+            {kpi.overdueIncidents4hCount > 0 && (
+              <div style={{ borderLeft: '3px solid var(--danger)', paddingLeft: '8px', backgroundColor: 'rgba(239, 68, 68, 0.05)', padding: '6px' }}>
+                <strong style={{ color: 'var(--danger)' }}>Cảnh báo sự cố quá hạn 4h!</strong>
+                <div style={{ color: 'var(--text-primary)' }}>Có {kpi.overdueIncidents4hCount} sự cố khẩn cấp đã quá 4 giờ kể từ khi Operator báo cáo chưa hoàn thành xử lý.</div>
+              </div>
+            )}
             {urgentWorkOrders.length > 0 ? (
               <div style={{ borderLeft: '3px solid var(--danger)', paddingLeft: '8px' }}>
                 <strong>Yêu cầu khẩn cấp!</strong>

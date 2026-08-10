@@ -41,8 +41,8 @@ export class RequestsController {
   }
 
   @Post(':id/approve')
-  approve(@Param('id') id: string, @Body() body: ApproveMaintenanceRequestDto) {
-    return this.requestsService.approve(id, body);
+  approve(@Param('id') id: string, @Body() body: ApproveMaintenanceRequestDto, @Req() req: any) {
+    return this.requestsService.approve(id, body, req.user.id);
   }
 
   @Post(':id/reject')

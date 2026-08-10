@@ -112,7 +112,7 @@ export class RequestsService {
     });
   }
 
-  async approve(id: string, body: { technicianName?: string; note?: string }) {
+  async approve(id: string, body: { technicianName?: string; note?: string; handlerTeam?: string }, actorId?: string) {
     return this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
@@ -130,6 +130,14 @@ export class RequestsService {
         throw new ConflictException('Yêu cầu sửa chữa này đã được liên kết với một Phiếu bảo trì');
       }
 
+      // Determine technician/handler name based on decision
+      let assignedTech = body.technicianName || 'Kỹ thuật viên bảo trì';
+      let titlePrefix = '[Sửa chữa]';
+      if (body.handlerTeam === 'CO_DIEN') {
+        assignedTech = 'Bộ phận Cơ điện';
+        titlePrefix = '[Cơ điện xử lý]';
+      }
+
       // Create Work Order
       const woCount = await tx.workOrder.count();
       const orderCode = `WO-${(woCount + 1).toString().padStart(4, '0')}`;
@@ -139,11 +147,11 @@ export class RequestsService {
           orderCode,
           equipmentId: request.equipmentId,
           requestId: request.id,
-          title: `[Sửa chữa] ${request.title}`,
+          title: `${titlePrefix} ${request.title}`,
           description: request.description,
           priority: request.priority,
           status: 'ASSIGNED',
-          technicianName: body.technicianName || 'Kỹ thuật viên bảo trì',
+          technicianName: assignedTech,
           actualStartDate: null,
         },
       });
@@ -165,7 +173,8 @@ export class RequestsService {
           action: 'APPROVE',
           fromStatus: 'PENDING',
           toStatus: 'APPROVED',
-          comment: body.note || 'Duyệt yêu cầu sửa chữa',
+          comment: body.note || (body.handlerTeam === 'CO_DIEN' ? 'Duyệt yêu cầu - Chuyển Bộ phận Cơ điện xử lý' : 'Duyệt yêu cầu - Xưởng tự xử lý'),
+          actedById: actorId || null,
         },
       });
 
@@ -177,6 +186,7 @@ export class RequestsService {
           fromStatus: null,
           toStatus: 'ASSIGNED',
           comment: `Khởi tạo từ yêu cầu sửa chữa ${request.requestCode}`,
+          actedById: actorId || null,
         },
       });
 

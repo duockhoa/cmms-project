@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
+import { QRScanner } from '../components/common/QRScanner';
 
 export const RequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<any[]>([]);
@@ -14,8 +15,26 @@ export const RequestsPage: React.FC = () => {
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const [approveModalReq, setApproveModalReq] = useState<any>(null);
   const [technicianName, setTechnicianName] = useState('Trần Văn Kỹ Thuật');
+  const [handlerTeam, setHandlerTeam] = useState('XUONG'); // 'XUONG' hoặc 'CO_DIEN'
+
+  const handleQRScan = (decodedText: string) => {
+    if (decodedText.startsWith('cmms-equipment:')) {
+      const eqId = decodedText.split(':')[1];
+      const matched = equipmentList.find((e) => e.id === eqId);
+      if (matched) {
+        setFormData((prev) => ({ ...prev, equipmentId: eqId }));
+        toast.success('Nhận diện thiết bị thành công', `Thiết bị: ${matched.name} (${matched.code})`);
+        setShowScanner(false);
+      } else {
+        toast.error('Thiết bị không tồn tại', 'ID thiết bị quét từ mã QR không tồn tại trong hệ thống.');
+      }
+    } else {
+      toast.warning('Mã QR không đúng định dạng', 'Mã QR quét được không thuộc hệ thống CMMS thiết bị.');
+    }
+  };
 
   // Detail / History Modal
   const [detailReq, setDetailReq] = useState<any>(null);
@@ -90,8 +109,12 @@ export const RequestsPage: React.FC = () => {
   const handleApproveConfirm = async () => {
     if (!approveModalReq) return;
     try {
-      await api.approveRequest(approveModalReq.id, { technicianName });
+      await api.approveRequest(approveModalReq.id, { 
+        technicianName: handlerTeam === 'XUONG' ? technicianName : undefined, 
+        handlerTeam 
+      });
       setApproveModalReq(null);
+      setHandlerTeam('XUONG');
       toast.success('Phê duyệt thành công', 'Đã phê duyệt yêu cầu & tự động tạo Phiếu Bảo Trì.');
       loadData();
     } catch (err: any) {
@@ -241,7 +264,7 @@ export const RequestsPage: React.FC = () => {
                 <th>Người báo</th>
                 <th>Ưu tiên</th>
                 <th>Trạng thái</th>
-                <th style={{ textAlign: 'center' }}>Hành động</th>
+                <th style={{ textAlign: 'center', minWidth: '250px' }}>Hành động</th>
               </tr>
             </thead>
             <tbody>
@@ -273,19 +296,19 @@ export const RequestsPage: React.FC = () => {
                   <td><StatusBadge status={req.status} /></td>
                   <td style={{ textAlign: 'center' }}>
                     {req.status === 'PENDING' ? (
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                         <button className="btn btn-success btn-sm" onClick={() => setApproveModalReq(req)}>
                           <CheckCircle size={13} /> Duyệt
                         </button>
                         <button className="btn btn-danger btn-sm" onClick={() => handleReject(req.id)}>
                           <XCircle size={13} /> Từ chối
                         </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => handleReturn(req)} style={{ color: 'var(--warning)' }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => handleReturn(req)} style={{ color: 'var(--warning)', borderColor: 'rgba(245, 158, 11, 0.3)' }}>
                           <RotateCcw size={13} /> Trả lại
                         </button>
                       </div>
                     ) : req.status === 'RETURNED' ? (
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                         <button className="btn btn-primary btn-sm" onClick={() => openResubmit(req)}>
                           <Send size={13} /> Tái gửi
                         </button>
@@ -310,14 +333,30 @@ export const RequestsPage: React.FC = () => {
       <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Tạo Yêu cầu Sửa chữa / Báo sự cố">
         <form onSubmit={handleCreate}>
           <div className="form-group">
-            <label className="form-label">Chọn Thiết bị gặp sự cố *</label>
-            <select className="form-select" required value={formData.equipmentId} onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value })}>
-              {equipmentList.map((eq) => (
-                <option key={eq.id} value={eq.id}>
-                  [{eq.code}] {eq.name} - {eq.location}
-                </option>
-              ))}
-            </select>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <label className="form-label" style={{ margin: 0 }}>Chọn Thiết bị gặp sự cố *</label>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 8px', fontSize: '12px', borderColor: 'var(--border-color)' }}
+                onClick={() => setShowScanner(true)}
+              >
+                <QrCode size={14} /> Quét mã QR
+              </button>
+            </div>
+            {showScanner ? (
+              <div style={{ marginBottom: '12px' }}>
+                <QRScanner onScanSuccess={handleQRScan} onClose={() => setShowScanner(false)} />
+              </div>
+            ) : (
+              <select className="form-select" required value={formData.equipmentId} onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value })}>
+                {equipmentList.map((eq) => (
+                  <option key={eq.id} value={eq.id}>
+                    [{eq.code}] {eq.name} - {eq.location}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="form-group">
@@ -355,7 +394,7 @@ export const RequestsPage: React.FC = () => {
 
       {/* Approve Request Modal */}
       {approveModalReq && (
-        <Modal isOpen={!!approveModalReq} onClose={() => setApproveModalReq(null)} title={`Phê duyệt & Tạo Phiếu Bảo Trì cho ${approveModalReq.requestCode}`}>
+        <Modal isOpen={!!approveModalReq} onClose={() => { setApproveModalReq(null); setHandlerTeam('XUONG'); }} title={`Phê duyệt & Tạo Phiếu Bảo Trì cho ${approveModalReq.requestCode}`}>
           <div>
             <p className="mb-4">
               <strong>Yêu cầu:</strong> {approveModalReq.title}<br />
@@ -363,12 +402,22 @@ export const RequestsPage: React.FC = () => {
             </p>
 
             <div className="form-group">
-              <label className="form-label">Phân công Kỹ thuật viên Phụ trách *</label>
-              <input type="text" className="form-input" value={technicianName} onChange={(e) => setTechnicianName(e.target.value)} placeholder="Nhập tên kỹ thuật viên" />
+              <label className="form-label" style={{ fontWeight: 600 }}>Phương án xử lý sự cố *</label>
+              <select className="form-select" value={handlerTeam} onChange={(e) => setHandlerTeam(e.target.value)}>
+                <option value="XUONG">Sự cố nhỏ - Xưởng tự xử lý</option>
+                <option value="CO_DIEN">Sự cố nghiêm trọng - Chuyển bộ phận Cơ điện</option>
+              </select>
             </div>
 
+            {handlerTeam === 'XUONG' && (
+              <div className="form-group">
+                <label className="form-label">Phân công Kỹ thuật viên Phụ trách *</label>
+                <input type="text" className="form-input" value={technicianName} onChange={(e) => setTechnicianName(e.target.value)} placeholder="Nhập tên kỹ thuật viên" />
+              </div>
+            )}
+
             <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
-              <button className="btn btn-secondary" onClick={() => setApproveModalReq(null)}>Hủy</button>
+              <button className="btn btn-secondary" onClick={() => { setApproveModalReq(null); setHandlerTeam('XUONG'); }}>Hủy</button>
               <button className="btn btn-success" onClick={handleApproveConfirm}>
                 Xác nhận Duyệt & Tạo Phiếu WO
               </button>

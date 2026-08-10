@@ -136,7 +136,12 @@ export class WorkOrdersService {
     comment?: string,
     reason?: string,
     extraOperations?: (tx: any, wo: any) => Promise<void>,
+    actorContext?: { id: string; role: string },
   ) {
+    if (targetStatus === 'CLOSED' && actorContext && actorContext.role === 'TECHNICIAN') {
+      throw new BadRequestException('Chỉ Quản đốc xưởng hoặc bộ phận kỹ thuật (Cơ điện) mới được đóng hồ sơ sự cố này.');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const wo = await tx.workOrder.findUnique({
         where: { id },
@@ -185,6 +190,7 @@ export class WorkOrdersService {
           toStatus: targetStatus,
           comment: comment || `Chuyển trạng thái sang ${targetStatus}`,
           reason: reason || null,
+          actedById: actorContext?.id || null,
         },
       });
 
@@ -195,7 +201,7 @@ export class WorkOrdersService {
     });
   }
 
-  async assign(id: string, dto: { technicianName: string; expectedVersion: number }) {
+  async assign(id: string, dto: { technicianName: string; expectedVersion: number }, actorContext?: { id: string; role: string }) {
     const user = await this.prisma.user.findFirst({
       where: {
         name: dto.technicianName,
@@ -213,10 +219,13 @@ export class WorkOrdersService {
       { technicianName: dto.technicianName },
       'ASSIGN',
       `Phân công cho kỹ thuật viên: ${dto.technicianName}`,
+      undefined,
+      undefined,
+      actorContext,
     );
   }
 
-  async start(id: string, dto: { expectedVersion: number }) {
+  async start(id: string, dto: { expectedVersion: number }, actorContext?: { id: string; role: string }) {
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
@@ -224,10 +233,13 @@ export class WorkOrdersService {
       { actualStartDate: new Date() },
       'START',
       'Bắt đầu thực hiện công việc',
+      undefined,
+      undefined,
+      actorContext,
     );
   }
 
-  async pause(id: string, dto: { reason: string; expectedVersion: number }) {
+  async pause(id: string, dto: { reason: string; expectedVersion: number }, actorContext?: { id: string; role: string }) {
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
@@ -236,10 +248,12 @@ export class WorkOrdersService {
       'PAUSE',
       'Tạm dừng công việc',
       dto.reason,
+      undefined,
+      actorContext,
     );
   }
 
-  async resume(id: string, dto: { expectedVersion: number }) {
+  async resume(id: string, dto: { expectedVersion: number }, actorContext?: { id: string; role: string }) {
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
@@ -247,10 +261,13 @@ export class WorkOrdersService {
       {},
       'RESUME',
       'Tiếp tục thực hiện công việc',
+      undefined,
+      undefined,
+      actorContext,
     );
   }
 
-  async complete(id: string, dto: { expectedVersion: number; failureCause?: string; solution?: string }) {
+  async complete(id: string, dto: { expectedVersion: number; failureCause?: string; solution?: string }, actorContext?: { id: string; role: string }) {
     const extraOperations = async (tx: any, wo: any) => {
       // 1. Stock Validation
       // Sum up quantities for unique inventory items needed
@@ -335,10 +352,11 @@ export class WorkOrdersService {
       'Hoàn tất công việc sửa chữa',
       undefined,
       extraOperations,
+      actorContext,
     );
   }
 
-  async verify(id: string, dto: { expectedVersion: number; comment?: string }) {
+  async verify(id: string, dto: { expectedVersion: number; comment?: string }, actorContext?: { id: string; role: string }) {
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
@@ -346,10 +364,13 @@ export class WorkOrdersService {
       { verifiedAt: new Date() },
       'VERIFY',
       dto.comment || 'Nghiệm thu đạt yêu cầu kỹ thuật',
+      undefined,
+      undefined,
+      actorContext,
     );
   }
 
-  async reopen(id: string, dto: { expectedVersion: number; reason?: string }) {
+  async reopen(id: string, dto: { expectedVersion: number; reason?: string }, actorContext?: { id: string; role: string }) {
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
@@ -357,10 +378,13 @@ export class WorkOrdersService {
       { completedAt: null, actualEndDate: null },
       'REOPEN',
       dto.reason || 'Nghiệm thu không đạt, yêu cầu xử lý lại',
+      undefined,
+      undefined,
+      actorContext,
     );
   }
 
-  async close(id: string, dto: { expectedVersion: number }) {
+  async close(id: string, dto: { expectedVersion: number }, actorContext?: { id: string; role: string }) {
     const result = await this.updateStatusTransaction(
       id,
       dto.expectedVersion,
@@ -368,6 +392,9 @@ export class WorkOrdersService {
       { closedAt: new Date() },
       'CLOSE',
       'Đóng phiếu bảo trì vĩnh viễn',
+      undefined,
+      undefined,
+      actorContext,
     );
 
     if (result && result.scheduleId) {
@@ -380,7 +407,7 @@ export class WorkOrdersService {
     return result;
   }
 
-  async cancel(id: string, dto: { reason: string; expectedVersion: number }) {
+  async cancel(id: string, dto: { reason: string; expectedVersion: number }, actorContext?: { id: string; role: string }) {
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
@@ -389,36 +416,38 @@ export class WorkOrdersService {
       'CANCEL',
       'Hủy phiếu bảo trì',
       dto.reason,
+      undefined,
+      actorContext,
     );
   }
 
-  async updateStatusLegacy(id: string, body: any) {
+  async updateStatusLegacy(id: string, body: any, actorContext?: { id: string; role: string }) {
     const wo = await this.findOne(id);
     const expectedVersion = wo.version;
     const targetStatus = body.status as WorkOrderStatus;
 
     switch (targetStatus) {
       case 'ASSIGNED':
-        return this.assign(id, { technicianName: body.technicianName || 'Kỹ thuật viên', expectedVersion });
+        return this.assign(id, { technicianName: body.technicianName || 'Kỹ thuật viên', expectedVersion }, actorContext);
       case 'IN_PROGRESS':
         if (wo.status === 'ON_HOLD') {
-          return this.resume(id, { expectedVersion });
+          return this.resume(id, { expectedVersion }, actorContext);
         } else if (wo.status === 'COMPLETED') {
-          return this.reopen(id, { expectedVersion, reason: 'Reopened from legacy endpoint' });
+          return this.reopen(id, { expectedVersion, reason: 'Reopened from legacy endpoint' }, actorContext);
         } else {
-          return this.start(id, { expectedVersion });
+          return this.start(id, { expectedVersion }, actorContext);
         }
       case 'ON_HOLD':
-        return this.pause(id, { reason: body.reason || 'Legacy pause', expectedVersion });
+        return this.pause(id, { reason: body.reason || 'Legacy pause', expectedVersion }, actorContext);
       case 'COMPLETED':
-        return this.complete(id, { expectedVersion, failureCause: body.failureCause, solution: body.solution });
+        return this.complete(id, { expectedVersion, failureCause: body.failureCause, solution: body.solution }, actorContext);
       case 'VERIFIED':
       case 'INSPECTION' as any: // Map legacy INSPECTION status to VERIFIED
-        return this.verify(id, { expectedVersion, comment: 'Nghiệm thu từ legacy endpoint' });
+        return this.verify(id, { expectedVersion, comment: 'Nghiệm thu từ legacy endpoint' }, actorContext);
       case 'CLOSED':
-        return this.close(id, { expectedVersion });
+        return this.close(id, { expectedVersion }, actorContext);
       case 'CANCELLED':
-        return this.cancel(id, { reason: body.reason || 'Legacy cancel', expectedVersion });
+        return this.cancel(id, { reason: body.reason || 'Legacy cancel', expectedVersion }, actorContext);
       default:
         throw new BadRequestException(`Trạng thái không hợp lệ: ${targetStatus}`);
     }

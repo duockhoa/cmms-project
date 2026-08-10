@@ -61,7 +61,7 @@ export const api = {
   },
   getRequestById: (id: string) => request(`/requests/${id}`),
   createRequest: (data: any) => request('/requests', { method: 'POST', body: JSON.stringify(data) }),
-  approveRequest: (id: string, body?: { technicianName?: string }) =>
+  approveRequest: (id: string, body?: any) =>
     request(`/requests/${id}/approve`, { method: 'POST', body: JSON.stringify(body || {}) }),
   rejectRequest: (id: string, body?: { reason?: string }) =>
     request(`/requests/${id}/reject`, { method: 'POST', body: JSON.stringify(body || {}) }),
