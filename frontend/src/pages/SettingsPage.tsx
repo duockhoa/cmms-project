@@ -174,7 +174,7 @@ export const SettingsPage: React.FC = () => {
     const titleMap: Record<SettingsTab, string> = {
       'categories': 'loại thiết bị',
       'locations': 'vị trí/nhà xưởng',
-      'production-lines': 'dây chuyền sản xuất',
+      'production-lines': 'khu vực',
       'system-settings': 'cài đặt',
     };
     const urlSegment = endpointMap[activeTab];
@@ -298,8 +298,8 @@ export const SettingsPage: React.FC = () => {
           >
             <Layers size={16} />
             <div style={{ textAlign: 'left' }}>
-              <div style={{ fontWeight: 700, fontSize: '13.5px' }}>Dây chuyền sản xuất</div>
-              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Quản lý dây chuyền nhà máy.</div>
+              <div style={{ fontWeight: 700, fontSize: '13.5px' }}>Khu vực</div>
+              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Quản lý khu vực sản xuất.</div>
             </div>
           </button>
 
@@ -323,7 +323,7 @@ export const SettingsPage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <div>
                   <h3 style={{ fontSize: '16px', fontWeight: 700, textTransform: 'capitalize' }}>
-                    Danh mục {activeTab === 'categories' ? 'Loại thiết bị' : activeTab === 'locations' ? 'Vị trí / Nhà xưởng' : 'Dây chuyền sản xuất'}
+                    Danh mục {activeTab === 'categories' ? 'Loại thiết bị' : activeTab === 'locations' ? 'Vị trí / Nhà xưởng' : 'Khu vực'}
                   </h3>
                   <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                     Quản lý danh sách chuẩn dùng để phân loại và cấu hình.
@@ -486,7 +486,7 @@ export const SettingsPage: React.FC = () => {
       <Modal 
         isOpen={isAddEditOpen} 
         onClose={() => setIsAddEditOpen(false)} 
-        title={editItem ? `Chỉnh sửa ${activeTab === 'categories' ? 'loại thiết bị' : activeTab === 'locations' ? 'vị trí/nhà xưởng' : 'dây chuyền'}` : `Thêm mới ${activeTab === 'categories' ? 'loại thiết bị' : activeTab === 'locations' ? 'vị trí/nhà xưởng' : 'dây chuyền'}`}
+        title={editItem ? `Chỉnh sửa ${activeTab === 'categories' ? 'loại thiết bị' : activeTab === 'locations' ? 'vị trí/nhà xưởng' : 'khu vực'}` : `Thêm mới ${activeTab === 'categories' ? 'loại thiết bị' : activeTab === 'locations' ? 'vị trí/nhà xưởng' : 'khu vực'}`}
       >
         <form onSubmit={handleItemSubmit}>
           <div className="form-group">
