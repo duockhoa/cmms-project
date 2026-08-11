@@ -1,10 +1,11 @@
 const API_BASE = ((import.meta as any).env.VITE_API_URL || 'http://localhost:3001') + '/api/v1';
+const DEMO_USER_ID = (import.meta as any).env.VITE_USER_ID || 'tech-demo-id';
 
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
   const headers = {
     'Content-Type': 'application/json',
-    'x-user-id': 'tech-demo-id',
-    'x-test-user-id': 'tech-demo-id',
+    'x-user-id': DEMO_USER_ID,
+    'x-test-user-id': DEMO_USER_ID,
     ...options.headers
   };
   return fetch(url, { ...options, headers });
@@ -16,8 +17,8 @@ async function request(endpoint: string, options: RequestInit = {}) {
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
-      'x-user-id': 'tech-demo-id',
-      'x-test-user-id': 'tech-demo-id',
+      'x-user-id': DEMO_USER_ID,
+      'x-test-user-id': DEMO_USER_ID,
       ...options.headers,
     },
     ...options,
@@ -148,8 +149,8 @@ export const api = {
     return fetch(`${API_BASE}/attachments`, {
       method: 'POST',
       headers: {
-        'x-user-id': 'tech-demo-id',
-        'x-test-user-id': 'tech-demo-id',
+        'x-user-id': DEMO_USER_ID,
+        'x-test-user-id': DEMO_USER_ID,
       },
       body: formData,
     }).then(async (res) => {

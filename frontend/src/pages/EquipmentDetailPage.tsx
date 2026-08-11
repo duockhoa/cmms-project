@@ -13,6 +13,7 @@ import { QRCodeTab } from '../components/equipment/QRCodeTab';
 import { LogsTab } from '../components/equipment/LogsTab';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+const DEMO_USER_ID = (import.meta as any).env.VITE_USER_ID || 'tech-demo-id';
 
 interface EquipmentDetailPageProps {
   item: any;
@@ -42,8 +43,8 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     setLoading(true);
     fetch(`${API_BASE}/api/v1/equipment/${item.id}`, {
       headers: {
-        'x-user-id': 'tech-demo-id',
-        'x-test-user-id': 'tech-demo-id',
+        'x-user-id': DEMO_USER_ID,
+        'x-test-user-id': DEMO_USER_ID,
       }
     })
       .then(res => {
@@ -106,8 +107,8 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': 'tech-demo-id',
-          'x-test-user-id': 'tech-demo-id',
+          'x-user-id': DEMO_USER_ID,
+          'x-test-user-id': DEMO_USER_ID,
         },
         body: JSON.stringify({
           expectedVersion: data.version,
@@ -144,8 +145,8 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': 'tech-demo-id',
-          'x-test-user-id': 'tech-demo-id',
+          'x-user-id': DEMO_USER_ID,
+          'x-test-user-id': DEMO_USER_ID,
         },
         body: JSON.stringify({
           expectedVersion: data.version,
@@ -176,8 +177,8 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
       const res = await fetch(`${API_BASE}/api/v1/attachments`, {
         method: 'POST',
         headers: {
-          'x-user-id': 'tech-demo-id',
-          'x-test-user-id': 'tech-demo-id',
+          'x-user-id': DEMO_USER_ID,
+          'x-test-user-id': DEMO_USER_ID,
         },
         body: formData
       });
