@@ -46,6 +46,8 @@ export const RequestsPage: React.FC = () => {
   const [resubmitFields, setResubmitFields] = useState<any>({});
   const [resubmitComment, setResubmitComment] = useState('');
 
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
   const [formData, setFormData] = useState({
     equipmentId: '',
     title: '',
@@ -60,16 +62,30 @@ export const RequestsPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [reqRes, eqRes, userRes] = await Promise.all([
+      const [reqRes, eqRes, userRes, meRes] = await Promise.all([
         api.getRequests({ status: statusFilter }),
         api.getEquipment(),
         api.getUsers().catch(() => []),
+        api.getMe().catch(() => null),
       ]);
       setRequests(reqRes);
       setEquipmentList(eqRes);
       setUsers(userRes);
+
+      if (meRes && meRes.authenticated) {
+        setCurrentUser(meRes.user);
+        setFormData((prev) => ({
+          ...prev,
+          reporterName: meRes.user.name,
+          department: meRes.user.department || 'Phòng ban khác',
+        }));
+      }
+
       if (eqRes.length > 0 && !formData.equipmentId) {
-        setFormData((prev) => ({ ...prev, equipmentId: eqRes[0].id }));
+        setFormData((prev) => ({
+          ...prev,
+          equipmentId: eqRes[0].id,
+        }));
       }
     } catch (err) {
       console.error(err);
@@ -97,8 +113,8 @@ export const RequestsPage: React.FC = () => {
         title: '',
         description: '',
         priority: 'HIGH',
-        reporterName: 'Lê Hoàng Nam (Quản đốc)',
-        department: 'Bộ phận Đóng gói',
+        reporterName: currentUser ? currentUser.name : 'Lê Hoàng Nam (Quản đốc)',
+        department: currentUser ? (currentUser.department || 'Phòng ban khác') : 'Bộ phận Đóng gói',
       });
       loadData();
     } catch (err) {

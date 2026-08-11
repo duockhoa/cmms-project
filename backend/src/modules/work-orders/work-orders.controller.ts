@@ -32,8 +32,9 @@ export class WorkOrdersController {
     @Query('equipmentId') equipmentId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('handlerTeam') handlerTeam?: string,
   ) {
-    return this.workOrdersService.findAll({ status, priority, search, equipmentId, page, limit });
+    return this.workOrdersService.findAll({ status, priority, search, equipmentId, page, limit, handlerTeam });
   }
 
   @Get(':id')

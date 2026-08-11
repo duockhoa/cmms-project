@@ -18,6 +18,11 @@ export class UsersController {
     return this.usersService.getUsers(role, isIncludeInactive);
   }
 
+  @Get('departments')
+  async getDepartments() {
+    return this.usersService.getDepartments();
+  }
+
   @Get(':id')
   async getUserById(@Param('id') id: string) {
     return this.usersService.getUserById(id);

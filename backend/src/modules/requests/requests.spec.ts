@@ -23,7 +23,7 @@ describe('Requests Module', () => {
       } catch (e) {}
     }
 
-    execSync('npx prisma db push --accept-data-loss', {
+    execSync('npx prisma db push --accept-data-loss --skip-generate', {
       env: { ...process.env, DATABASE_URL: `file:./test-req.db` },
       stdio: 'inherit',
     });
@@ -41,6 +41,15 @@ describe('Requests Module', () => {
         role: 'TECHNICIAN',
         status: 'AVAILABLE',
         isActive: true,
+      },
+    });
+
+    await prisma.location.create({
+      data: {
+        id: 'req-loc-test-id',
+        code: 'XUONG_A',
+        name: 'Xưởng A',
+        responsibleTechId: 'req-tech-user',
       },
     });
 

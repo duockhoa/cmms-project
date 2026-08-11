@@ -46,8 +46,8 @@ export class RequestsController {
   }
 
   @Post(':id/reject')
-  reject(@Param('id') id: string, @Body() body: RejectMaintenanceRequestDto) {
-    return this.requestsService.reject(id, body);
+  reject(@Param('id') id: string, @Body() body: RejectMaintenanceRequestDto, @Req() req: any) {
+    return this.requestsService.reject(id, body, req.user.id);
   }
 
   @Post(':id/return')

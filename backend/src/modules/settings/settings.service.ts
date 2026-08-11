@@ -61,11 +61,15 @@ export class SettingsService {
   async getAllLocations() {
     return this.prisma.location.findMany({
       orderBy: { code: 'asc' },
+      include: { responsibleTech: true },
     });
   }
 
   async getLocationById(id: string) {
-    const item = await this.prisma.location.findUnique({ where: { id } });
+    const item = await this.prisma.location.findUnique({
+      where: { id },
+      include: { responsibleTech: true },
+    });
     if (!item) throw new NotFoundException('Không tìm thấy vị trí/nhà xưởng');
     return item;
   }

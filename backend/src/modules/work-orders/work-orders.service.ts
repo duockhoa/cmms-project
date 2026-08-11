@@ -10,18 +10,70 @@ export class WorkOrdersService {
     private equipmentStatus: EquipmentStatusService,
   ) {}
 
-  async findAll(query?: { status?: string; priority?: string; search?: string; equipmentId?: string; page?: string; limit?: string }) {
-    const where: any = {};
-    if (query?.status) where.status = query.status;
-    if (query?.priority) where.priority = query.priority;
-    if (query?.equipmentId) where.equipmentId = query.equipmentId;
+  async findAll(query?: { status?: string; priority?: string; search?: string; equipmentId?: string; page?: string; limit?: string; handlerTeam?: string }) {
+    const andConditions: any[] = [];
+
+    if (query?.status) andConditions.push({ status: query.status });
+    if (query?.priority) andConditions.push({ priority: query.priority });
+    if (query?.equipmentId) andConditions.push({ equipmentId: query.equipmentId });
     if (query?.search) {
-      where.OR = [
-        { title: { contains: query.search } },
-        { orderCode: { contains: query.search } },
-        { technicianName: { contains: query.search } },
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: query.search } },
+          { orderCode: { contains: query.search } },
+          { technicianName: { contains: query.search } },
+        ]
+      });
     }
+
+    if (query?.handlerTeam) {
+      if (query.handlerTeam === 'CO_DIEN') {
+        const users = await this.prisma.user.findMany({
+          where: { department: { contains: 'Cơ điện' } },
+          select: { name: true }
+        });
+        const names = users.map((u) => u.name);
+        andConditions.push({
+          OR: [
+            { technicianName: { in: names } },
+            { technicianName: { contains: 'Cơ điện' } },
+            { title: { contains: 'Cơ điện' } }
+          ]
+        });
+      } else if (query.handlerTeam === 'XUONG') {
+        const users = await this.prisma.user.findMany({
+          where: { 
+            OR: [
+              { department: null },
+              { NOT: { department: { contains: 'Cơ điện' } } }
+            ]
+          },
+          select: { name: true }
+        });
+        const names = users.map((u) => u.name);
+        andConditions.push({
+          AND: [
+            { OR: [
+              { technicianName: null },
+              { technicianName: { in: names } },
+              { NOT: { technicianName: { contains: 'Cơ điện' } } }
+            ]},
+            { NOT: { title: { contains: 'Cơ điện' } } }
+          ]
+        });
+      } else {
+        const users = await this.prisma.user.findMany({
+          where: { department: query.handlerTeam },
+          select: { name: true }
+        });
+        const names = users.map((u) => u.name);
+        andConditions.push({
+          technicianName: { in: names }
+        });
+      }
+    }
+
+    const where = andConditions.length > 0 ? { AND: andConditions } : {};
 
     if (query?.page || query?.limit) {
       const page = Math.max(1, parseInt(query.page || '1', 10));

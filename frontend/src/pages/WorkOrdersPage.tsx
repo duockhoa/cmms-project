@@ -14,6 +14,8 @@ export const WorkOrdersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const [search, setSearch] = useState('');
+  const [handlerTeamFilter, setHandlerTeamFilter] = useState('');
+  const [departments, setDepartments] = useState<string[]>([]);
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -57,15 +59,17 @@ export const WorkOrdersPage: React.FC = () => {
     try {
       setLoading(true);
 
-      // Fetch dynamic users and tech lists
-      const [eqRes, techRes, userRes] = await Promise.all([
+      // Fetch dynamic users and tech lists, plus departments
+      const [eqRes, techRes, userRes, deptRes] = await Promise.all([
         api.getEquipment(),
         api.getUsers({ role: 'TECHNICIAN' }),
         api.getUsers().catch(() => []),
+        api.getDepartments().catch(() => []),
       ]);
       setEquipmentList(eqRes);
       setTechniciansList(techRes);
       setUsers(userRes);
+      setDepartments(deptRes);
 
       if (eqRes.length > 0 && !formData.equipmentId) {
         setFormData((prev) => ({ ...prev, equipmentId: eqRes[0].id }));
@@ -76,6 +80,7 @@ export const WorkOrdersPage: React.FC = () => {
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
       if (search) url.searchParams.append('search', search);
+      if (handlerTeamFilter) url.searchParams.append('handlerTeam', handlerTeamFilter);
 
       const response = await fetchWithAuth(url.toString());
       if (!response.ok) throw new Error('Không thể tải danh sách Work Orders');
@@ -99,11 +104,11 @@ export const WorkOrdersPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [search, page]);
+  }, [search, page, handlerTeamFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, handlerTeamFilter]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,7 +235,7 @@ export const WorkOrdersPage: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="card mb-4" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+      <div className="card mb-4" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
           <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
@@ -241,6 +246,30 @@ export const WorkOrdersPage: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+
+        {/* Bộ phận phụ trách Filter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '280px' }}>
+          <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Bộ phận phụ trách:</label>
+          <select 
+            className="form-select" 
+            style={{ flex: 1, height: '38px', fontSize: '13px', padding: '0 12px' }} 
+            value={handlerTeamFilter} 
+            onChange={(e) => setHandlerTeamFilter(e.target.value)}
+          >
+            <option value="">-- Tất cả bộ phận --</option>
+            <optgroup label="Nhóm bộ phận">
+              <option value="XUONG">Phân xưởng tự xử lý</option>
+              <option value="CO_DIEN">Bộ phận Cơ điện</option>
+            </optgroup>
+            {departments.length > 0 && (
+              <optgroup label="Bộ phận từ nhân sự (HRM)">
+                {departments.map((dept) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
         </div>
       </div>
 

@@ -96,6 +96,20 @@ export class RequestsService {
       // Recalculate equipment status
       await this.equipmentStatus.calculateAndSetStatus(data.equipmentId, tx);
 
+      // Resolve location and responsible technician
+      const location = await tx.location.findFirst({
+        where: { name: equipment.location },
+        include: { responsibleTech: true },
+      });
+
+      let comment = 'Tạo yêu cầu báo hỏng mới';
+      if (location) {
+        const managerName = 'Quản đốc ' + location.name;
+        const techName = location.responsibleTech ? location.responsibleTech.name : 'Chưa gán kỹ thuật viên';
+        comment += `. Đã gửi thông báo tới ${managerName} và Kỹ thuật viên phụ trách: ${techName}`;
+        console.log(`[NOTIFICATION] Sự cố ${requestCode} tại ${location.name}: Đã gửi thông báo cho ${managerName} và Kỹ thuật viên phụ trách: ${techName}.`);
+      }
+
       // Log history
       await tx.workflowHistory.create({
         data: {
@@ -104,7 +118,7 @@ export class RequestsService {
           action: 'CREATE',
           fromStatus: null,
           toStatus: 'PENDING',
-          comment: 'Tạo yêu cầu báo hỏng mới',
+          comment,
         },
       });
 
@@ -116,9 +130,30 @@ export class RequestsService {
     return this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
-        include: { workOrders: true },
+        include: { 
+          workOrders: true,
+          equipment: true,
+        },
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
+
+      // Authorization Check
+      if (actorId) {
+        const actor = await tx.user.findUnique({ where: { id: actorId } });
+        if (actor) {
+          const location = await tx.location.findFirst({
+            where: { name: request.equipment.location },
+          });
+          const isAuthorized = 
+            actor.role === 'ADMIN' || 
+            actor.role === 'MANAGER' || 
+            (actor.role === 'TECHNICIAN' && location && location.responsibleTechId === actor.id);
+
+          if (!isAuthorized) {
+            throw new BadRequestException('Bạn không có quyền phê duyệt yêu cầu sửa chữa cho vị trí/nhà xưởng này.');
+          }
+        }
+      }
       
       // Business Validation: Must be PENDING
       if (request.status !== 'PENDING') {
@@ -194,10 +229,31 @@ export class RequestsService {
     });
   }
 
-  async reject(id: string, body: { reason?: string }) {
+  async reject(id: string, body: { reason?: string }, actorId?: string) {
     return this.prisma.$transaction(async (tx) => {
-      const request = await tx.maintenanceRequest.findUnique({ where: { id } });
+      const request = await tx.maintenanceRequest.findUnique({
+        where: { id },
+        include: { equipment: true },
+      });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
+
+      // Authorization Check
+      if (actorId) {
+        const actor = await tx.user.findUnique({ where: { id: actorId } });
+        if (actor) {
+          const location = await tx.location.findFirst({
+            where: { name: request.equipment.location },
+          });
+          const isAuthorized = 
+            actor.role === 'ADMIN' || 
+            actor.role === 'MANAGER' || 
+            (actor.role === 'TECHNICIAN' && location && location.responsibleTechId === actor.id);
+
+          if (!isAuthorized) {
+            throw new BadRequestException('Bạn không có quyền từ chối yêu cầu sửa chữa cho vị trí/nhà xưởng này.');
+          }
+        }
+      }
 
       if (request.status !== 'PENDING') {
         throw new ConflictException(`Yêu cầu sửa chữa đã được xử lý (Trạng thái hiện tại: ${request.status})`);
@@ -224,6 +280,7 @@ export class RequestsService {
           toStatus: 'REJECTED',
           reason: body.reason,
           comment: 'Từ chối yêu cầu sửa chữa',
+          actedById: actorId || null,
         },
       });
 
@@ -254,9 +311,30 @@ export class RequestsService {
     return this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
-        include: { workOrders: true },
+        include: { 
+          workOrders: true,
+          equipment: true,
+        },
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
+
+      // Authorization Check
+      if (actorId) {
+        const actor = await tx.user.findUnique({ where: { id: actorId } });
+        if (actor) {
+          const location = await tx.location.findFirst({
+            where: { name: request.equipment.location },
+          });
+          const isAuthorized = 
+            actor.role === 'ADMIN' || 
+            actor.role === 'MANAGER' || 
+            (actor.role === 'TECHNICIAN' && location && location.responsibleTechId === actor.id);
+
+          if (!isAuthorized) {
+            throw new BadRequestException('Bạn không có quyền trả lại yêu cầu sửa chữa cho vị trí/nhà xưởng này.');
+          }
+        }
+      }
 
       if (request.status !== 'PENDING') {
         throw new BadRequestException(`Chỉ được trả lại yêu cầu ở trạng thái PENDING. Trạng thái hiện tại: ${request.status}`);

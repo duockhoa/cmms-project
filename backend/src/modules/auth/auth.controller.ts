@@ -49,6 +49,7 @@ export class AuthController {
         role: dbUser.role,
         status: dbUser.status,
         isActive: dbUser.isActive,
+        department: dbUser.department,
       },
       permissions: permissions,
       scope: {

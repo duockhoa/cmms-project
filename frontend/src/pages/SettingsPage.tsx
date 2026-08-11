@@ -21,6 +21,7 @@ export const SettingsPage: React.FC = () => {
   const [locations, setLocations] = useState<any[]>([]);
   const [productionLines, setProductionLines] = useState<any[]>([]);
   const [systemSettings, setSystemSettings] = useState<any[]>([]);
+  const [technicians, setTechnicians] = useState<any[]>([]);
 
   // Modal States
   const [isAddEditOpen, setIsAddEditOpen] = useState(false);
@@ -31,6 +32,7 @@ export const SettingsPage: React.FC = () => {
     code: '',
     name: '',
     description: '',
+    responsibleTechId: '',
   });
 
   // Form State for System Settings (Key-Value)
@@ -53,6 +55,8 @@ export const SettingsPage: React.FC = () => {
         if (!res.ok) throw new Error('Không thể tải danh sách vị trí');
         const data = await res.json();
         setLocations(data);
+        const techs = await api.getUsers({ role: 'TECHNICIAN' }).catch(() => []);
+        setTechnicians(techs);
       } else if (activeTab === 'production-lines') {
         const res = await fetchWithAuth(`${API_BASE}/api/v1/production-lines`);
         if (!res.ok) throw new Error('Không thể tải danh sách dây chuyền');
@@ -84,7 +88,7 @@ export const SettingsPage: React.FC = () => {
   // Open modal for Create
   const handleOpenAdd = () => {
     setEditItem(null);
-    setItemForm({ code: '', name: '', description: '' });
+    setItemForm({ code: '', name: '', description: '', responsibleTechId: '' });
     setIsAddEditOpen(true);
   };
 
@@ -95,6 +99,7 @@ export const SettingsPage: React.FC = () => {
       code: item.code,
       name: item.name,
       description: item.description || '',
+      responsibleTechId: item.responsibleTechId || '',
     });
     setIsAddEditOpen(true);
   };
@@ -115,12 +120,16 @@ export const SettingsPage: React.FC = () => {
     try {
       if (editItem) {
         // Edit mode (PATCH)
+        const body: any = {
+          name: itemForm.name.trim(),
+          description: itemForm.description.trim(),
+        };
+        if (activeTab === 'locations') {
+          body.responsibleTechId = itemForm.responsibleTechId || null;
+        }
         const res = await fetchWithAuth(`${API_BASE}/api/v1/${urlSegment}/${editItem.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({
-            name: itemForm.name.trim(),
-            description: itemForm.description.trim(),
-          }),
+          body: JSON.stringify(body),
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
@@ -129,13 +138,17 @@ export const SettingsPage: React.FC = () => {
         toast.success('Thành công', 'Đã cập nhật cấu hình thành công.');
       } else {
         // Create mode (POST)
+        const body: any = {
+          code: itemForm.code.trim().toUpperCase(),
+          name: itemForm.name.trim(),
+          description: itemForm.description.trim(),
+        };
+        if (activeTab === 'locations') {
+          body.responsibleTechId = itemForm.responsibleTechId || null;
+        }
         const res = await fetchWithAuth(`${API_BASE}/api/v1/${urlSegment}`, {
           method: 'POST',
-          body: JSON.stringify({
-            code: itemForm.code.trim().toUpperCase(),
-            name: itemForm.name.trim(),
-            description: itemForm.description.trim(),
-          }),
+          body: JSON.stringify(body),
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
@@ -365,7 +378,14 @@ export const SettingsPage: React.FC = () => {
                           <tr key={item.id}>
                             <td style={{ fontWeight: 600 }}>{idx + 1}</td>
                             <td style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>{item.code}</td>
-                            <td style={{ fontWeight: 600 }}>{item.name}</td>
+                            <td style={{ fontWeight: 600 }}>
+                              <div>{item.name}</div>
+                              {activeTab === 'locations' && item.responsibleTech && (
+                                <div style={{ fontSize: '11.5px', color: '#10b981', marginTop: '2px', fontWeight: 500 }}>
+                                  Phụ trách: {item.responsibleTech.name}
+                                </div>
+                              )}
+                            </td>
                             <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{item.description || '—'}</td>
                             <td>
                               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
@@ -504,6 +524,24 @@ export const SettingsPage: React.FC = () => {
               onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
             />
           </div>
+
+          {activeTab === 'locations' && (
+            <div className="form-group">
+              <label className="form-label">Kỹ thuật viên phụ trách phân xưởng</label>
+              <select
+                className="form-select"
+                value={itemForm.responsibleTechId}
+                onChange={(e) => setItemForm({ ...itemForm, responsibleTechId: e.target.value })}
+              >
+                <option value="">-- Chưa chỉ định / Trống --</option>
+                {technicians.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.specialty || 'Kỹ thuật viên'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
             <button type="button" className="btn btn-secondary" onClick={() => setIsAddEditOpen(false)}>Hủy</button>

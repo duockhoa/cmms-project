@@ -36,6 +36,10 @@ export class CreateLocationDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @IsString()
+  @IsOptional()
+  responsibleTechId?: string;
 }
 
 export class UpdateLocationDto {
@@ -46,6 +50,10 @@ export class UpdateLocationDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @IsString()
+  @IsOptional()
+  responsibleTechId?: string;
 }
 
 export class CreateProductionLineDto {

@@ -133,6 +133,7 @@ export const api = {
     return request(`/users${query ? `?${query}` : ''}`);
   },
   getUserById: (id: string) => request(`/users/${id}`),
+  getDepartments: () => request('/users/departments'),
   updateUserTechnicalProfile: (id: string, body: { specialty?: string; isActive?: boolean; expectedVersion: number }) =>
     request(`/users/${id}/technical-profile`, { method: 'PATCH', body: JSON.stringify(body) }),
   updateUserAvailability: (id: string, body: { status: string; expectedVersion: number }) =>
@@ -173,4 +174,5 @@ export const api = {
     request(`/checklist-executions/${executionId}/complete`, { method: 'POST', body: JSON.stringify(body) }),
   cancelChecklistExecution: (executionId: string, body: any) =>
     request(`/checklist-executions/${executionId}/cancel`, { method: 'POST', body: JSON.stringify(body) }),
+  getMe: () => request('/auth/me'),
 };

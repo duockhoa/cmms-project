@@ -7,6 +7,19 @@ import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getDepartments() {
+    const users = await this.prisma.user.findMany({
+      where: {
+        department: { not: null },
+      },
+      select: {
+        department: true,
+      },
+      distinct: ['department'],
+    });
+    return users.map((u) => u.department).filter(Boolean);
+  }
+
   async getUsers(role?: string, includeInactive = false) {
     const whereClause: any = {};
     if (role) {
