@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsGateway } from './notifications.gateway';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: NotificationsGateway,
+  ) {}
 
   async createNotification(
     userId?: string,
@@ -12,7 +16,7 @@ export class NotificationsService {
     title?: string,
     message?: string,
   ) {
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: {
         userId: userId || null,
         role: role || null,
@@ -21,6 +25,20 @@ export class NotificationsService {
         message: message || '',
       },
     });
+
+    // Push via WebSocket Gateway
+    try {
+      this.gateway.sendNotificationToRooms(
+        userId || null,
+        role || null,
+        department || null,
+        notification,
+      );
+    } catch (err) {
+      console.error('[WEBSOCKET] Failed to emit notification realtime:', err);
+    }
+
+    return notification;
   }
 
   async getNotificationsForUser(user: any) {

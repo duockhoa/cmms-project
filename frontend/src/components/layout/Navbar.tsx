@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Bell, Sun, Moon, Menu } from 'lucide-react';
 import { api } from '../../services/api';
+import { io, Socket } from 'socket.io-client';
 
 interface NavbarProps {
   theme: string;
@@ -11,6 +12,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const fetchNotifications = async () => {
     try {
@@ -21,11 +23,54 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
     }
   };
 
+  // 1. Fetch current user and initial notifications list
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 10000);
-    return () => clearInterval(interval);
+    const initData = async () => {
+      try {
+        const user = await api.getMe();
+        setCurrentUser(user);
+      } catch (e) {
+        console.error('Failed to load user profile in Navbar:', e);
+      }
+      fetchNotifications();
+    };
+    initData();
   }, []);
+
+  // 2. Establish WebSocket client connection once currentUser is resolved
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const socketUrl = window.location.protocol === 'https:' 
+      ? `https://${window.location.hostname}:3001/notifications`
+      : `http://${window.location.hostname}:3001/notifications`;
+
+    const socket: Socket = io(socketUrl, {
+      query: {
+        userId: currentUser.id,
+        role: currentUser.role,
+        department: currentUser.department || '',
+      },
+      transports: ['websocket'],
+    });
+
+    socket.on('connect', () => {
+      console.log('[WEBSOCKET] Connected to real-time notification gateway');
+    });
+
+    socket.on('notification', (newNotification: any) => {
+      console.log('[WEBSOCKET] Received instant notification:', newNotification);
+      setNotifications((prev) => [newNotification, ...prev]);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('[WEBSOCKET] Disconnected from notification gateway');
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [currentUser]);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
@@ -152,8 +197,12 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
         {/* User Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.1 }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Lê Hoàng Cương</span>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>NV Kỹ Thuật</span>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {currentUser?.name || 'Đang tải...'}
+            </span>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+              {currentUser ? (currentUser.role === 'ADMIN' ? 'Quản trị viên' : currentUser.role === 'MANAGER' ? 'Quản lý' : 'Kỹ thuật viên') : ''}
+            </span>
           </div>
           {/* Circular Red Avatar */}
           <div style={{
@@ -164,7 +213,7 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
             border: '2px solid rgba(255,255,255,0.2)',
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           }}>
-            LC
+            {currentUser?.name ? currentUser.name.split(' ').pop()?.substring(0, 2).toUpperCase() : 'U'}
           </div>
         </div>
       </div>
