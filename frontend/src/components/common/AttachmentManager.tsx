@@ -3,6 +3,8 @@ import { api } from '../../services/api';
 import { Paperclip, Download, Trash2, Upload, AlertCircle, RefreshCw, FileText, Image } from 'lucide-react';
 import { useToast, useConfirmDialog } from './Toast';
 
+const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+
 interface AttachmentManagerProps {
   entityType: string;
   entityId: string;
@@ -213,7 +215,7 @@ export const AttachmentManager: React.FC<AttachmentManagerProps> = ({
 
                 <div style={{ display: 'flex', gap: '4px', marginLeft: '12px' }}>
                   <a
-                    href={`http://localhost:3001/api/v1/attachments/${att.id}/download`}
+                    href={`${API_BASE}/api/v1/attachments/${att.id}/download`}
                     target="_blank"
                     rel="noreferrer"
                     className="btn btn-secondary btn-sm"
