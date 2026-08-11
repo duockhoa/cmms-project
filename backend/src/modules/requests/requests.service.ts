@@ -2,11 +2,14 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
 
+import { NotificationsService } from '../notifications/notifications.service';
+
 @Injectable()
 export class RequestsService {
   constructor(
     private prisma: PrismaService,
     private equipmentStatus: EquipmentStatusService,
+    private notifications: NotificationsService,
   ) {}
 
   async findAll(query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string }) {
@@ -75,7 +78,7 @@ export class RequestsService {
     const equipment = await this.prisma.equipment.findUnique({ where: { id: data.equipmentId } });
     if (!equipment) throw new BadRequestException('Thiết bị không tồn tại');
 
-    return this.prisma.$transaction(async (tx) => {
+    const request = await this.prisma.$transaction(async (tx) => {
       const count = await tx.maintenanceRequest.count();
       const requestCode = `REQ-${(count + 1).toString().padStart(4, '0')}`;
 
@@ -124,10 +127,42 @@ export class RequestsService {
 
       return request;
     });
+
+    // Create Database Notifications OUTSIDE transaction to avoid locking/timeouts!
+    try {
+      const location = await this.prisma.location.findFirst({
+        where: { name: equipment.location },
+      });
+      if (location) {
+        // Notify managers of this department
+        await this.notifications.createNotification(
+          null,
+          'MANAGER',
+          location.name,
+          `Sự cố mới: ${request.requestCode}`,
+          `Thiết bị ${equipment.name} gặp sự cố: ${request.title}. Vui lòng đánh giá phương án xử lý.`,
+        );
+
+        // Notify responsible technician of this location
+        if (location.responsibleTechId) {
+          await this.notifications.createNotification(
+            location.responsibleTechId,
+            null,
+            null,
+            `Sự cố mới: ${request.requestCode}`,
+            `Phân xưởng ${location.name} báo sự cố thiết bị ${equipment.name}: ${request.title}.`,
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Failed to send request creation notifications:', err);
+    }
+
+    return request;
   }
 
   async approve(id: string, body: { technicianName?: string; note?: string; handlerTeam?: string }, actorId?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
         include: { 
@@ -227,6 +262,45 @@ export class RequestsService {
 
       return { request: updatedRequest, workOrder };
     });
+
+    // Create Database Notifications OUTSIDE transaction to avoid locking/timeouts!
+    try {
+      const request = await this.prisma.maintenanceRequest.findUnique({
+        where: { id },
+        include: { equipment: true },
+      });
+      const orderCode = result.workOrder.orderCode;
+      const assignedTech = result.workOrder.technicianName;
+
+      if (body.handlerTeam === 'CO_DIEN') {
+        // Transferred to Electromechanical department
+        await this.notifications.createNotification(
+          null,
+          null,
+          'Bộ phận Cơ điện',
+          `Phiếu bảo trì chuyển Cơ điện: ${orderCode}`,
+          `Yêu cầu sửa chữa ${request.requestCode} đã chuyển đến bộ phận Cơ điện.`,
+        );
+      } else {
+        // Assigned to a specific technician in the workshop
+        const technician = await this.prisma.user.findFirst({
+          where: { name: assignedTech },
+        });
+        if (technician) {
+          await this.notifications.createNotification(
+            technician.id,
+            null,
+            null,
+            `Phiếu bảo trì mới được phân công: ${orderCode}`,
+            `Bạn được giao xử lý phiếu bảo trì ${orderCode} cho thiết bị ${request.equipment.name}.`,
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Failed to send approval notifications:', err);
+    }
+
+    return result;
   }
 
   async reject(id: string, body: { reason?: string }, actorId?: string) {

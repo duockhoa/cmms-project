@@ -175,4 +175,6 @@ export const api = {
   cancelChecklistExecution: (executionId: string, body: any) =>
     request(`/checklist-executions/${executionId}/cancel`, { method: 'POST', body: JSON.stringify(body) }),
   getMe: () => request('/auth/me'),
+  getNotifications: () => request('/notifications'),
+  markNotificationRead: (id: string) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
 };

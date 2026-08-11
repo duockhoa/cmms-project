@@ -3,11 +3,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
 import { WorkOrderStateMachine, WorkOrderStatus } from './work-order-state-machine';
 
+import { NotificationsService } from '../notifications/notifications.service';
+
 @Injectable()
 export class WorkOrdersService {
   constructor(
     private prisma: PrismaService,
     private equipmentStatus: EquipmentStatusService,
+    private notifications: NotificationsService,
   ) {}
 
   async findAll(query?: { status?: string; priority?: string; search?: string; equipmentId?: string; page?: string; limit?: string; handlerTeam?: string }) {
