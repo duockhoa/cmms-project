@@ -163,6 +163,16 @@ export class RequestsService {
 
   async approve(id: string, body: { technicianName?: string; note?: string; handlerTeam?: string }, actorId?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Atomic check-and-set update status first to prevent concurrency anomaly
+      const updateResult = await tx.maintenanceRequest.updateMany({
+        where: { id, status: 'PENDING' },
+        data: { status: 'APPROVED' },
+      });
+      if (updateResult.count === 0) {
+        throw new ConflictException('Yêu cầu sửa chữa đã được phê duyệt hoặc xử lý bởi người dùng khác.');
+      }
+
+      // 2. Fetch details for validation and Work Order generation
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
         include: { 
@@ -188,16 +198,6 @@ export class RequestsService {
             throw new BadRequestException('Bạn không có quyền phê duyệt yêu cầu sửa chữa cho vị trí/nhà xưởng này.');
           }
         }
-      }
-      
-      // Business Validation: Must be PENDING
-      if (request.status !== 'PENDING') {
-        throw new ConflictException(`Yêu cầu sửa chữa đã được xử lý (Trạng thái hiện tại: ${request.status})`);
-      }
-
-      // Business Validation: Must not already have a WorkOrder
-      if (request.workOrders.length > 0) {
-        throw new ConflictException('Yêu cầu sửa chữa này đã được liên kết với một Phiếu bảo trì');
       }
 
       // Determine technician/handler name based on decision
@@ -226,11 +226,8 @@ export class RequestsService {
         },
       });
 
-      // Update Request status
-      const updatedRequest = await tx.maintenanceRequest.update({
-        where: { id },
-        data: { status: 'APPROVED' },
-      });
+      request.status = 'APPROVED';
+      const updatedRequest = request;
 
       // Recalculate Equipment status
       await this.equipmentStatus.calculateAndSetStatus(request.equipmentId, tx);

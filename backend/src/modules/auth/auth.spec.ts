@@ -1,4 +1,7 @@
-process.env.DATABASE_URL = `file:./test-auth.db`;
+const baseDbUrl = process.env.DATABASE_URL || "mysql://root:123456@localhost:3306/dk_cmms";
+process.env.DATABASE_URL = baseDbUrl.includes('?')
+  ? baseDbUrl.replace(/\/([^/?]+)\?/, '/dk_cmms_test_auth?auth')
+  : baseDbUrl.replace(/\/([^/]+)$/, '/dk_cmms_test_auth');
 
 import { NestApplicationContext } from '@nestjs/core';
 import { NestFactory } from '@nestjs/core';
@@ -15,17 +18,13 @@ jest.setTimeout(30000);
 describe('Authentication & Authorization Flow', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  const testDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'test-auth.db');
+  
 
   beforeAll(async () => {
-    if (fs.existsSync(testDbPath)) {
-      try {
-        fs.unlinkSync(testDbPath);
-      } catch (e) {}
-    }
+    
 
-    execSync('npx prisma db push --accept-data-loss --skip-generate', {
-      env: { ...process.env, DATABASE_URL: `file:./test-auth.db` },
+    execSync('npx prisma db push --force-reset --accept-data-loss --skip-generate', {
+      env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL },
       stdio: 'inherit',
     });
 
@@ -60,11 +59,7 @@ describe('Authentication & Authorization Flow', () => {
     if (app) {
       await app.close();
     }
-    if (fs.existsSync(testDbPath)) {
-      try {
-        fs.unlinkSync(testDbPath);
-      } catch (e) {}
-    }
+    
   });
 
   it('should return 401 Unauthorized when requesting /auth/me without token', async () => {

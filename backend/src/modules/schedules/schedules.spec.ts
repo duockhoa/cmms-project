@@ -1,4 +1,7 @@
-process.env.DATABASE_URL = `file:./test-sched.db`;
+const baseDbUrl = process.env.DATABASE_URL || "mysql://root:123456@localhost:3306/dk_cmms";
+process.env.DATABASE_URL = baseDbUrl.includes('?')
+  ? baseDbUrl.replace(/\/([^/?]+)\?/, '/dk_cmms_test_schedules?sched')
+  : baseDbUrl.replace(/\/([^/]+)$/, '/dk_cmms_test_schedules');
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
@@ -14,17 +17,13 @@ describe('Schedules Module', () => {
   let app: any;
   let prisma: PrismaService;
   let schedulesService: SchedulesService;
-  const testDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'test-sched.db');
+  
 
   beforeAll(async () => {
-    if (fs.existsSync(testDbPath)) {
-      try {
-        fs.unlinkSync(testDbPath);
-      } catch (e) {}
-    }
+    
 
-    execSync('npx prisma db push --accept-data-loss --skip-generate', {
-      env: { ...process.env, DATABASE_URL: `file:./test-sched.db` },
+    execSync('npx prisma db push --force-reset --accept-data-loss --skip-generate', {
+      env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL },
       stdio: 'inherit',
     });
 
@@ -60,11 +59,7 @@ describe('Schedules Module', () => {
     if (app) {
       await app.close();
     }
-    if (fs.existsSync(testDbPath)) {
-      try {
-        fs.unlinkSync(testDbPath);
-      } catch (e) {}
-    }
+    
   });
 
   describe('INTEGRATION TESTS: Preventive Maintenance Schedule', () => {

@@ -1,4 +1,7 @@
-process.env.DATABASE_URL = `file:./test-wo.db`;
+const baseDbUrl = process.env.DATABASE_URL || "mysql://root:123456@localhost:3306/dk_cmms";
+process.env.DATABASE_URL = baseDbUrl.includes('?') 
+  ? baseDbUrl.replace(/\/([^/?]+)\?/, '/dk_cmms_test_wo?$1')
+  : baseDbUrl.replace(/\/([^/]+)$/, '/dk_cmms_test_wo');
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
@@ -16,19 +19,11 @@ describe('Work Orders Module', () => {
   let app: any;
   let prisma: PrismaService;
   let workOrdersService: WorkOrdersService;
-  const testDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'test-wo.db');
 
   beforeAll(async () => {
-    // 1. Remove old test database
-    if (fs.existsSync(testDbPath)) {
-      try {
-        fs.unlinkSync(testDbPath);
-      } catch (e) {}
-    }
-
-    // 2. Initialize fresh database schema from prisma schema
-    execSync('npx prisma db push --accept-data-loss --skip-generate', {
-      env: { ...process.env, DATABASE_URL: `file:./test-wo.db` },
+    // Initialize fresh database schema from prisma schema
+    execSync('npx prisma db push --force-reset --accept-data-loss --skip-generate', {
+      env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL },
       stdio: 'inherit',
     });
 
@@ -63,11 +58,6 @@ describe('Work Orders Module', () => {
   afterAll(async () => {
     if (app) {
       await app.close();
-    }
-    if (fs.existsSync(testDbPath)) {
-      try {
-        fs.unlinkSync(testDbPath);
-      } catch (e) {}
     }
   });
 

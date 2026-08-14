@@ -1,4 +1,7 @@
-process.env.DATABASE_URL = `file:./test-attachments.db`;
+const baseDbUrl = process.env.DATABASE_URL || "mysql://root:123456@localhost:3306/dk_cmms";
+process.env.DATABASE_URL = baseDbUrl.includes('?')
+  ? baseDbUrl.replace(/\/([^/?]+)\?/, '/dk_cmms_test_attachments?attachments')
+  : baseDbUrl.replace(/\/([^/]+)$/, '/dk_cmms_test_attachments');
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
@@ -14,17 +17,13 @@ jest.setTimeout(30000);
 describe('Attachments Upload Flow & Validation', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  const testDbPath = path.join(__dirname, '..', '..', '..', 'prisma', 'test-attachments.db');
+  
 
   beforeAll(async () => {
-    if (fs.existsSync(testDbPath)) {
-      try {
-        fs.unlinkSync(testDbPath);
-      } catch (e) {}
-    }
+    
 
-    execSync('npx prisma db push --accept-data-loss --skip-generate', {
-      env: { ...process.env, DATABASE_URL: `file:./test-attachments.db` },
+    execSync('npx prisma db push --force-reset --accept-data-loss --skip-generate', {
+      env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL },
       stdio: 'inherit',
     });
 
@@ -51,11 +50,7 @@ describe('Attachments Upload Flow & Validation', () => {
     if (app) {
       await app.close();
     }
-    if (fs.existsSync(testDbPath)) {
-      try {
-        fs.unlinkSync(testDbPath);
-      } catch (e) {}
-    }
+    
   });
 
   it('should upload successfully with valid png magic numbers', async () => {
