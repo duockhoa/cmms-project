@@ -36,8 +36,12 @@ export class CreateWorkOrderDto {
 
 export class AssignWorkOrderDto {
   @IsString()
-  @IsNotEmpty({ message: 'Tên kỹ thuật viên không được để trống' })
-  technicianName: string;
+  @IsOptional()
+  technicianName?: string;
+
+  @IsString()
+  @IsOptional()
+  assignedTechnicianId?: string;
 
   @IsInt()
   @IsNotEmpty()
@@ -79,7 +83,6 @@ export class CompleteWorkOrderDto {
   @IsOptional()
   solution?: string;
 
-  // New fields for detailed completion reporting
   @IsString()
   @IsOptional()
   workDone?: string;
@@ -101,7 +104,7 @@ export class CompleteWorkOrderDto {
   recommendation?: string;
 }
 
-export class CreateRepairLogDto {
+export class CreateExecutionLogDto {
   @IsString()
   @IsNotEmpty({ message: 'Nội dung không được để trống' })
   content: string;
@@ -122,6 +125,9 @@ export class CreateRepairLogDto {
   @IsOptional()
   adjustmentReason?: string;
 }
+
+// Backward compatibility or fallback support
+export class CreateRepairLogDto extends CreateExecutionLogDto {}
 
 export class VerifyWorkOrderDto {
   @IsInt()
@@ -157,4 +163,64 @@ export class AddWorkOrderItemDto {
   @IsInt()
   @IsPositive({ message: 'Số lượng phải lớn hơn 0' })
   quantity: number;
+}
+
+export class EscalateWorkOrderDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Lý do yêu cầu hỗ trợ kỹ thuật không được để trống' })
+  reason: string;
+
+  @IsInt()
+  @IsNotEmpty()
+  expectedVersion: number;
+}
+
+export class ClassifyWorkOrderDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Kết quả phân loại không được để trống' })
+  classificationResult: 'WORKSHOP_CONTINUE' | 'MAINTENANCE_REQUIRED';
+
+  @IsString()
+  @IsNotEmpty({ message: 'Nhận xét đánh giá không được để trống' })
+  classificationNotes: string;
+
+  @IsInt()
+  @IsNotEmpty()
+  expectedVersion: number;
+}
+
+export class SubmitHandoverDto {
+  @IsInt()
+  @IsNotEmpty()
+  expectedVersion: number;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Nội dung sửa chữa không được để trống' })
+  workDone: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Tình trạng thiết bị không được để trống' })
+  equipmentStatusAfter: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Kết quả chạy thử không được để trống' })
+  testResult: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Kết luận không được để trống' })
+  conclusion: string;
+
+  @IsString()
+  @IsOptional()
+  recommendation?: string;
+}
+
+export class RejectHandoverDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Lý do từ chối bàn giao không được để trống' })
+  reason: string;
+
+  @IsInt()
+  @IsNotEmpty()
+  expectedVersion: number;
 }

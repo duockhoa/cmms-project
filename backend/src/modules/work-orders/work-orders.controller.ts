@@ -14,7 +14,11 @@ import {
   CloseWorkOrderDto,
   CancelWorkOrderDto,
   AddWorkOrderItemDto,
-  CreateRepairLogDto,
+  CreateExecutionLogDto,
+  EscalateWorkOrderDto,
+  ClassifyWorkOrderDto,
+  SubmitHandoverDto,
+  RejectHandoverDto,
 } from './dto/work-orders.dto';
 
 @Controller('work-orders')
@@ -34,18 +38,18 @@ export class WorkOrdersController {
     return this.workOrdersService.findByEquipmentQr(qrToken, req.user.id, scanMethod);
   }
 
-  @Get(':id/repair-logs')
-  getRepairLogs(@Param('id') id: string) {
-    return this.workOrdersService.getRepairLogs(id);
+  @Get(':id/execution-logs')
+  getExecutionLogs(@Param('id') id: string) {
+    return this.workOrdersService.getExecutionLogs(id);
   }
 
-  @Post(':id/repair-logs')
-  createRepairLog(
+  @Post(':id/execution-logs')
+  createExecutionLog(
     @Param('id') id: string,
-    @Body() body: CreateRepairLogDto,
+    @Body() body: CreateExecutionLogDto,
     @Req() req: any
   ) {
-    return this.workOrdersService.createRepairLog(id, body, req.user.id);
+    return this.workOrdersService.createExecutionLog(id, body, req.user.id);
   }
 
   @Get()
@@ -111,6 +115,36 @@ export class WorkOrdersController {
     return this.workOrdersService.complete(id, body, req.user);
   }
 
+  @Post(':id/escalate')
+  escalate(@Param('id') id: string, @Body() body: EscalateWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.escalate(id, body, req.user);
+  }
+
+  @Post(':id/classify')
+  classify(@Param('id') id: string, @Body() body: ClassifyWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.classify(id, body, req.user);
+  }
+
+  @Post(':id/assign-executor')
+  assignExecutor(@Param('id') id: string, @Body() body: AssignWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.assignExecutor(id, body, req.user);
+  }
+
+  @Post(':id/submit-handover')
+  submitHandover(@Param('id') id: string, @Body() body: SubmitHandoverDto, @Req() req: any) {
+    return this.workOrdersService.submitHandover(id, body, req.user);
+  }
+
+  @Post(':id/accept-handover')
+  acceptHandover(@Param('id') id: string, @Body() body: { expectedVersion: number }, @Req() req: any) {
+    return this.workOrdersService.acceptHandover(id, body, req.user);
+  }
+
+  @Post(':id/reject-handover')
+  rejectHandover(@Param('id') id: string, @Body() body: RejectHandoverDto, @Req() req: any) {
+    return this.workOrdersService.rejectHandover(id, body, req.user);
+  }
+
   @Post(':id/verify')
   verify(@Param('id') id: string, @Body() body: VerifyWorkOrderDto, @Req() req: any) {
     return this.workOrdersService.verify(id, body, req.user);
@@ -131,7 +165,6 @@ export class WorkOrdersController {
     return this.workOrdersService.addItem(id, itemDto);
   }
 
-  // Material Return (Phase 3.6)
   @Post(':workOrderId/material-returns')
   @HttpCode(HttpStatus.CREATED)
   materialReturn(

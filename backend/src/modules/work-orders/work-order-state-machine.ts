@@ -12,10 +12,10 @@ export type WorkOrderStatus =
 
 export class WorkOrderStateMachine {
   private static readonly transitions: Record<WorkOrderStatus, WorkOrderStatus[]> = {
-    PENDING: ['ASSIGNED', 'CANCELLED'],
-    ASSIGNED: ['IN_PROGRESS', 'CANCELLED'],
-    IN_PROGRESS: ['ON_HOLD', 'COMPLETED'],
-    ON_HOLD: ['IN_PROGRESS'],
+    PENDING: ['ASSIGNED', 'CANCELLED', 'PENDING'],
+    ASSIGNED: ['IN_PROGRESS', 'CANCELLED', 'PENDING', 'ASSIGNED'],
+    IN_PROGRESS: ['ON_HOLD', 'COMPLETED', 'PENDING'],
+    ON_HOLD: ['IN_PROGRESS', 'PENDING'],
     COMPLETED: ['VERIFIED', 'IN_PROGRESS'],
     VERIFIED: ['CLOSED'],
     CLOSED: [],

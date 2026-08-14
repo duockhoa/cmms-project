@@ -9,7 +9,7 @@ const RETENTION_POLICIES: Record<string, 'HARD_DELETE' | 'SOFT_DELETE'> = {
   MaintenanceRequest: 'SOFT_DELETE',
   WorkOrder: 'SOFT_DELETE',
   ChecklistExecutionItem: 'SOFT_DELETE',
-  WorkOrderRepairLog: 'SOFT_DELETE',
+  WorkOrderExecutionLog: 'SOFT_DELETE',
 };
 
 @Injectable()
@@ -93,8 +93,8 @@ export class AttachmentsService {
         const item = await this.prisma.checklistExecutionItem.findUnique({ where: { id: entityId } });
         exists = !!item;
         break;
-      case 'WorkOrderRepairLog':
-        const log = await this.prisma.workOrderRepairLog.findUnique({ where: { id: entityId } });
+      case 'WorkOrderExecutionLog':
+        const log = await this.prisma.workOrderExecutionLog.findUnique({ where: { id: entityId } });
         exists = !!log;
         break;
       default:
@@ -113,7 +113,7 @@ export class AttachmentsService {
     uploadedById?: string,
     description?: string,
     workOrderId?: string,
-    repairLogId?: string,
+    executionLogId?: string,
     photoCategory?: string
   ) {
     if (!file) {
@@ -180,7 +180,7 @@ export class AttachmentsService {
         description: description || null,
         checksum,
         workOrderId: workOrderId || null,
-        repairLogId: repairLogId || null,
+        executionLogId: executionLogId || null,
         photoCategory: photoCategory || null,
       },
     });

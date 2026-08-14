@@ -9,7 +9,10 @@ let runError = null;
 
 try {
   console.log('Temporarily converting schema.prisma to sqlite for local spec tests...');
-  let tempSchema = originalSchema.replace('provider = "mysql"', 'provider = "sqlite"');
+  let tempSchema = originalSchema
+    .replace('provider = "mysql"', 'provider = "sqlite"')
+    .replace(/ @db\.Text/g, ''); // strip MySQL @db.Text annotations for SQLite compatibility
+
   fs.writeFileSync(schemaPath, tempSchema, 'utf8');
 
   console.log('Generating SQLite Prisma Client...');

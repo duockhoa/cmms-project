@@ -3,8 +3,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
 import { WorkOrderStateMachine, WorkOrderStatus } from './work-order-state-machine';
 import { NotificationsService } from '../notifications/notifications.service';
-import { CreateRepairLogDto, CompleteWorkOrderDto } from './dto/work-orders.dto';
-import { RepairLogActionType } from '@prisma/client';
+import { 
+  CreateExecutionLogDto, 
+  CompleteWorkOrderDto,
+  EscalateWorkOrderDto,
+  ClassifyWorkOrderDto,
+  SubmitHandoverDto,
+  RejectHandoverDto,
+  AssignWorkOrderDto
+} from './dto/work-orders.dto';
+import { ExecutionLogActionType, PerformerUnitType, HandlingRoute } from '@prisma/client';
 
 @Injectable()
 export class WorkOrdersService implements OnModuleInit {
@@ -164,11 +172,9 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async create(data: any) {
-    // Business Validation: Equipment must exist
     const equipment = await this.prisma.equipment.findUnique({ where: { id: data.equipmentId } });
     if (!equipment) throw new BadRequestException('Thiết bị không tồn tại');
 
-    // Business Validation: Request must exist if provided
     if (data.requestId) {
       const request = await this.prisma.maintenanceRequest.findUnique({ where: { id: data.requestId } });
       if (!request) throw new BadRequestException('Yêu cầu sửa chữa không tồn tại');
@@ -204,10 +210,8 @@ export class WorkOrdersService implements OnModuleInit {
         },
       });
 
-      // Recalculate equipment status
       await this.equipmentStatus.calculateAndSetStatus(data.equipmentId, tx);
 
-      // Log Workflow History
       await tx.workflowHistory.create({
         data: {
           entityType: 'WorkOrder',
@@ -223,39 +227,45 @@ export class WorkOrdersService implements OnModuleInit {
     });
   }
 
+  getPerformerUnitType(user: { role: string; department?: string | null }): PerformerUnitType {
+    const dept = (user.department || '').toLowerCase();
+    if (dept.includes('xưởng') || dept.includes('workshop') || user.role === 'OPERATOR') {
+      return PerformerUnitType.WORKSHOP;
+    }
+    if (dept.includes('kỹ thuật') || dept.includes('technical') || user.role === 'ADMIN' || user.role === 'MANAGER') {
+      return PerformerUnitType.TECHNICAL;
+    }
+    return PerformerUnitType.MAINTENANCE;
+  }
+
   async findByEquipmentQr(qrToken: string, userId: string, scanMethod: string = 'QR_SCAN') {
     const equipment = await this.prisma.equipment.findFirst({
-      where: {
-        OR: [
-          { code: qrToken },
-        ]
-      }
+      where: { code: qrToken }
     });
 
     if (!equipment) {
       throw new NotFoundException('Không tìm thấy thiết bị với mã này.');
     }
 
-    // Write audit trail for the scan action
     await this.prisma.workflowHistory.create({
       data: {
         entityType: 'Equipment',
         entityId: equipment.id,
         action: scanMethod === 'MANUAL_ENTRY' ? 'MANUAL_ENTRY' : 'QR_SCAN',
-        comment: `Kỹ thuật viên quét thiết bị ${equipment.code} (${scanMethod === 'MANUAL_ENTRY' ? 'Nhập tay' : 'Quét QR'})`,
+        comment: `Quét thiết bị ${equipment.code} (${scanMethod === 'MANUAL_ENTRY' ? 'Nhập tay' : 'Quét QR'})`,
         actedById: userId,
         metadata: JSON.stringify({ scanMethod, timestamp: new Date() }),
       },
     });
 
-    // Allowed active states: ASSIGNED, IN_PROGRESS, ON_HOLD
-    const activeStatuses = ['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD'];
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+    const unitType = this.getPerformerUnitType(user);
 
-    const workOrders = await this.prisma.workOrder.findMany({
+    const activeWos = await this.prisma.workOrder.findMany({
       where: {
         equipmentId: equipment.id,
-        assignedTechnicianId: userId,
-        status: { in: activeStatuses }
+        status: { notIn: ['CLOSED', 'CANCELLED'] }
       },
       include: {
         equipment: true,
@@ -263,18 +273,31 @@ export class WorkOrdersService implements OnModuleInit {
       }
     });
 
+    const filteredWos = activeWos.filter((wo) => {
+      if ((unitType === PerformerUnitType.TECHNICAL || user.role === 'ADMIN' || user.role === 'MANAGER') && wo.status === 'PENDING') {
+        return true;
+      }
+      if (unitType === PerformerUnitType.WORKSHOP) {
+        return (wo.handlingRoute === HandlingRoute.WORKSHOP_SELF_HANDLE && wo.status !== 'COMPLETED') || wo.assignedTechnicianId === userId;
+      }
+      if (unitType === PerformerUnitType.MAINTENANCE) {
+        return wo.assignedTechnicianId === userId;
+      }
+      return false;
+    });
+
     return {
       equipment,
-      workOrders,
+      workOrders: filteredWos,
     };
   }
 
-  async getRepairLogs(workOrderId: string) {
-    return this.prisma.workOrderRepairLog.findMany({
+  async getExecutionLogs(workOrderId: string) {
+    return this.prisma.workOrderExecutionLog.findMany({
       where: { workOrderId },
       orderBy: { recordedAt: 'asc' },
       include: {
-        technician: true,
+        performedBy: true,
         attachments: {
           where: { isDeleted: false }
         }
@@ -282,7 +305,7 @@ export class WorkOrdersService implements OnModuleInit {
     });
   }
 
-  async createRepairLog(workOrderId: string, dto: CreateRepairLogDto, userId: string) {
+  async createExecutionLog(workOrderId: string, dto: CreateExecutionLogDto, userId: string) {
     const wo = await this.prisma.workOrder.findUnique({
       where: { id: workOrderId }
     });
@@ -290,30 +313,42 @@ export class WorkOrdersService implements OnModuleInit {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+    const unitType = this.getPerformerUnitType(user);
 
-    if (user.role === 'TECHNICIAN' && wo.assignedTechnicianId !== userId) {
-      throw new ForbiddenException('Bạn không được phân công thực hiện công việc này.');
+    if (wo.handlingRoute === HandlingRoute.WORKSHOP_SELF_HANDLE) {
+      if (unitType !== PerformerUnitType.WORKSHOP && user.role !== 'ADMIN' && user.role !== 'MANAGER' && wo.assignedTechnicianId !== userId) {
+        throw new ForbiddenException('Bạn không thuộc bộ phận Xưởng để ghi nhận WO này.');
+      }
+    } else {
+      if (wo.assignedTechnicianId !== userId && user.role !== 'ADMIN' && user.role !== 'MANAGER') {
+        throw new ForbiddenException('Bạn không phải kỹ thuật viên Cơ điện được phân công cho WO này.');
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {
       let adjustmentReason = null;
       if (dto.adjustedLogId) {
-        const oldLog = await tx.workOrderRepairLog.findUnique({ where: { id: dto.adjustedLogId } });
+        const oldLog = await tx.workOrderExecutionLog.findUnique({ where: { id: dto.adjustedLogId } });
         if (!oldLog) throw new NotFoundException('Không tìm thấy bản ghi nhật ký cần điều chỉnh');
-        adjustmentReason = dto.adjustmentReason || 'Điều chỉnh thông tin ghi nhận sửa chữa';
+        adjustmentReason = dto.adjustmentReason || 'Điều chỉnh thông tin';
       }
 
-      const log = await tx.workOrderRepairLog.create({
+      const log = await tx.workOrderExecutionLog.create({
         data: {
           workOrderId,
           equipmentId: wo.equipmentId,
-          technicianId: userId,
-          actionType: RepairLogActionType.LOG, // strictly LOG from this endpoint
+          performedById: userId,
+          performerUnitType: unitType,
+          performerDepartmentId: user.department || 'Bộ phận',
+          performerDepartmentCodeSnapshot: user.department || 'SNAPSHOT_CODE',
+          performerDepartmentNameSnapshot: user.department || 'SNAPSHOT_NAME',
+          handlingRoute: wo.handlingRoute as HandlingRoute,
+          actionType: ExecutionLogActionType.LOG,
           content: dto.content,
           result: dto.result || null,
           notes: dto.notes || null,
           adjustedLogId: dto.adjustedLogId || null,
-          adjustmentReason: adjustmentReason,
+          adjustmentReason,
         }
       });
 
@@ -322,7 +357,7 @@ export class WorkOrdersService implements OnModuleInit {
           entityType: 'WorkOrder',
           entityId: workOrderId,
           action: 'LOG',
-          comment: `Kỹ thuật viên thêm ghi nhận sửa chữa: ${dto.content}`,
+          comment: `Ghi nhận thao tác sửa chữa: ${dto.content}`,
           actedById: userId,
         }
       });
@@ -342,8 +377,9 @@ export class WorkOrdersService implements OnModuleInit {
     extraOperations?: (tx: any, wo: any) => Promise<void>,
     actorContext?: { id: string; role: string },
   ) {
-    if (targetStatus === 'CLOSED' && actorContext && actorContext.role === 'TECHNICIAN') {
-      throw new BadRequestException('Chỉ Quản đốc xưởng hoặc bộ phận kỹ thuật (Cơ điện) mới được đóng hồ sơ sự cố này.');
+    let resolvedActorUser = null;
+    if (actorContext?.id) {
+      resolvedActorUser = await this.prisma.user.findUnique({ where: { id: actorContext.id } });
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -353,43 +389,48 @@ export class WorkOrdersService implements OnModuleInit {
       });
       if (!wo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
 
-      // Optimistic Locking Check
       if (wo.version !== expectedVersion) {
         throw new ConflictException('Bản ghi đã bị sửa đổi bởi người dùng khác. Vui lòng tải lại dữ liệu.');
       }
 
-      // State Machine Check
       WorkOrderStateMachine.assertTransition(wo.status as WorkOrderStatus, targetStatus);
 
-      // Security checking: only assigned technician can perform technician-level actions
-      if (actorContext && actorContext.role === 'TECHNICIAN' && wo.assignedTechnicianId !== actorContext.id) {
-        throw new ForbiddenException('Bạn không được phân công thực hiện công việc này.');
+      if (actorContext && actorContext.role !== 'ADMIN' && actorContext.role !== 'MANAGER') {
+        const user = resolvedActorUser;
+        if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+        const unitType = this.getPerformerUnitType(user);
+
+        if (wo.handlingRoute === HandlingRoute.WORKSHOP_SELF_HANDLE) {
+          if (unitType !== PerformerUnitType.WORKSHOP && wo.assignedTechnicianId !== actorContext.id) {
+            throw new ForbiddenException('Bạn không thuộc Xưởng hoặc không được giao xử lý WO này.');
+          }
+        } else {
+          const isHandoverAction = actionName === 'HANDOVER_ACCEPT' || actionName === 'HANDOVER_REJECT';
+          if (wo.assignedTechnicianId !== actorContext.id && 
+              actionName !== 'ESCALATE' && 
+              actionName !== 'CLASSIFY' && 
+              actionName !== 'ASSIGN' &&
+              !isHandoverAction) {
+            throw new ForbiddenException('Bạn không phải Cơ điện được phân công cho WO này.');
+          }
+        }
       }
 
-      // Extra Business Operations (like Stock Deductions)
       if (extraOperations) {
         await extraOperations(tx, wo);
       }
 
-      // Resolve actor ID for logging
       let actorId = actorContext?.id;
       if (!actorId) {
-        if (wo.assignedTechnicianId) {
-          actorId = wo.assignedTechnicianId;
-        } else if (wo.technicianName) {
-          const user = await tx.user.findFirst({ where: { name: wo.technicianName } });
-          if (user) actorId = user.id;
+        actorId = wo.assignedTechnicianId;
+        if (!actorId) {
+          const fallback = await tx.user.findFirst();
+          actorId = fallback?.id;
         }
       }
-      if (!actorId) {
-        const fallbackUser = await tx.user.findFirst();
-        if (fallbackUser) actorId = fallbackUser.id;
-      }
 
-      // Extract special properties
       const { _completionFields, _pauseReason, ...prismaUpdateData } = updateData;
 
-      // Perform Update
       const result = await tx.workOrder.updateMany({
         where: { id, version: expectedVersion },
         data: {
@@ -404,28 +445,53 @@ export class WorkOrdersService implements OnModuleInit {
         throw new ConflictException('Xung đột đồng thời. Vui lòng thử lại.');
       }
 
-      // Write WorkOrderRepairLog if it is START, PAUSE, RESUME, COMPLETE
-      let logActionType: RepairLogActionType | null = null;
+      let logActionType: ExecutionLogActionType | null = null;
       let logContent = comment || `Chuyển trạng thái sang ${targetStatus}`;
 
       if (actionName === 'START') {
-        logActionType = RepairLogActionType.START;
+        logActionType = ExecutionLogActionType.START;
       } else if (actionName === 'PAUSE') {
-        logActionType = RepairLogActionType.PAUSE;
+        logActionType = ExecutionLogActionType.PAUSE;
         logContent = `Tạm dừng sửa chữa. Lý do: ${_pauseReason || reason}`;
       } else if (actionName === 'RESUME') {
-        logActionType = RepairLogActionType.RESUME;
+        logActionType = ExecutionLogActionType.RESUME;
       } else if (actionName === 'COMPLETE') {
-        logActionType = RepairLogActionType.COMPLETE;
-        logContent = `Hoàn thành sửa chữa, đề nghị bàn giao. Công việc: ${_completionFields?.workDone || 'Sửa chữa thiết bị'}`;
+        logActionType = ExecutionLogActionType.COMPLETE;
+        logContent = `Hoàn thành sửa chữa. Công việc: ${_completionFields?.workDone || 'Đã sửa chữa'}`;
+      } else if (actionName === 'ESCALATE') {
+        logActionType = ExecutionLogActionType.ESCALATE;
+        logContent = `Yêu cầu hỗ trợ kỹ thuật. Lý do: ${reason}`;
+      } else if (actionName === 'CLASSIFY') {
+        logActionType = ExecutionLogActionType.CLASSIFY;
+        logContent = `Phân loại sự cố. Nhận xét: ${comment}`;
+      } else if (actionName === 'ASSIGN') {
+        logActionType = ExecutionLogActionType.ASSIGN;
+      } else if (actionName === 'HANDOVER_SUBMIT') {
+        logActionType = ExecutionLogActionType.HANDOVER_SUBMIT;
+      } else if (actionName === 'HANDOVER_ACCEPT') {
+        logActionType = ExecutionLogActionType.HANDOVER_ACCEPT;
+      } else if (actionName === 'HANDOVER_REJECT') {
+        logActionType = ExecutionLogActionType.HANDOVER_REJECT;
+        logContent = `Từ chối nhận bàn giao. Lý do: ${reason}`;
       }
 
       if (logActionType && actorId) {
-        await tx.workOrderRepairLog.create({
+        let actorUser = (resolvedActorUser && resolvedActorUser.id === actorId) ? resolvedActorUser : null;
+        if (!actorUser) {
+          actorUser = await tx.user.findUnique({ where: { id: actorId } });
+        }
+        const actorUnitType = actorUser ? this.getPerformerUnitType(actorUser) : PerformerUnitType.MAINTENANCE;
+
+        await tx.workOrderExecutionLog.create({
           data: {
             workOrderId: id,
             equipmentId: wo.equipmentId,
-            technicianId: actorId,
+            performedById: actorId,
+            performerUnitType: actorUnitType,
+            performerDepartmentId: actorUser?.department || 'Bộ phận',
+            performerDepartmentCodeSnapshot: actorUser?.department || 'SNAPSHOT_CODE',
+            performerDepartmentNameSnapshot: actorUser?.department || 'SNAPSHOT_NAME',
+            handlingRoute: wo.handlingRoute as HandlingRoute,
             actionType: logActionType,
             content: logContent,
             result: _completionFields?.conclusion || null,
@@ -440,10 +506,8 @@ export class WorkOrdersService implements OnModuleInit {
         });
       }
 
-      // Recalculate Equipment status
       await this.equipmentStatus.calculateAndSetStatus(wo.equipmentId, tx);
 
-      // Log Workflow History
       await tx.workflowHistory.create({
         data: {
           entityType: 'WorkOrder',
@@ -451,7 +515,7 @@ export class WorkOrdersService implements OnModuleInit {
           action: actionName,
           fromStatus: wo.status,
           toStatus: targetStatus,
-          comment: comment || `Chuyển trạng thái sang ${targetStatus}`,
+          comment: comment || `Chuyển sang ${targetStatus}`,
           reason: reason || null,
           actedById: actorContext?.id || null,
         },
@@ -464,27 +528,28 @@ export class WorkOrdersService implements OnModuleInit {
     });
   }
 
-  async assign(id: string, dto: { technicianName: string; expectedVersion: number }, actorContext?: { id: string; role: string }) {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        name: dto.technicianName,
-        role: 'TECHNICIAN',
-      },
-    });
-    if (user && !user.isActive) {
-      throw new BadRequestException(`Kỹ thuật viên "${dto.technicianName}" hiện đang ngừng hoạt động.`);
+  async assign(id: string, dto: AssignWorkOrderDto, actorContext?: { id: string; role: string }) {
+    let targetTechId = dto.assignedTechnicianId;
+    let techName = dto.technicianName;
+
+    if (!targetTechId && techName) {
+      const u = await this.prisma.user.findFirst({ where: { name: techName } });
+      if (u) targetTechId = u.id;
+    } else if (targetTechId && !techName) {
+      const u = await this.prisma.user.findUnique({ where: { id: targetTechId } });
+      if (u) techName = u.name;
     }
 
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
       'ASSIGNED',
-      { 
-        technicianName: dto.technicianName,
-        assignedTechnicianId: user ? user.id : null
+      {
+        technicianName: techName || 'Kỹ thuật viên',
+        assignedTechnicianId: targetTechId || null,
       },
       'ASSIGN',
-      `Phân công cho kỹ thuật viên: ${dto.technicianName}`,
+      `Phân công người thực hiện: ${techName || 'Kỹ thuật viên'}`,
       undefined,
       undefined,
       actorContext,
@@ -510,11 +575,9 @@ export class WorkOrdersService implements OnModuleInit {
       id,
       dto.expectedVersion,
       'ON_HOLD',
-      {
-        _pauseReason: dto.reason
-      },
+      { _pauseReason: dto.reason },
       'PAUSE',
-      'Tạm dừng công việc',
+      'Tạm dừng sửa chữa',
       dto.reason,
       undefined,
       actorContext,
@@ -537,8 +600,7 @@ export class WorkOrdersService implements OnModuleInit {
 
   async complete(id: string, dto: CompleteWorkOrderDto, actorContext?: { id: string; role: string }) {
     const extraOperations = async (tx: any, wo: any) => {
-      // 1. Stock Validation
-      const neededQuantities: Record<string, { required: number; name: string; itemCode: string; available: number }> = {};
+      const neededQuantities: Record<string, { required: number; name: string; itemCode: string; available: number; unitPrice: number }> = {};
       for (const item of wo.items) {
         if (!neededQuantities[item.inventoryItemId]) {
           neededQuantities[item.inventoryItemId] = {
@@ -546,6 +608,7 @@ export class WorkOrdersService implements OnModuleInit {
             name: item.inventoryItem.name,
             itemCode: item.inventoryItem.itemCode,
             available: item.inventoryItem.quantity,
+            unitPrice: item.unitPrice,
           };
         }
         neededQuantities[item.inventoryItemId].required += item.quantity;
@@ -556,48 +619,27 @@ export class WorkOrdersService implements OnModuleInit {
         if (check.required > check.available) {
           throw new BadRequestException({
             message: 'INSUFFICIENT_STOCK',
-            details: {
-              itemId,
-              itemCode: check.itemCode,
-              required: check.required,
-              available: check.available,
-            },
+            details: { itemId, itemCode: check.itemCode, required: check.required, available: check.available }
           });
         }
-      }
-
-      // 2. Perform Stock Deduction
-      for (const item of wo.items) {
-        const existingTx = await tx.inventoryTransaction.findUnique({
-          where: { issueKey: item.id },
+        await tx.inventoryItem.update({
+          where: { id: itemId },
+          data: { quantity: { decrement: check.required } },
         });
 
-        if (!existingTx) {
-          const itemBefore = await tx.inventoryItem.findUnique({ where: { id: item.inventoryItemId } });
-          const quantityBefore = itemBefore?.quantity || 0;
-          const quantityAfter = quantityBefore - item.quantity;
-
-          await tx.inventoryItem.update({
-            where: { id: item.inventoryItemId },
-            data: { quantity: { decrement: item.quantity } },
-          });
-
-          await tx.inventoryTransaction.create({
-            data: {
-              inventoryItemId: item.inventoryItemId,
-              workOrderId: wo.id,
-              workOrderItemId: item.id,
-              transactionType: 'ISSUE',
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              totalAmount: item.quantity * item.unitPrice,
-              quantityBefore,
-              quantityAfter,
-              issueKey: item.id,
-              reference: `Xuất kho cho phiếu WO ${wo.orderCode}`,
-            },
-          });
-        }
+        await tx.inventoryTransaction.create({
+          data: {
+            inventoryItemId: itemId,
+            transactionType: 'ISSUE',
+            quantity: check.required,
+            unitPrice: check.unitPrice,
+            totalAmount: check.required * check.unitPrice,
+            quantityBefore: check.available,
+            quantityAfter: check.available - check.required,
+            actedById: actorContext?.id || null,
+            reference: `WorkOrder complete: ${wo.orderCode}`,
+          }
+        });
       }
     };
 
@@ -606,35 +648,138 @@ export class WorkOrdersService implements OnModuleInit {
       dto.expectedVersion,
       'COMPLETED',
       {
-        actualEndDate: new Date(),
         completedAt: new Date(),
+        actualEndDate: new Date(),
         failureCause: dto.failureCause || null,
-        solution: dto.solution || dto.workDone || null,
+        solution: dto.solution || null,
         _completionFields: {
-          workDone: dto.workDone || dto.solution || null,
-          equipmentStatusAfter: dto.equipmentStatusAfter || null,
-          testResult: dto.testResult || null,
-          conclusion: dto.conclusion || null,
-          recommendations: dto.recommendation || null,
+          workDone: dto.workDone,
+          equipmentStatusAfter: dto.equipmentStatusAfter,
+          testResult: dto.testResult,
+          conclusion: dto.conclusion,
+          recommendations: dto.recommendation,
         }
       },
       'COMPLETE',
-      'Hoàn tất công việc sửa chữa',
+      'Xác nhận hoàn thành sửa chữa',
       undefined,
       extraOperations,
       actorContext,
     );
   }
 
-  async verify(id: string, dto: { expectedVersion: number; comment?: string }, actorContext?: { id: string; role: string }) {
+  async escalate(id: string, dto: EscalateWorkOrderDto, actorContext?: { id: string; role: string }) {
+    return this.updateStatusTransaction(
+      id,
+      dto.expectedVersion,
+      'PENDING',
+      {
+        handlingRoute: HandlingRoute.TECHNICAL_MAINTENANCE_SUPPORT,
+        assignedTechnicianId: null,
+      },
+      'ESCALATE',
+      `Xưởng không tự xử lý được, chuyển hỗ trợ kỹ thuật. Lý do: ${dto.reason}`,
+      dto.reason,
+      undefined,
+      actorContext,
+    );
+  }
+
+  async classify(id: string, dto: ClassifyWorkOrderDto, actorContext?: { id: string; role: string }) {
+    const actorId = actorContext?.id;
+    if (!actorId) throw new BadRequestException('Yêu cầu định danh người thực hiện phân loại');
+
+    const user = await this.prisma.user.findUnique({ where: { id: actorId } });
+    if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+    const unitType = this.getPerformerUnitType(user);
+
+    if (unitType !== PerformerUnitType.TECHNICAL && user.role !== 'ADMIN' && user.role !== 'MANAGER' && !user.department?.toLowerCase().includes('xưởng')) {
+      throw new ForbiddenException('Bạn không có quyền thực hiện phân loại Work Order này.');
+    }
+
+    const wo = await this.prisma.workOrder.findUnique({ where: { id } });
+    if (!wo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
+    if (wo.status !== 'PENDING' || wo.classificationResult) {
+      throw new ConflictException('Work Order đã được phân loại trước đó.');
+    }
+
+    const nextStatus = dto.classificationResult === 'WORKSHOP_CONTINUE' ? 'ASSIGNED' : 'PENDING';
+    const nextRoute = dto.classificationResult === 'WORKSHOP_CONTINUE' ? HandlingRoute.WORKSHOP_SELF_HANDLE : HandlingRoute.TECHNICAL_MAINTENANCE_SUPPORT;
+
+    return this.updateStatusTransaction(
+      id,
+      dto.expectedVersion,
+      nextStatus,
+      {
+        handlingRoute: nextRoute,
+        classificationNotes: dto.classificationNotes,
+        classificationResult: dto.classificationResult,
+        classificationReporterId: actorId,
+      },
+      'CLASSIFY',
+      `Phân loại kết quả: ${dto.classificationResult}. Nhận xét: ${dto.classificationNotes}`,
+      undefined,
+      undefined,
+      actorContext,
+    );
+  }
+
+  async assignExecutor(id: string, dto: AssignWorkOrderDto, actorContext?: { id: string; role: string }) {
+    if (actorContext && actorContext.role !== 'ADMIN' && actorContext.role !== 'MANAGER') {
+      const user = await this.prisma.user.findUnique({ where: { id: actorContext.id } });
+      if (!user || this.getPerformerUnitType(user) !== PerformerUnitType.TECHNICAL) {
+        throw new ForbiddenException('Chỉ phòng kỹ thuật mới có quyền phân công Cơ điện.');
+      }
+    }
+
+    return this.assign(id, dto, actorContext);
+  }
+
+  async submitHandover(id: string, dto: SubmitHandoverDto, actorContext?: { id: string; role: string }) {
+    return this.updateStatusTransaction(
+      id,
+      dto.expectedVersion,
+      'COMPLETED',
+      {
+        _completionFields: {
+          workDone: dto.workDone,
+          equipmentStatusAfter: dto.equipmentStatusAfter,
+          testResult: dto.testResult,
+          conclusion: dto.conclusion,
+          recommendations: dto.recommendation,
+        }
+      },
+      'HANDOVER_SUBMIT',
+      'Đã hoàn thành sửa chữa, đề nghị bàn giao nghiệm thu',
+      undefined,
+      undefined,
+      actorContext,
+    );
+  }
+
+  async acceptHandover(id: string, dto: { expectedVersion: number }, actorContext?: { id: string; role: string }) {
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
       'VERIFIED',
-      { verifiedAt: new Date() },
-      'VERIFY',
-      dto.comment || 'Nghiệm thu đạt yêu cầu kỹ thuật',
+      {},
+      'HANDOVER_ACCEPT',
+      'Chấp nhận bàn giao nghiệm thu thành công',
       undefined,
+      undefined,
+      actorContext,
+    );
+  }
+
+  async rejectHandover(id: string, dto: RejectHandoverDto, actorContext?: { id: string; role: string }) {
+    return this.updateStatusTransaction(
+      id,
+      dto.expectedVersion,
+      'IN_PROGRESS',
+      {},
+      'HANDOVER_REJECT',
+      `Từ chối nhận bàn giao nghiệm thu. Lý do: ${dto.reason}`,
+      dto.reason,
       undefined,
       actorContext,
     );
@@ -647,7 +792,21 @@ export class WorkOrdersService implements OnModuleInit {
       'IN_PROGRESS',
       { completedAt: null, actualEndDate: null },
       'REOPEN',
-      dto.reason || 'Nghiệm thu không đạt, yêu cầu xử lý lại',
+      dto.reason || 'Yêu cầu xử lý lại',
+      undefined,
+      undefined,
+      actorContext,
+    );
+  }
+
+  async verify(id: string, dto: { expectedVersion: number; comment?: string }, actorContext?: { id: string; role: string }) {
+    return this.updateStatusTransaction(
+      id,
+      dto.expectedVersion,
+      'VERIFIED',
+      { verifiedAt: new Date() },
+      'VERIFY',
+      dto.comment || 'Nghiệm thu hoàn tất',
       undefined,
       undefined,
       actorContext,
@@ -703,7 +862,7 @@ export class WorkOrdersService implements OnModuleInit {
         if (wo.status === 'ON_HOLD') {
           return this.resume(id, { expectedVersion }, actorContext);
         } else if (wo.status === 'COMPLETED') {
-          return this.reopen(id, { expectedVersion, reason: 'Reopened from legacy endpoint' }, actorContext);
+          return this.reopen(id, { expectedVersion, reason: 'Reopened from legacy' }, actorContext);
         } else {
           return this.start(id, { expectedVersion }, actorContext);
         }
@@ -721,8 +880,7 @@ export class WorkOrdersService implements OnModuleInit {
           recommendation: body.recommendation,
         }, actorContext);
       case 'VERIFIED':
-      case 'INSPECTION' as any: // Map legacy INSPECTION status to VERIFIED
-        return this.verify(id, { expectedVersion, comment: 'Nghiệm thu từ legacy endpoint' }, actorContext);
+        return this.verify(id, { expectedVersion, comment: 'Nghiệm thu từ legacy' }, actorContext);
       case 'CLOSED':
         return this.close(id, { expectedVersion }, actorContext);
       case 'CANCELLED':
@@ -737,7 +895,6 @@ export class WorkOrdersService implements OnModuleInit {
       const wo = await tx.workOrder.findUnique({ where: { id } });
       if (!wo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
 
-      // Business Validation: Closed WOs cannot add materials
       if (wo.status === 'CLOSED' || wo.status === 'CANCELLED') {
         throw new BadRequestException('Phiếu bảo trì đã đóng hoặc hủy, không thể thêm vật tư');
       }
@@ -755,7 +912,6 @@ export class WorkOrdersService implements OnModuleInit {
         },
       });
 
-      // Recalculate total cost
       const items = await tx.workOrderItem.findMany({ where: { workOrderId: id } });
       const totalCost = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
 

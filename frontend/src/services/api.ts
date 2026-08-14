@@ -84,12 +84,24 @@ export const api = {
   getWorkOrdersByEquipmentQr: (qrToken: string, scanMethod: string = 'QR_SCAN') =>
     request(`/work-orders/by-equipment-qr/${qrToken}?scanMethod=${scanMethod}`),
   getWorkOrderRepairLogs: (id: string) =>
-    request(`/work-orders/${id}/repair-logs`),
+    request(`/work-orders/${id}/execution-logs`),
   createWorkOrderRepairLog: (id: string, body: { content: string; result?: string; notes?: string; adjustedLogId?: string; adjustmentReason?: string }) =>
-    request(`/work-orders/${id}/repair-logs`, { method: 'POST', body: JSON.stringify(body) }),
+    request(`/work-orders/${id}/execution-logs`, { method: 'POST', body: JSON.stringify(body) }),
   createWorkOrder: (data: any) => request('/work-orders', { method: 'POST', body: JSON.stringify(data) }),
   updateWorkOrderStatus: (id: string, body: { status: string; expectedVersion?: number; failureCause?: string; solution?: string; technicianName?: string; workDone?: string; equipmentStatusAfter?: string; testResult?: string; conclusion?: string; recommendation?: string }) =>
     request(`/work-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) }),
+  escalateWorkOrder: (id: string, body: { expectedVersion: number; reason: string }) =>
+    request(`/work-orders/${id}/escalate`, { method: 'POST', body: JSON.stringify(body) }),
+  classifyWorkOrder: (id: string, body: { expectedVersion: number; classificationResult: string; classificationNotes?: string }) =>
+    request(`/work-orders/${id}/classify`, { method: 'POST', body: JSON.stringify(body) }),
+  assignExecutor: (id: string, body: { expectedVersion: number; assignedTechnicianId: string; technicianName?: string }) =>
+    request(`/work-orders/${id}/assign-executor`, { method: 'POST', body: JSON.stringify(body) }),
+  submitHandover: (id: string, body: { expectedVersion: number; workDone: string; equipmentStatusAfter: string; testResult: string; conclusion: string; recommendation?: string }) =>
+    request(`/work-orders/${id}/submit-handover`, { method: 'POST', body: JSON.stringify(body) }),
+  acceptHandover: (id: string, body: { expectedVersion: number }) =>
+    request(`/work-orders/${id}/accept-handover`, { method: 'POST', body: JSON.stringify(body) }),
+  rejectHandover: (id: string, body: { expectedVersion: number; reason: string }) =>
+    request(`/work-orders/${id}/reject-handover`, { method: 'POST', body: JSON.stringify(body) }),
   addWorkOrderItem: (id: string, item: { inventoryItemId: string; quantity: number }) =>
     request(`/work-orders/${id}/items`, { method: 'POST', body: JSON.stringify(item) }),
   deleteWorkOrder: (id: string) => request(`/work-orders/${id}`, { method: 'DELETE' }),

@@ -33,7 +33,7 @@ export class AttachmentsController {
     @Body('uploadedById') uploadedById?: string,
     @Body('description') description?: string,
     @Body('workOrderId') workOrderId?: string,
-    @Body('repairLogId') repairLogId?: string,
+    @Body('executionLogId') executionLogId?: string,
     @Body('photoCategory') photoCategory?: string
   ) {
     return this.attachmentsService.uploadFile(
@@ -43,7 +43,7 @@ export class AttachmentsController {
       uploadedById,
       description,
       workOrderId,
-      repairLogId,
+      executionLogId,
       photoCategory
     );
   }

@@ -56,7 +56,8 @@ model User {
   scheduleHistories     ScheduleHistory[]      @relation("ScheduleHistoryActedBy")
   responsibleLocations Location[]             @relation("LocationResponsibleTech")
   assignedWorkOrders    WorkOrder[]            @relation("WorkOrderAssignedTechnician")
-  repairLogs            WorkOrderRepairLog[]   @relation("UserRepairLogs")
+  executionLogs         WorkOrderExecutionLog[] @relation("UserExecutionLogs")
+  classifiedWorkOrders  WorkOrder[]            @relation("WorkOrderClassificationReporter")
 }
 
 model Equipment {
@@ -80,7 +81,7 @@ model Equipment {
   requests              MaintenanceRequest[]
   workOrders            WorkOrder[]
   schedules             MaintenanceSchedule[]
-  repairLogs            WorkOrderRepairLog[]  @relation("EquipmentRepairLogs")
+  executionLogs         WorkOrderExecutionLog[] @relation("EquipmentExecutionLogs")
 }
 
 model MaintenanceRequest {
@@ -142,7 +143,12 @@ model WorkOrder {
   scheduleHistories   ScheduleHistory[]      @relation("ScheduleHistoryWorkOrder")
   assignedTechnicianId String?
   assignedTechnician   User?                  @relation("WorkOrderAssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: Restrict)
-  repairLogs           WorkOrderRepairLog[]   @relation("WorkOrderRepairLogs")
+  handlingRoute        HandlingRoute          @default(WORKSHOP_SELF_HANDLE)
+  classificationNotes  String?                @db.Text
+  classificationResult String?                // WORKSHOP_CONTINUE or MAINTENANCE_REQUIRED
+  classificationReporterId String?
+  classificationReporter User?                @relation("WorkOrderClassificationReporter", fields: [classificationReporterId], references: [id], onDelete: SetNull)
+  executionLogs        WorkOrderExecutionLog[] @relation("WorkOrderExecutionLogs")
   attachments          Attachment[]           @relation("WorkOrderAttachments")
 
   @@unique([scheduleId, scheduledDueDate])
@@ -309,9 +315,9 @@ model Attachment {
 
   // New fields for Phase 4.x
   workOrderId   String?
-  workOrder     WorkOrder?          @relation("WorkOrderAttachments", fields: [workOrderId], references: [id], onDelete: Restrict)
-  repairLogId   String?
-  repairLog     WorkOrderRepairLog? @relation("RepairLogAttachments", fields: [repairLogId], references: [id], onDelete: Restrict)
+  workOrder     WorkOrder?             @relation("WorkOrderAttachments", fields: [workOrderId], references: [id], onDelete: Restrict)
+  executionLogId String?
+  executionLog  WorkOrderExecutionLog? @relation("ExecutionLogAttachments", fields: [executionLogId], references: [id], onDelete: Restrict)
   photoCategory String? // BEFORE, DURING, AFTER, OTHER
 
   @@index([entityType, entityId])
@@ -397,40 +403,64 @@ model Notification {
   createdAt  DateTime @default(now())
 }
 
-enum RepairLogActionType {
+enum ExecutionLogActionType {
   START
   LOG
   PAUSE
   RESUME
   COMPLETE
+  ESCALATE
+  CLASSIFY
+  ASSIGN
+  HANDOVER_SUBMIT
+  HANDOVER_ACCEPT
+  HANDOVER_REJECT
+  CORRECTION
 }
 
-model WorkOrderRepairLog {
-  id                    String              @id @default(uuid())
-  workOrderId           String
-  workOrder             WorkOrder           @relation("WorkOrderRepairLogs", fields: [workOrderId], references: [id], onDelete: Restrict)
-  equipmentId           String
-  equipment             Equipment           @relation("EquipmentRepairLogs", fields: [equipmentId], references: [id], onDelete: Restrict)
-  technicianId          String
-  technician            User                @relation("UserRepairLogs", fields: [technicianId], references: [id], onDelete: Restrict)
-  actionType            RepairLogActionType
-  content               String
-  result                String?
-  notes                 String?
-  recordedAt            DateTime            @default(now())
-  
+enum PerformerUnitType {
+  WORKSHOP
+  TECHNICAL
+  MAINTENANCE
+}
+
+enum HandlingRoute {
+  WORKSHOP_SELF_HANDLE
+  TECHNICAL_MAINTENANCE_SUPPORT
+}
+
+model WorkOrderExecutionLog {
+  id                                String                 @id @default(uuid())
+  workOrderId                       String
+  workOrder                         WorkOrder              @relation("WorkOrderExecutionLogs", fields: [workOrderId], references: [id], onDelete: Restrict)
+  equipmentId                       String
+  equipment                         Equipment              @relation("EquipmentExecutionLogs", fields: [equipmentId], references: [id], onDelete: Restrict)
+  performedById                     String
+  performedBy                       User                   @relation("UserExecutionLogs", fields: [performedById], references: [id], onDelete: Restrict)
+  performerUnitType                 PerformerUnitType
+  performerDepartmentId             String?
+  performerDepartmentCodeSnapshot   String?
+  performerDepartmentNameSnapshot   String?
+  handlingRoute                     HandlingRoute
+  actionType                        ExecutionLogActionType
+  content                           String                 @db.Text
+  result                            String?                @db.Text
+  notes                             String?                @db.Text
+  recordedAt                        DateTime               @default(now())
+
   // Pause / complete details
-  pauseReason           String?
-  workDone              String?
-  equipmentStatusAfter  String?
-  testResult            String?
-  conclusion            String?
-  recommendations       String?
+  pauseReason                       String?
+  workDone                          String?                @db.Text
+  equipmentStatusAfter              String?
+  testResult                        String?                @db.Text
+  conclusion                        String?
+  recommendations                   String?                @db.Text
 
   // Adjustment relation
-  adjustedLogId         String?             @unique
-  adjustmentReason      String?
+  adjustedLogId                     String?                @unique
+  adjustedLog                       WorkOrderExecutionLog? @relation("ExecutionLogAdjustments", fields: [adjustedLogId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  adjustments                       WorkOrderExecutionLog? @relation("ExecutionLogAdjustments")
+  adjustmentReason                  String?
 
-  attachments           Attachment[]        @relation("RepairLogAttachments")
+  attachments                       Attachment[]           @relation("ExecutionLogAttachments")
 }
-

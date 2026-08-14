@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Modal } from './Modal';
 import { useToast } from './Toast';
-import { Play, Pause, CheckCircle2, FileText, Camera, Upload, Plus, AlertTriangle, Eye, Loader2 } from 'lucide-react';
+import { Play, Pause, CheckCircle2, FileText, Camera, Upload, Plus, AlertTriangle, Eye, Loader2, ArrowRightLeft, ShieldCheck, XOctagon } from 'lucide-react';
 
 interface WorkOrderDetailModalProps {
   isOpen: boolean;
@@ -52,6 +52,38 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
   const [completeRecommendation, setCompleteRecommendation] = useState('');
   const [completePhotos, setCompletePhotos] = useState<FileList | null>(null);
 
+  // Escalate Modal State
+  const [isEscalateOpen, setIsEscalateOpen] = useState(false);
+  const [escalateReason, setEscalateReason] = useState('');
+
+  // Classify Modal State
+  const [isClassifyOpen, setIsClassifyOpen] = useState(false);
+  const [classificationResult, setClassificationResult] = useState<'WORKSHOP_CONTINUE' | 'MAINTENANCE_REQUIRED'>('WORKSHOP_CONTINUE');
+  const [classificationNotes, setClassificationNotes] = useState('');
+
+  // Assign Executor Modal State
+  const [isAssignExecutorOpen, setIsAssignExecutorOpen] = useState(false);
+  const [assignedExecutorId, setAssignedExecutorId] = useState('');
+  const [technicians, setTechnicians] = useState<any[]>([]);
+
+  // Reject Handover Modal State
+  const [isRejectHandoverOpen, setIsRejectHandoverOpen] = useState(false);
+  const [rejectHandoverReason, setRejectHandoverReason] = useState('');
+
+  const getPerformerUnitType = (user: any): 'WORKSHOP' | 'TECHNICAL' | 'MAINTENANCE' => {
+    if (!user) return 'MAINTENANCE';
+    const dept = (user.department || '').toLowerCase();
+    if (dept.includes('xưởng') || dept.includes('workshop') || user.role === 'OPERATOR') {
+      return 'WORKSHOP';
+    }
+    if (dept.includes('kỹ thuật') || dept.includes('technical') || user.role === 'ADMIN' || user.role === 'MANAGER') {
+      return 'TECHNICAL';
+    }
+    return 'MAINTENANCE';
+  };
+
+  const userUnitType = getPerformerUnitType(currentUser);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -60,6 +92,16 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
       
       const logData = await api.getWorkOrderRepairLogs(workOrderId);
       setLogs(logData);
+
+      // Load technicians if user is manager, admin, or technical
+      const isManagerOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
+      if (isManagerOrAdmin || userUnitType === 'TECHNICAL') {
+        const techs = await api.getUsers({ role: 'TECHNICIAN' });
+        setTechnicians(techs);
+        if (techs.length > 0 && !assignedExecutorId) {
+          setAssignedExecutorId(techs[0].id);
+        }
+      }
     } catch (err: any) {
       toast.error('Lỗi tải dữ liệu', err.message || 'Không thể tải chi tiết Work Order');
       onClose();
@@ -88,7 +130,9 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
   // Permission Checks
   const isAssigned = wo.assignedTechnicianId === currentUser?.id;
   const isManagerOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
-  const canModify = isAssigned || isManagerOrAdmin;
+  
+  // Can execute standard repair logs
+  const canModify = isAssigned || isManagerOrAdmin || (wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' && userUnitType === 'WORKSHOP');
 
   // Upload handler helper
   const uploadPhotos = async (files: FileList, logId: string, category: 'BEFORE' | 'DURING' | 'AFTER' | 'OTHER') => {
@@ -235,26 +279,158 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
 
     try {
       setActionLoading(true);
-      const result = await api.updateWorkOrderStatus(wo.id, {
-        status: 'COMPLETED',
-        expectedVersion: wo.version,
-        workDone: completeWorkDone,
-        equipmentStatusAfter: completeEquipmentStatus,
-        testResult: completeTestResult,
-        conclusion: completeConclusion,
-        recommendation: completeRecommendation,
-      } as any);
+      
+      const isMaintRoute = wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT';
+      let result;
 
-      // Find the COMPLETE type log created automatically during transaction
+      if (isMaintRoute) {
+        // Submit handover for Maintenance route
+        result = await (api as any).submitHandover(wo.id, {
+          expectedVersion: wo.version,
+          workDone: completeWorkDone,
+          equipmentStatusAfter: completeEquipmentStatus,
+          testResult: completeTestResult,
+          conclusion: completeConclusion,
+          recommendation: completeRecommendation || undefined,
+        });
+      } else {
+        // Direct complete for Workshop route
+        result = await api.updateWorkOrderStatus(wo.id, {
+          status: 'COMPLETED',
+          expectedVersion: wo.version,
+          workDone: completeWorkDone,
+          equipmentStatusAfter: completeEquipmentStatus,
+          testResult: completeTestResult,
+          conclusion: completeConclusion,
+          recommendation: completeRecommendation,
+        } as any);
+      }
+
+      // Find the HANDOVER_SUBMIT or COMPLETE type log created automatically during transaction
       const updatedLogs = await api.getWorkOrderRepairLogs(wo.id);
-      const completeLog = updatedLogs.find((l: any) => l.actionType === 'COMPLETE');
+      const targetLogType = isMaintRoute ? 'HANDOVER_SUBMIT' : 'COMPLETE';
+      const completeLog = updatedLogs.find((l: any) => l.actionType === targetLogType);
 
       if (completeLog && completePhotos && completePhotos.length > 0) {
         await uploadPhotos(completePhotos, completeLog.id, 'AFTER');
       }
 
-      toast.success('Hoàn thành sửa chữa', 'Đã gửi đề nghị nghiệm thu bàn giao.');
+      toast.success(
+        isMaintRoute ? 'Gửi yêu cầu bàn giao thành công' : 'Hoàn thành sửa chữa',
+        isMaintRoute ? 'Đã gửi bàn giao kỹ thuật đề nghị nghiệm thu.' : 'Đã chuyển trạng thái sang Chờ nghiệm thu.'
+      );
       setIsCompleteFormOpen(false);
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi', err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleEscalateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!escalateReason.trim()) {
+      toast.error('Yêu cầu nhập lý do', 'Vui lòng nhập lý do yêu cầu hỗ trợ kỹ thuật.');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await (api as any).escalateWorkOrder(wo.id, {
+        expectedVersion: wo.version,
+        reason: escalateReason,
+      });
+      toast.success('Yêu cầu hỗ trợ kỹ thuật thành công', 'Phiếu đã chuyển sang Chờ phân loại kỹ thuật.');
+      setIsEscalateOpen(false);
+      setEscalateReason('');
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi', err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleClassifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setActionLoading(true);
+      await (api as any).classifyWorkOrder(wo.id, {
+        expectedVersion: wo.version,
+        classificationResult,
+        classificationNotes: classificationNotes || undefined,
+      });
+      toast.success('Phân loại thành công', `Đã phân loại kết quả: ${classificationResult === 'WORKSHOP_CONTINUE' ? 'Xưởng tự xử lý' : 'Cơ điện sửa chữa'}.`);
+      setIsClassifyOpen(false);
+      setClassificationNotes('');
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi', err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAssignExecutorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignedExecutorId) {
+      toast.error('Yêu cầu dữ liệu', 'Vui lòng chọn kỹ thuật viên để phân công.');
+      return;
+    }
+
+    const tech = technicians.find(t => t.id === assignedExecutorId);
+    try {
+      setActionLoading(true);
+      await (api as any).assignExecutor(wo.id, {
+        expectedVersion: wo.version,
+        assignedTechnicianId: assignedExecutorId,
+        technicianName: tech ? tech.name : undefined,
+      });
+      toast.success('Phân công thành công', `Đã phân công Cơ điện: ${tech ? tech.name : 'Kỹ thuật viên'}.`);
+      setIsAssignExecutorOpen(false);
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi', err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAcceptHandover = async () => {
+    try {
+      setActionLoading(true);
+      await (api as any).acceptHandover(wo.id, { expectedVersion: wo.version });
+      toast.success('Đã nghiệm thu nhận bàn giao', 'Đã chuyển trạng thái sang Đã nghiệm thu (VERIFIED).');
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi', err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectHandoverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectHandoverReason.trim()) {
+      toast.error('Yêu cầu nhập lý do', 'Vui lòng nhập lý do từ chối bàn giao.');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await (api as any).rejectHandover(wo.id, {
+        expectedVersion: wo.version,
+        reason: rejectHandoverReason,
+      });
+      toast.success('Từ chối bàn giao thành công', 'Đã chuyển trả phiếu về Đang sửa chữa cho Cơ điện.');
+      setIsRejectHandoverOpen(false);
+      setRejectHandoverReason('');
       if (onStatusChangeSuccess) onStatusChangeSuccess();
       loadData();
     } catch (err: any) {
@@ -292,7 +468,7 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`WO Detail: ${wo.orderCode}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={`Chi tiết phiếu bảo trì: ${wo.orderCode}`}>
       <div className="work-order-detail-container" style={{ display: 'flex', flexDirection: 'column', gap: '20px', minHeight: '500px', maxHeight: '80vh', overflowY: 'auto' }}>
         
         {/* Top Header Card */}
@@ -316,6 +492,12 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
               </span>
             </div>
           </div>
+          <div>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>TUYẾN XỬ LÝ</span>
+            <div style={{ marginTop: '4px', fontWeight: 700, fontSize: '13px', color: '#16a34a' }}>
+              {wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? 'Xưởng tự xử lý' : 'Cơ điện sửa chữa'}
+            </div>
+          </div>
         </div>
 
         {/* Tab Controls */}
@@ -330,7 +512,7 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
             onClick={() => setActiveTab('timeline')}
             style={{ padding: '8px 16px', fontWeight: 600, background: 'none', border: 'none', borderBottom: activeTab === 'timeline' ? '3px solid #2563eb' : 'none', color: activeTab === 'timeline' ? '#2563eb' : 'var(--text-secondary)', cursor: 'pointer' }}
           >
-            Timeline Sửa Chữa ({logs.length})
+            Nhật ký xử lý ({logs.length})
           </button>
         </div>
 
@@ -361,6 +543,12 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
                   <div><strong>Phòng ban:</strong> {wo.request?.department || 'Cơ điện'}</div>
                   <div><strong>Kỹ thuật viên:</strong> {wo.technicianName || 'Chưa phân công'}</div>
                   <div><strong>Ngày tạo:</strong> {new Date(wo.createdAt).toLocaleString('vi-VN')}</div>
+                  {wo.classificationResult && (
+                    <div style={{ marginTop: '8px', padding: '6px', border: '1px solid #3b82f6', borderRadius: '4px', backgroundColor: 'rgba(59, 130, 246, 0.05)' }}>
+                      <strong>Kết quả phân loại:</strong> {wo.classificationResult === 'WORKSHOP_CONTINUE' ? 'Xưởng tiếp tục tự xử lý' : 'Yêu cầu Cơ điện sửa chữa'}<br/>
+                      <strong>Ghi chú phân loại:</strong> {wo.classificationNotes || '---'}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -385,49 +573,87 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             
             {/* Timeline Action Bar */}
-            {canModify && (
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
-                {wo.status === 'ASSIGNED' && (
-                  <button className="btn btn-primary" onClick={handleStart} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <Play size={15} /> Bắt đầu sửa chữa
-                  </button>
-                )}
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
+              {/* 1. Standard Technician Actions */}
+              {canModify && wo.status === 'ASSIGNED' && (
+                <button className="btn btn-primary" onClick={handleStart} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Play size={15} /> Bắt đầu sửa chữa
+                </button>
+              )}
 
-                {wo.status === 'IN_PROGRESS' && (
-                  <>
-                    <button className="btn btn-primary" onClick={() => setIsLogFormOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <Plus size={15} /> Thêm ghi nhận sửa chữa
-                    </button>
-                    <button className="btn btn-warning" onClick={() => setIsPauseFormOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <Pause size={15} /> Tạm dừng
-                    </button>
-                    <button className="btn btn-success" onClick={() => setIsCompleteFormOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <CheckCircle2 size={15} /> Hoàn thành & Bàn giao
-                    </button>
-                  </>
-                )}
-
-                {wo.status === 'ON_HOLD' && (
-                  <button className="btn btn-primary" onClick={handleResume} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <Play size={15} /> Tiếp tục sửa chữa
+              {canModify && wo.status === 'IN_PROGRESS' && (
+                <>
+                  <button className="btn btn-primary" onClick={() => setIsLogFormOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <Plus size={15} /> Ghi nhận thao tác & Ảnh
                   </button>
-                )}
-              </div>
-            )}
+                  <button className="btn btn-warning" onClick={() => setIsPauseFormOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <Pause size={15} /> Tạm dừng
+                  </button>
+                  <button className="btn btn-success" onClick={() => setIsCompleteFormOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle2 size={15} /> {wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? 'Đề nghị bàn giao' : 'Hoàn thành sửa chữa'}
+                  </button>
+                </>
+              )}
+
+              {canModify && wo.status === 'ON_HOLD' && (
+                <button className="btn btn-primary" onClick={handleResume} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Play size={15} /> Tiếp tục sửa chữa
+                </button>
+              )}
+
+              {/* 2. Escalate Action (Xưởng yêu cầu kỹ thuật hỗ trợ) */}
+              {wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' && 
+               ['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD'].includes(wo.status) && 
+               (userUnitType === 'WORKSHOP' || isManagerOrAdmin) && (
+                <button className="btn btn-danger" onClick={() => setIsEscalateOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <ArrowRightLeft size={15} /> Yêu cầu hỗ trợ kỹ thuật (Escalate)
+                </button>
+              )}
+
+              {/* 3. Classify Action (Phân loại Work Order) */}
+              {wo.status === 'PENDING' && !wo.classificationResult && (userUnitType === 'TECHNICAL' || isManagerOrAdmin) && (
+                <button className="btn btn-warning" onClick={() => setIsClassifyOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <ShieldCheck size={15} /> Phân loại sự cố (Classify)
+                </button>
+              )}
+
+              {/* 4. Assign Executor Action (Phòng kỹ thuật phân công Cơ điện) */}
+              {wo.status === 'PENDING' && wo.classificationResult === 'MAINTENANCE_REQUIRED' && !wo.assignedTechnicianId && (userUnitType === 'TECHNICAL' || isManagerOrAdmin) && (
+                <button className="btn btn-primary" onClick={() => setIsAssignExecutorOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Plus size={15} /> Phân công kỹ thuật Cơ điện
+                </button>
+              )}
+
+              {/* 5. Accept / Reject Handover Actions (Xưởng nghiệm thu/từ chối Cơ điện) */}
+              {wo.status === 'COMPLETED' && wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' && (userUnitType === 'WORKSHOP' || isManagerOrAdmin) && (
+                <>
+                  <button className="btn btn-success" onClick={handleAcceptHandover} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <ShieldCheck size={15} /> Nghiệm thu & Nhận bàn giao
+                  </button>
+                  <button className="btn btn-danger" onClick={() => setIsRejectHandoverOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <XOctagon size={15} /> Từ chối nhận bàn giao
+                  </button>
+                </>
+              )}
+            </div>
 
             {/* Timeline Nodes */}
             <div className="timeline" style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', paddingLeft: '20px' }}>
               <div style={{ position: 'absolute', left: '6px', top: '10px', bottom: '10px', width: '2px', backgroundColor: 'var(--border-color)' }}></div>
               
               {logs.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '13px' }}>Chưa có quá trình ghi nhận sửa chữa. Click "Bắt đầu sửa chữa" hoặc thay đổi trạng thái.</div>
+                <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '13px' }}>Chưa có quá trình xử lý nào được ghi nhận. Click các hành động ở trên để tiếp tục.</div>
               ) : (
                 logs.map((log: any) => {
                   let badgeColor = '#6b7280';
                   if (log.actionType === 'START') badgeColor = '#3b82f6';
                   if (log.actionType === 'PAUSE') badgeColor = '#ef4444';
                   if (log.actionType === 'RESUME') badgeColor = '#3b82f6';
-                  if (log.actionType === 'COMPLETE') badgeColor = '#10b981';
+                  if (log.actionType === 'COMPLETE' || log.actionType === 'HANDOVER_SUBMIT') badgeColor = '#10b981';
+                  if (log.actionType === 'HANDOVER_ACCEPT') badgeColor = '#059669';
+                  if (log.actionType === 'HANDOVER_REJECT') badgeColor = '#ef4444';
+                  if (log.actionType === 'ESCALATE') badgeColor = '#dc2626';
+                  if (log.actionType === 'CLASSIFY') badgeColor = '#f59e0b';
                   if (log.actionType === 'LOG') badgeColor = '#8b5cf6';
 
                   return (
@@ -439,7 +665,7 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', backgroundColor: 'var(--bg-card)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                           <span style={{ fontWeight: 700, fontSize: '13px', color: badgeColor }}>
-                            {log.actionType} – {log.technician?.name || 'Kỹ thuật viên'}
+                            {log.actionType} – {log.performedBy?.name || 'Hệ thống'} ({log.performerUnitType})
                           </span>
                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                             {new Date(log.recordedAt).toLocaleString('vi-VN')}
@@ -451,13 +677,13 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
                         </div>
 
                         {/* Additional structured metadata */}
-                        {log.actionType === 'PAUSE' && log.pauseReason && (
+                        {log.pauseReason && (
                           <div style={{ fontSize: '12px', backgroundColor: 'rgba(239, 68, 68, 0.05)', color: '#ef4444', padding: '4px 8px', borderRadius: '4px', marginTop: '6px', fontWeight: 600 }}>
                             Lý do tạm dừng: {log.pauseReason}
                           </div>
                         )}
 
-                        {log.actionType === 'COMPLETE' && (
+                        {(log.actionType === 'COMPLETE' || log.actionType === 'HANDOVER_SUBMIT') && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: 'rgba(16, 185, 129, 0.05)', border: '1px dashed rgba(16, 185, 129, 0.2)', padding: '8px', borderRadius: '6px', marginTop: '8px', fontSize: '12px' }}>
                             <div><strong>Công việc đã thực hiện:</strong> {log.workDone || '---'}</div>
                             <div><strong>Tình trạng thiết bị:</strong> {log.equipmentStatusAfter || '---'}</div>
@@ -467,14 +693,12 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
                           </div>
                         )}
 
-                        {/* Adjustments link */}
                         {log.adjustedLogId && (
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '4px' }}>
                             * Bản ghi điều chỉnh cho nhật ký ID: {log.adjustedLogId.substring(0, 8)} (Lý do: {log.adjustmentReason})
                           </div>
                         )}
 
-                        {/* Action details if LOG */}
                         {log.actionType === 'LOG' && (log.result || log.notes) && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px', paddingLeft: '8px', borderLeft: '2px solid var(--border-color)' }}>
                             {log.result && <div><strong>Kết quả:</strong> {log.result}</div>}
@@ -524,7 +748,7 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
 
       {/* 1. Modal Thêm ghi nhận sửa chữa */}
       {isLogFormOpen && (
-        <Modal isOpen={isLogFormOpen} onClose={() => setIsLogFormOpen(false)} title={logAdjustTargetId ? "Điều chỉnh ghi nhận sửa chữa" : "Thêm ghi nhận sửa chữa"}>
+        <Modal isOpen={isLogFormOpen} onClose={() => setIsLogFormOpen(false)} title={logAdjustTargetId ? "Điều chỉnh ghi nhận sửa chữa" : "Ghi nhận thao tác xử lý & Ảnh chụp"}>
           <form onSubmit={handleLogSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             
             {logAdjustTargetId && (
@@ -542,7 +766,7 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
             )}
 
             <div className="form-group">
-              <label className="form-label">Nội dung thao tác sửa chữa *</label>
+              <label className="form-label">Nội dung thao tác xử lý *</label>
               <textarea 
                 className="form-input" 
                 rows={3} 
@@ -653,9 +877,9 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
         </Modal>
       )}
 
-      {/* 3. Modal Hoàn thành sửa chữa và đề nghị bàn giao */}
+      {/* 3. Modal Hoàn thành sửa chữa / Đề nghị bàn giao */}
       {isCompleteFormOpen && (
-        <Modal isOpen={isCompleteFormOpen} onClose={() => setIsCompleteFormOpen(false)} title="Hoàn thành & Đề nghị bàn giao nghiệm thu">
+        <Modal isOpen={isCompleteFormOpen} onClose={() => setIsCompleteFormOpen(false)} title={wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? "Đề nghị bàn giao kỹ thuật" : "Xác nhận hoàn thành sửa chữa"}>
           <form onSubmit={handleCompleteSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto' }}>
             
             <div className="form-group">
@@ -735,7 +959,115 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
             <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setIsCompleteFormOpen(false)}>Hủy</button>
               <button type="submit" className="btn btn-success" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Gửi đề nghị bàn giao"}
+                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : (wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? "Gửi đề nghị bàn giao" : "Xác nhận hoàn thành")}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 4. Modal Yêu cầu hỗ trợ kỹ thuật (Escalate) */}
+      {isEscalateOpen && (
+        <Modal isOpen={isEscalateOpen} onClose={() => setIsEscalateOpen(false)} title="Yêu cầu hỗ trợ kỹ thuật (Phòng Cơ điện)">
+          <form onSubmit={handleEscalateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Lý do yêu cầu hỗ trợ kỹ thuật *</label>
+              <textarea
+                className="form-input"
+                rows={3}
+                required
+                placeholder="Ví dụ: Lỗi bo mạch điện tử phức tạp, cần máy móc kiểm tra chuyên sâu..."
+                value={escalateReason}
+                onChange={(e) => setEscalateReason(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setIsEscalateOpen(false)}>Hủy</button>
+              <button type="submit" className="btn btn-danger" disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Gửi yêu cầu hỗ trợ"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 5. Modal Phân loại sự cố (Classify) */}
+      {isClassifyOpen && (
+        <Modal isOpen={isClassifyOpen} onClose={() => setIsClassifyOpen(false)} title="Phân loại phương án xử lý sự cố">
+          <form onSubmit={handleClassifySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Chọn phương án xử lý *</label>
+              <select className="form-select" value={classificationResult} onChange={(e) => setClassificationResult(e.target.value as any)}>
+                <option value="WORKSHOP_CONTINUE">Xưởng tiếp tục tự xử lý (WORKSHOP_CONTINUE)</option>
+                <option value="MAINTENANCE_REQUIRED">Yêu cầu Cơ điện sửa chữa chuyên nghiệp (MAINTENANCE_REQUIRED)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Ghi chú nhận xét phân loại (Tùy chọn)</label>
+              <textarea
+                className="form-input"
+                rows={3}
+                placeholder="Ghi chú đánh giá tình trạng lỗi hoặc chỉ dẫn thực hiện..."
+                value={classificationNotes}
+                onChange={(e) => setClassificationNotes(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setIsClassifyOpen(false)}>Hủy</button>
+              <button type="submit" className="btn btn-primary" disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận phân loại"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 6. Modal Phân công kỹ thuật Cơ điện */}
+      {isAssignExecutorOpen && (
+        <Modal isOpen={isAssignExecutorOpen} onClose={() => setIsAssignExecutorOpen(false)} title="Phân công kỹ thuật viên Cơ điện">
+          <form onSubmit={handleAssignExecutorSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Chọn kỹ thuật viên *</label>
+              <select className="form-select" value={assignedExecutorId} onChange={(e) => setAssignedExecutorId(e.target.value)}>
+                {technicians.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.specialty || 'Kỹ thuật viên'})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setIsAssignExecutorOpen(false)}>Hủy</button>
+              <button type="submit" className="btn btn-primary" disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận phân công"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 7. Modal Từ chối nhận bàn giao */}
+      {isRejectHandoverOpen && (
+        <Modal isOpen={isRejectHandoverOpen} onClose={() => setIsRejectHandoverOpen(false)} title="Từ chối nhận bàn giao nghiệm thu">
+          <form onSubmit={handleRejectHandoverSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Lý do từ chối nhận bàn giao *</label>
+              <textarea
+                className="form-input"
+                rows={3}
+                required
+                placeholder="Ví dụ: Thiết bị chạy thử vẫn bị rung động mạnh, chưa đạt yêu cầu..."
+                value={rejectHandoverReason}
+                onChange={(e) => setRejectHandoverReason(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setIsRejectHandoverOpen(false)}>Hủy</button>
+              <button type="submit" className="btn btn-danger" disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận từ chối"}
               </button>
             </div>
           </form>
