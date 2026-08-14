@@ -55,6 +55,8 @@ model User {
   cancelledSchedules    MaintenanceSchedule[]  @relation("ScheduleCancelledBy")
   scheduleHistories     ScheduleHistory[]      @relation("ScheduleHistoryActedBy")
   responsibleLocations Location[]             @relation("LocationResponsibleTech")
+  assignedWorkOrders    WorkOrder[]            @relation("WorkOrderAssignedTechnician")
+  repairLogs            WorkOrderRepairLog[]   @relation("UserRepairLogs")
 }
 
 model Equipment {
@@ -78,6 +80,7 @@ model Equipment {
   requests              MaintenanceRequest[]
   workOrders            WorkOrder[]
   schedules             MaintenanceSchedule[]
+  repairLogs            WorkOrderRepairLog[]  @relation("EquipmentRepairLogs")
 }
 
 model MaintenanceRequest {
@@ -137,6 +140,10 @@ model WorkOrder {
   transactions        InventoryTransaction[]
   checklistExecutions ChecklistExecution[]
   scheduleHistories   ScheduleHistory[]      @relation("ScheduleHistoryWorkOrder")
+  assignedTechnicianId String?
+  assignedTechnician   User?                  @relation("WorkOrderAssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: Restrict)
+  repairLogs           WorkOrderRepairLog[]   @relation("WorkOrderRepairLogs")
+  attachments          Attachment[]           @relation("WorkOrderAttachments")
 
   @@unique([scheduleId, scheduledDueDate])
   @@index([scheduleId])
@@ -300,6 +307,13 @@ model Attachment {
   version      Int       @default(1)
   createdAt    DateTime  @default(now())
 
+  // New fields for Phase 4.x
+  workOrderId   String?
+  workOrder     WorkOrder?          @relation("WorkOrderAttachments", fields: [workOrderId], references: [id], onDelete: Restrict)
+  repairLogId   String?
+  repairLog     WorkOrderRepairLog? @relation("RepairLogAttachments", fields: [repairLogId], references: [id], onDelete: Restrict)
+  photoCategory String? // BEFORE, DURING, AFTER, OTHER
+
   @@index([entityType, entityId])
 }
 
@@ -382,3 +396,41 @@ model Notification {
   isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
 }
+
+enum RepairLogActionType {
+  START
+  LOG
+  PAUSE
+  RESUME
+  COMPLETE
+}
+
+model WorkOrderRepairLog {
+  id                    String              @id @default(uuid())
+  workOrderId           String
+  workOrder             WorkOrder           @relation("WorkOrderRepairLogs", fields: [workOrderId], references: [id], onDelete: Restrict)
+  equipmentId           String
+  equipment             Equipment           @relation("EquipmentRepairLogs", fields: [equipmentId], references: [id], onDelete: Restrict)
+  technicianId          String
+  technician            User                @relation("UserRepairLogs", fields: [technicianId], references: [id], onDelete: Restrict)
+  actionType            RepairLogActionType
+  content               String
+  result                String?
+  notes                 String?
+  recordedAt            DateTime            @default(now())
+  
+  // Pause / complete details
+  pauseReason           String?
+  workDone              String?
+  equipmentStatusAfter  String?
+  testResult            String?
+  conclusion            String?
+  recommendations       String?
+
+  // Adjustment relation
+  adjustedLogId         String?             @unique
+  adjustmentReason      String?
+
+  attachments           Attachment[]        @relation("RepairLogAttachments")
+}
+

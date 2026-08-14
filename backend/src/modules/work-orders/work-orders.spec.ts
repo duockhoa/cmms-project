@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { WorkOrdersService } from './work-orders.service';
 import { WorkOrderStateMachine } from './work-order-state-machine';
+import { ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
@@ -26,7 +27,7 @@ describe('Work Orders Module', () => {
     }
 
     // 2. Initialize fresh database schema from prisma schema
-    execSync('npx prisma db push --accept-data-loss', {
+    execSync('npx prisma db push --accept-data-loss --skip-generate', {
       env: { ...process.env, DATABASE_URL: `file:./test-wo.db` },
       stdio: 'inherit',
     });
@@ -201,6 +202,157 @@ describe('Work Orders Module', () => {
 
       const finalItem = await prisma.inventoryItem.findUnique({ where: { id: item.id } });
       expect(finalItem?.quantity).toBe(3);
+    });
+  });
+
+  describe('4. PHASE 4 FUNCTIONAL TESTS', () => {
+    it('should only find WOs assigned to current user, blocking others', async () => {
+      // Create user
+      const techUser = await prisma.user.create({
+        data: {
+          id: 'tech-user-2',
+          name: 'Tech User Two',
+          email: 'tech2@test.com',
+          role: 'TECHNICIAN',
+        },
+      });
+
+      const otherTechUser = await prisma.user.create({
+        data: {
+          id: 'tech-user-3',
+          name: 'Tech User Three',
+          email: 'tech3@test.com',
+          role: 'TECHNICIAN',
+        },
+      });
+
+      const equipment = await prisma.equipment.create({
+        data: {
+          code: 'EQ-QR-TEST-1',
+          name: 'Device QR 1',
+          category: 'Cơ khí',
+          location: 'Khu A',
+        },
+      });
+
+      // Create WO assigned to tech-user-2
+      const wo = await prisma.workOrder.create({
+        data: {
+          orderCode: 'WO-QR-TEST-01',
+          equipmentId: equipment.id,
+          title: 'WO for tech 2',
+          description: 'Fix pump',
+          status: 'ASSIGNED',
+          assignedTechnicianId: techUser.id,
+        },
+      });
+
+      // 1. Search by techUser: should find 1 WO
+      const searchRes1 = await workOrdersService.findByEquipmentQr('EQ-QR-TEST-1', techUser.id);
+      expect(searchRes1.workOrders.length).toBe(1);
+      expect(searchRes1.workOrders[0].id).toBe(wo.id);
+
+      // 2. Search by otherTechUser: should find 0 WOs
+      const searchRes2 = await workOrdersService.findByEquipmentQr('EQ-QR-TEST-1', otherTechUser.id);
+      expect(searchRes2.workOrders.length).toBe(0);
+
+      // 3. FindOne by otherTechUser: should throw ForbiddenException
+      await expect(
+        workOrdersService.findOne(wo.id, { id: otherTechUser.id, role: 'TECHNICIAN' })
+      ).rejects.toThrow(ForbiddenException);
+
+      // 4. Start action by otherTechUser: should throw ForbiddenException
+      await expect(
+        workOrdersService.start(wo.id, { expectedVersion: 1 }, { id: otherTechUser.id, role: 'TECHNICIAN' })
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should return multiple WOs when equipment has multiple active tasks assigned', async () => {
+      const equipment = await prisma.equipment.create({
+        data: {
+          code: 'EQ-QR-TEST-MULTIPLE',
+          name: 'Device QR Multiple',
+          category: 'Điện',
+          location: 'Khu B',
+        },
+      });
+
+      // Create 2 WOs assigned to tech-user-2
+      await prisma.workOrder.create({
+        data: {
+          orderCode: 'WO-QR-MULT-01',
+          equipmentId: equipment.id,
+          title: 'Task 1',
+          description: 'Fix cable',
+          status: 'ASSIGNED',
+          assignedTechnicianId: 'tech-user-2',
+        },
+      });
+
+      await prisma.workOrder.create({
+        data: {
+          orderCode: 'WO-QR-MULT-02',
+          equipmentId: equipment.id,
+          title: 'Task 2',
+          description: 'Adjust sensor',
+          status: 'IN_PROGRESS',
+          assignedTechnicianId: 'tech-user-2',
+        },
+      });
+
+      const res = await workOrdersService.findByEquipmentQr('EQ-QR-TEST-MULTIPLE', 'tech-user-2');
+      expect(res.workOrders.length).toBe(2);
+    });
+
+    it('should force LOG actionType when creating repair logs from endpoint, blocking other types', async () => {
+      const wo = await prisma.workOrder.create({
+        data: {
+          orderCode: 'WO-LOG-FORCE-01',
+          equipmentId: 'equipment-test-id',
+          title: 'WO Log Force',
+          description: 'Check logic',
+          status: 'IN_PROGRESS',
+          assignedTechnicianId: 'tech-user-id',
+        },
+      });
+
+      const log = await workOrdersService.createRepairLog(
+        wo.id,
+        {
+          content: 'Thực hiện kiểm tra tụ điện',
+          result: 'Tụ hoạt động bình thường',
+          notes: 'Ghi chú thêm',
+        },
+        'tech-user-id'
+      );
+
+      // actionType must be LOG, despite any frontend attempt
+      expect(log.actionType).toBe('LOG');
+    });
+
+    it('should rollback transaction if creating repair log fails', async () => {
+      const wo = await prisma.workOrder.create({
+        data: {
+          orderCode: 'WO-ROLLBACK-01',
+          equipmentId: 'equipment-test-id',
+          title: 'WO Rollback Test',
+          description: 'Desc',
+          status: 'ASSIGNED',
+          assignedTechnicianId: 'tech-user-id',
+          version: 1,
+        },
+      });
+
+      // Triggering start with non-existent user should fail log creation and rollback status
+      try {
+        await workOrdersService.start(wo.id, { expectedVersion: 1 }, { id: 'non-existent-user-id', role: 'TECHNICIAN' });
+      } catch (err) {
+        // expected failure
+      }
+
+      const verifiedWo = await prisma.workOrder.findUnique({ where: { id: wo.id } });
+      expect(verifiedWo?.status).toBe('ASSIGNED'); // Must NOT change to IN_PROGRESS
+      expect(verifiedWo?.version).toBe(1); // Version must NOT increment
     });
   });
 });

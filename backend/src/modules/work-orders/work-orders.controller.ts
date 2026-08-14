@@ -14,6 +14,7 @@ import {
   CloseWorkOrderDto,
   CancelWorkOrderDto,
   AddWorkOrderItemDto,
+  CreateRepairLogDto,
 } from './dto/work-orders.dto';
 
 @Controller('work-orders')
@@ -23,6 +24,29 @@ export class WorkOrdersController {
     private readonly workOrdersService: WorkOrdersService,
     private readonly inventoryService: InventoryService,
   ) {}
+
+  @Get('by-equipment-qr/:qrToken')
+  findByEquipmentQr(
+    @Param('qrToken') qrToken: string,
+    @Query('scanMethod') scanMethod: string = 'QR_SCAN',
+    @Req() req: any
+  ) {
+    return this.workOrdersService.findByEquipmentQr(qrToken, req.user.id, scanMethod);
+  }
+
+  @Get(':id/repair-logs')
+  getRepairLogs(@Param('id') id: string) {
+    return this.workOrdersService.getRepairLogs(id);
+  }
+
+  @Post(':id/repair-logs')
+  createRepairLog(
+    @Param('id') id: string,
+    @Body() body: CreateRepairLogDto,
+    @Req() req: any
+  ) {
+    return this.workOrdersService.createRepairLog(id, body, req.user.id);
+  }
 
   @Get()
   findAll(

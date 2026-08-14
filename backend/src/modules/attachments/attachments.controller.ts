@@ -31,14 +31,20 @@ export class AttachmentsController {
     @Body('entityType') entityType: string,
     @Body('entityId') entityId: string,
     @Body('uploadedById') uploadedById?: string,
-    @Body('description') description?: string
+    @Body('description') description?: string,
+    @Body('workOrderId') workOrderId?: string,
+    @Body('repairLogId') repairLogId?: string,
+    @Body('photoCategory') photoCategory?: string
   ) {
     return this.attachmentsService.uploadFile(
       file,
       entityType,
       entityId,
       uploadedById,
-      description
+      description,
+      workOrderId,
+      repairLogId,
+      photoCategory
     );
   }
 

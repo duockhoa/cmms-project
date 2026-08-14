@@ -81,8 +81,14 @@ export const api = {
     return request(`/work-orders${query ? `?${query}` : ''}`);
   },
   getWorkOrderById: (id: string) => request(`/work-orders/${id}`),
+  getWorkOrdersByEquipmentQr: (qrToken: string, scanMethod: string = 'QR_SCAN') =>
+    request(`/work-orders/by-equipment-qr/${qrToken}?scanMethod=${scanMethod}`),
+  getWorkOrderRepairLogs: (id: string) =>
+    request(`/work-orders/${id}/repair-logs`),
+  createWorkOrderRepairLog: (id: string, body: { content: string; result?: string; notes?: string; adjustedLogId?: string; adjustmentReason?: string }) =>
+    request(`/work-orders/${id}/repair-logs`, { method: 'POST', body: JSON.stringify(body) }),
   createWorkOrder: (data: any) => request('/work-orders', { method: 'POST', body: JSON.stringify(data) }),
-  updateWorkOrderStatus: (id: string, body: { status: string; expectedVersion?: number; failureCause?: string; solution?: string; technicianName?: string }) =>
+  updateWorkOrderStatus: (id: string, body: { status: string; expectedVersion?: number; failureCause?: string; solution?: string; technicianName?: string; workDone?: string; equipmentStatusAfter?: string; testResult?: string; conclusion?: string; recommendation?: string }) =>
     request(`/work-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) }),
   addWorkOrderItem: (id: string, item: { inventoryItemId: string; quantity: number }) =>
     request(`/work-orders/${id}/items`, { method: 'POST', body: JSON.stringify(item) }),

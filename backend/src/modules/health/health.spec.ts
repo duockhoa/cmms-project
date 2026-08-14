@@ -23,7 +23,7 @@ describe('Health Check Module', () => {
       } catch (e) {}
     }
 
-    execSync('npx prisma db push --accept-data-loss', {
+    execSync('npx prisma db push --accept-data-loss --skip-generate', {
       env: { ...process.env, DATABASE_URL: `file:./test-health.db` },
       stdio: 'inherit',
     });

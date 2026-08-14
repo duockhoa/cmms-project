@@ -78,6 +78,49 @@ export class CompleteWorkOrderDto {
   @IsString()
   @IsOptional()
   solution?: string;
+
+  // New fields for detailed completion reporting
+  @IsString()
+  @IsOptional()
+  workDone?: string;
+
+  @IsString()
+  @IsOptional()
+  equipmentStatusAfter?: string;
+
+  @IsString()
+  @IsOptional()
+  testResult?: string;
+
+  @IsString()
+  @IsOptional()
+  conclusion?: string;
+
+  @IsString()
+  @IsOptional()
+  recommendation?: string;
+}
+
+export class CreateRepairLogDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Nội dung không được để trống' })
+  content: string;
+
+  @IsString()
+  @IsOptional()
+  result?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
+  @IsString()
+  @IsOptional()
+  adjustedLogId?: string;
+
+  @IsString()
+  @IsOptional()
+  adjustmentReason?: string;
 }
 
 export class VerifyWorkOrderDto {

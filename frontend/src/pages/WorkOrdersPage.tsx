@@ -3,8 +3,10 @@ import { api, fetchWithAuth } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { ChecklistManager } from '../components/common/ChecklistManager';
-import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
+import { QRScanner } from '../components/common/QRScanner';
+import { WorkOrderDetailModal } from '../components/common/WorkOrderDetailModal';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
@@ -40,6 +42,14 @@ export const WorkOrdersPage: React.FC = () => {
   const [returnReason, setReturnReason] = useState('');
 
   const [users, setUsers] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // QR and Detail states
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [manualDeviceCode, setManualDeviceCode] = useState('');
+  const [multipleWosList, setMultipleWosList] = useState<any[]>([]);
+  const [isSelectWoOpen, setIsSelectWoOpen] = useState(false);
+  const [selectedDetailWoId, setSelectedDetailWoId] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -59,17 +69,23 @@ export const WorkOrdersPage: React.FC = () => {
     try {
       setLoading(true);
 
-      // Fetch dynamic users and tech lists, plus departments
-      const [eqRes, techRes, userRes, deptRes] = await Promise.all([
+      // Fetch dynamic users and tech lists, plus departments, plus current user profile
+      const [eqRes, techRes, userRes, deptRes, meRes] = await Promise.all([
         api.getEquipment(),
         api.getUsers({ role: 'TECHNICIAN' }),
         api.getUsers().catch(() => []),
         api.getDepartments().catch(() => []),
+        api.getMe().catch(() => null),
       ]);
       setEquipmentList(eqRes);
       setTechniciansList(techRes);
       setUsers(userRes);
       setDepartments(deptRes);
+      if (meRes && meRes.user) {
+        setCurrentUser(meRes.user);
+      } else if (meRes) {
+        setCurrentUser(meRes);
+      }
 
       if (eqRes.length > 0 && !formData.equipmentId) {
         setFormData((prev) => ({ ...prev, equipmentId: eqRes[0].id }));
@@ -219,6 +235,33 @@ export const WorkOrdersPage: React.FC = () => {
     }
   };
 
+  const handleDeviceIdentified = async (deviceCode: string, method: 'QR_SCAN' | 'MANUAL_ENTRY') => {
+    try {
+      setLoading(true);
+      const res = await api.getWorkOrdersByEquipmentQr(deviceCode, method);
+      
+      toast.success('Nhận diện thiết bị', `Thiết bị: ${res.equipment.name} (${res.equipment.code})`);
+      
+      if (res.workOrders.length === 0) {
+        toast.warning('Không có công việc', 'Thiết bị này không có công việc đang được phân công cho bạn.');
+        return;
+      }
+      
+      if (res.workOrders.length === 1) {
+        setSelectedDetailWoId(res.workOrders[0].id);
+      } else {
+        setMultipleWosList(res.workOrders);
+        setIsSelectWoOpen(true);
+      }
+    } catch (err: any) {
+      toast.error('Lỗi nhận diện', err.message || 'Không tìm thấy thiết bị hoặc không có quyền.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+
   const startItem = (page - 1) * limit + 1;
   const endItem = Math.min(page * limit, total);
 
@@ -229,9 +272,14 @@ export const WorkOrdersPage: React.FC = () => {
           <h1 className="page-title">Phiếu bảo trì (Work Orders)</h1>
           <p className="page-subtitle">Quản lý lệnh sửa chữa và vật tư liên quan</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Tạo phiếu mới
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn btn-warning" onClick={() => setIsQrScannerOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}>
+            <Camera size={16} /> Quét mã thiết bị
+          </button>
+          <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
+            <Plus size={16} /> Tạo phiếu mới
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -302,8 +350,18 @@ export const WorkOrdersPage: React.FC = () => {
                   </tr>
                 ) : workOrders.map((wo) => (
                   <tr key={wo.id}>
-                    <td style={{ fontWeight: 700 }}>{wo.orderCode}</td>
-                    <td style={{ fontWeight: 600 }}>{wo.title}</td>
+                    <td 
+                      style={{ fontWeight: 700, color: '#2563eb', cursor: 'pointer' }}
+                      onClick={() => setSelectedDetailWoId(wo.id)}
+                    >
+                      {wo.orderCode}
+                    </td>
+                    <td 
+                      style={{ fontWeight: 600, cursor: 'pointer' }}
+                      onClick={() => setSelectedDetailWoId(wo.id)}
+                    >
+                      {wo.title}
+                    </td>
                     <td>{wo.equipment?.name || '---'}</td>
                     <td>
                       <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -562,6 +620,112 @@ export const WorkOrdersPage: React.FC = () => {
             </div>
           </form>
         </Modal>
+      )}
+
+      {/* 4. QR Scanner Modal */}
+      {isQrScannerOpen && (
+        <Modal
+          isOpen={isQrScannerOpen}
+          onClose={() => setIsQrScannerOpen(false)}
+          title="Quét mã thiết bị"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <QRScanner
+              onScanSuccess={(decodedText) => {
+                setIsQrScannerOpen(false);
+                handleDeviceIdentified(decodedText, 'QR_SCAN');
+              }}
+              onClose={() => setIsQrScannerOpen(false)}
+            />
+            
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <label className="form-label" style={{ fontWeight: 700 }}>Nhập mã thiết bị thủ công</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Ví dụ: EQ-001..."
+                  value={manualDeviceCode}
+                  onChange={(e) => setManualDeviceCode(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    if (manualDeviceCode.trim()) {
+                      setIsQrScannerOpen(false);
+                      handleDeviceIdentified(manualDeviceCode.trim(), 'MANUAL_ENTRY');
+                    } else {
+                      toast.error('Nhập mã', 'Vui lòng nhập mã thiết bị.');
+                    }
+                  }}
+                >
+                  Xác nhận
+                </button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 5. Multiple WOs Selector Modal */}
+      {isSelectWoOpen && (
+        <Modal
+          isOpen={isSelectWoOpen}
+          onClose={() => setIsSelectWoOpen(false)}
+          title="Chọn Work Order đang được phân công"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Thiết bị có nhiều hơn 1 công việc được phân công cho bạn. Vui lòng chọn công việc để tiếp tục:</p>
+            <div className="table-wrapper">
+              <table className="custom-table" style={{ fontSize: '13px' }}>
+                <thead>
+                  <tr>
+                    <th>Mã WO</th>
+                    <th>Mô tả sự cố</th>
+                    <th>Mức độ ưu tiên</th>
+                    <th>Trạng thái</th>
+                    <th>Ngày tạo</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {multipleWosList.map((item) => (
+                    <tr key={item.id}>
+                      <td style={{ fontWeight: 700 }}>{item.orderCode}</td>
+                      <td>{item.title}</td>
+                      <td><span className={`badge badge-${item.priority === 'HIGH' || item.priority === 'URGENT' ? 'danger' : 'warning'}`}>{item.priority}</span></td>
+                      <td><StatusBadge status={item.status} /></td>
+                      <td>{new Date(item.createdAt).toLocaleDateString()}</td>
+                      <td>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => {
+                            setIsSelectWoOpen(false);
+                            setSelectedDetailWoId(item.id);
+                          }}
+                        >
+                          Chọn
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 6. WO Detail Modal */}
+      {selectedDetailWoId && (
+        <WorkOrderDetailModal
+          isOpen={!!selectedDetailWoId}
+          onClose={() => setSelectedDetailWoId(null)}
+          workOrderId={selectedDetailWoId}
+          onStatusChangeSuccess={() => loadData()}
+          currentUser={currentUser}
+        />
       )}
     </div>
   );

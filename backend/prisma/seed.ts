@@ -31,6 +31,7 @@ async function main() {
   // Create Users
   const userAdmin = await prisma.user.create({
     data: {
+      id: 'admin-demo-id',
       name: 'Nguyễn Văn Quản Trị',
       email: 'admin@company.com',
       role: 'ADMIN',
@@ -40,10 +41,21 @@ async function main() {
 
   const userTech = await prisma.user.create({
     data: {
+      id: 'tech-demo-id',
       name: 'Trần Văn Kỹ Thuật',
       email: 'tech@company.com',
       role: 'TECHNICIAN',
       department: 'Tổ Bảo trì Xưởng A',
+    },
+  });
+
+  const userManager = await prisma.user.create({
+    data: {
+      id: 'manager-demo-id',
+      name: 'Lê Hoàng Nam',
+      email: 'manager@company.com',
+      role: 'MANAGER',
+      department: 'Bộ phận Đóng gói',
     },
   });
 
@@ -305,13 +317,17 @@ async function main() {
   });
 
   // Seed locations
-  await prisma.location.createMany({
-    data: [
-      { code: 'XUONG_A', name: 'Xưởng sản xuất A', description: 'Khu vực chính chế biến dược liệu' },
-      { code: 'XUONG_B', name: 'Xưởng sản xuất B', description: 'Khu vực đóng gói và dán nhãn thành phẩm' },
-      { code: 'PHONG_SACH', name: 'Phòng sạch cấp độ D', description: 'Khu vực pha chế và vô trùng' },
-      { code: 'KHO_KHO', name: 'Kho nguyên liệu khô', description: 'Nơi lưu kho bao bì, phụ liệu' },
-    ],
+  await prisma.location.create({
+    data: { code: 'XUONG_A', name: 'Xưởng sản xuất A', description: 'Khu vực chính chế biến dược liệu', responsibleTechId: 'tech-demo-id' }
+  });
+  await prisma.location.create({
+    data: { code: 'XUONG_B', name: 'Xưởng sản xuất B', description: 'Khu vực đóng gói và dán nhãn thành phẩm', responsibleTechId: 'tech-demo-id' }
+  });
+  await prisma.location.create({
+    data: { code: 'PHONG_SACH', name: 'Phòng sạch cấp độ D', description: 'Khu vực pha chế và vô trùng' }
+  });
+  await prisma.location.create({
+    data: { code: 'KHO_KHO', name: 'Kho nguyên liệu khô', description: 'Nơi lưu kho bao bì, phụ liệu' }
   });
 
   // Seed production lines

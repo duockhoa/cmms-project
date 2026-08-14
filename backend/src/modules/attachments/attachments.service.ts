@@ -9,6 +9,7 @@ const RETENTION_POLICIES: Record<string, 'HARD_DELETE' | 'SOFT_DELETE'> = {
   MaintenanceRequest: 'SOFT_DELETE',
   WorkOrder: 'SOFT_DELETE',
   ChecklistExecutionItem: 'SOFT_DELETE',
+  WorkOrderRepairLog: 'SOFT_DELETE',
 };
 
 @Injectable()
@@ -92,6 +93,10 @@ export class AttachmentsService {
         const item = await this.prisma.checklistExecutionItem.findUnique({ where: { id: entityId } });
         exists = !!item;
         break;
+      case 'WorkOrderRepairLog':
+        const log = await this.prisma.workOrderRepairLog.findUnique({ where: { id: entityId } });
+        exists = !!log;
+        break;
       default:
         throw new BadRequestException(`Phân loại thực thể không hợp lệ: ${entityType}`);
     }
@@ -106,7 +111,10 @@ export class AttachmentsService {
     entityType: string,
     entityId: string,
     uploadedById?: string,
-    description?: string
+    description?: string,
+    workOrderId?: string,
+    repairLogId?: string,
+    photoCategory?: string
   ) {
     if (!file) {
       throw new BadRequestException('Vui lòng cung cấp tệp tải lên');
@@ -171,6 +179,9 @@ export class AttachmentsService {
         uploadedById: uploadedById || null,
         description: description || null,
         checksum,
+        workOrderId: workOrderId || null,
+        repairLogId: repairLogId || null,
+        photoCategory: photoCategory || null,
       },
     });
   }
