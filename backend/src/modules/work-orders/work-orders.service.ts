@@ -274,7 +274,11 @@ export class WorkOrdersService implements OnModuleInit {
     });
 
     const filteredWos = activeWos.filter((wo) => {
-      if ((unitType === PerformerUnitType.TECHNICAL || user.role === 'ADMIN' || user.role === 'MANAGER') && wo.status === 'PENDING') {
+      // ADMIN and MANAGER can see all active WOs
+      if (user.role === 'ADMIN' || user.role === 'MANAGER') {
+        return true;
+      }
+      if (unitType === PerformerUnitType.TECHNICAL && wo.status === 'PENDING') {
         return true;
       }
       if (unitType === PerformerUnitType.WORKSHOP) {

@@ -14,6 +14,8 @@ import { MaintenancePage } from './pages/MaintenancePage';
 import { TechniciansPage } from './pages/TechniciansPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AboutPage } from './pages/AboutPage';
+import { OperationLogFormPage } from './pages/OperationLogFormPage';
+import { OperationLogsPage } from './pages/OperationLogsPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ToastProvider } from './components/common/Toast';
@@ -77,6 +79,8 @@ export function App() {
                 <Route path="/technicians" element={<TechniciansPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/about" element={<AboutPage />} />
+                <Route path="/operation-logs" element={<OperationLogsPage />} />
+                <Route path="/equipment/:id/operation-log-form" element={<OperationLogFormPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>

@@ -43,4 +43,9 @@ export class AnalyticsController {
 
     return this.kpiEngineService.computeKpiSummary(query, user);
   }
+
+  @Get('operation-logs-report')
+  getOperationLogsReport() {
+    return this.analyticsService.getOperationLogsReport();
+  }
 }

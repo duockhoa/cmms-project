@@ -8,19 +8,22 @@ export const ReportsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [kpiData, setKpiData] = useState<any>(null);
+  const [opLogsReport, setOpLogsReport] = useState<any>(null);
 
   const ranges = ['7 ngày', '30 ngày', 'Tháng này', 'Quý này', 'Năm nay', 'Tùy chọn'];
-  const tabs = ['Tổng quan', 'Thiết bị', 'Bảo trì định kỳ', 'Chi phí', 'Kỹ thuật viên', 'Phụ tùng'];
+  const tabs = ['Tổng quan', 'Thiết bị', 'Bảo trì định kỳ', 'Chi phí', 'Kỹ thuật viên', 'Phụ tùng', 'Sổ vận hành'];
 
   const loadReportData = async () => {
     try {
       setLoading(true);
-      const [dash, kpis] = await Promise.all([
+      const [dash, kpis, opLogs] = await Promise.all([
         api.getDashboard(),
         api.getKpis(),
+        api.getOperationLogsReport().catch(() => null),
       ]);
       setDashboardData(dash);
       setKpiData(kpis);
+      if (opLogs) setOpLogsReport(opLogs);
     } catch (err) {
       console.error(err);
     } finally {
@@ -126,11 +129,46 @@ export const ReportsPage: React.FC = () => {
           ))}
         </div>
 
-        <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
-          <BarChart3 size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
-          <p style={{ fontWeight: '600' }}>Biểu đồ phân tích {activeTab}</p>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Dữ liệu tổng hợp từ {totalWorkOrders} Work Orders & {dashboardData?.kpi?.activeWorkOrders || 0} Lịch bảo trì định kỳ đang mở.</p>
-        </div>
+        {activeTab === 'Sổ vận hành' ? (
+          <div style={{ padding: '20px' }}>
+            <h3 style={{ marginBottom: 16 }}>Thống kê cảnh báo thông số vượt tiêu chuẩn</h3>
+            {opLogsReport?.equipmentIssueCounts?.length > 0 ? (
+              <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+                <div className="card" style={{ padding: 16 }}>
+                  <h4 style={{ marginBottom: 16 }}>Thiết bị có nhiều cảnh báo nhất</h4>
+                  {opLogsReport.equipmentIssueCounts.map((item: any, idx: number) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                      <span>{item.equipment?.name || 'Unknown'} ({item.equipment?.code})</span>
+                      <span style={{ color: 'red', fontWeight: 'bold' }}>{item.count} lỗi</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="card" style={{ padding: 16 }}>
+                  <h4 style={{ marginBottom: 16 }}>Nhật ký cảnh báo gần đây</h4>
+                  {opLogsReport.outliers?.slice(0, 5).map((log: any, idx: number) => (
+                    <div key={idx} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                      <div style={{ fontWeight: 500 }}>{log.equipment?.name} - {log.parameter?.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <span style={{ color: 'red' }}>Đo được: {log.value} {log.parameter?.unit}</span> 
+                        (Tiêu chuẩn: {log.parameter?.minSpec} - {log.parameter?.maxSpec})
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                Chưa có dữ liệu cảnh báo thông số vận hành.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <BarChart3 size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+            <p style={{ fontWeight: '600' }}>Biểu đồ phân tích {activeTab}</p>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Dữ liệu tổng hợp từ {totalWorkOrders} Work Orders & {dashboardData?.kpi?.activeWorkOrders || 0} Lịch bảo trì định kỳ đang mở.</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -82,4 +82,43 @@ export class AnalyticsService {
       urgentWorkOrders,
     };
   }
+
+  async getOperationLogsReport(limit: number = 50) {
+    // Get latest outlier logs
+    const outliers = await this.prisma.operationLog.findMany({
+      where: { isOutlier: true },
+      orderBy: { recordedAt: 'desc' },
+      take: limit,
+      include: {
+        equipment: { select: { id: true, name: true, code: true } },
+        parameter: { select: { id: true, name: true, unit: true, minSpec: true, maxSpec: true } },
+        recordedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    // Group by equipment to find those with most issues
+    const grouped = await this.prisma.operationLog.groupBy({
+      by: ['equipmentId'],
+      where: { isOutlier: true },
+      _count: { isOutlier: true },
+      orderBy: { _count: { isOutlier: 'desc' } },
+      take: 10,
+    });
+
+    const equipmentIds = grouped.map(g => g.equipmentId);
+    const equipments = await this.prisma.equipment.findMany({
+      where: { id: { in: equipmentIds } },
+      select: { id: true, name: true, code: true }
+    });
+
+    const equipmentIssueCounts = grouped.map(g => ({
+      equipment: equipments.find(e => e.id === g.equipmentId),
+      count: g._count.isOutlier
+    }));
+
+    return {
+      outliers,
+      equipmentIssueCounts
+    };
+  }
 }

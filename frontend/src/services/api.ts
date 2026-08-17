@@ -1,4 +1,5 @@
-const API_BASE = ((import.meta as any).env.VITE_API_URL || 'http://localhost:3001') + '/api/v1';
+export const API_HOST = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = API_HOST + '/api/v1';
 const DEMO_USER_ID = (import.meta as any).env.VITE_USER_ID || 'tech-demo-id';
 
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
@@ -196,4 +197,20 @@ export const api = {
   getMe: () => request('/auth/me'),
   getNotifications: () => request('/notifications'),
   markNotificationRead: (id: string) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
+
+  // Operation Logs & Parameters
+  getEquipmentParameters: (equipmentId: string) => request(`/equipment/${equipmentId}/parameters`),
+  createEquipmentParameter: (equipmentId: string, body: any) => request(`/equipment/${equipmentId}/parameters`, { method: 'POST', body: JSON.stringify(body) }),
+  updateEquipmentParameter: (equipmentId: string, paramId: string, body: any) => request(`/equipment/${equipmentId}/parameters/${paramId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteEquipmentParameter: (equipmentId: string, paramId: string) => request(`/equipment/${equipmentId}/parameters/${paramId}`, { method: 'DELETE' }),
+  getOperationLogs: (equipmentId: string) => request(`/equipment/${equipmentId}/operation-logs`),
+  submitOperationLogs: (equipmentId: string, logs: any) => request(`/equipment/${equipmentId}/operation-logs`, { method: 'POST', body: JSON.stringify({ logs }) }),
+  getAllOperationLogs: () => request('/operation-logs'),
+  getOperationLogsReport: () => request('/analytics/operation-logs-report'),
+
+  // Standard Parameters
+  getStandardParameters: () => request('/standard-parameters'),
+  createStandardParameter: (data: any) => request('/standard-parameters', { method: 'POST', body: JSON.stringify(data) }),
+  updateStandardParameter: (id: string, data: any) => request(`/standard-parameters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStandardParameter: (id: string) => request(`/standard-parameters/${id}`, { method: 'DELETE' }),
 };

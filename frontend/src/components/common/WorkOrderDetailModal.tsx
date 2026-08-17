@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../../services/api';
+import { api, API_HOST } from '../../services/api';
 import { Modal } from './Modal';
 import { useToast } from './Toast';
 import { Play, Pause, CheckCircle2, FileText, Camera, Upload, Plus, AlertTriangle, Eye, Loader2, ArrowRightLeft, ShieldCheck, XOctagon } from 'lucide-react';
@@ -711,9 +711,9 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
                             {log.attachments.map((file: any) => (
                               <div key={file.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px', backgroundColor: 'var(--bg-secondary)', position: 'relative' }}>
-                                <img src={`${api.getWorkOrderById.name === 'mock' ? '' : 'http://localhost:3001/'}${file.storagePath}`} alt="Repair step" style={{ height: '70px', width: '100px', objectFit: 'cover', borderRadius: '2px' }} />
+                                <img src={`${api.getWorkOrderById.name === 'mock' ? '' : API_HOST + '/'}${file.storagePath}`} alt="Repair step" style={{ height: '70px', width: '100px', objectFit: 'cover', borderRadius: '2px' }} />
                                 <span style={{ fontSize: '9px', fontWeight: 700, marginTop: '2px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{file.photoCategory || 'OTHER'}</span>
-                                <a href={`${api.getWorkOrderById.name === 'mock' ? '' : 'http://localhost:3001/'}${file.storagePath}`} target="_blank" rel="noreferrer" style={{ position: 'absolute', top: '2px', right: '2px', backgroundColor: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: '50%', padding: '2px', cursor: 'pointer' }}>
+                                <a href={`${api.getWorkOrderById.name === 'mock' ? '' : API_HOST + '/'}${file.storagePath}`} target="_blank" rel="noreferrer" style={{ position: 'absolute', top: '2px', right: '2px', backgroundColor: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: '50%', padding: '2px', cursor: 'pointer' }}>
                                   <Eye size={10} />
                                 </a>
                               </div>

@@ -1,369 +1,464 @@
-import { PrismaClient } from '@prisma/client';
-
+const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting database seed...');
+  console.log('🌱 Seeding test data...');
 
-  // Temporarily drop triggers to allow cleaning the DB
-  await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS prevent_delete_workflow_history`).catch(() => {});
-  await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS prevent_update_workflow_history`).catch(() => {});
+  // ═══════════════════════════════════════════
+  // 1. USERS - Đầy đủ vai trò và bộ phận
+  // ═══════════════════════════════════════════
+  const users = await Promise.all([
+    // ADMIN
+    prisma.user.upsert({
+      where: { email: 'admin@dkcmms.vn' },
+      update: {},
+      create: {
+        id: 'user-admin-01',
+        name: 'Nguyễn Văn Admin',
+        email: 'admin@dkcmms.vn',
+        role: 'ADMIN',
+        department: 'BAN_GIAM_DOC',
+        status: 'AVAILABLE',
+      },
+    }),
+    // MANAGER - Phòng Kỹ thuật
+    prisma.user.upsert({
+      where: { email: 'manager.kt@dkcmms.vn' },
+      update: {},
+      create: {
+        id: 'user-manager-01',
+        name: 'Trần Văn Quản Lý',
+        email: 'manager.kt@dkcmms.vn',
+        role: 'MANAGER',
+        department: 'PHONG_KY_THUAT',
+        status: 'AVAILABLE',
+      },
+    }),
+    // TECHNICIAN - Xưởng A
+    prisma.user.upsert({
+      where: { email: 'tech.xuonga@dkcmms.vn' },
+      update: {},
+      create: {
+        id: 'user-tech-xuong-01',
+        name: 'Lê Minh Xưởng',
+        email: 'tech.xuonga@dkcmms.vn',
+        role: 'TECHNICIAN',
+        department: 'XUONG_A',
+        specialty: 'Cơ khí chung',
+        status: 'AVAILABLE',
+      },
+    }),
+    // TECHNICIAN - Xưởng B
+    prisma.user.upsert({
+      where: { email: 'tech.xuongb@dkcmms.vn' },
+      update: {},
+      create: {
+        id: 'user-tech-xuong-02',
+        name: 'Phạm Văn Bình',
+        email: 'tech.xuongb@dkcmms.vn',
+        role: 'TECHNICIAN',
+        department: 'XUONG_B',
+        specialty: 'Vận hành máy CNC',
+        status: 'AVAILABLE',
+      },
+    }),
+    // TECHNICIAN - Cơ điện
+    prisma.user.upsert({
+      where: { email: 'tech.codien01@dkcmms.vn' },
+      update: {},
+      create: {
+        id: 'user-tech-codien-01',
+        name: 'Hoàng Đức Cơ Điện',
+        email: 'tech.codien01@dkcmms.vn',
+        role: 'TECHNICIAN',
+        department: 'CO_DIEN',
+        specialty: 'Điện công nghiệp',
+        status: 'AVAILABLE',
+      },
+    }),
+    // TECHNICIAN - Cơ điện 2
+    prisma.user.upsert({
+      where: { email: 'tech.codien02@dkcmms.vn' },
+      update: {},
+      create: {
+        id: 'user-tech-codien-02',
+        name: 'Ngô Quang Điện',
+        email: 'tech.codien02@dkcmms.vn',
+        role: 'TECHNICIAN',
+        department: 'CO_DIEN',
+        specialty: 'PLC & Tự động hóa',
+        status: 'AVAILABLE',
+      },
+    }),
+    // OPERATOR - Xưởng A
+    prisma.user.upsert({
+      where: { email: 'operator01@dkcmms.vn' },
+      update: {},
+      create: {
+        id: 'user-operator-01',
+        name: 'Vũ Thị Hoa',
+        email: 'operator01@dkcmms.vn',
+        role: 'OPERATOR',
+        department: 'XUONG_A',
+        status: 'AVAILABLE',
+      },
+    }),
+    // Demo user (frontend default) - update existing user to ADMIN
+    prisma.user.upsert({
+      where: { email: 'tech@company.com' },
+      update: { role: 'ADMIN', name: 'Demo User (Full Quyền)', department: 'BAN_GIAM_DOC' },
+      create: {
+        id: 'tech-demo-id',
+        name: 'Demo User (Full Quyền)',
+        email: 'tech@company.com',
+        role: 'ADMIN',
+        department: 'BAN_GIAM_DOC',
+        status: 'AVAILABLE',
+      },
+    }),
+  ]);
+  console.log(`✅ Created ${users.length} users`);
 
-  // Clean DB in correct order to avoid foreign key constraints
-  await prisma.checklistExecutionItem.deleteMany();
-  await prisma.checklistExecution.deleteMany();
-  await prisma.workOrderItem.deleteMany();
-  await prisma.inventoryTransaction.deleteMany();
-  await prisma.workflowHistory.deleteMany();
-  await prisma.attachment.deleteMany();
-  await prisma.scheduleHistory.deleteMany();
-  await prisma.workOrder.deleteMany();
-  await prisma.maintenanceRequest.deleteMany();
-  await prisma.maintenanceSchedule.deleteMany();
-  await prisma.equipment.deleteMany();
-  await prisma.inventoryItem.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.systemSetting.deleteMany();
-  await prisma.productionLine.deleteMany();
-  await prisma.location.deleteMany();
-  await prisma.equipmentCategory.deleteMany();
+  // ═══════════════════════════════════════════
+  // 2. EQUIPMENT CATEGORIES
+  // ═══════════════════════════════════════════
+  const categories = await Promise.all([
+    prisma.equipmentCategory.upsert({
+      where: { code: 'CAT-CK' },
+      update: {},
+      create: { code: 'CAT-CK', name: 'Cơ khí', description: 'Thiết bị cơ khí chung' },
+    }),
+    prisma.equipmentCategory.upsert({
+      where: { code: 'CAT-DIEN' },
+      update: {},
+      create: { code: 'CAT-DIEN', name: 'Điện', description: 'Thiết bị điện công nghiệp' },
+    }),
+    prisma.equipmentCategory.upsert({
+      where: { code: 'CAT-KHI' },
+      update: {},
+      create: { code: 'CAT-KHI', name: 'Khí nén', description: 'Hệ thống khí nén' },
+    }),
+    prisma.equipmentCategory.upsert({
+      where: { code: 'CAT-THUY' },
+      update: {},
+      create: { code: 'CAT-THUY', name: 'Thủy lực', description: 'Hệ thống thủy lực' },
+    }),
+  ]);
+  console.log(`✅ Created ${categories.length} equipment categories`);
 
-  // Create Users
-  const userAdmin = await prisma.user.create({
-    data: {
-      id: 'admin-demo-id',
-      name: 'Nguyễn Văn Quản Trị',
-      email: 'admin@company.com',
-      role: 'ADMIN',
-      department: 'Phòng Công nghệ & Bảo trì',
-    },
-  });
+  // ═══════════════════════════════════════════
+  // 3. LOCATIONS
+  // ═══════════════════════════════════════════
+  const locations = await Promise.all([
+    prisma.location.upsert({
+      where: { code: 'LOC-XA' },
+      update: {},
+      create: { code: 'LOC-XA', name: 'Xưởng A', description: 'Xưởng sản xuất chính' },
+    }),
+    prisma.location.upsert({
+      where: { code: 'LOC-XB' },
+      update: {},
+      create: { code: 'LOC-XB', name: 'Xưởng B', description: 'Xưởng gia công phụ' },
+    }),
+    prisma.location.upsert({
+      where: { code: 'LOC-KHO' },
+      update: {},
+      create: { code: 'LOC-KHO', name: 'Kho vật tư', description: 'Kho lưu trữ vật tư, phụ tùng' },
+    }),
+  ]);
+  console.log(`✅ Created ${locations.length} locations`);
 
-  const userTech = await prisma.user.create({
-    data: {
-      id: 'tech-demo-id',
-      name: 'Trần Văn Kỹ Thuật',
-      email: 'tech@company.com',
-      role: 'TECHNICIAN',
-      department: 'Tổ Bảo trì Xưởng A',
-    },
-  });
+  // ═══════════════════════════════════════════
+  // 4. PRODUCTION LINES
+  // ═══════════════════════════════════════════
+  const lines = await Promise.all([
+    prisma.productionLine.upsert({
+      where: { code: 'LINE-01' },
+      update: {},
+      create: { code: 'LINE-01', name: 'Dây chuyền 1', description: 'Dây chuyền sản xuất chính' },
+    }),
+    prisma.productionLine.upsert({
+      where: { code: 'LINE-02' },
+      update: {},
+      create: { code: 'LINE-02', name: 'Dây chuyền 2', description: 'Dây chuyền phụ' },
+    }),
+  ]);
+  console.log(`✅ Created ${lines.length} production lines`);
 
-  const userManager = await prisma.user.create({
-    data: {
-      id: 'manager-demo-id',
-      name: 'Lê Hoàng Nam',
-      email: 'manager@company.com',
-      role: 'MANAGER',
-      department: 'Bộ phận Đóng gói',
-    },
-  });
+  // ═══════════════════════════════════════════
+  // 5. EQUIPMENT - 10 thiết bị
+  // ═══════════════════════════════════════════
+  const equipmentData = [
+    { id: 'eq-001', code: 'EQ-CNC-001', name: 'Máy phay CNC Fanuc α-D14MiB5', category: 'Cơ khí', location: 'Xưởng A', serialNumber: 'FANUC-2023-001', currentOperatingHours: 4520 },
+    { id: 'eq-002', code: 'EQ-CNC-002', name: 'Máy tiện CNC Doosan Lynx 2100', category: 'Cơ khí', location: 'Xưởng A', serialNumber: 'DOOSAN-2022-015', currentOperatingHours: 3800 },
+    { id: 'eq-003', code: 'EQ-WELD-001', name: 'Máy hàn TIG Miller Dynasty 350', category: 'Điện', location: 'Xưởng B', serialNumber: 'MILLER-2024-003', currentOperatingHours: 1200 },
+    { id: 'eq-004', code: 'EQ-COMP-001', name: 'Máy nén khí Atlas Copco GA37', category: 'Khí nén', location: 'Xưởng A', serialNumber: 'ATLAS-2021-008', currentOperatingHours: 8900 },
+    { id: 'eq-005', code: 'EQ-CONV-001', name: 'Băng tải chính dây chuyền 1', category: 'Cơ khí', location: 'Xưởng A', serialNumber: 'CONV-2020-001', currentOperatingHours: 12000 },
+    { id: 'eq-006', code: 'EQ-PUMP-001', name: 'Bơm thủy lực Rexroth A10V', category: 'Thủy lực', location: 'Xưởng B', serialNumber: 'REXROTH-2023-002', currentOperatingHours: 2100 },
+    { id: 'eq-007', code: 'EQ-MOTOR-001', name: 'Động cơ servo Siemens 1FK7', category: 'Điện', location: 'Xưởng A', serialNumber: 'SIEMENS-2022-011', currentOperatingHours: 5500 },
+    { id: 'eq-008', code: 'EQ-ROBOT-001', name: 'Robot hàn ABB IRB 1600', category: 'Cơ khí', location: 'Xưởng B', serialNumber: 'ABB-2024-001', currentOperatingHours: 800 },
+    { id: 'eq-009', code: 'EQ-DRILL-001', name: 'Máy khoan cột Hồng Ký HK35', category: 'Cơ khí', location: 'Xưởng A', serialNumber: 'HK-2019-007', currentOperatingHours: 6200 },
+    { id: 'eq-010', code: 'EQ-TRANS-001', name: 'Biến áp nguồn 3 pha 500KVA', category: 'Điện', location: 'Xưởng A', serialNumber: 'ABB-TR-2020-004', currentOperatingHours: 15000 },
+  ];
 
-  // Create Inventory
-  const inv1 = await prisma.inventoryItem.create({
-    data: {
-      itemCode: 'VT-0001',
-      name: 'Vòng bi SKF 6205-2RS',
-      category: 'Cơ khí',
-      quantity: 25,
-      unit: 'Cái',
-      minQuantity: 5,
-      unitPrice: 180000,
-      location: 'Kệ A-01',
-    },
-  });
+  for (const eq of equipmentData) {
+    await prisma.equipment.upsert({
+      where: { code: eq.code },
+      update: {},
+      create: {
+        id: eq.id,
+        code: eq.code,
+        name: eq.name,
+        category: eq.category,
+        location: eq.location,
+        serialNumber: eq.serialNumber,
+        currentOperatingHours: eq.currentOperatingHours,
+        status: 'OPERATIONAL',
+        isActive: true,
+      },
+    });
+  }
+  console.log(`✅ Created ${equipmentData.length} equipment`);
 
-  const inv2 = await prisma.inventoryItem.create({
-    data: {
-      itemCode: 'VT-0002',
-      name: 'Dầu máy nén khí Shell Corena S3 R46',
-      category: 'Dầu mỡ',
-      quantity: 60,
-      unit: 'Lít',
-      minQuantity: 20,
-      unitPrice: 120000,
-      location: 'Kho Dầu',
-    },
-  });
+  // ═══════════════════════════════════════════
+  // 6. INVENTORY ITEMS - 8 vật tư
+  // ═══════════════════════════════════════════
+  const inventoryData = [
+    { id: 'inv-001', itemCode: 'VT-VONBI-001', name: 'Vòng bi SKF 6205-2RS', category: 'Vòng bi', quantity: 25, unit: 'Cái', minQuantity: 5, unitPrice: 180000, location: 'Kệ A1' },
+    { id: 'inv-002', itemCode: 'VT-DAU-001', name: 'Dầu thủy lực Shell Tellus S2 M46', category: 'Dầu mỡ', quantity: 200, unit: 'Lít', minQuantity: 50, unitPrice: 55000, location: 'Kệ B2' },
+    { id: 'inv-003', itemCode: 'VT-DAIBOC-001', name: 'Đai ốc M10 inox 304', category: 'Cơ khí', quantity: 500, unit: 'Cái', minQuantity: 100, unitPrice: 3500, location: 'Kệ C1' },
+    { id: 'inv-004', itemCode: 'VT-PHOT-001', name: 'Phớt chắn dầu TC 25x47x7', category: 'Phớt', quantity: 40, unit: 'Cái', minQuantity: 10, unitPrice: 25000, location: 'Kệ A2' },
+    { id: 'inv-005', itemCode: 'VT-RELAY-001', name: 'Relay trung gian Omron MY2N 24VDC', category: 'Linh kiện điện', quantity: 30, unit: 'Cái', minQuantity: 10, unitPrice: 95000, location: 'Kệ D1' },
+    { id: 'inv-006', itemCode: 'VT-CONTACTOR-001', name: 'Contactor Schneider LC1D09M7', category: 'Linh kiện điện', quantity: 15, unit: 'Cái', minQuantity: 5, unitPrice: 350000, location: 'Kệ D2' },
+    { id: 'inv-007', itemCode: 'VT-FILTER-001', name: 'Lọc khí Atlas Copco DD17', category: 'Lọc', quantity: 8, unit: 'Bộ', minQuantity: 3, unitPrice: 1200000, location: 'Kệ E1' },
+    { id: 'inv-008', itemCode: 'VT-BELT-001', name: 'Dây đai B-60 Continental', category: 'Cơ khí', quantity: 12, unit: 'Sợi', minQuantity: 4, unitPrice: 85000, location: 'Kệ A3' },
+  ];
 
-  const inv3 = await prisma.inventoryItem.create({
-    data: {
-      itemCode: 'VT-0003',
-      name: 'Cảm biến tiệm cận Omron E2E-X3D1-N',
-      category: 'Linh kiện điện',
-      quantity: 3,
-      unit: 'Cái',
-      minQuantity: 10,
-      unitPrice: 450000,
-      location: 'Kệ B-04',
-    },
-  });
+  for (const item of inventoryData) {
+    await prisma.inventoryItem.upsert({
+      where: { itemCode: item.itemCode },
+      update: {},
+      create: item,
+    });
+  }
+  console.log(`✅ Created ${inventoryData.length} inventory items`);
 
-  const inv4 = await prisma.inventoryItem.create({
-    data: {
-      itemCode: 'VT-0004',
-      name: 'Phớt chắn dầu NBR 35x52x7',
-      category: 'Cơ khí',
-      quantity: 40,
-      unit: 'Cái',
-      minQuantity: 10,
-      unitPrice: 35000,
-      location: 'Kệ A-03',
-    },
-  });
-
-  // Create Equipment
-  const eq1 = await prisma.equipment.create({
-    data: {
-      code: 'EQ-0001',
-      name: 'Máy phay CNC 3 trục Haas VF-2',
-      category: 'Máy phay',
-      location: 'Xưởng Gia công A',
-      status: 'OPERATIONAL',
-      serialNumber: 'HS-9827341',
-      purchaseDate: new Date('2022-03-15'),
-      warrantyPeriod: '24 tháng',
-      image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&auto=format&fit=crop&q=60',
-      specs: 'Tốc độ trục chính: 10,000 RPM. Hành trình X/Y/Z: 762 x 406 x 508 mm. Công suất: 22.4 kW',
-      notes: 'Hoạt động ổn định, bảo dưỡng định kỳ hàng tháng.',
-    },
-  });
-
-  const eq2 = await prisma.equipment.create({
-    data: {
-      code: 'EQ-0002',
-      name: 'Máy nén khí Trục vít Kobelco Kobelion 37kW',
-      category: 'Máy nén khí',
-      location: 'Phòng Động lực 1',
-      status: 'UNDER_MAINTENANCE',
-      serialNumber: 'KB-554201',
-      purchaseDate: new Date('2021-08-10'),
-      warrantyPeriod: '36 tháng',
-      image: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=600&auto=format&fit=crop&q=60',
-      specs: 'Lưu lượng khí: 6.5 m3/min. Áp suất hoạt động: 7.5 bar. Độ ồn: 68 dB',
-      notes: 'Đang bảo dưỡng định kỳ thay lọc gió & dầu động cơ.',
-    },
-  });
-
-  const eq3 = await prisma.equipment.create({
-    data: {
-      code: 'EQ-0003',
-      name: 'Băng tải con lăn tự động Phân loại sản phẩm',
-      category: 'Băng tải',
-      location: 'Phân xưởng Đóng gói B',
-      status: 'INCIDENT',
-      serialNumber: 'BT-2023-09',
-      purchaseDate: new Date('2023-01-20'),
-      warrantyPeriod: '12 tháng',
-      image: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=600&auto=format&fit=crop&q=60',
-      specs: 'Tải trọng tối đa: 50 kg/m. Tốc độ: 0.8 m/s. Chiều dài: 15 mét.',
-      notes: 'Phát hiện tiếng ồn lạ tại cụm truyền động góc.',
-    },
-  });
-
-  const eq4 = await prisma.equipment.create({
-    data: {
-      code: 'EQ-0004',
-      name: 'Máy hàn Laser Fiber Công nghiệp 3000W',
-      category: 'Máy hàn',
-      location: 'Xưởng Kết cấu C',
-      status: 'OPERATIONAL',
-      serialNumber: 'LZ-3000F-88',
-      purchaseDate: new Date('2023-06-01'),
-      warrantyPeriod: '24 tháng',
-      image: 'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=600&auto=format&fit=crop&q=60',
-      specs: 'Công suất nguồn Laser: 3000W Raycus. Chiều rộng đường hàn: 0.2 - 5.0 mm.',
-      notes: 'Chất lượng mối hàn đạt chuẩn.',
-    },
-  });
-
-  // Create Maintenance Requests
-  const req1 = await prisma.maintenanceRequest.create({
-    data: {
-      requestCode: 'REQ-0001',
-      equipmentId: eq3.id,
-      title: 'Băng tải bị rung lắc và có tiếng kêu lớn tại xưởng B',
-      description: 'Khi chạy tốc độ cao trên 0.6 m/s băng tải có tiếng rít lạ ở cụm nhông xích truyền động.',
+  // ═══════════════════════════════════════════
+  // 7. MAINTENANCE REQUESTS - 5 yêu cầu
+  // ═══════════════════════════════════════════
+  const requests = [
+    {
+      id: 'req-001',
+      requestCode: 'REQ-2026-001',
+      equipmentId: 'eq-001',
+      title: 'Máy CNC Fanuc rung lắc bất thường khi phay thô',
+      description: 'Khi gia công phay thô ở tốc độ cao (>8000rpm), máy rung lắc mạnh, bề mặt sản phẩm bị sóng. Nghi ngờ vòng bi trục chính bị mòn.',
       priority: 'HIGH',
       status: 'APPROVED',
-      reporterName: 'Lê Hoàng Nam (Quản đốc Xưởng B)',
-      department: 'Bộ phận Đóng gói',
+      reporterName: 'Vũ Thị Hoa',
+      department: 'XUONG_A',
     },
-  });
-
-  const req2 = await prisma.maintenanceRequest.create({
-    data: {
-      requestCode: 'REQ-0002',
-      equipmentId: eq1.id,
-      title: 'Cần vệ sinh lọc mát và bổ sung dầu làm mát cho máy phay Haas',
-      description: 'Nhiệt độ dung dịch làm mát tăng nhẹ sau ca làm việc liên tục 8 tiếng.',
-      priority: 'LOW',
-      status: 'PENDING',
-      reporterName: 'Phạm Đức Anh (Vận hành CNC)',
-      department: 'Xưởng Gia công A',
+    {
+      id: 'req-002',
+      requestCode: 'REQ-2026-002',
+      equipmentId: 'eq-004',
+      title: 'Máy nén khí Atlas áp suất giảm',
+      description: 'Áp suất đầu ra giảm từ 8 bar xuống 5.5 bar, không đủ cung cấp cho dây chuyền 1. Nghi ngờ van giảm áp hoặc bộ lọc khí bị tắc.',
+      priority: 'URGENT',
+      status: 'APPROVED',
+      reporterName: 'Lê Minh Xưởng',
+      department: 'XUONG_A',
     },
-  });
-
-  // Create Work Orders
-  const wo1 = await prisma.workOrder.create({
-    data: {
-      orderCode: 'WO-0001',
-      equipmentId: eq3.id,
-      requestId: req1.id,
-      title: '[Sửa chữa] Khắc phục tiếng ồn và thay thế vòng bi băng tải Xưởng B',
-      description: 'Tháo kiểm tra cụm truyền động, thay thế 2 vòng bi bị hỏng rơ và tra mỡ chịu nhiệt.',
+    {
+      id: 'req-003',
+      requestCode: 'REQ-2026-003',
+      equipmentId: 'eq-003',
+      title: 'Máy hàn TIG không lên hồ quang',
+      description: 'Nhấn trigger hàn không lên hồ quang, đèn báo quá nhiệt nhấp nháy. Đã kiểm tra điện cực và kẹp mass, vẫn không hoạt động.',
       priority: 'HIGH',
-      status: 'IN_PROGRESS',
-      technicianName: 'Trần Văn Kỹ Thuật',
-      plannedStartDate: new Date(),
-      plannedEndDate: new Date(Date.now() + 86400000),
-      actualStartDate: new Date(),
-      failureCause: 'Vòng bi bị mòn và rơ sau thời gian dài vận hành liên tục',
-      totalCost: 360000,
+      status: 'PENDING',
+      reporterName: 'Phạm Văn Bình',
+      department: 'XUONG_B',
     },
-  });
-
-  await prisma.workOrderItem.create({
-    data: {
-      workOrderId: wo1.id,
-      inventoryItemId: inv1.id,
-      quantity: 2,
-      unitPrice: 180000,
+    {
+      id: 'req-004',
+      requestCode: 'REQ-2026-004',
+      equipmentId: 'eq-005',
+      title: 'Băng tải dây chuyền 1 trượt đai',
+      description: 'Đai băng tải bị trượt liên tục khi chạy tải nặng, sản phẩm bị lệch trên băng. Đai có dấu hiệu dãn, cần thay mới.',
+      priority: 'MEDIUM',
+      status: 'PENDING',
+      reporterName: 'Vũ Thị Hoa',
+      department: 'XUONG_A',
     },
-  });
+    {
+      id: 'req-005',
+      requestCode: 'REQ-2026-005',
+      equipmentId: 'eq-007',
+      title: 'Servo Siemens báo lỗi F07011',
+      description: 'Động cơ servo báo lỗi F07011 (Motor encoder fault) khi khởi động. Đã reset lỗi nhưng vẫn tái phát. Cần kiểm tra encoder.',
+      priority: 'HIGH',
+      status: 'APPROVED',
+      reporterName: 'Lê Minh Xưởng',
+      department: 'XUONG_A',
+    },
+  ];
 
-  const wo2 = await prisma.workOrder.create({
-    data: {
-      orderCode: 'WO-0002',
-      equipmentId: eq2.id,
-      title: '[Bảo trì định kỳ] Thay lọc dầu và bổ sung 20L dầu máy nén khí Kobelco',
-      description: 'Thực hiện quy trình bảo dưỡng định kỳ 2000 giờ cho máy nén khí Kobelco.',
+  for (const req of requests) {
+    await prisma.maintenanceRequest.upsert({
+      where: { requestCode: req.requestCode },
+      update: {},
+      create: req,
+    });
+  }
+  console.log(`✅ Created ${requests.length} maintenance requests`);
+
+  // ═══════════════════════════════════════════
+  // 8. WORK ORDERS - 4 WO từ các request đã duyệt
+  // ═══════════════════════════════════════════
+  const workOrders = [
+    // WO1: Xưởng tự xử lý - CNC rung lắc
+    {
+      id: 'wo-001',
+      orderCode: 'WO-2026-001',
+      equipmentId: 'eq-001',
+      requestId: 'req-001',
+      title: '[Xưởng] Máy CNC Fanuc rung lắc bất thường khi phay thô',
+      description: 'Kiểm tra và thay thế vòng bi trục chính máy CNC Fanuc.',
+      priority: 'HIGH',
+      status: 'ASSIGNED',
+      technicianName: 'Lê Minh Xưởng',
+      assignedTechnicianId: 'user-tech-xuong-01',
+      handlingRoute: 'WORKSHOP_SELF_HANDLE',
+    },
+    // WO2: Xưởng tự xử lý - Nén khí áp suất giảm
+    {
+      id: 'wo-002',
+      orderCode: 'WO-2026-002',
+      equipmentId: 'eq-004',
+      requestId: 'req-002',
+      title: '[Xưởng] Máy nén khí Atlas áp suất giảm',
+      description: 'Kiểm tra van giảm áp, thay bộ lọc khí, bảo dưỡng máy nén khí.',
+      priority: 'URGENT',
+      status: 'ASSIGNED',
+      technicianName: 'Lê Minh Xưởng',
+      assignedTechnicianId: 'user-tech-xuong-01',
+      handlingRoute: 'WORKSHOP_SELF_HANDLE',
+    },
+    // WO3: Chuyển Cơ điện xử lý - Servo báo lỗi
+    {
+      id: 'wo-003',
+      orderCode: 'WO-2026-003',
+      equipmentId: 'eq-007',
+      requestId: 'req-005',
+      title: '[Cơ điện] Servo Siemens báo lỗi F07011',
+      description: 'Kiểm tra và sửa chữa encoder động cơ servo Siemens. Thay thế nếu cần thiết.',
+      priority: 'HIGH',
+      status: 'ASSIGNED',
+      technicianName: 'Hoàng Đức Cơ Điện',
+      assignedTechnicianId: 'user-tech-codien-01',
+      handlingRoute: 'TECHNICAL_MAINTENANCE_SUPPORT',
+    },
+    // WO4: WO đang xử lý (IN_PROGRESS) - Demo
+    {
+      id: 'wo-004',
+      orderCode: 'WO-2026-004',
+      equipmentId: 'eq-006',
+      title: '[Cơ điện] Bơm thủy lực Rexroth rò rỉ dầu',
+      description: 'Bơm thủy lực bị rò rỉ dầu tại phớt trục chính. Cần thay phớt và kiểm tra áp suất hệ thống.',
       priority: 'MEDIUM',
       status: 'IN_PROGRESS',
-      technicianName: 'Nguyễn Văn Quản Trị',
-      plannedStartDate: new Date(),
-      plannedEndDate: new Date(Date.now() + 172800000),
-      actualStartDate: new Date(),
-      totalCost: 2400000,
+      technicianName: 'Ngô Quang Điện',
+      assignedTechnicianId: 'user-tech-codien-02',
+      handlingRoute: 'TECHNICAL_MAINTENANCE_SUPPORT',
+      actualStartDate: new Date('2026-08-14T08:00:00Z'),
     },
-  });
+  ];
 
-  await prisma.workOrderItem.create({
-    data: {
-      workOrderId: wo2.id,
-      inventoryItemId: inv2.id,
-      quantity: 20,
-      unitPrice: 120000,
-    },
-  });
+  for (const wo of workOrders) {
+    await prisma.workOrder.upsert({
+      where: { orderCode: wo.orderCode },
+      update: {},
+      create: wo,
+    });
+  }
+  console.log(`✅ Created ${workOrders.length} work orders`);
 
-  // Create Schedules
-  await prisma.maintenanceSchedule.create({
-    data: {
-      scheduleCode: 'MS-2026-0001',
-      title: 'Bảo trì định kỳ Máy phay CNC Haas VF-2',
-      equipmentId: eq1.id,
-      createdById: userAdmin.id,
-      frequencyType: 'MONTHLY',
-      frequencyInterval: 1,
-      startDate: new Date(),
-      status: 'ACTIVE',
-      nextDueDate: new Date(Date.now() + 7 * 86400000),
-      checklistJson: JSON.stringify([
-        'Kiểm tra mức dầu bôi trơn trục chính',
-        'Vệ sinh tấm chắn phoi và rãnh thoát phoi',
-        'Kiểm tra độ rơ cơ học các trục X/Y/Z',
-        'Đo điện áp và kiểm tra quạt tản nhiệt tủ điện',
-      ]),
-    },
+  // ═══════════════════════════════════════════
+  // 9. EXECUTION LOG cho WO4 (đang IN_PROGRESS)
+  // ═══════════════════════════════════════════
+  const existingLog = await prisma.workOrderExecutionLog.findFirst({
+    where: { workOrderId: 'wo-004', actionType: 'START' },
   });
+  if (!existingLog) {
+    await prisma.workOrderExecutionLog.create({
+      data: {
+        workOrderId: 'wo-004',
+        equipmentId: 'eq-006',
+        performedById: 'user-tech-codien-02',
+        performerUnitType: 'MAINTENANCE',
+        handlingRoute: 'TECHNICAL_MAINTENANCE_SUPPORT',
+        actionType: 'START',
+        content: 'Bắt đầu kiểm tra bơm thủy lực Rexroth A10V. Đã chuẩn bị dụng cụ và phớt thay thế.',
+        recordedAt: new Date('2026-08-14T08:00:00Z'),
+      },
+    });
+    await prisma.workOrderExecutionLog.create({
+      data: {
+        workOrderId: 'wo-004',
+        equipmentId: 'eq-006',
+        performedById: 'user-tech-codien-02',
+        performerUnitType: 'MAINTENANCE',
+        handlingRoute: 'TECHNICAL_MAINTENANCE_SUPPORT',
+        actionType: 'LOG',
+        content: 'Đã tháo bơm, xác nhận phớt trục chính TC 25x47x7 bị mòn gây rò rỉ. Đang tiến hành thay thế.',
+        recordedAt: new Date('2026-08-14T09:30:00Z'),
+      },
+    });
+    console.log('✅ Created execution logs for WO-2026-004');
+  }
 
-  await prisma.maintenanceSchedule.create({
-    data: {
-      scheduleCode: 'MS-2026-0002',
-      title: 'Kiểm tra hệ thống khí nén & xả ngưng tụ',
-      equipmentId: eq2.id,
-      createdById: userAdmin.id,
-      frequencyType: 'WEEKLY',
-      frequencyInterval: 1,
-      startDate: new Date(),
-      status: 'ACTIVE',
-      nextDueDate: new Date(Date.now() + 3 * 86400000),
-      checklistJson: JSON.stringify([
-        'Xả nước tích tụ tại bình chứa khí',
-        'Kiểm tra chênh áp qua lõi lọc khí',
-        'Kiểm tra dòng điện động cơ chính',
-      ]),
-    },
+  // ═══════════════════════════════════════════
+  // 10. SYSTEM SETTINGS
+  // ═══════════════════════════════════════════
+  await prisma.systemSetting.upsert({
+    where: { key: 'app.name' },
+    update: {},
+    create: { key: 'app.name', value: 'DK-CMMS' },
   });
+  await prisma.systemSetting.upsert({
+    where: { key: 'app.version' },
+    update: {},
+    create: { key: 'app.version', value: '1.0.0' },
+  });
+  await prisma.systemSetting.upsert({
+    where: { key: 'wo.autoAssign' },
+    update: {},
+    create: { key: 'wo.autoAssign', value: 'false' },
+  });
+  console.log('✅ Created system settings');
 
-  // Seed system settings
-  await prisma.systemSetting.createMany({
-    data: [
-      { key: 'WARNING_LEAD_DAYS', value: '7' },
-      { key: 'COMPANY_NAME', value: 'Công ty Cổ phần Dược Khoa' },
-      { key: 'SYSTEM_ABBREVIATION', value: 'DKPHARMA-CMMS' },
-    ],
-  });
-
-  // Seed equipment categories
-  await prisma.equipmentCategory.createMany({
-    data: [
-      { code: 'COKHI', name: 'Cơ khí', description: 'Các thiết bị truyền động cơ học, bồn khuấy, máy nén...' },
-      { code: 'DIEN', name: 'Điện', description: 'Hệ thống điện động lực, tủ phân phối, biến áp...' },
-      { code: 'TUDONG', name: 'Điện - Tự động hóa', description: 'Các hệ thống điều khiển PLC, SCADA, cảm biến...' },
-      { code: 'SANXUAT', name: 'Sản xuất', description: 'Dây chuyền bao phim, máy ép vỉ, máy đóng tuýp...' },
-    ],
-  });
-
-  // Seed locations
-  await prisma.location.create({
-    data: { code: 'XUONG_A', name: 'Xưởng sản xuất A', description: 'Khu vực chính chế biến dược liệu', responsibleTechId: 'tech-demo-id' }
-  });
-  await prisma.location.create({
-    data: { code: 'XUONG_B', name: 'Xưởng sản xuất B', description: 'Khu vực đóng gói và dán nhãn thành phẩm', responsibleTechId: 'tech-demo-id' }
-  });
-  await prisma.location.create({
-    data: { code: 'PHONG_SACH', name: 'Phòng sạch cấp độ D', description: 'Khu vực pha chế và vô trùng' }
-  });
-  await prisma.location.create({
-    data: { code: 'KHO_KHO', name: 'Kho nguyên liệu khô', description: 'Nơi lưu kho bao bì, phụ liệu' }
-  });
-
-  // Seed production lines
-  await prisma.productionLine.createMany({
-    data: [
-      { code: 'DC_NANG', name: 'Dây chuyền viên nang', description: 'Hệ thống đóng nang tự động' },
-      { code: 'DC_NEN', name: 'Dây chuyền viên nén', description: 'Máy dập viên và bao phim xoay tròn' },
-      { code: 'DC_DONGGOI', name: 'Dây chuyền đóng gói', description: 'Máy ép vỉ nhôm-nhôm, nhôm-pvc' },
-    ],
-  });
-
-  // Re-apply database triggers for WorkflowHistory immutability
-  await prisma.$executeRawUnsafe(`
-    CREATE TRIGGER IF NOT EXISTS prevent_update_workflow_history
-    BEFORE UPDATE ON WorkflowHistory
-    BEGIN
-        SELECT RAISE(FAIL, 'WorkflowHistory is immutable and cannot be updated.');
-    END;
-  `).catch(() => {});
-
-  await prisma.$executeRawUnsafe(`
-    CREATE TRIGGER IF NOT EXISTS prevent_delete_workflow_history
-    BEFORE DELETE ON WorkflowHistory
-    BEGIN
-        SELECT RAISE(FAIL, 'WorkflowHistory is immutable and cannot be deleted.');
-    END;
-  `).catch(() => {});
-
-  console.log('✅ Seed data successfully populated!');
+  console.log('\n══════════════════════════════════════════');
+  console.log('🎉 Seed hoàn tất! Thông tin đăng nhập:');
+  console.log('══════════════════════════════════════════');
+  console.log('Frontend tự động dùng user "tech-demo-id" (ADMIN, full quyền)');
+  console.log('');
+  console.log('Danh sách user:');
+  console.log('  - user-admin-01      | ADMIN     | Nguyễn Văn Admin');
+  console.log('  - user-manager-01    | MANAGER   | Trần Văn Quản Lý');
+  console.log('  - user-tech-xuong-01 | TECHNICIAN| Lê Minh Xưởng (Xưởng A)');
+  console.log('  - user-tech-xuong-02 | TECHNICIAN| Phạm Văn Bình (Xưởng B)');
+  console.log('  - user-tech-codien-01| TECHNICIAN| Hoàng Đức Cơ Điện');
+  console.log('  - user-tech-codien-02| TECHNICIAN| Ngô Quang Điện');
+  console.log('  - user-operator-01   | OPERATOR  | Vũ Thị Hoa');
+  console.log('  - tech-demo-id       | ADMIN     | Demo User (Full Quyền) ← FE mặc định');
+  console.log('');
+  console.log('Thiết bị: 10 thiết bị (EQ-CNC-001 đến EQ-TRANS-001)');
+  console.log('Yêu cầu:  5 yêu cầu (3 APPROVED, 2 PENDING)');
+  console.log('Work Order: 4 WO (3 ASSIGNED, 1 IN_PROGRESS)');
+  console.log('Vật tư:    8 loại vật tư');
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch(e => { console.error(e); process.exit(1); })
+  .finally(() => prisma.$disconnect());

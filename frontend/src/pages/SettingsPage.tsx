@@ -9,7 +9,7 @@ import {
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
-type SettingsTab = 'categories' | 'locations' | 'production-lines' | 'system-settings';
+type SettingsTab = 'categories' | 'locations' | 'production-lines' | 'system-settings' | 'standard-parameters';
 
 export const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('categories');
@@ -21,6 +21,7 @@ export const SettingsPage: React.FC = () => {
   const [locations, setLocations] = useState<any[]>([]);
   const [productionLines, setProductionLines] = useState<any[]>([]);
   const [systemSettings, setSystemSettings] = useState<any[]>([]);
+  const [standardParameters, setStandardParameters] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
 
   // Modal States
@@ -37,6 +38,16 @@ export const SettingsPage: React.FC = () => {
 
   // Form State for System Settings (Key-Value)
   const [systemForm, setSystemForm] = useState<Record<string, string>>({});
+
+  // Form State for Standard Parameters
+  const [paramForm, setParamForm] = useState({
+    name: '',
+    unit: '',
+    minSpec: '',
+    maxSpec: '',
+    description: '',
+    isActive: true,
+  });
 
   const toast = useToast();
   const { confirm } = useConfirmDialog();
@@ -72,6 +83,11 @@ export const SettingsPage: React.FC = () => {
           form[s.key] = s.value;
         });
         setSystemForm(form);
+      } else if (activeTab === 'standard-parameters') {
+        const res = await fetchWithAuth(`${API_BASE}/api/v1/standard-parameters`);
+        if (!res.ok) throw new Error('Không thể tải danh sách thông số chuẩn');
+        const data = await res.json();
+        setStandardParameters(data);
       }
     } catch (err: any) {
       toast.error('Lỗi tải dữ liệu', err.message);
@@ -89,18 +105,30 @@ export const SettingsPage: React.FC = () => {
   const handleOpenAdd = () => {
     setEditItem(null);
     setItemForm({ code: '', name: '', description: '', responsibleTechId: '' });
+    setParamForm({ name: '', unit: '', minSpec: '', maxSpec: '', description: '', isActive: true });
     setIsAddEditOpen(true);
   };
 
   // Open modal for Edit
   const handleOpenEdit = (item: any) => {
     setEditItem(item);
-    setItemForm({
-      code: item.code,
-      name: item.name,
-      description: item.description || '',
-      responsibleTechId: item.responsibleTechId || '',
-    });
+    if (activeTab === 'standard-parameters') {
+      setParamForm({
+        name: item.name,
+        unit: item.unit || '',
+        minSpec: item.minSpec !== null ? String(item.minSpec) : '',
+        maxSpec: item.maxSpec !== null ? String(item.maxSpec) : '',
+        description: item.description || '',
+        isActive: item.isActive,
+      });
+    } else {
+      setItemForm({
+        code: item.code,
+        name: item.name,
+        description: item.description || '',
+        responsibleTechId: item.responsibleTechId || '',
+      });
+    }
     setIsAddEditOpen(true);
   };
 
@@ -112,6 +140,7 @@ export const SettingsPage: React.FC = () => {
       'locations': 'locations',
       'production-lines': 'production-lines',
       'system-settings': 'system-settings',
+      'standard-parameters': 'standard-parameters',
     };
     
     const urlSegment = endpointMap[activeTab];
@@ -120,12 +149,24 @@ export const SettingsPage: React.FC = () => {
     try {
       if (editItem) {
         // Edit mode (PATCH)
-        const body: any = {
-          name: itemForm.name.trim(),
-          description: itemForm.description.trim(),
-        };
-        if (activeTab === 'locations') {
-          body.responsibleTechId = itemForm.responsibleTechId || null;
+        let body: any = {};
+        if (activeTab === 'standard-parameters') {
+          body = {
+            name: paramForm.name.trim(),
+            unit: paramForm.unit.trim() || null,
+            minSpec: paramForm.minSpec ? Number(paramForm.minSpec) : null,
+            maxSpec: paramForm.maxSpec ? Number(paramForm.maxSpec) : null,
+            description: paramForm.description.trim() || null,
+            isActive: paramForm.isActive,
+          };
+        } else {
+          body = {
+            name: itemForm.name.trim(),
+            description: itemForm.description.trim(),
+          };
+          if (activeTab === 'locations') {
+            body.responsibleTechId = itemForm.responsibleTechId || null;
+          }
         }
         const res = await fetchWithAuth(`${API_BASE}/api/v1/${urlSegment}/${editItem.id}`, {
           method: 'PATCH',
@@ -138,13 +179,25 @@ export const SettingsPage: React.FC = () => {
         toast.success('Thành công', 'Đã cập nhật cấu hình thành công.');
       } else {
         // Create mode (POST)
-        const body: any = {
-          code: itemForm.code.trim().toUpperCase(),
-          name: itemForm.name.trim(),
-          description: itemForm.description.trim(),
-        };
-        if (activeTab === 'locations') {
-          body.responsibleTechId = itemForm.responsibleTechId || null;
+        let body: any = {};
+        if (activeTab === 'standard-parameters') {
+          body = {
+            name: paramForm.name.trim(),
+            unit: paramForm.unit.trim() || null,
+            minSpec: paramForm.minSpec ? Number(paramForm.minSpec) : null,
+            maxSpec: paramForm.maxSpec ? Number(paramForm.maxSpec) : null,
+            description: paramForm.description.trim() || null,
+            isActive: paramForm.isActive,
+          };
+        } else {
+          body = {
+            code: itemForm.code.trim().toUpperCase(),
+            name: itemForm.name.trim(),
+            description: itemForm.description.trim(),
+          };
+          if (activeTab === 'locations') {
+            body.responsibleTechId = itemForm.responsibleTechId || null;
+          }
         }
         const res = await fetchWithAuth(`${API_BASE}/api/v1/${urlSegment}`, {
           method: 'POST',
@@ -170,12 +223,14 @@ export const SettingsPage: React.FC = () => {
       'locations': 'locations',
       'production-lines': 'production-lines',
       'system-settings': 'system-settings',
+      'standard-parameters': 'standard-parameters',
     };
     const titleMap: Record<SettingsTab, string> = {
       'categories': 'loại thiết bị',
       'locations': 'vị trí/nhà xưởng',
       'production-lines': 'khu vực',
       'system-settings': 'cài đặt',
+      'standard-parameters': 'thông số chuẩn',
     };
     const urlSegment = endpointMap[activeTab];
     const segmentTitle = titleMap[activeTab];
@@ -232,6 +287,7 @@ export const SettingsPage: React.FC = () => {
     if (activeTab === 'categories') items = categories;
     else if (activeTab === 'locations') items = locations;
     else if (activeTab === 'production-lines') items = productionLines;
+    else if (activeTab === 'standard-parameters') items = standardParameters;
 
     if (!searchQuery.trim()) return items;
     const query = searchQuery.toLowerCase();
@@ -313,6 +369,17 @@ export const SettingsPage: React.FC = () => {
               <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Cảnh báo, chu kỳ hệ thống.</div>
             </div>
           </button>
+
+          <button
+            onClick={() => setActiveTab('standard-parameters')}
+            style={activeTab === 'standard-parameters' ? activeMenuStyles : inactiveMenuStyles}
+          >
+            <HardDrive size={16} />
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: '13.5px' }}>Thông số chuẩn</div>
+              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Thư viện thông số máy móc.</div>
+            </div>
+          </button>
         </div>
 
         {/* Right Main Content Panel */}
@@ -323,7 +390,7 @@ export const SettingsPage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <div>
                   <h3 style={{ fontSize: '16px', fontWeight: 700, textTransform: 'capitalize' }}>
-                    Danh mục {activeTab === 'categories' ? 'Loại thiết bị' : activeTab === 'locations' ? 'Vị trí / Nhà xưởng' : 'Khu vực'}
+                    Danh mục {activeTab === 'categories' ? 'Loại thiết bị' : activeTab === 'locations' ? 'Vị trí / Nhà xưởng' : activeTab === 'standard-parameters' ? 'Thông số chuẩn' : 'Khu vực'}
                   </h3>
                   <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                     Quản lý danh sách chuẩn dùng để phân loại và cấu hình.
@@ -360,9 +427,20 @@ export const SettingsPage: React.FC = () => {
                     <thead>
                       <tr>
                         <th style={{ width: '80px' }}>STT</th>
-                        <th style={{ width: '160px' }}>Mã danh mục</th>
-                        <th>Tên hiển thị</th>
-                        <th>Mô tả ghi chú</th>
+                        {activeTab === 'standard-parameters' ? (
+                          <>
+                            <th style={{ width: '160px' }}>Tên thông số</th>
+                            <th>Đơn vị</th>
+                            <th>Min/Max Spec</th>
+                            <th>Trạng thái</th>
+                          </>
+                        ) : (
+                          <>
+                            <th style={{ width: '160px' }}>Mã danh mục</th>
+                            <th>Tên hiển thị</th>
+                            <th>Mô tả ghi chú</th>
+                          </>
+                        )}
                         <th style={{ width: '140px', textAlign: 'center' }}>Hành động</th>
                       </tr>
                     </thead>
@@ -377,16 +455,38 @@ export const SettingsPage: React.FC = () => {
                         filteredItems.map((item, idx) => (
                           <tr key={item.id}>
                             <td style={{ fontWeight: 600 }}>{idx + 1}</td>
-                            <td style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>{item.code}</td>
-                            <td style={{ fontWeight: 600 }}>
-                              <div>{item.name}</div>
-                              {activeTab === 'locations' && item.responsibleTech && (
-                                <div style={{ fontSize: '11.5px', color: '#10b981', marginTop: '2px', fontWeight: 500 }}>
-                                  Phụ trách: {item.responsibleTech.name}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{item.description || '—'}</td>
+                            {activeTab === 'standard-parameters' ? (
+                              <>
+                                <td style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>{item.name}</td>
+                                <td>{item.unit || '—'}</td>
+                                <td>{item.minSpec ?? '—'} / {item.maxSpec ?? '—'}</td>
+                                <td>
+                                  <span style={{ 
+                                    backgroundColor: item.isActive ? '#dcfce7' : '#f3f4f6', 
+                                    color: item.isActive ? '#16a34a' : '#6b7280', 
+                                    padding: '4px 10px', 
+                                    borderRadius: '12px', 
+                                    fontSize: '12px',
+                                    fontWeight: 600
+                                  }}>
+                                    {item.isActive ? 'Hoạt động' : 'Tạm dừng'}
+                                  </span>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>{item.code}</td>
+                                <td style={{ fontWeight: 600 }}>
+                                  <div>{item.name}</div>
+                                  {activeTab === 'locations' && item.responsibleTech && (
+                                    <div style={{ fontSize: '11.5px', color: '#10b981', marginTop: '2px', fontWeight: 500 }}>
+                                      Phụ trách: {item.responsibleTech.name}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{item.description || '—'}</td>
+                              </>
+                            )}
                             <td>
                               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                                 <button
@@ -486,61 +586,140 @@ export const SettingsPage: React.FC = () => {
       <Modal 
         isOpen={isAddEditOpen} 
         onClose={() => setIsAddEditOpen(false)} 
-        title={editItem ? `Chỉnh sửa ${activeTab === 'categories' ? 'loại thiết bị' : activeTab === 'locations' ? 'vị trí/nhà xưởng' : 'khu vực'}` : `Thêm mới ${activeTab === 'categories' ? 'loại thiết bị' : activeTab === 'locations' ? 'vị trí/nhà xưởng' : 'khu vực'}`}
+        title={editItem ? `Chỉnh sửa ${activeTab === 'categories' ? 'loại thiết bị' : activeTab === 'locations' ? 'vị trí/nhà xưởng' : activeTab === 'standard-parameters' ? 'thông số chuẩn' : 'khu vực'}` : `Thêm mới ${activeTab === 'categories' ? 'loại thiết bị' : activeTab === 'locations' ? 'vị trí/nhà xưởng' : activeTab === 'standard-parameters' ? 'thông số chuẩn' : 'khu vực'}`}
       >
         <form onSubmit={handleItemSubmit}>
-          <div className="form-group">
-            <label className="form-label">Mã danh mục *</label>
-            <input
-              type="text"
-              className="form-input"
-              required
-              disabled={!!editItem}
-              placeholder="Nhập mã viết liền không dấu (Ví dụ: AP_LUC, XUONG_C)"
-              value={itemForm.code}
-              onChange={(e) => setItemForm({ ...itemForm, code: e.target.value })}
-            />
-          </div>
+          {activeTab === 'standard-parameters' ? (
+            <>
+              <div className="form-group">
+                <label className="form-label">Tên thông số *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  disabled={!!editItem}
+                  placeholder="VD: Nhiệt độ, Áp suất..."
+                  value={paramForm.name}
+                  onChange={(e) => setParamForm({ ...paramForm, name: e.target.value })}
+                />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label">Tên hiển thị *</label>
-            <input
-              type="text"
-              className="form-input"
-              required
-              placeholder="Nhập tên hiển thị đầy đủ"
-              value={itemForm.name}
-              onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-            />
-          </div>
+              <div className="form-group">
+                <label className="form-label">Đơn vị</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="VD: °C, Bar, RPM..."
+                  value={paramForm.unit}
+                  onChange={(e) => setParamForm({ ...paramForm, unit: e.target.value })}
+                />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label">Mô tả ghi chú</label>
-            <textarea
-              className="form-textarea"
-              rows={3}
-              placeholder="Nhập mô tả tóm tắt..."
-              value={itemForm.description}
-              onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-            />
-          </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label">Min Spec</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="form-input"
+                    placeholder="Ngưỡng dưới"
+                    value={paramForm.minSpec}
+                    onChange={(e) => setParamForm({ ...paramForm, minSpec: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Max Spec</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="form-input"
+                    placeholder="Ngưỡng trên"
+                    value={paramForm.maxSpec}
+                    onChange={(e) => setParamForm({ ...paramForm, maxSpec: e.target.value })}
+                  />
+                </div>
+              </div>
 
-          {activeTab === 'locations' && (
-            <div className="form-group">
-              <label className="form-label">Kỹ thuật viên phụ trách phân xưởng</label>
-              <select
-                className="form-select"
-                value={itemForm.responsibleTechId}
-                onChange={(e) => setItemForm({ ...itemForm, responsibleTechId: e.target.value })}
-              >
-                <option value="">-- Chưa chỉ định / Trống --</option>
-                {technicians.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.specialty || 'Kỹ thuật viên'})
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div className="form-group">
+                <label className="form-label">Mô tả / Ghi chú</label>
+                <textarea
+                  className="form-textarea"
+                  rows={2}
+                  placeholder="Nhập mô tả..."
+                  value={paramForm.description}
+                  onChange={(e) => setParamForm({ ...paramForm, description: e.target.value })}
+                />
+              </div>
+
+              {editItem && (
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                  <input 
+                    type="checkbox" 
+                    id="isActive"
+                    checked={paramForm.isActive}
+                    onChange={(e) => setParamForm({ ...paramForm, isActive: e.target.checked })}
+                    style={{ width: '16px', height: '16px' }}
+                  />
+                  <label htmlFor="isActive" style={{ margin: 0, fontWeight: 500 }}>Trạng thái hoạt động</label>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="form-group">
+                <label className="form-label">Mã danh mục *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  disabled={!!editItem}
+                  placeholder="Nhập mã viết liền không dấu (Ví dụ: AP_LUC, XUONG_C)"
+                  value={itemForm.code}
+                  onChange={(e) => setItemForm({ ...itemForm, code: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Tên hiển thị *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  placeholder="Nhập tên hiển thị đầy đủ"
+                  value={itemForm.name}
+                  onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Mô tả ghi chú</label>
+                <textarea
+                  className="form-textarea"
+                  rows={3}
+                  placeholder="Nhập mô tả tóm tắt..."
+                  value={itemForm.description}
+                  onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                />
+              </div>
+
+              {activeTab === 'locations' && (
+                <div className="form-group">
+                  <label className="form-label">Kỹ thuật viên phụ trách phân xưởng</label>
+                  <select
+                    className="form-select"
+                    value={itemForm.responsibleTechId}
+                    onChange={(e) => setItemForm({ ...itemForm, responsibleTechId: e.target.value })}
+                  >
+                    <option value="">-- Chưa chỉ định / Trống --</option>
+                    {technicians.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.specialty || 'Kỹ thuật viên'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
           )}
 
           <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>

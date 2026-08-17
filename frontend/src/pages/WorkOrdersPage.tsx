@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, fetchWithAuth } from '../services/api';
+import { api, fetchWithAuth, API_HOST } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { ChecklistManager } from '../components/common/ChecklistManager';
@@ -8,7 +8,7 @@ import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
 import { WorkOrderDetailModal } from '../components/common/WorkOrderDetailModal';
 
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = API_HOST;
 
 export const WorkOrdersPage: React.FC = () => {
   const [workOrders, setWorkOrders] = useState<any[]>([]);

@@ -58,6 +58,7 @@ model User {
   assignedWorkOrders    WorkOrder[]            @relation("WorkOrderAssignedTechnician")
   executionLogs         WorkOrderExecutionLog[] @relation("UserExecutionLogs")
   classifiedWorkOrders  WorkOrder[]            @relation("WorkOrderClassificationReporter")
+  operationLogs         OperationLog[]         @relation("UserOperationLogs")
 }
 
 model Equipment {
@@ -82,6 +83,8 @@ model Equipment {
   workOrders            WorkOrder[]
   schedules             MaintenanceSchedule[]
   executionLogs         WorkOrderExecutionLog[] @relation("EquipmentExecutionLogs")
+  parameters            EquipmentParameter[]
+  operationLogs         OperationLog[]
 }
 
 model MaintenanceRequest {
@@ -463,4 +466,45 @@ model WorkOrderExecutionLog {
   adjustmentReason                  String?
 
   attachments                       Attachment[]           @relation("ExecutionLogAttachments")
+}
+
+model EquipmentParameter {
+  id            String         @id @default(uuid())
+  equipmentId   String
+  equipment     Equipment      @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  name          String         // Tên thông số (VD: Nhiệt độ)
+  unit          String?        // Đơn vị (VD: °C, Bar, RPM)
+  minSpec       Float?         // Tiêu chuẩn dưới
+  maxSpec       Float?         // Tiêu chuẩn trên
+  standardValue Float?         // Giá trị chuẩn (nếu có)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  logs          OperationLog[]
+}
+
+model StandardParameter {
+  id            String         @id @default(uuid())
+  name          String         @unique
+  unit          String?
+  minSpec       Float?
+  maxSpec       Float?
+  description   String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model OperationLog {
+  id            String             @id @default(uuid())
+  equipmentId   String
+  equipment     Equipment          @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  parameterId   String
+  parameter     EquipmentParameter @relation(fields: [parameterId], references: [id], onDelete: Restrict)
+  value         Float              // Giá trị ghi nhận thực tế
+  isOutlier     Boolean            @default(false) // Giá trị có nằm ngoài spec không
+  recordedAt    DateTime           @default(now()) // Thời điểm ghi nhận
+  recordedById  String
+  recordedBy    User               @relation("UserOperationLogs", fields: [recordedById], references: [id], onDelete: Restrict)
+  notes         String?            @db.Text
 }
