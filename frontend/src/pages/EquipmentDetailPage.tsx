@@ -12,6 +12,7 @@ import { DocumentsTab } from '../components/equipment/DocumentsTab';
 import { QRCodeTab } from '../components/equipment/QRCodeTab';
 import { LogsTab } from '../components/equipment/LogsTab';
 import { OperationParametersTab } from '../components/equipment/OperationParametersTab';
+import { EquipmentOperationLogsTab } from '../components/equipment/EquipmentOperationLogsTab';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 const DEMO_USER_ID = (import.meta as any).env.VITE_USER_ID || 'tech-demo-id';
@@ -66,7 +67,7 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     fetchDetail();
   }, [item.id]);
 
-  const subTabs = ['Tổng quan', 'Lịch sử sửa chữa', 'Lịch bảo trì', 'Phụ tùng', 'SOP & Tài liệu', 'Mã QR', 'Thông số vận hành', 'Nhật ký'];
+  const subTabs = ['Tổng quan', 'Lịch sử sửa chữa', 'Lịch bảo trì', 'Phụ tùng', 'SOP & Tài liệu', 'Mã QR', 'Thông số vận hành', 'Sổ vận hành', 'Nhật ký'];
 
   if (loading) {
     return (
@@ -311,6 +312,9 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
         )}
         {activeSubTab === 'Thông số vận hành' && (
           <OperationParametersTab equipmentId={data.id} />
+        )}
+        {activeSubTab === 'Sổ vận hành' && (
+          <EquipmentOperationLogsTab equipmentId={data.id} />
         )}
       </div>
 

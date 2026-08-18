@@ -204,6 +204,11 @@ export const api = {
   updateEquipmentParameter: (equipmentId: string, paramId: string, body: any) => request(`/equipment/${equipmentId}/parameters/${paramId}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteEquipmentParameter: (equipmentId: string, paramId: string) => request(`/equipment/${equipmentId}/parameters/${paramId}`, { method: 'DELETE' }),
   getOperationLogs: (equipmentId: string) => request(`/equipment/${equipmentId}/operation-logs`),
+  // Lấy lịch sử sổ vận hành theo thiết bị
+  getEquipmentLogs: async (equipmentId: string) => {
+    return request(`/equipment/${equipmentId}/operation-logs`);
+  },
+
   submitOperationLogs: (equipmentId: string, logs: any) => request(`/equipment/${equipmentId}/operation-logs`, { method: 'POST', body: JSON.stringify({ logs }) }),
   getAllOperationLogs: () => request('/operation-logs'),
   getOperationLogsReport: () => request('/analytics/operation-logs-report'),
