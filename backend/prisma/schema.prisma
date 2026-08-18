@@ -59,6 +59,21 @@ model User {
   executionLogs         WorkOrderExecutionLog[] @relation("UserExecutionLogs")
   classifiedWorkOrders  WorkOrder[]            @relation("WorkOrderClassificationReporter")
   operationLogs         OperationLog[]         @relation("UserOperationLogs")
+  
+  // Custom Role Association
+  roleId                String?
+  customRole            Role?                  @relation(fields: [roleId], references: [id], onDelete: SetNull)
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  permissions String   @db.Text // JSON string of permissions like ["equipment:read", "equipment:write"]
+  isActive    Boolean  @default(true)
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Equipment {

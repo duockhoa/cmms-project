@@ -81,9 +81,9 @@ export class UsersController {
   }
 
   @ApiStandardResponse({
-    summary: 'Cập nhật tình trạng sẵn sàng',
+    summary: 'Cập nhật trạng thái bận rộn',
     method: 'PATCH',
-    path: '/users/{id}/availability',
+    path: '/users/:id/availability',
   })
   @Patch(':id/availability')
   async updateAvailability(
@@ -91,5 +91,18 @@ export class UsersController {
     @Body() dto: UpdateAvailabilityDto
   ) {
     return this.usersService.updateAvailability(id, dto);
+  }
+
+  @ApiStandardResponse({
+    summary: 'Cập nhật phân quyền (Role) cho người dùng',
+    method: 'PATCH',
+    path: '/users/:id/role',
+  })
+  @Patch(':id/role')
+  async updateRole(
+    @Param('id') id: string,
+    @Body() body: { roleId: string | null }
+  ) {
+    return this.usersService.updateRole(id, body.roleId);
   }
 }

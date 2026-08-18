@@ -7,9 +7,13 @@ import {
   Plus, Search, Edit2, Trash2, Save, RefreshCw, AlertTriangle
 } from 'lucide-react';
 
+import { Shield, Users } from 'lucide-react';
+import { RolesSettingsTab } from '../components/settings/RolesSettingsTab';
+import { UsersSettingsTab } from '../components/settings/UsersSettingsTab';
+
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
-type SettingsTab = 'categories' | 'locations' | 'production-lines' | 'system-settings' | 'standard-parameters';
+type SettingsTab = 'categories' | 'locations' | 'production-lines' | 'system-settings' | 'standard-parameters' | 'roles' | 'users';
 
 export const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('categories');
@@ -23,6 +27,8 @@ export const SettingsPage: React.FC = () => {
   const [systemSettings, setSystemSettings] = useState<any[]>([]);
   const [standardParameters, setStandardParameters] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   // Modal States
   const [isAddEditOpen, setIsAddEditOpen] = useState(false);
@@ -47,6 +53,13 @@ export const SettingsPage: React.FC = () => {
     maxSpec: '',
     description: '',
     isActive: true,
+  });
+
+  // Form State for Roles
+  const [roleForm, setRoleForm] = useState({
+    name: '',
+    description: '',
+    permissions: [] as string[],
   });
 
   const toast = useToast();
@@ -88,6 +101,16 @@ export const SettingsPage: React.FC = () => {
         if (!res.ok) throw new Error('Không thể tải danh sách thông số chuẩn');
         const data = await res.json();
         setStandardParameters(data);
+      } else if (activeTab === 'roles') {
+        const res = await api.getRoles();
+        setRoles(res);
+      } else if (activeTab === 'users') {
+        const [usersRes, rolesRes] = await Promise.all([
+          api.getUsers({}),
+          api.getRoles()
+        ]);
+        setUsers(usersRes);
+        setRoles(rolesRes);
       }
     } catch (err: any) {
       toast.error('Lỗi tải dữ liệu', err.message);
@@ -135,7 +158,7 @@ export const SettingsPage: React.FC = () => {
   // Form Submit for CRUD items
   const handleItemSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const endpointMap: Record<SettingsTab, string> = {
+    const endpointMap: Partial<Record<SettingsTab, string>> = {
       'categories': 'equipment-categories',
       'locations': 'locations',
       'production-lines': 'production-lines',
@@ -218,14 +241,14 @@ export const SettingsPage: React.FC = () => {
 
   // Delete Action for CRUD items
   const handleDeleteItem = async (item: any) => {
-    const endpointMap: Record<SettingsTab, string> = {
+    const endpointMap: Partial<Record<SettingsTab, string>> = {
       'categories': 'equipment-categories',
       'locations': 'locations',
       'production-lines': 'production-lines',
       'system-settings': 'system-settings',
       'standard-parameters': 'standard-parameters',
     };
-    const titleMap: Record<SettingsTab, string> = {
+    const titleMap: Partial<Record<SettingsTab, string>> = {
       'categories': 'loại thiết bị',
       'locations': 'vị trí/nhà xưởng',
       'production-lines': 'khu vực',
@@ -380,11 +403,99 @@ export const SettingsPage: React.FC = () => {
               <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Thư viện thông số máy móc.</div>
             </div>
           </button>
+          <button
+            onClick={() => setActiveTab('roles')}
+            style={activeTab === 'roles' ? activeMenuStyles : inactiveMenuStyles}
+          >
+            <Shield size={16} />
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: '13.5px' }}>Quản lý Nhóm quyền</div>
+              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Tạo và cấp quyền truy cập.</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('users')}
+            style={activeTab === 'users' ? activeMenuStyles : inactiveMenuStyles}
+          >
+            <Users size={16} />
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: '13.5px' }}>Người dùng & Gán quyền</div>
+              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Danh sách tài khoản hệ thống.</div>
+            </div>
+          </button>
         </div>
 
         {/* Right Main Content Panel */}
         <div className="card" style={{ flex: 1, padding: '24px', minHeight: '460px' }}>
-          {activeTab !== 'system-settings' ? (
+          {activeTab === 'roles' ? (
+            <RolesSettingsTab />
+          ) : activeTab === 'users' ? (
+            <UsersSettingsTab />
+          ) : activeTab === 'system-settings' ? (
+            // System Settings Form
+            <div>
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Cấu hình tham số hệ thống</h3>
+                <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  Điều chỉnh các thông số cảnh báo và cấu hình chung cho hệ thống bảo trì.
+                </p>
+              </div>
+
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 12px auto' }} />
+                  Đang tải cấu hình...
+                </div>
+              ) : (
+                <form onSubmit={handleSystemSettingsSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600 }}>Số ngày cảnh báo trước hạn bảo trì định kỳ (Warning Lead Days)</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ maxWidth: '280px' }}
+                      value={systemForm['WARNING_LEAD_DAYS'] || ''}
+                      onChange={(e) => setSystemForm({ ...systemForm, 'WARNING_LEAD_DAYS': e.target.value })}
+                      required
+                    />
+                    <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                      Hệ thống sẽ gửi cảnh báo hoặc tạo trước Work Order chuẩn bị bảo trì trước số ngày cấu hình này.
+                    </small>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600 }}>Tên doanh nghiệp sử dụng</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={systemForm['COMPANY_NAME'] || ''}
+                      onChange={(e) => setSystemForm({ ...systemForm, 'COMPANY_NAME': e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600 }}>Tên viết tắt hệ thống</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ maxWidth: '280px' }}
+                      value={systemForm['SYSTEM_ABBREVIATION'] || ''}
+                      onChange={(e) => setSystemForm({ ...systemForm, 'SYSTEM_ABBREVIATION': e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      <Save size={15} /> Lưu thay đổi
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          ) : (
             <div>
               {/* Header inside right panel */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -513,69 +624,6 @@ export const SettingsPage: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
-          ) : (
-            // System Settings Form
-            <div>
-              <div style={{ marginBottom: '24px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Cấu hình tham số hệ thống</h3>
-                <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  Điều chỉnh các thông số cảnh báo và cấu hình chung cho hệ thống bảo trì.
-                </p>
-              </div>
-
-              {loading ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                  <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 12px auto' }} />
-                  Đang tải cấu hình...
-                </div>
-              ) : (
-                <form onSubmit={handleSystemSettingsSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600 }}>Số ngày cảnh báo trước hạn bảo trì định kỳ (Warning Lead Days)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ maxWidth: '280px' }}
-                      value={systemForm['WARNING_LEAD_DAYS'] || ''}
-                      onChange={(e) => setSystemForm({ ...systemForm, 'WARNING_LEAD_DAYS': e.target.value })}
-                      required
-                    />
-                    <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
-                      Hệ thống sẽ gửi cảnh báo hoặc tạo trước Work Order chuẩn bị bảo trì trước số ngày cấu hình này.
-                    </small>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600 }}>Tên doanh nghiệp sử dụng</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={systemForm['COMPANY_NAME'] || ''}
-                      onChange={(e) => setSystemForm({ ...systemForm, 'COMPANY_NAME': e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600 }}>Tên viết tắt hệ thống</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{ maxWidth: '280px' }}
-                      value={systemForm['SYSTEM_ABBREVIATION'] || ''}
-                      onChange={(e) => setSystemForm({ ...systemForm, 'SYSTEM_ABBREVIATION': e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-                    <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      <Save size={15} /> Lưu thay đổi
-                    </button>
-                  </div>
-                </form>
               )}
             </div>
           )}

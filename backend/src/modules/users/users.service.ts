@@ -32,6 +32,9 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       where: whereClause,
       orderBy: { name: 'asc' },
+      include: {
+        customRole: true,
+      }
     });
 
     // Compute active work orders dynamically
@@ -129,6 +132,20 @@ export class UsersService {
           version: { increment: 1 },
         },
       });
+    });
+  async updateRole(id: string, roleId: string | null) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`Không tìm thấy nhân viên với ID: ${id}`);
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        roleId,
+        version: { increment: 1 }
+      },
+      include: { customRole: true }
     });
   }
 }

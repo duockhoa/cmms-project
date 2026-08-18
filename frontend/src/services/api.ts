@@ -218,4 +218,15 @@ export const api = {
   createStandardParameter: (data: any) => request('/standard-parameters', { method: 'POST', body: JSON.stringify(data) }),
   updateStandardParameter: (id: string, data: any) => request(`/standard-parameters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStandardParameter: (id: string) => request(`/standard-parameters/${id}`, { method: 'DELETE' }),
+
+  // ==========================================
+  // ROLES & PERMISSIONS
+  // ==========================================
+  getRoles: () => request('/roles'),
+  getRole: (id: string) => request(`/roles/${id}`),
+  createRole: (role: any) => request('/roles', { method: 'POST', body: JSON.stringify(role) }),
+  updateRole: (id: string, role: any) => request(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(role) }),
+  deleteRole: (id: string) => request(`/roles/${id}`, { method: 'DELETE' }),
+
+  updateUserRole: (userId: string, roleId: string | null) => request(`/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ roleId }) }),
 };

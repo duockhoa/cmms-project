@@ -8,6 +8,8 @@ import {
   SystemSettingController,
 } from './settings.controller';
 import { StandardParametersController } from './standard-parameters.controller';
+import { RolesService } from './roles.service';
+import { RolesController } from './roles.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
@@ -18,8 +20,9 @@ import { PrismaModule } from '../../prisma/prisma.module';
     ProductionLineController,
     SystemSettingController,
     StandardParametersController,
+    RolesController,
   ],
-  providers: [SettingsService, StandardParametersService],
-  exports: [SettingsService, StandardParametersService],
+  providers: [SettingsService, StandardParametersService, RolesService],
+  exports: [SettingsService, StandardParametersService, RolesService],
 })
 export class SettingsModule {}
