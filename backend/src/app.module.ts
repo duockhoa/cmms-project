@@ -14,6 +14,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ChecklistTemplatesModule } from './modules/checklist-templates/checklist-templates.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     HealthModule,
     SettingsModule,
     NotificationsModule,
+    ChecklistTemplatesModule,
   ],
 })
 export class AppModule {}

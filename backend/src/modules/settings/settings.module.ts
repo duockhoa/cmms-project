@@ -10,6 +10,8 @@ import {
 import { StandardParametersController } from './standard-parameters.controller';
 import { RolesService } from './roles.service';
 import { RolesController } from './roles.controller';
+import { ChecklistLibraryService } from './checklist-library.service';
+import { ChecklistLibraryController } from './checklist-library.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
@@ -21,8 +23,9 @@ import { PrismaModule } from '../../prisma/prisma.module';
     SystemSettingController,
     StandardParametersController,
     RolesController,
+    ChecklistLibraryController,
   ],
-  providers: [SettingsService, StandardParametersService, RolesService],
-  exports: [SettingsService, StandardParametersService, RolesService],
+  providers: [SettingsService, StandardParametersService, RolesService, ChecklistLibraryService],
+  exports: [SettingsService, StandardParametersService, RolesService, ChecklistLibraryService],
 })
 export class SettingsModule {}

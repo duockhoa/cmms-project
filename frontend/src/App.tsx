@@ -7,6 +7,7 @@ import { EquipmentPage } from './pages/EquipmentPage';
 import { RequestsPage } from './pages/RequestsPage';
 import { WorkOrdersPage } from './pages/WorkOrdersPage';
 import { ChecklistsPage } from './pages/ChecklistsPage';
+import { ChecklistDetailPage } from './pages/ChecklistDetailPage';
 import { SparePartsPage } from './pages/SparePartsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { UsersPage } from './pages/UsersPage';
@@ -72,6 +73,7 @@ export function App() {
                 <Route path="/requests" element={<RequestsPage />} />
                 <Route path="/work-orders" element={<WorkOrdersPage />} />
                 <Route path="/checklists" element={<ChecklistsPage />} />
+                <Route path="/checklists/:id" element={<ChecklistDetailPage />} />
                 <Route path="/spare-parts" element={<SparePartsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/users" element={<UsersPage />} />

@@ -229,4 +229,22 @@ export const api = {
   deleteRole: (id: string) => request(`/roles/${id}`, { method: 'DELETE' }),
 
   updateUserRole: (userId: string, roleId: string | null) => request(`/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ roleId }) }),
+
+  // ==========================================
+  // CHECKLIST TEMPLATES & LIBRARY
+  // ==========================================
+  getChecklistLibrary: () => request('/checklist-library'),
+  createChecklistLibraryItem: (data: any) => request('/checklist-library', { method: 'POST', body: JSON.stringify(data) }),
+  updateChecklistLibraryItem: (id: string, data: any) => request(`/checklist-library/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteChecklistLibraryItem: (id: string) => request(`/checklist-library/${id}`, { method: 'DELETE' }),
+
+  getChecklistTemplates: () => request('/checklist-templates'),
+  getChecklistTemplate: (id: string) => request(`/checklist-templates/${id}`),
+  createChecklistTemplate: (data: any) => request('/checklist-templates', { method: 'POST', body: JSON.stringify(data) }),
+  updateChecklistTemplate: (id: string, data: any) => request(`/checklist-templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteChecklistTemplate: (id: string) => request(`/checklist-templates/${id}`, { method: 'DELETE' }),
+
+  addChecklistTemplateItems: (templateId: string, items: any[]) => request(`/checklist-templates/${templateId}/items`, { method: 'POST', body: JSON.stringify(items) }),
+  deleteChecklistTemplateItem: (templateId: string, itemId: string) => request(`/checklist-templates/${templateId}/items/${itemId}`, { method: 'DELETE' }),
+  reorderChecklistTemplateItems: (templateId: string, items: any[]) => request(`/checklist-templates/${templateId}/items/reorder`, { method: 'PUT', body: JSON.stringify(items) }),
 };

@@ -133,6 +133,8 @@ export class UsersService {
         },
       });
     });
+  }
+
   async updateRole(id: string, roleId: string | null) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {

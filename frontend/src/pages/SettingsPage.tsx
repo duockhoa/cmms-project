@@ -7,13 +7,14 @@ import {
   Plus, Search, Edit2, Trash2, Save, RefreshCw, AlertTriangle
 } from 'lucide-react';
 
-import { Shield, Users } from 'lucide-react';
+import { Shield, Users, ListChecks } from 'lucide-react';
 import { RolesSettingsTab } from '../components/settings/RolesSettingsTab';
 import { UsersSettingsTab } from '../components/settings/UsersSettingsTab';
+import { ChecklistLibraryTab } from '../components/settings/ChecklistLibraryTab';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
-type SettingsTab = 'categories' | 'locations' | 'production-lines' | 'system-settings' | 'standard-parameters' | 'roles' | 'users';
+type SettingsTab = 'categories' | 'locations' | 'production-lines' | 'system-settings' | 'standard-parameters' | 'roles' | 'users' | 'checklist-library';
 
 export const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('categories');
@@ -424,6 +425,17 @@ export const SettingsPage: React.FC = () => {
               <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Danh sách tài khoản hệ thống.</div>
             </div>
           </button>
+          
+          <button
+            onClick={() => setActiveTab('checklist-library')}
+            style={activeTab === 'checklist-library' ? activeMenuStyles : inactiveMenuStyles}
+          >
+            <ListChecks size={16} />
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: '13.5px' }}>Thư viện Checklist</div>
+              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Quản lý các hạng mục kiểm tra.</div>
+            </div>
+          </button>
         </div>
 
         {/* Right Main Content Panel */}
@@ -432,6 +444,8 @@ export const SettingsPage: React.FC = () => {
             <RolesSettingsTab />
           ) : activeTab === 'users' ? (
             <UsersSettingsTab />
+          ) : activeTab === 'checklist-library' ? (
+            <ChecklistLibraryTab />
           ) : activeTab === 'system-settings' ? (
             // System Settings Form
             <div>
