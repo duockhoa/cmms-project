@@ -76,8 +76,8 @@ export const OperationLogsPage: React.FC = () => {
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Đang tải dữ liệu...</div>
         ) : (
-          <div className="table-responsive">
-            <table className="table">
+          <div className="table-wrapper" style={{ padding: 0, border: 'none' }}>
+            <table className="custom-table">
               <thead>
                 <tr>
                   <th>Thời gian</th>
@@ -90,23 +90,35 @@ export const OperationLogsPage: React.FC = () => {
               </thead>
               <tbody>
                 {logs.map(log => (
-                  <tr key={log.id}>
-                    <td>{new Date(log.recordedAt).toLocaleString('vi-VN')}</td>
-                    <td>{log.equipment?.name} <span style={{ color: 'var(--text-muted)' }}>({log.equipment?.code})</span></td>
-                    <td>{log.parameter?.name}</td>
+                  <tr 
+                    key={log.id}
+                    style={{ transition: 'background-color 0.2s ease' }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <td style={{ fontWeight: 600 }}>{new Date(log.recordedAt).toLocaleString('vi-VN')}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--accent-blue)' }}>
+                      {log.equipment?.name} <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>({log.equipment?.code})</span>
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{log.parameter?.name}</td>
                     <td>
-                      <span style={{ color: log.isOutlier ? '#dc2626' : 'inherit', fontWeight: log.isOutlier ? 'bold' : 'normal' }}>
+                      <span style={{ color: log.isOutlier ? '#dc2626' : 'inherit', fontWeight: log.isOutlier ? 'bold' : 600 }}>
                         {log.value} {log.parameter?.unit}
                       </span>
                     </td>
                     <td>
-                      {log.isOutlier ? (
-                        <span style={{ color: '#dc2626', fontWeight: 600, fontSize: '12px', backgroundColor: '#fee2e2', padding: '2px 8px', borderRadius: '12px' }}>Vượt ngưỡng</span>
-                      ) : (
-                        <span style={{ color: '#16a34a', fontWeight: 500, fontSize: '12px', backgroundColor: '#dcfce7', padding: '2px 8px', borderRadius: '12px' }}>Bình thường</span>
-                      )}
+                      <span style={{ 
+                        backgroundColor: log.isOutlier ? '#fee2e2' : '#dcfce7', 
+                        color: log.isOutlier ? '#dc2626' : '#16a34a', 
+                        padding: '4px 10px', 
+                        borderRadius: '12px', 
+                        fontSize: '12px',
+                        fontWeight: 600
+                      }}>
+                        {log.isOutlier ? 'Vượt ngưỡng' : 'Bình thường'}
+                      </span>
                     </td>
-                    <td>{log.recordedBy?.name || '---'}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{log.recordedBy?.name || '---'}</td>
                   </tr>
                 ))}
                 {logs.length === 0 && (
