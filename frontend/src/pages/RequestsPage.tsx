@@ -5,6 +5,7 @@ import { Modal } from '../components/common/Modal';
 import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
+import { RequestDetailView } from '../components/common/RequestDetailView';
 
 export const RequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<any[]>([]);
@@ -13,12 +14,12 @@ export const RequestsPage: React.FC = () => {
   const toast = useToast();
   const [statusFilter, setStatusFilter] = useState('');
 
+  // Selected Detail state for Split Pane layout
+  const [selectedDetailReqId, setSelectedDetailReqId] = useState<string | null>(null);
+
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
-  const [approveModalReq, setApproveModalReq] = useState<any>(null);
-  const [technicianName, setTechnicianName] = useState('Trần Văn Kỹ Thuật');
-  const [handlerTeam, setHandlerTeam] = useState('XUONG'); // 'XUONG' hoặc 'CO_DIEN'
 
   const handleQRScan = (decodedText: string) => {
     if (decodedText.startsWith('cmms-equipment:')) {
@@ -35,17 +36,6 @@ export const RequestsPage: React.FC = () => {
       toast.warning('Mã QR không đúng định dạng', 'Mã QR quét được không thuộc hệ thống CMMS thiết bị.');
     }
   };
-
-  // Detail / History Modal
-  const [detailReq, setDetailReq] = useState<any>(null);
-  const [history, setHistory] = useState<any[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-
-  // Resubmit Modal
-  const [resubmitReq, setResubmitReq] = useState<any>(null);
-  const [resubmitFields, setResubmitFields] = useState<any>({});
-  const [resubmitComment, setResubmitComment] = useState('');
-
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   const [formData, setFormData] = useState({
@@ -122,123 +112,7 @@ export const RequestsPage: React.FC = () => {
     }
   };
 
-  const handleApproveConfirm = async () => {
-    if (!approveModalReq) return;
-    try {
-      await api.approveRequest(approveModalReq.id, { 
-        technicianName: handlerTeam === 'XUONG' ? technicianName : undefined, 
-        handlerTeam 
-      });
-      setApproveModalReq(null);
-      setHandlerTeam('XUONG');
-      toast.success('Phê duyệt thành công', 'Đã phê duyệt yêu cầu & tự động tạo Phiếu Bảo Trì.');
-      loadData();
-    } catch (err: any) {
-      if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        toast.warning('Xung đột dữ liệu', 'Phiên làm việc đã lỗi thời. Dữ liệu sẽ được tải lại.');
-        loadData();
-      } else {
-        toast.error('Lỗi phê duyệt', err.message || 'Không thể phê duyệt yêu cầu');
-      }
-    }
-  };
 
-  const handleReject = async (id: string) => {
-    const reason = prompt('Nhập lý do từ chối yêu cầu này:');
-    if (reason) {
-      await api.rejectRequest(id, { reason });
-      loadData();
-    }
-  };
-
-  const handleReturn = async (req: any) => {
-    const reason = prompt('Nhập lý do trả lại yêu cầu để bổ sung thông tin:');
-    if (!reason || reason.trim() === '') return;
-    try {
-      await api.returnRequest(req.id, {
-        reason: reason.trim(),
-        expectedVersion: req.version,
-        actedById: getActiveUserId(),
-      });
-      toast.success('Trả lại thành công', 'Đã trả lại yêu cầu để bổ sung thông tin.');
-      loadData();
-    } catch (err: any) {
-      if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        toast.warning('Xung đột dữ liệu', 'Có người khác vừa cập nhật yêu cầu này. Dữ liệu sẽ được tải lại.');
-        loadData();
-      } else {
-        toast.error('Lỗi', err.message || 'Không thể trả lại yêu cầu');
-      }
-    }
-  };
-
-  const openResubmit = (req: any) => {
-    setResubmitReq(req);
-    setResubmitFields({
-      title: req.title,
-      description: req.description,
-      priority: req.priority,
-    });
-    setResubmitComment('');
-  };
-
-  const handleResubmitConfirm = async () => {
-    if (!resubmitReq) return;
-    try {
-      await api.resubmitRequest(resubmitReq.id, {
-        expectedVersion: resubmitReq.version,
-        actedById: getActiveUserId(),
-        comment: resubmitComment || 'Đã bổ sung thông tin',
-        updatedFields: resubmitFields,
-      });
-      setResubmitReq(null);
-      toast.success('Tái gửi thành công', 'Đã tái gửi yêu cầu với thông tin bổ sung.');
-      loadData();
-    } catch (err: any) {
-      if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        toast.warning('Xung đột dữ liệu', 'Có người khác vừa cập nhật yêu cầu này. Dữ liệu sẽ được tải lại.');
-        setResubmitReq(null);
-        loadData();
-      } else {
-        toast.error('Lỗi', err.message || 'Không thể tái gửi yêu cầu');
-      }
-    }
-  };
-
-  const handleCancel = async (req: any) => {
-    const reason = prompt('Nhập lý do hủy yêu cầu:');
-    if (!reason || reason.trim() === '') return;
-    try {
-      await api.cancelRequest(req.id, {
-        reason: reason.trim(),
-        expectedVersion: req.version,
-        actedById: getActiveUserId(),
-      });
-      toast.success('Hủy thành công', 'Đã hủy yêu cầu bảo trì.');
-      loadData();
-    } catch (err: any) {
-      if (err.message?.includes('409') || err.message?.includes('Xung đột')) {
-        toast.warning('Xung đột dữ liệu', 'Có người khác vừa cập nhật yêu cầu này. Dữ liệu sẽ được tải lại.');
-        loadData();
-      } else {
-        toast.error('Lỗi', err.message || 'Không thể hủy yêu cầu');
-      }
-    }
-  };
-
-  const openDetail = async (req: any) => {
-    setDetailReq(req);
-    setHistoryLoading(true);
-    try {
-      const h = await api.getRequestHistory(req.id);
-      setHistory(h);
-    } catch (err) {
-      console.error(err);
-      setHistory([]);
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
 
   return (
     <div>
@@ -266,84 +140,121 @@ export const RequestsPage: React.FC = () => {
         </select>
       </div>
 
-      {/* Requests Table */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách yêu cầu...</div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Mã Yêu cầu</th>
-                <th>Thiết bị sự cố</th>
-                <th>Mô tả / Tiêu đề</th>
-                <th>Người báo</th>
-                <th>Ưu tiên</th>
-                <th>Trạng thái</th>
-                <th style={{ textAlign: 'center', minWidth: '250px' }}>Hành động</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((req) => (
-                <tr key={req.id}>
-                  <td>
-                    <button
-                      style={{ fontWeight: 800, color: 'var(--warning)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
-                      onClick={() => openDetail(req)}
-                    >
-                      {req.requestCode}
-                    </button>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{req.equipment?.name || '---'}</td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{req.title}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{req.description}</div>
-                    {req.status === 'RETURNED' && req.returnedReason && (
-                      <div style={{ fontSize: '11px', color: 'var(--danger)', marginTop: '4px', padding: '4px 8px', backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: '4px', borderLeft: '3px solid var(--danger)' }}>
-                        <strong>Lý do trả lại:</strong> {req.returnedReason}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ fontSize: '13px' }}>
-                    <div>{req.reporterName}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{req.department}</div>
-                  </td>
-                  <td><StatusBadge status={req.priority} /></td>
-                  <td><StatusBadge status={req.status} /></td>
-                  <td style={{ textAlign: 'center' }}>
-                    {req.status === 'PENDING' ? (
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'nowrap' }}>
-                        <button className="btn btn-success btn-sm" onClick={() => setApproveModalReq(req)}>
-                          <CheckCircle size={13} /> Duyệt
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleReject(req.id)}>
-                          <XCircle size={13} /> Từ chối
-                        </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => handleReturn(req)} style={{ color: 'var(--warning)', borderColor: 'rgba(245, 158, 11, 0.3)' }}>
-                          <RotateCcw size={13} /> Trả lại
-                        </button>
-                      </div>
-                    ) : req.status === 'RETURNED' ? (
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'nowrap' }}>
-                        <button className="btn btn-primary btn-sm" onClick={() => openResubmit(req)}>
-                          <Send size={13} /> Tái gửi
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleCancel(req)}>
-                          <Ban size={13} /> Hủy
-                        </button>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {req.status === 'APPROVED' ? 'Đã tạo WO' : req.status === 'REJECTED' ? 'Đã từ chối' : req.status === 'CANCELLED' ? 'Đã hủy' : 'Đã xử lý'}
-                      </span>
-                    )}
-                  </td>
-                </tr>
+      {/* Main Content Area */}
+      <div style={{ flex: 1, display: 'flex', gap: '20px', overflow: 'hidden' }}>
+        
+        {/* Master List Pane */}
+        <div style={{
+          flex: selectedDetailReqId ? '0 0 400px' : 1,
+          transition: 'all 0.3s ease',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: 'var(--bg-card)',
+          borderRadius: '12px',
+          border: '1px solid var(--border-color)',
+          overflow: 'hidden'
+        }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách yêu cầu...</div>
+          ) : selectedDetailReqId ? (
+            // Cột bên trái khi đang xem chi tiết (Card List)
+            <div style={{ overflowY: 'auto', flex: 1, padding: '12px', backgroundColor: 'var(--bg-secondary)' }}>
+              {requests.map(req => (
+                <div 
+                  key={req.id}
+                  onClick={() => setSelectedDetailReqId(req.id)}
+                  style={{
+                    padding: '12px',
+                    marginBottom: '8px',
+                    borderRadius: '8px',
+                    backgroundColor: selectedDetailReqId === req.id ? 'var(--bg-primary)' : 'var(--bg-card)',
+                    border: selectedDetailReqId === req.id ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                    boxShadow: selectedDetailReqId === req.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontWeight: 800, color: 'var(--primary)' }}>{req.requestCode}</span>
+                    <StatusBadge status={req.status} />
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>{req.title}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Thiết bị: {req.equipment?.code || '---'}
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            // Full Table khi không xem chi tiết
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>Mã Yêu cầu</th>
+                    <th>Thiết bị sự cố</th>
+                    <th>Mô tả / Tiêu đề</th>
+                    <th>Người báo</th>
+                    <th>Ưu tiên</th>
+                    <th>Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {requests.map((req) => (
+                    <tr key={req.id}>
+                      <td>
+                        <button
+                          style={{ fontWeight: 800, color: 'var(--warning)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                          onClick={() => setSelectedDetailReqId(req.id)}
+                        >
+                          {req.requestCode}
+                        </button>
+                      </td>
+                      <td style={{ fontWeight: 600 }}>{req.equipment?.name || '---'}</td>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{req.title}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{req.description}</div>
+                        {req.status === 'RETURNED' && req.returnedReason && (
+                          <div style={{ fontSize: '11px', color: 'var(--danger)', marginTop: '4px', padding: '4px 8px', backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: '4px', borderLeft: '3px solid var(--danger)' }}>
+                            <strong>Lý do trả lại:</strong> {req.returnedReason}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ fontSize: '13px' }}>
+                        <div>{req.reporterName}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{req.department}</div>
+                      </td>
+                      <td><StatusBadge status={req.priority} /></td>
+                      <td><StatusBadge status={req.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Detail View Pane */}
+        {selectedDetailReqId && (
+          <div style={{
+            flex: 1,
+            backgroundColor: 'var(--bg-card)',
+            borderRadius: '12px',
+            border: '1px solid var(--border-color)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            animation: 'slideInRight 0.3s ease'
+          }}>
+            <RequestDetailView 
+              requestId={selectedDetailReqId} 
+              users={users} 
+              currentUser={currentUser} 
+              onActionSuccess={() => { loadData(); }} 
+              onClose={() => setSelectedDetailReqId(null)} 
+            />
+          </div>
+        )}
+      </div>
 
       {/* Create Request Modal */}
       <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Tạo Yêu cầu Sửa chữa / Báo sự cố">
@@ -408,172 +319,7 @@ export const RequestsPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Approve Request Modal */}
-      {approveModalReq && (
-        <Modal isOpen={!!approveModalReq} onClose={() => { setApproveModalReq(null); setHandlerTeam('XUONG'); }} title={`Phê duyệt & Tạo Phiếu Bảo Trì cho ${approveModalReq.requestCode}`}>
-          <div>
-            <p className="mb-4">
-              <strong>Yêu cầu:</strong> {approveModalReq.title}<br />
-              <strong>Thiết bị:</strong> {approveModalReq.equipment?.name} ({approveModalReq.equipment?.code})
-            </p>
 
-            <div className="form-group">
-              <label className="form-label" style={{ fontWeight: 600 }}>Phương án xử lý sự cố *</label>
-              <select className="form-select" value={handlerTeam} onChange={(e) => setHandlerTeam(e.target.value)}>
-                <option value="XUONG">Sự cố nhỏ - Xưởng tự xử lý</option>
-                <option value="CO_DIEN">Sự cố nghiêm trọng - Chuyển bộ phận Cơ điện</option>
-              </select>
-            </div>
-
-            {handlerTeam === 'XUONG' && (
-              <div className="form-group">
-                <label className="form-label">Phân công Kỹ thuật viên Phụ trách *</label>
-                <input type="text" className="form-input" value={technicianName} onChange={(e) => setTechnicianName(e.target.value)} placeholder="Nhập tên kỹ thuật viên" />
-              </div>
-            )}
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
-              <button className="btn btn-secondary" onClick={() => { setApproveModalReq(null); setHandlerTeam('XUONG'); }}>Hủy</button>
-              <button className="btn btn-success" onClick={handleApproveConfirm}>
-                Xác nhận Duyệt & Tạo Phiếu WO
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Resubmit Modal */}
-      {resubmitReq && (
-        <Modal isOpen={!!resubmitReq} onClose={() => setResubmitReq(null)} title={`Tái gửi yêu cầu ${resubmitReq.requestCode}`}>
-          <div>
-            {resubmitReq.returnedReason && (
-              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: '8px', borderLeft: '4px solid var(--danger)' }}>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--danger)', marginBottom: '4px' }}>Lý do trả lại gần nhất:</div>
-                <div style={{ fontSize: '13px' }}>{resubmitReq.returnedReason}</div>
-              </div>
-            )}
-
-            <div className="form-group">
-              <label className="form-label">Tiêu đề</label>
-              <input type="text" className="form-input" value={resubmitFields.title || ''} onChange={(e) => setResubmitFields({ ...resubmitFields, title: e.target.value })} />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Mô tả chi tiết (bổ sung thêm thông tin)</label>
-              <textarea className="form-textarea" rows={3} value={resubmitFields.description || ''} onChange={(e) => setResubmitFields({ ...resubmitFields, description: e.target.value })} />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Mức độ ưu tiên</label>
-              <select className="form-select" value={resubmitFields.priority || 'MEDIUM'} onChange={(e) => setResubmitFields({ ...resubmitFields, priority: e.target.value })}>
-                <option value="URGENT">Khẩn cấp</option>
-                <option value="HIGH">Cao</option>
-                <option value="MEDIUM">Trung bình</option>
-                <option value="LOW">Thấp</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Ghi chú bổ sung</label>
-              <input type="text" className="form-input" value={resubmitComment} onChange={(e) => setResubmitComment(e.target.value)} placeholder="Đã bổ sung mô tả và hình ảnh..." />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
-              <button className="btn btn-secondary" onClick={() => setResubmitReq(null)}>Hủy</button>
-              <button className="btn btn-primary" onClick={handleResubmitConfirm}>
-                <Send size={14} /> Tái gửi Yêu cầu
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Detail & History Modal */}
-      {detailReq && (
-        <Modal isOpen={!!detailReq} onClose={() => setDetailReq(null)} title={`Chi tiết yêu cầu ${detailReq.requestCode}`}>
-          <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-              <div><strong>Tiêu đề:</strong> {detailReq.title}</div>
-              <div><strong>Trạng thái:</strong> <StatusBadge status={detailReq.status} /></div>
-              <div><strong>Thiết bị:</strong> {detailReq.equipment?.name}</div>
-              <div><strong>Ưu tiên:</strong> <StatusBadge status={detailReq.priority} /></div>
-              <div><strong>Người báo:</strong> {detailReq.reporterName}</div>
-              <div><strong>Version:</strong> {detailReq.version}</div>
-            </div>
-            <div style={{ marginBottom: '16px' }}>
-              <strong>Mô tả:</strong>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{detailReq.description}</p>
-            </div>
-
-            {detailReq.returnedReason && (
-              <div style={{ padding: '10px', backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: '6px', marginBottom: '16px', borderLeft: '3px solid var(--danger)' }}>
-                <strong style={{ color: 'var(--danger)', fontSize: '12px' }}>Lý do trả lại:</strong>
-                <div style={{ fontSize: '13px' }}>{detailReq.returnedReason}</div>
-              </div>
-            )}
-
-            {detailReq.rejectedReason && (
-              <div style={{ padding: '10px', backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: '6px', marginBottom: '16px', borderLeft: '3px solid var(--danger)' }}>
-                <strong style={{ color: 'var(--danger)', fontSize: '12px' }}>Lý do từ chối:</strong>
-                <div style={{ fontSize: '13px' }}>{detailReq.rejectedReason}</div>
-              </div>
-            )}
-
-            {detailReq.cancelledReason && (
-              <div style={{ padding: '10px', backgroundColor: 'rgba(100,100,100,0.08)', borderRadius: '6px', marginBottom: '16px', borderLeft: '3px solid var(--text-muted)' }}>
-                <strong style={{ fontSize: '12px' }}>Lý do hủy:</strong>
-                <div style={{ fontSize: '13px' }}>{detailReq.cancelledReason}</div>
-              </div>
-            )}
-
-            {/* Workflow History */}
-            <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Clock size={14} /> Lịch sử chuyển trạng thái
-            </h4>
-
-            {historyLoading ? (
-              <div style={{ textAlign: 'center', padding: '20px' }}>
-                <RefreshCw size={16} className="animate-spin" style={{ color: 'var(--primary)' }} /> Đang tải...
-              </div>
-            ) : history.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                Chưa có lịch sử chuyển trạng thái.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {history.map((h, idx) => (
-                  <div key={h.id} style={{
-                    padding: '10px 14px',
-                    borderRadius: '6px',
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-color)',
-                    fontSize: '13px',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--primary)' }}>{h.action}</span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          {h.fromStatus || '---'} → {h.toStatus || '---'}
-                        </span>
-                      </div>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {new Date(h.createdAt).toLocaleString('vi-VN')}
-                      </span>
-                    </div>
-                    {h.reason && <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Lý do: {h.reason}</div>}
-                    {h.comment && <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{h.comment}</div>}
-                    {h.requestVersionBefore != null && (
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Version: {h.requestVersionBefore} → {h.requestVersionAfter}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
     </div>
   );
 };
