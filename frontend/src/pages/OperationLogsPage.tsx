@@ -3,20 +3,20 @@ import { api } from '../services/api';
 import { Camera, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { OperationLogDetailView } from '../components/common/OperationLogDetailView';
+import { EquipmentOperationDetailView } from '../components/common/OperationLogDetailView';
 
 export const OperationLogsPage: React.FC = () => {
-  const [logs, setLogs] = useState<any[]>([]);
+  const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
-  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [selectedEqId, setSelectedEqId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const fetchLogs = async () => {
+  const fetchEquipment = async () => {
     try {
       setLoading(true);
-      const data = await api.getAllOperationLogs();
-      setLogs(data);
+      const data = await api.getEquipment();
+      setEquipmentList(data);
     } catch (error) {
       console.error('Lỗi khi tải lịch sử sổ vận hành:', error);
     } finally {
@@ -25,7 +25,7 @@ export const OperationLogsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchLogs();
+    fetchEquipment();
   }, []);
 
   useEffect(() => {
@@ -42,9 +42,9 @@ export const OperationLogsPage: React.FC = () => {
           // Giả sử mã QR chính là equipmentId hoặc có format "equipment/ID"
           scanner.clear();
           setShowScanner(false);
-          const eqId = decodedText.replace('equipment/', '').trim();
+          const eqId = decodedText.replace('equipment/', '').replace('cmms-equipment:', '').trim();
           if (eqId) {
-            navigate(`/equipment/${eqId}/operation-log-form`);
+            setSelectedEqId(eqId);
           } else {
             alert('Mã QR không hợp lệ!');
           }
@@ -78,7 +78,7 @@ export const OperationLogsPage: React.FC = () => {
         
         {/* Master List Pane */}
         <div style={{
-          flex: selectedLogId ? '0 0 450px' : 1,
+          flex: selectedEqId ? '0 0 400px' : 1,
           transition: 'all 0.3s ease',
           display: 'flex',
           flexDirection: 'column',
@@ -89,43 +89,36 @@ export const OperationLogsPage: React.FC = () => {
         }}>
           {loading ? (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Đang tải dữ liệu...</div>
-          ) : selectedLogId ? (
+          ) : selectedEqId ? (
             // Card List View
             <div style={{ overflowY: 'auto', flex: 1, padding: '12px', backgroundColor: 'var(--bg-secondary)' }}>
-              {logs.map(log => (
+              {equipmentList.map(eq => (
                 <div 
-                  key={log.id}
-                  onClick={() => setSelectedLogId(log.id)}
+                  key={eq.id}
+                  onClick={() => setSelectedEqId(eq.id)}
                   style={{
                     padding: '12px',
                     marginBottom: '8px',
                     borderRadius: '8px',
-                    backgroundColor: selectedLogId === log.id ? 'var(--bg-primary)' : 'var(--bg-card)',
-                    border: selectedLogId === log.id ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                    backgroundColor: selectedEqId === eq.id ? 'var(--bg-primary)' : 'var(--bg-card)',
+                    border: selectedEqId === eq.id ? '1px solid var(--primary)' : '1px solid var(--border-color)',
                     cursor: 'pointer',
-                    boxShadow: selectedLogId === log.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                    boxShadow: selectedEqId === eq.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                     <span style={{ fontWeight: 800, color: 'var(--primary)' }}>
-                      {log.equipment?.code || '---'}
+                      {eq.code || '---'}
                     </span>
-                    <span style={{ 
-                      backgroundColor: log.isOutlier ? '#fee2e2' : '#dcfce7', 
-                      color: log.isOutlier ? '#dc2626' : '#16a34a', 
-                      padding: '2px 8px', 
-                      borderRadius: '12px', 
-                      fontSize: '11px',
-                      fontWeight: 600
-                    }}>
-                      {log.isOutlier ? 'Vượt ngưỡng' : 'Bình thường'}
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      {eq.category}
                     </span>
                   </div>
                   <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
-                    {log.parameter?.name}: <span style={{ color: log.isOutlier ? '#dc2626' : 'inherit' }}>{log.value} {log.parameter?.unit}</span>
+                    {eq.name}
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                    {new Date(log.recordedAt).toLocaleString('vi-VN')} - {log.recordedBy?.name}
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Khu vực: {eq.location}
                   </div>
                 </div>
               ))}
@@ -136,50 +129,42 @@ export const OperationLogsPage: React.FC = () => {
               <table className="custom-table">
                 <thead>
                   <tr>
-                    <th>Thời gian</th>
-                    <th>Thiết bị</th>
-                    <th>Thông số</th>
-                    <th>Giá trị</th>
+                    <th>Mã Thiết bị</th>
+                    <th>Tên Thiết bị</th>
+                    <th>Phân loại</th>
+                    <th>Khu vực</th>
                     <th>Trạng thái</th>
-                    <th>Người ghi nhận</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map(log => (
+                  {equipmentList.map(eq => (
                     <tr 
-                      key={log.id}
-                      onClick={() => setSelectedLogId(log.id)}
+                      key={eq.id}
+                      onClick={() => setSelectedEqId(eq.id)}
                       style={{ transition: 'background-color 0.2s ease', cursor: 'pointer' }}
                       onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
                       onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
-                      <td style={{ fontWeight: 600 }}>{new Date(log.recordedAt).toLocaleString('vi-VN')}</td>
-                      <td style={{ fontWeight: 600, color: 'var(--accent-blue)' }}>
-                        {log.equipment?.name} <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>({log.equipment?.code})</span>
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{log.parameter?.name}</td>
-                      <td>
-                        <span style={{ color: log.isOutlier ? '#dc2626' : 'inherit', fontWeight: log.isOutlier ? 'bold' : 600 }}>
-                          {log.value} {log.parameter?.unit}
-                        </span>
-                      </td>
+                      <td style={{ fontWeight: 600 }}>{eq.code}</td>
+                      <td style={{ fontWeight: 600, color: 'var(--accent-blue)' }}>{eq.name}</td>
+                      <td>{eq.category}</td>
+                      <td>{eq.location}</td>
                       <td>
                         <span style={{ 
-                          backgroundColor: log.isOutlier ? '#fee2e2' : '#dcfce7', 
-                          color: log.isOutlier ? '#dc2626' : '#16a34a', 
+                          backgroundColor: eq.status === 'ACTIVE' ? '#dcfce7' : eq.status === 'INACTIVE' ? '#fee2e2' : '#fef3c7', 
+                          color: eq.status === 'ACTIVE' ? '#16a34a' : eq.status === 'INACTIVE' ? '#dc2626' : '#d97706', 
                           padding: '4px 10px', 
                           borderRadius: '12px', 
                           fontSize: '12px',
                           fontWeight: 600
                         }}>
-                          {log.isOutlier ? 'Vượt ngưỡng' : 'Bình thường'}
+                          {eq.status === 'ACTIVE' ? 'Hoạt động' : eq.status === 'INACTIVE' ? 'Ngưng hoạt động' : 'Bảo trì'}
                         </span>
                       </td>
-                      <td style={{ color: 'var(--text-secondary)' }}>{log.recordedBy?.name || '---'}</td>
                     </tr>
                   ))}
-                  {logs.length === 0 && (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Chưa có dữ liệu vận hành trên hệ thống</td></tr>
+                  {equipmentList.length === 0 && (
+                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Chưa có thiết bị nào</td></tr>
                   )}
                 </tbody>
               </table>
@@ -188,7 +173,7 @@ export const OperationLogsPage: React.FC = () => {
         </div>
 
         {/* Detail View Pane */}
-        {selectedLogId && (
+        {selectedEqId && (
           <div style={{
             flex: 1,
             backgroundColor: 'var(--bg-card)',
@@ -199,9 +184,9 @@ export const OperationLogsPage: React.FC = () => {
             flexDirection: 'column',
             animation: 'slideInRight 0.3s ease'
           }}>
-            <OperationLogDetailView 
-              log={logs.find(l => l.id === selectedLogId)} 
-              onClose={() => setSelectedLogId(null)} 
+            <EquipmentOperationDetailView 
+              equipmentId={selectedEqId}
+              onClose={() => setSelectedEqId(null)} 
             />
           </div>
         )}
