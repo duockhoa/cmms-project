@@ -483,13 +483,108 @@ export const WorkOrdersPage: React.FC = () => {
       )}
       </>
       ) : (
-        <div style={{ height: 'calc(100vh - 80px)', backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <WorkOrderDetailView
-            workOrderId={selectedDetailWoId}
-            onStatusChangeSuccess={() => loadData()}
-            currentUser={currentUser}
-            onClose={() => setSelectedDetailWoId(null)}
-          />
+        <div style={{ display: 'flex', gap: '24px', height: 'calc(100vh - 100px)', padding: '4px' }}>
+          
+          {/* Lề trái: Master List */}
+          <div style={{ width: '380px', display: 'flex', flexDirection: 'column', gap: '16px', borderRight: '1px solid var(--border-color)', paddingRight: '16px' }}>
+            
+            {/* Header Left */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h1 className="page-title" style={{ fontSize: '20px', margin: 0 }}>Danh sách phiếu</h1>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-secondary" onClick={() => setSelectedDetailWoId(null)} title="Đóng chi tiết" style={{ padding: '6px 10px' }}>
+                  <ChevronLeft size={16} /> Trở về
+                </button>
+              </div>
+            </div>
+
+            {/* List Cards */}
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '13px' }}>Đang tải danh sách...</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: '16px' }}>
+                {workOrders.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px', fontSize: '13px' }}>
+                    Không có phiếu bảo trì nào
+                  </div>
+                ) : workOrders.map((wo) => (
+                  <div 
+                    key={wo.id}
+                    onClick={() => setSelectedDetailWoId(wo.id)}
+                    style={{ 
+                      padding: '16px', 
+                      borderRadius: '8px', 
+                      border: selectedDetailWoId === wo.id ? '2px solid #2563eb' : '1px solid var(--border-color)',
+                      backgroundColor: selectedDetailWoId === wo.id ? '#eff6ff' : 'var(--bg-card)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      transition: 'all 0.2s ease',
+                      boxShadow: selectedDetailWoId === wo.id ? '0 4px 6px -1px rgba(37, 99, 235, 0.1)' : 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <span style={{ fontWeight: 700, color: '#2563eb', fontSize: '14px' }}>{wo.orderCode}</span>
+                      <StatusBadge status={wo.status} />
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{wo.title}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <LayoutGrid size={12} /> {wo.equipment?.name || '---'}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <List size={12} /> {wo.technicianName || 'Chưa phân công'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Pagination */}
+            {total > 0 && (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                paddingTop: '12px', 
+                borderTop: '1px solid var(--border-color)' 
+              }}>
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  disabled={page === 1}
+                  onClick={() => setPage(page - 1)}
+                  style={{ padding: '4px 8px' }}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Trang {page} / {totalPages}
+                </span>
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  disabled={page === totalPages}
+                  onClick={() => setPage(page + 1)}
+                  style={{ padding: '4px 8px' }}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Lề phải: Detail View */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <WorkOrderDetailView
+              workOrderId={selectedDetailWoId}
+              onStatusChangeSuccess={() => loadData()}
+              currentUser={currentUser}
+              onClose={() => setSelectedDetailWoId(null)}
+            />
+          </div>
         </div>
       )}
 

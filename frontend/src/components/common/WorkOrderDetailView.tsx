@@ -24,8 +24,6 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
   const [actionLoading, setActionLoading] = useState(false);
 
   // Form states
-  const [activeTab, setActiveTab] = useState<'details' | 'timeline' | 'checklist'>('details');
-  
   // Custom Log Modal state
   const [isLogFormOpen, setIsLogFormOpen] = useState(false);
   const [logContent, setLogContent] = useState('');
@@ -465,9 +463,32 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
     }
   };
 
+  const ActionButton = ({ onClick, disabled, icon: Icon, label, color }: any) => (
+    <button 
+      onClick={onClick} 
+      disabled={disabled} 
+      style={{ 
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', 
+        background: 'none', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1, width: '90px'
+      }}
+    >
+      <div style={{ 
+        width: '50px', height: '50px', borderRadius: '50%', backgroundColor: color, 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <Icon size={24} />
+      </div>
+      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', lineHeight: '1.3' }}>
+        {label}
+      </span>
+    </button>
+  );
+
   return (
-    <div className="work-order-detail-view" style={{ flex: 1, backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Title Bar like the one in the mockup */}
+    <div className="work-order-detail-view" style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Title Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
         <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1e3a8a' }}>
           {wo.title} <span style={{ color: 'var(--text-muted)' }}>- {wo.orderCode}</span>
@@ -479,180 +500,142 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         )}
       </div>
 
-      <div className="work-order-detail-container" style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, padding: '24px', overflowY: 'auto', backgroundColor: 'var(--bg-primary)' }}>
+      <div className="work-order-detail-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, padding: '24px', overflowY: 'auto' }}>
         
-        {/* Top Header Card */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'space-between', padding: '16px', border: '1px solid var(--border-color)', borderRadius: '8px', backgroundColor: 'var(--bg-secondary)' }}>
-          <div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>MÃ WORK ORDER</span>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{wo.orderCode}</h2>
-          </div>
-          <div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>TRẠNG THÁI HIỆN TẠI</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: getStatusColor(wo.status) }}></span>
-              <span style={{ fontWeight: 700, fontSize: '14px', color: getStatusColor(wo.status) }}>{getStatusLabel(wo.status)}</span>
-            </div>
-          </div>
-          <div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>ĐỘ ƯU TIÊN</span>
-            <div style={{ marginTop: '4px' }}>
-              <span className={`badge badge-${wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'danger' : 'warning'}`} style={{ fontSize: '12px', padding: '4px 8px' }}>
-                {wo.priority}
-              </span>
-            </div>
-          </div>
-          <div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>TUYẾN XỬ LÝ</span>
-            <div style={{ marginTop: '4px', fontWeight: 700, fontSize: '13px', color: '#16a34a' }}>
-              {wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? 'Xưởng tự xử lý' : 'Cơ điện sửa chữa'}
-            </div>
-          </div>
+        {/* Top Header Card - Action Grid */}
+        <div className="card" style={{ padding: '24px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+           <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a8a', textAlign: 'center', marginBottom: '24px' }}>
+             {wo.title} - {wo.orderCode}
+           </h3>
+           
+           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
+             
+             {canModify && wo.status === 'ASSIGNED' && (
+               <ActionButton onClick={handleStart} disabled={actionLoading} icon={Play} label="Bắt đầu sửa chữa" color="#3b82f6" />
+             )}
+
+             {canModify && wo.status === 'IN_PROGRESS' && (
+               <>
+                 <ActionButton onClick={() => setIsLogFormOpen(true)} disabled={actionLoading} icon={Plus} label="Ghi nhận thao tác" color="#8b5cf6" />
+                 <ActionButton onClick={() => setIsPauseFormOpen(true)} disabled={actionLoading} icon={Pause} label="Tạm dừng" color="#f59e0b" />
+                 <ActionButton onClick={() => setIsCompleteFormOpen(true)} disabled={actionLoading} icon={CheckCircle2} label={wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? 'Đề nghị bàn giao' : 'Hoàn thành sửa'} color="#10b981" />
+               </>
+             )}
+
+             {canModify && wo.status === 'ON_HOLD' && (
+               <ActionButton onClick={handleResume} disabled={actionLoading} icon={Play} label="Tiếp tục sửa chữa" color="#3b82f6" />
+             )}
+
+             {/* Escalate */}
+             {wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' && ['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD'].includes(wo.status) && (userUnitType === 'WORKSHOP' || isManagerOrAdmin) && (
+               <ActionButton onClick={() => setIsEscalateOpen(true)} disabled={actionLoading} icon={ArrowRightLeft} label="Yêu cầu hỗ trợ" color="#ef4444" />
+             )}
+
+             {/* Classify */}
+             {wo.status === 'PENDING' && !wo.classificationResult && (userUnitType === 'TECHNICAL' || isManagerOrAdmin) && (
+               <ActionButton onClick={() => setIsClassifyOpen(true)} disabled={actionLoading} icon={ShieldCheck} label="Phân loại sự cố" color="#f59e0b" />
+             )}
+
+             {/* Assign */}
+             {wo.status === 'PENDING' && wo.classificationResult === 'MAINTENANCE_REQUIRED' && !wo.assignedTechnicianId && (userUnitType === 'TECHNICAL' || isManagerOrAdmin) && (
+               <ActionButton onClick={() => setIsAssignExecutorOpen(true)} disabled={actionLoading} icon={Plus} label="Phân công Cơ điện" color="#3b82f6" />
+             )}
+
+             {/* Accept/Reject Handover */}
+             {wo.status === 'COMPLETED' && wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' && (userUnitType === 'WORKSHOP' || isManagerOrAdmin) && (
+               <>
+                 <ActionButton onClick={handleAcceptHandover} disabled={actionLoading} icon={ShieldCheck} label="Nghiệm thu bàn giao" color="#059669" />
+                 <ActionButton onClick={() => setIsRejectHandoverOpen(true)} disabled={actionLoading} icon={XOctagon} label="Từ chối bàn giao" color="#ef4444" />
+               </>
+             )}
+
+           </div>
         </div>
 
-        {/* Tab Controls */}
-        <div style={{ display: 'flex', borderBottom: '2px solid var(--border-color)', gap: '16px' }}>
-          <button 
-            onClick={() => setActiveTab('details')}
-            style={{ padding: '8px 16px', fontWeight: 600, background: 'none', border: 'none', borderBottom: activeTab === 'details' ? '3px solid #2563eb' : 'none', color: activeTab === 'details' ? '#2563eb' : 'var(--text-secondary)', cursor: 'pointer' }}
-          >
-            Thông tin sự cố & Thiết bị
-          </button>
-          <button 
-            onClick={() => setActiveTab('timeline')}
-            style={{ padding: '8px 16px', fontWeight: 600, background: 'none', border: 'none', borderBottom: activeTab === 'timeline' ? '3px solid #2563eb' : 'none', color: activeTab === 'timeline' ? '#2563eb' : 'var(--text-secondary)', cursor: 'pointer' }}
-          >
-            Nhật ký xử lý ({logs.length})
-          </button>
+        {/* Metadata Table */}
+        <div className="card" style={{ padding: '24px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <table style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse' }}>
+            <tbody>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', width: '25%', color: 'var(--text-secondary)' }}>Mã lệnh sửa chữa</td>
+                <td style={{ padding: '12px 0', fontWeight: 600 }}>{wo.orderCode}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mã thiết bị</td>
+                <td style={{ padding: '12px 0', fontWeight: 600 }}>{wo.equipment?.code} - {wo.equipment?.name}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Trạng thái</td>
+                <td style={{ padding: '12px 0' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: getStatusColor(wo.status) }}></span>
+                    <span style={{ fontWeight: 700, color: getStatusColor(wo.status) }}>{getStatusLabel(wo.status)}</span>
+                  </div>
+                </td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Tuyến xử lý</td>
+                <td style={{ padding: '12px 0', fontWeight: 600 }}>{wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? 'Xưởng tự xử lý' : 'Cơ điện sửa chữa'}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mức độ ưu tiên</td>
+                <td style={{ padding: '12px 0' }}>
+                  <span className={`badge badge-${wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'danger' : 'warning'}`}>
+                    {wo.priority}
+                  </span>
+                </td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Người yêu cầu</td>
+                <td style={{ padding: '12px 0' }}>{wo.request?.reporterName || 'Hệ thống'} ({wo.request?.department || 'Cơ điện'})</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Kỹ thuật viên</td>
+                <td style={{ padding: '12px 0' }}>{wo.technicianName || 'Chưa phân công'}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Ngày tạo</td>
+                <td style={{ padding: '12px 0' }}>{new Date(wo.createdAt).toLocaleString('vi-VN')}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mô tả sự cố</td>
+                <td style={{ padding: '12px 0' }}>{wo.description}</td>
+              </tr>
+              {wo.classificationResult && (
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Kết quả phân loại</td>
+                  <td style={{ padding: '12px 0' }}>
+                    <span style={{ fontWeight: 600, color: '#3b82f6' }}>{wo.classificationResult === 'WORKSHOP_CONTINUE' ? 'Xưởng tiếp tục tự xử lý' : 'Yêu cầu Cơ điện sửa chữa'}</span>
+                    {wo.classificationNotes && <div style={{ fontSize: '13px', marginTop: '4px' }}>Ghi chú: {wo.classificationNotes}</div>}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
 
-        {/* Tab Content */}
-        {activeTab === 'details' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-              
-              {/* Equipment Info */}
-              <div className="card" style={{ padding: '16px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '12px' }}>Thiết bị liên quan</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-                  <div><strong>Mã thiết bị:</strong> {wo.equipment?.code}</div>
-                  <div><strong>Tên thiết bị:</strong> {wo.equipment?.name}</div>
-                  <div><strong>Vị trí đặt:</strong> {wo.equipment?.location}</div>
-                  <div><strong>Phân loại nhóm:</strong> {wo.equipment?.category}</div>
-                  <div><strong>Trạng thái máy:</strong> {wo.equipment?.status}</div>
-                </div>
-              </div>
-
-              {/* WO Info */}
-              <div className="card" style={{ padding: '16px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '12px' }}>Thông tin phiếu bảo trì</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-                  <div><strong>Tiêu đề:</strong> {wo.title}</div>
-                  <div><strong>Mô tả sự cố:</strong> {wo.description}</div>
-                  <div><strong>Người yêu cầu:</strong> {wo.request?.reporterName || 'Hệ thống'}</div>
-                  <div><strong>Phòng ban:</strong> {wo.request?.department || 'Cơ điện'}</div>
-                  <div><strong>Kỹ thuật viên:</strong> {wo.technicianName || 'Chưa phân công'}</div>
-                  <div><strong>Ngày tạo:</strong> {new Date(wo.createdAt).toLocaleString('vi-VN')}</div>
-                  {wo.classificationResult && (
-                    <div style={{ marginTop: '8px', padding: '6px', border: '1px solid #3b82f6', borderRadius: '4px', backgroundColor: 'rgba(59, 130, 246, 0.05)' }}>
-                      <strong>Kết quả phân loại:</strong> {wo.classificationResult === 'WORKSHOP_CONTINUE' ? 'Xưởng tiếp tục tự xử lý' : 'Yêu cầu Cơ điện sửa chữa'}<br/>
-                      <strong>Ghi chú phân loại:</strong> {wo.classificationNotes || '---'}
-                    </div>
-                  )}
-                </div>
-              </div>
+        {/* Incident Image */}
+        {wo.request?.images && JSON.parse(wo.request.images).length > 0 && (
+          <div className="card" style={{ padding: '24px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Hình ảnh sự cố ban đầu</h3>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {JSON.parse(wo.request.images).map((imgUrl: string, idx: number) => (
+                <a key={idx} href={imgUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '4px' }}>
+                  <img src={imgUrl} alt="Initial incident" style={{ maxHeight: '120px', maxWidth: '200px', objectFit: 'contain', borderRadius: '4px' }} />
+                </a>
+              ))}
             </div>
-
-            {/* Incident Image */}
-            {wo.request?.images && (
-              <div className="card" style={{ padding: '16px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>Hình ảnh sự cố ban đầu</h3>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  {JSON.parse(wo.request.images).map((imgUrl: string, idx: number) => (
-                    <a key={idx} href={imgUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px' }}>
-                      <img src={imgUrl} alt="Initial incident" style={{ maxHeight: '120px', maxWidth: '200px', objectFit: 'contain' }} />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {activeTab === 'timeline' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            
-            {/* Timeline Action Bar */}
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
-              {/* 1. Standard Technician Actions */}
-              {canModify && wo.status === 'ASSIGNED' && (
-                <button className="btn btn-primary" onClick={handleStart} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <Play size={15} /> Bắt đầu sửa chữa
-                </button>
-              )}
-
-              {canModify && wo.status === 'IN_PROGRESS' && (
-                <>
-                  <button className="btn btn-primary" onClick={() => setIsLogFormOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <Plus size={15} /> Ghi nhận thao tác & Ảnh
-                  </button>
-                  <button className="btn btn-warning" onClick={() => setIsPauseFormOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <Pause size={15} /> Tạm dừng
-                  </button>
-                  <button className="btn btn-success" onClick={() => setIsCompleteFormOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <CheckCircle2 size={15} /> {wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? 'Đề nghị bàn giao' : 'Hoàn thành sửa chữa'}
-                  </button>
-                </>
-              )}
-
-              {canModify && wo.status === 'ON_HOLD' && (
-                <button className="btn btn-primary" onClick={handleResume} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <Play size={15} /> Tiếp tục sửa chữa
-                </button>
-              )}
-
-              {/* 2. Escalate Action (Xưởng yêu cầu kỹ thuật hỗ trợ) */}
-              {wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' && 
-               ['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD'].includes(wo.status) && 
-               (userUnitType === 'WORKSHOP' || isManagerOrAdmin) && (
-                <button className="btn btn-danger" onClick={() => setIsEscalateOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <ArrowRightLeft size={15} /> Yêu cầu hỗ trợ kỹ thuật (Escalate)
-                </button>
-              )}
-
-              {/* 3. Classify Action (Phân loại Work Order) */}
-              {wo.status === 'PENDING' && !wo.classificationResult && (userUnitType === 'TECHNICAL' || isManagerOrAdmin) && (
-                <button className="btn btn-warning" onClick={() => setIsClassifyOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <ShieldCheck size={15} /> Phân loại sự cố (Classify)
-                </button>
-              )}
-
-              {/* 4. Assign Executor Action (Phòng kỹ thuật phân công Cơ điện) */}
-              {wo.status === 'PENDING' && wo.classificationResult === 'MAINTENANCE_REQUIRED' && !wo.assignedTechnicianId && (userUnitType === 'TECHNICAL' || isManagerOrAdmin) && (
-                <button className="btn btn-primary" onClick={() => setIsAssignExecutorOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <Plus size={15} /> Phân công kỹ thuật Cơ điện
-                </button>
-              )}
-
-              {/* 5. Accept / Reject Handover Actions (Xưởng nghiệm thu/từ chối Cơ điện) */}
-              {wo.status === 'COMPLETED' && wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' && (userUnitType === 'WORKSHOP' || isManagerOrAdmin) && (
-                <>
-                  <button className="btn btn-success" onClick={handleAcceptHandover} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <ShieldCheck size={15} /> Nghiệm thu & Nhận bàn giao
-                  </button>
-                  <button className="btn btn-danger" onClick={() => setIsRejectHandoverOpen(true)} disabled={actionLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <XOctagon size={15} /> Từ chối nhận bàn giao
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Timeline Nodes */}
+        {/* Timeline Log */}
+        <div className="card" style={{ padding: '24px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '24px' }}>Nhật ký quá trình xử lý</h3>
             <div className="timeline" style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', paddingLeft: '20px' }}>
               <div style={{ position: 'absolute', left: '6px', top: '10px', bottom: '10px', width: '2px', backgroundColor: 'var(--border-color)' }}></div>
               
               {logs.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '13px' }}>Chưa có quá trình xử lý nào được ghi nhận. Click các hành động ở trên để tiếp tục.</div>
+                <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '13px' }}>Chưa có quá trình xử lý nào được ghi nhận.</div>
               ) : (
                 logs.map((log: any) => {
                   let badgeColor = '#6b7280';
@@ -672,29 +655,29 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
                       {/* Timeline dot */}
                       <div style={{ position: 'absolute', left: '-20px', top: '4px', width: '14px', height: '14px', borderRadius: '50%', backgroundColor: badgeColor, border: '3px solid var(--bg-card)', zIndex: 10 }}></div>
                       
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', backgroundColor: 'var(--bg-card)' }}>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', padding: '16px', border: '1px solid var(--border-color)', borderRadius: '8px', backgroundColor: 'var(--bg-primary)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                          <span style={{ fontWeight: 700, fontSize: '13px', color: badgeColor }}>
+                          <span style={{ fontWeight: 700, fontSize: '14px', color: badgeColor }}>
                             {log.actionType} – {log.performedBy?.name || 'Hệ thống'} ({log.performerUnitType})
                           </span>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                             {new Date(log.recordedAt).toLocaleString('vi-VN')}
                           </span>
                         </div>
 
-                        <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginTop: '4px', fontWeight: 500 }}>
+                        <div style={{ fontSize: '14px', color: 'var(--text-primary)', marginTop: '4px', fontWeight: 500 }}>
                           {log.content}
                         </div>
 
                         {/* Additional structured metadata */}
                         {log.pauseReason && (
-                          <div style={{ fontSize: '12px', backgroundColor: 'rgba(239, 68, 68, 0.05)', color: '#ef4444', padding: '4px 8px', borderRadius: '4px', marginTop: '6px', fontWeight: 600 }}>
+                          <div style={{ fontSize: '13px', backgroundColor: 'rgba(239, 68, 68, 0.05)', color: '#ef4444', padding: '6px 12px', borderRadius: '4px', marginTop: '8px', fontWeight: 600 }}>
                             Lý do tạm dừng: {log.pauseReason}
                           </div>
                         )}
 
                         {(log.actionType === 'COMPLETE' || log.actionType === 'HANDOVER_SUBMIT') && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: 'rgba(16, 185, 129, 0.05)', border: '1px dashed rgba(16, 185, 129, 0.2)', padding: '8px', borderRadius: '6px', marginTop: '8px', fontSize: '12px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: 'rgba(16, 185, 129, 0.05)', border: '1px dashed rgba(16, 185, 129, 0.2)', padding: '12px', borderRadius: '6px', marginTop: '12px', fontSize: '13px' }}>
                             <div><strong>Công việc đã thực hiện:</strong> {log.workDone || '---'}</div>
                             <div><strong>Tình trạng thiết bị:</strong> {log.equipmentStatusAfter || '---'}</div>
                             <div><strong>Kết quả test:</strong> {log.testResult || '---'}</div>
@@ -704,13 +687,13 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
                         )}
 
                         {log.adjustedLogId && (
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '4px' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '6px' }}>
                             * Bản ghi điều chỉnh cho nhật ký ID: {log.adjustedLogId.substring(0, 8)} (Lý do: {log.adjustmentReason})
                           </div>
                         )}
 
                         {log.actionType === 'LOG' && (log.result || log.notes) && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px', paddingLeft: '8px', borderLeft: '2px solid var(--border-color)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: 'var(--text-secondary)', marginTop: '8px', paddingLeft: '12px', borderLeft: '3px solid var(--border-color)' }}>
                             {log.result && <div><strong>Kết quả:</strong> {log.result}</div>}
                             {log.notes && <div><strong>Ghi chú:</strong> {log.notes}</div>}
                           </div>
@@ -718,13 +701,13 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
 
                         {/* Uploaded Photos timeline list */}
                         {log.attachments && log.attachments.length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '12px' }}>
                             {log.attachments.map((file: any) => (
-                              <div key={file.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '4px', backgroundColor: 'var(--bg-secondary)', position: 'relative' }}>
-                                <img src={`${API_HOST}/${file.storagePath}`} alt="Repair step" style={{ height: '70px', width: '100px', objectFit: 'cover', borderRadius: '2px' }} />
-                                <span style={{ fontSize: '9px', fontWeight: 700, marginTop: '2px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{file.photoCategory || 'OTHER'}</span>
-                                <a href={`${API_HOST}/${file.storagePath}`} target="_blank" rel="noreferrer" style={{ position: 'absolute', top: '2px', right: '2px', backgroundColor: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: '50%', padding: '2px', cursor: 'pointer' }}>
-                                  <Eye size={10} />
+                              <div key={file.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px', backgroundColor: 'var(--bg-card)', position: 'relative' }}>
+                                <img src={`${API_HOST}/${file.storagePath}`} alt="Repair step" style={{ height: '80px', width: '120px', objectFit: 'cover', borderRadius: '4px' }} />
+                                <span style={{ fontSize: '10px', fontWeight: 700, marginTop: '4px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{file.photoCategory || 'OTHER'}</span>
+                                <a href={`${API_HOST}/${file.storagePath}`} target="_blank" rel="noreferrer" style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: '50%', padding: '4px', cursor: 'pointer' }}>
+                                  <Eye size={12} />
                                 </a>
                               </div>
                             ))}
@@ -735,7 +718,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
                         {canModify && log.actionType === 'LOG' && !log.adjustedLogId && (
                           <button 
                             className="btn btn-secondary btn-sm" 
-                            style={{ alignSelf: 'flex-end', fontSize: '11px', padding: '2px 6px', marginTop: '8px' }}
+                            style={{ alignSelf: 'flex-end', fontSize: '12px', padding: '4px 8px', marginTop: '12px' }}
                             onClick={() => {
                               setLogAdjustTargetId(log.id);
                               setLogAdjustReason('');
@@ -752,8 +735,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
                 })
               )}
             </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* 1. Modal Thêm ghi nhận sửa chữa */}
