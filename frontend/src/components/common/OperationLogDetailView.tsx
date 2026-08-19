@@ -85,6 +85,29 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
     </div>
   );
 
+  const ActionButton = ({ onClick, disabled, icon: Icon, label, color }: any) => (
+    <button 
+      onClick={onClick} 
+      disabled={disabled} 
+      style={{ 
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', 
+        background: 'none', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1, width: '100px'
+      }}
+    >
+      <div style={{ 
+        width: '50px', height: '50px', borderRadius: '50%', backgroundColor: color, 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <Icon size={24} />
+      </div>
+      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', lineHeight: '1.3' }}>
+        {label}
+      </span>
+    </button>
+  );
+
   return (
     <div className="request-detail-view" style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       
@@ -98,20 +121,17 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
         </button>
       </div>
 
-      <div className="request-detail-container" style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, padding: '24px', overflowY: 'auto' }}>
+      <div className="request-detail-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, padding: '24px', overflowY: 'auto' }}>
         
-        {/* Action Grid */}
-        <div className="card" style={{ padding: '16px 20px', border: '1px solid var(--border-color)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <button 
-            className="btn btn-primary" 
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px', fontWeight: 600 }}
-            onClick={() => setIsFormOpen(true)}
-          >
-            <Plus size={18} /> Nhập thông số Vận hành
-          </button>
-          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Ghi nhận thông số thực tế của máy theo ca làm việc.
-          </div>
+        {/* Top Header Card - Action Grid */}
+        <div className="card" style={{ padding: '24px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+           <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a8a', textAlign: 'center', marginBottom: '24px' }}>
+             Các thao tác
+           </h3>
+           
+           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
+             <ActionButton onClick={() => setIsFormOpen(true)} icon={Plus} label="Nhập thông số" color="#3b82f6" />
+           </div>
         </div>
 
         {/* Metadata Table */}
