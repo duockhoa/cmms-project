@@ -143,25 +143,6 @@ export const WorkOrdersPage: React.FC = () => {
     }
   };
 
-  const handleStatusChange = async (id: string, newStatus: string, expectedVersion: number) => {
-    try {
-      const res = await fetchWithAuth(`${API_BASE}/api/v1/work-orders/${id}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, expectedVersion })
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || 'Lỗi đổi trạng thái');
-      }
-      setStatusDropdownId(null);
-      toast.success('Thành công', 'Đã cập nhật trạng thái phiếu bảo trì.');
-      loadData();
-    } catch (err: any) {
-      toast.error('Đổi trạng thái thất bại', err.message);
-    }
-  };
-
   const openMaterialModal = async (wo: any) => {
     setSelectedMaterialWO(wo);
     setMaterialLoading(true);
@@ -366,33 +347,7 @@ export const WorkOrdersPage: React.FC = () => {
                     </td>
                     <td>{wo.equipment?.name || '---'}</td>
                     <td>
-                      <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <button 
-                          className="btn btn-secondary btn-sm"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px' }}
-                          onClick={() => setStatusDropdownId(statusDropdownId === wo.id ? null : wo.id)}
-                        >
-                          <StatusBadge status={wo.status} />
-                          <ChevronDown size={12} />
-                        </button>
-                        {statusDropdownId === wo.id && (
-                          <div className="action-dropdown" style={{
-                            position: 'absolute', left: 0, top: '28px', zIndex: 1000,
-                            backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                            borderRadius: '4px', width: '150px', padding: '4px 0', boxShadow: 'var(--shadow-md)'
-                          }}>
-                            {['ASSIGNED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'VERIFIED', 'CLOSED', 'CANCELLED'].map((st) => (
-                              <button
-                                key={st}
-                                onClick={() => handleStatusChange(wo.id, st, wo.version)}
-                                style={{ display: 'block', width: '100%', padding: '6px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '12px' }}
-                              >
-                                {st}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <StatusBadge status={wo.status} />
                     </td>
                     <td><span className={`badge badge-${wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'danger' : 'warning'}`}>{wo.priority}</span></td>
                     <td>{wo.technicianName || 'Chưa phân công'}</td>
