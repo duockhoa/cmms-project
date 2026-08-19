@@ -6,7 +6,7 @@ import { ChecklistManager } from '../components/common/ChecklistManager';
 import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
-import { WorkOrderDetailModal } from '../components/common/WorkOrderDetailModal';
+import { WorkOrderDetailView } from '../components/common/WorkOrderDetailView';
 
 const API_BASE = API_HOST;
 
@@ -267,7 +267,9 @@ export const WorkOrdersPage: React.FC = () => {
 
   return (
     <div>
-      <div className="page-header">
+      {!selectedDetailWoId ? (
+        <>
+          <div className="page-header">
         <div>
           <h1 className="page-title">Phiếu bảo trì (Work Orders)</h1>
           <p className="page-subtitle">Quản lý lệnh sửa chữa và vật tư liên quan</p>
@@ -477,6 +479,17 @@ export const WorkOrdersPage: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+      </>
+      ) : (
+        <div style={{ height: 'calc(100vh - 80px)', backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <WorkOrderDetailView
+            workOrderId={selectedDetailWoId}
+            onStatusChangeSuccess={() => loadData()}
+            currentUser={currentUser}
+            onClose={() => setSelectedDetailWoId(null)}
+          />
         </div>
       )}
 
@@ -717,16 +730,6 @@ export const WorkOrdersPage: React.FC = () => {
         </Modal>
       )}
 
-      {/* 6. WO Detail Modal */}
-      {selectedDetailWoId && (
-        <WorkOrderDetailModal
-          isOpen={!!selectedDetailWoId}
-          onClose={() => setSelectedDetailWoId(null)}
-          workOrderId={selectedDetailWoId}
-          onStatusChangeSuccess={() => loadData()}
-          currentUser={currentUser}
-        />
-      )}
     </div>
   );
 };

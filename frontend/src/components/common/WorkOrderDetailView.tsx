@@ -4,20 +4,18 @@ import { Modal } from './Modal';
 import { useToast } from './Toast';
 import { Play, Pause, CheckCircle2, FileText, Camera, Upload, Plus, AlertTriangle, Eye, Loader2, ArrowRightLeft, ShieldCheck, XOctagon } from 'lucide-react';
 
-interface WorkOrderDetailModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface WorkOrderDetailViewProps {
   workOrderId: string;
   onStatusChangeSuccess?: () => void;
   currentUser: any;
+  onClose?: () => void;
 }
 
-export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
-  isOpen,
-  onClose,
+export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
   workOrderId,
   onStatusChangeSuccess,
   currentUser,
+  onClose,
 }) => {
   const toast = useToast();
   const [wo, setWo] = useState<any>(null);
@@ -111,19 +109,19 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
   };
 
   useEffect(() => {
-    if (isOpen && workOrderId) {
+    if (workOrderId) {
       loadData();
     }
-  }, [isOpen, workOrderId]);
+  }, [workOrderId]);
 
-  if (!isOpen || loading || !wo) {
+  if (loading || !wo) {
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Chi tiết Work Order">
-        <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center' }}>
           <Loader2 className="animate-spin" style={{ margin: '0 auto 12px auto' }} size={24} />
           Đang tải chi tiết lệnh sửa chữa...
         </div>
-      </Modal>
+      </div>
     );
   }
 
@@ -468,8 +466,20 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Chi tiết phiếu bảo trì: ${wo.orderCode}`}>
-      <div className="work-order-detail-container" style={{ display: 'flex', flexDirection: 'column', gap: '20px', minHeight: '500px', maxHeight: '80vh', overflowY: 'auto' }}>
+    <div className="work-order-detail-view" style={{ flex: 1, backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Title Bar like the one in the mockup */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
+        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1e3a8a' }}>
+          {wo.title} <span style={{ color: 'var(--text-muted)' }}>- {wo.orderCode}</span>
+        </h2>
+        {onClose && (
+          <button onClick={onClose} className="btn-icon">
+            <XOctagon size={18} />
+          </button>
+        )}
+      </div>
+
+      <div className="work-order-detail-container" style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, padding: '24px', overflowY: 'auto', backgroundColor: 'var(--bg-primary)' }}>
         
         {/* Top Header Card */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'space-between', padding: '16px', border: '1px solid var(--border-color)', borderRadius: '8px', backgroundColor: 'var(--bg-secondary)' }}>
@@ -1073,6 +1083,6 @@ export const WorkOrderDetailModal: React.FC<WorkOrderDetailModalProps> = ({
           </form>
         </Modal>
       )}
-    </Modal>
+    </div>
   );
 };
