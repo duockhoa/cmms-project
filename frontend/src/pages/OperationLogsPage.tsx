@@ -74,19 +74,10 @@ export const OperationLogsPage: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', gap: '20px', overflow: 'hidden' }}>
+      <div className="master-detail-container">
         
         {/* Master List Pane */}
-        <div style={{
-          flex: selectedEqId ? '0 0 400px' : 1,
-          transition: 'all 0.3s ease',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: 'var(--bg-card)',
-          borderRadius: '12px',
-          border: '1px solid var(--border-color)',
-          overflow: 'hidden'
-        }}>
+        <div className={`master-pane ${selectedEqId ? 'has-selection' : ''}`}>
           {loading ? (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Đang tải dữ liệu...</div>
           ) : selectedEqId ? (
@@ -172,18 +163,8 @@ export const OperationLogsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Detail View Pane */}
         {selectedEqId && (
-          <div style={{
-            flex: 1,
-            backgroundColor: 'var(--bg-card)',
-            borderRadius: '12px',
-            border: '1px solid var(--border-color)',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'slideInRight 0.3s ease'
-          }}>
+          <div className="detail-pane">
             <EquipmentOperationDetailView 
               equipmentId={selectedEqId}
               onClose={() => setSelectedEqId(null)} 

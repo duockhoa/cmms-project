@@ -141,19 +141,10 @@ export const RequestsPage: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', gap: '20px', overflow: 'hidden' }}>
+      <div className="master-detail-container">
         
         {/* Master List Pane */}
-        <div style={{
-          flex: selectedDetailReqId ? '0 0 400px' : 1,
-          transition: 'all 0.3s ease',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: 'var(--bg-card)',
-          borderRadius: '12px',
-          border: '1px solid var(--border-color)',
-          overflow: 'hidden'
-        }}>
+        <div className={`master-pane ${selectedDetailReqId ? 'has-selection' : ''}`}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách yêu cầu...</div>
           ) : selectedDetailReqId ? (
@@ -235,16 +226,7 @@ export const RequestsPage: React.FC = () => {
 
         {/* Detail View Pane */}
         {selectedDetailReqId && (
-          <div style={{
-            flex: 1,
-            backgroundColor: 'var(--bg-card)',
-            borderRadius: '12px',
-            border: '1px solid var(--border-color)',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'slideInRight 0.3s ease'
-          }}>
+          <div className="detail-pane">
             <RequestDetailView 
               requestId={selectedDetailReqId} 
               users={users} 

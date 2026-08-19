@@ -457,3 +457,69 @@ body {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+
+/* Master-Detail Responsive Layout */
+.master-detail-container {
+  display: flex;
+  gap: 20px;
+  height: calc(100vh - 180px);
+  position: relative;
+  overflow: hidden;
+}
+
+.master-pane {
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-card);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  height: 100%;
+}
+
+.master-pane.has-selection {
+  flex: 0 0 450px;
+}
+
+.master-pane:not(.has-selection) {
+  flex: 1;
+}
+
+.detail-pane {
+  flex: 1;
+  background-color: var(--bg-card);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.3s ease;
+  height: 100%;
+}
+
+@media (max-width: 1024px) {
+  .master-pane.has-selection {
+    flex: 0 0 320px; /* Narrower on tablet */
+  }
+}
+
+@media (max-width: 768px) {
+  .master-detail-container {
+    gap: 0;
+    height: calc(100vh - 130px); /* Adjust height for mobile */
+  }
+  
+  .master-pane.has-selection {
+    display: none; /* Hide master when detail is open */
+  }
+  
+  .master-pane:not(.has-selection) {
+    flex: 1;
+    display: flex;
+  }
+  
+  .detail-pane {
+    width: 100%;
+  }
+}

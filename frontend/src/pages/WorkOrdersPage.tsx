@@ -438,11 +438,10 @@ export const WorkOrdersPage: React.FC = () => {
       )}
       </>
       ) : (
-        <div style={{ display: 'flex', gap: '24px', height: 'calc(100vh - 100px)', padding: '4px' }}>
-          
-          {/* Lề trái: Master List */}
-          <div style={{ width: '380px', display: 'flex', flexDirection: 'column', gap: '16px', borderRight: '1px solid var(--border-color)', paddingRight: '16px' }}>
-            
+        <div className="master-detail-container">
+        
+        {/* Master List Pane */}
+        <div className={`master-pane ${selectedDetailWoId ? 'has-selection' : ''}`}>    
             {/* Header Left */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
