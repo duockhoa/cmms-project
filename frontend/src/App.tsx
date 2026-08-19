@@ -10,7 +10,6 @@ import { ChecklistsPage } from './pages/ChecklistsPage';
 import { ChecklistDetailPage } from './pages/ChecklistDetailPage';
 import { SparePartsPage } from './pages/SparePartsPage';
 import { ReportsPage } from './pages/ReportsPage';
-import { UsersPage } from './pages/UsersPage';
 import { MaintenancePage } from './pages/MaintenancePage';
 import { TechniciansPage } from './pages/TechniciansPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -56,13 +55,12 @@ export function App() {
         <ToastProvider>
         <BrowserRouter>
           <div className={`app-container ${!sidebarOpen ? 'sidebar-collapsed' : ''}`}>
-
-          <Sidebar 
-            collapsed={!sidebarOpen} 
-            onCloseSidebar={() => setSidebarOpen(false)}
-          />
-          
-          <div className="main-content">
+            <Sidebar 
+              collapsed={!sidebarOpen} 
+              onCloseSidebar={() => setSidebarOpen(false)}
+            />
+            
+            <div className="main-content">
             <Navbar theme={theme} setTheme={setTheme} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
             
             <main className="page-body">
@@ -76,7 +74,6 @@ export function App() {
                 <Route path="/checklists/:id" element={<ChecklistDetailPage />} />
                 <Route path="/spare-parts" element={<SparePartsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/users" element={<UsersPage />} />
                 <Route path="/maintenance" element={<MaintenancePage />} />
                 <Route path="/technicians" element={<TechniciansPage />} />
                 <Route path="/settings" element={<SettingsPage />} />

@@ -31,7 +31,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
     { id: 'checklists', label: 'Checklist bảo trì', icon: CheckSquare },
     { id: 'spare-parts', label: 'Kho phụ tùng', icon: Package },
     { id: 'reports', label: 'Báo cáo & Phân tích', icon: BarChart3 },
-    { id: 'users', label: 'Người dùng CMMS', icon: Users },
     { id: 'maintenance', label: 'Lịch bảo trì', icon: Calendar },
     { id: 'technicians', label: 'Kỹ thuật viên', icon: UserCheck },
     { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings },
