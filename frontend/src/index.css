@@ -567,3 +567,29 @@ body {
     font-size: 10px !important;
   }
 }
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .page-header > div:last-child {
+    width: 100%;
+    display: flex;
+  }
+  .page-header .btn {
+    flex: 1;
+    justify-content: center;
+  }
+  
+  .btn {
+    padding: 6px 10px;
+    font-size: 11px;
+    gap: 4px;
+  }
+  .btn svg {
+    width: 14px;
+    height: 14px;
+  }
+}
