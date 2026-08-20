@@ -8,7 +8,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     // if a special x-test-user-id header is provided, or let standard strategy handle it.
     const request = context.switchToHttp().getRequest();
     const testUserId = request.headers['x-test-user-id'] || request.headers['x-user-id'];
-    if (testUserId) {
+    
+    // Only allow bypass in test environments for security
+    if (testUserId && process.env.NODE_ENV === 'test') {
       // Mock token payload data structure
       request.user = {
         id: testUserId,

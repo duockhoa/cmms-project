@@ -37,6 +37,22 @@ export function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // SSO Token Interceptor
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      localStorage.setItem('access_token', token);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      // Check if logged in, if not, redirect to HRM
+      const currentToken = localStorage.getItem('access_token');
+      if (!currentToken && window.location.pathname !== '/login') {
+        window.location.href = (import.meta as any).env.VITE_HRM_LOGIN_URL || '/login';
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth <= 768) {

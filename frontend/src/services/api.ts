@@ -3,30 +3,53 @@ const API_BASE = API_HOST + '/api/v1';
 const DEMO_USER_ID = (import.meta as any).env.VITE_USER_ID || 'tech-demo-id';
 
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
-  const headers = {
+  const token = localStorage.getItem('access_token');
+  const headers: any = {
     'Content-Type': 'application/json',
-    'x-user-id': DEMO_USER_ID,
-    'x-test-user-id': DEMO_USER_ID,
     ...options.headers
   };
-  return fetch(url, { ...options, headers });
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(url, { ...options, headers });
+  
+  if (res.status === 401) {
+    localStorage.removeItem('access_token');
+    window.location.href = (import.meta as any).env.VITE_HRM_LOGIN_URL || '/login';
+  }
+  
+  return res;
 };
 
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
+  const token = localStorage.getItem('access_token');
+  
+  const headers: any = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const config: RequestInit = {
-    headers: {
-      'Content-Type': 'application/json',
-      'x-user-id': DEMO_USER_ID,
-      'x-test-user-id': DEMO_USER_ID,
-      ...options.headers,
-    },
+    headers,
     ...options,
   };
 
   try {
     const res = await fetch(url, config);
+    if (res.status === 401) {
+      localStorage.removeItem('access_token');
+      window.location.href = (import.meta as any).env.VITE_HRM_LOGIN_URL || '/login';
+      throw new Error('Unauthorized');
+    }
+    
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: res.statusText }));
       throw new Error(err.message || 'API request failed');
@@ -165,12 +188,15 @@ export const api = {
   deleteAttachment: (id: string) =>
     request(`/attachments/${id}`, { method: 'DELETE' }),
   uploadAttachment: (formData: FormData) => {
+    const token = localStorage.getItem('access_token');
+    const headers: any = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     return fetch(`${API_BASE}/attachments`, {
       method: 'POST',
-      headers: {
-        'x-user-id': DEMO_USER_ID,
-        'x-test-user-id': DEMO_USER_ID,
-      },
+      headers,
       body: formData,
     }).then(async (res) => {
       if (!res.ok) {
