@@ -179,6 +179,11 @@ export class UsersService {
         throw new HttpException('Dữ liệu từ HRM không đúng định dạng', HttpStatus.BAD_REQUEST);
       }
 
+      const defaultRole = process.env.DEFAULT_SYNC_ROLE || 'TECHNICIAN';
+      const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
+      const inactiveStatusesStr = process.env.HRM_INACTIVE_STATUSES || 'INACTIVE,BANNED,0';
+      const inactiveStatuses = inactiveStatusesStr.split(',').map(s => s.trim().toUpperCase());
+
       let syncedCount = 0;
       
       // Upsert each user
@@ -186,23 +191,24 @@ export class UsersService {
         // Skip users without id or username/email
         if (!hrmUser.id || (!hrmUser.email && !hrmUser.username)) continue;
         
-        const emailOrUsername = hrmUser.email || hrmUser.username || `${hrmUser.id}@local.hrm`;
+        const emailOrUsername = hrmUser.email || hrmUser.username || `${hrmUser.id}${dummyDomain}`;
         const name = hrmUser.name || hrmUser.username || `User ${hrmUser.id}`;
+        const isUserActive = !inactiveStatuses.includes(String(hrmUser.status).toUpperCase());
         
         await this.prisma.user.upsert({
           where: { email: emailOrUsername },
           update: {
             name: name,
             department: hrmUser.department || null,
-            isActive: hrmUser.status !== 'INACTIVE' && hrmUser.status !== 'BANNED' && hrmUser.status !== 0,
+            isActive: isUserActive,
           },
           create: {
             id: String(hrmUser.id),
             email: emailOrUsername,
             name: name,
-            role: 'TECHNICIAN', // Default role in CMMS
+            role: defaultRole, // Configurable via .env
             department: hrmUser.department || null,
-            isActive: hrmUser.status !== 'INACTIVE' && hrmUser.status !== 'BANNED' && hrmUser.status !== 0,
+            isActive: isUserActive,
           }
         });
         syncedCount++;

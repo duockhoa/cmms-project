@@ -22,7 +22,8 @@ export const UsersSettingsTab: React.FC = () => {
       ]);
       setUsers(uRes);
       setRoles(rRes);
-      if (meRes && meRes.roles && meRes.roles.includes('ADMIN')) {
+      const adminRole = import.meta.env.VITE_SUPER_ADMIN_ROLE || 'ADMIN';
+      if (meRes && meRes.roles && meRes.roles.includes(adminRole)) {
         setIsAdmin(true);
       }
     } catch (err: any) {

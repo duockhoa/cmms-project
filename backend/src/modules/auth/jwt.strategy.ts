@@ -54,7 +54,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // Try to find the user in the CMMS database by email or username
-    const emailOrUsername = payload.email || payload.username || `${payload.sub}@local.hrm`;
+    const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
+    const emailOrUsername = payload.email || payload.username || `${payload.sub}${dummyDomain}`;
     
     let dbUser = await this.prisma.user.findFirst({
       where: {
@@ -68,11 +69,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Auto-provision user if they don't exist in CMMS yet
     if (!dbUser) {
       try {
+        const defaultRole = process.env.DEFAULT_SYNC_ROLE || 'TECHNICIAN';
         dbUser = await this.prisma.user.create({
           data: {
             email: emailOrUsername,
             name: payload.preferred_username || payload.name || payload.username || `User ${payload.sub}`,
-            role: 'TECHNICIAN', // Default role in CMMS until Admin changes it
+            role: defaultRole, // Configurable via .env
           },
           include: {
             customRole: true
