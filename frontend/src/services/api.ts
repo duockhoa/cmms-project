@@ -1,6 +1,6 @@
-export const API_HOST = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_BASE = API_HOST + '/api/v1';
-const DEMO_USER_ID = (import.meta as any).env.VITE_USER_ID || 'tech-demo-id';
+const DEMO_USER_ID = import.meta.env.VITE_USER_ID || 'tech-demo-id';
 
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
   const token = localStorage.getItem('access_token');
@@ -17,7 +17,7 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
   
   if (res.status === 401) {
     localStorage.removeItem('access_token');
-    window.location.href = (import.meta as any).env.VITE_HRM_LOGIN_URL || '/login';
+    window.location.href = import.meta.env.VITE_HRM_LOGIN_URL || '/login';
   }
   
   return res;
@@ -46,7 +46,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
     const res = await fetch(url, config);
     if (res.status === 401) {
       localStorage.removeItem('access_token');
-      window.location.href = (import.meta as any).env.VITE_HRM_LOGIN_URL || '/login';
+      window.location.href = import.meta.env.VITE_HRM_LOGIN_URL || '/login';
       throw new Error('Unauthorized');
     }
     

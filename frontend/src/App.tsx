@@ -28,6 +28,13 @@ const queryClient = new QueryClient({
   },
 });
 
+function LoginRedirect() {
+  useEffect(() => {
+    window.location.href = import.meta.env.VITE_HRM_LOGIN_URL || '/';
+  }, []);
+  return null;
+}
+
 export function App() {
   const [theme, setTheme] = useState('light');
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -47,7 +54,7 @@ export function App() {
       // Check if logged in, if not, redirect to HRM
       const currentToken = localStorage.getItem('access_token');
       if (!currentToken && window.location.pathname !== '/login') {
-        window.location.href = (import.meta as any).env.VITE_HRM_LOGIN_URL || '/login';
+        window.location.href = import.meta.env.VITE_HRM_LOGIN_URL || '/login';
       }
     }
   }, []);
@@ -94,6 +101,7 @@ export function App() {
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/operation-logs" element={<OperationLogsPage />} />
                 <Route path="/equipment/:id/operation-log-form" element={<OperationLogFormPage />} />
+                <Route path="/login" element={<LoginRedirect />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>
