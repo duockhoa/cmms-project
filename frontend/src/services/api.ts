@@ -254,7 +254,25 @@ export const api = {
   updateRole: (id: string, role: any) => request(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(role) }),
   deleteRole: (id: string) => request(`/roles/${id}`, { method: 'DELETE' }),
 
-  updateUserRole: (userId: string, roleId: string | null) => request(`/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ roleId }) }),
+  updateUserRole: async (id: string, roleId: string | null) => {
+    const res = await fetchWithAuth(`${API_BASE}/api/v1/users/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ roleId }),
+    });
+    if (!res.ok) throw new Error('Không thể cập nhật quyền người dùng');
+    return res.json();
+  },
+
+  syncHrmUsers: async () => {
+    const res = await fetchWithAuth(`${API_BASE}/api/v1/users/sync-hrm`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => null);
+      throw new Error(errorData?.message || 'Không thể đồng bộ người dùng từ HRM');
+    }
+    return res.json();
+  },
 
   // ==========================================
   // CHECKLIST TEMPLATES & LIBRARY

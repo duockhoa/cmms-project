@@ -7,18 +7,24 @@ export const UsersSettingsTab: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const toast = useToast();
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [uRes, rRes] = await Promise.all([
-        api.getUsers({}), // we need all users
-        api.getRoles()
+      const [uRes, rRes, meRes] = await Promise.all([
+        api.getUsers({}),
+        api.getRoles(),
+        api.getMe().catch(() => null)
       ]);
       setUsers(uRes);
       setRoles(rRes);
+      if (meRes && meRes.roles && meRes.roles.includes('ADMIN')) {
+        setIsAdmin(true);
+      }
     } catch (err: any) {
       toast.error('Lỗi tải danh sách', err.message);
     } finally {
@@ -40,6 +46,19 @@ export const UsersSettingsTab: React.FC = () => {
     }
   };
 
+  const handleSyncHrm = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await api.syncHrmUsers();
+      toast.success('Thành công', `Đã đồng bộ ${res.syncedCount || 0} người dùng từ HRM`);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi đồng bộ', err.message || 'Không thể đồng bộ người dùng từ HRM');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -47,9 +66,16 @@ export const UsersSettingsTab: React.FC = () => {
           <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Danh sách người dùng & Phân quyền</h3>
           <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>Gán nhóm quyền cho nhân sự trong hệ thống.</p>
         </div>
-        <button className="btn btn-secondary" onClick={loadData} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <RefreshCw size={14} /> Làm mới
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={handleSyncHrm} disabled={isSyncing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} /> Đồng bộ HRM
+            </button>
+          )}
+          <button className="btn btn-secondary" onClick={loadData} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Làm mới
+          </button>
+        </div>
       </div>
 
       {loading ? (

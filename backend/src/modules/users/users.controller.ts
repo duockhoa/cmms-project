@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, Query, UseGuards, Post, Req } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateTechnicalProfileDto } from './dto/update-technical-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
@@ -12,6 +12,18 @@ import { ApiStandardResponse } from '../../common/decorators/api-standard-respon
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Post('sync-hrm')
+  @ApiStandardResponse({
+    summary: 'Đồng bộ danh sách người dùng từ HRM',
+    method: 'POST',
+    path: '/users/sync-hrm',
+  })
+  async syncHrmUsers(@Req() req: any) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1] || '';
+    return this.usersService.syncHrmUsers(token);
+  }
 
   @ApiStandardResponse({
     summary: 'Lấy danh sách người dùng đang hoạt động',

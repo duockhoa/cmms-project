@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateTechnicalProfileDto } from './dto/update-technical-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
@@ -149,5 +149,69 @@ export class UsersService {
       },
       include: { customRole: true }
     });
+  }
+
+  async syncHrmUsers(accessToken: string) {
+    const hrmApiUrl = process.env.HRM_API_URL;
+    if (!hrmApiUrl) {
+      throw new HttpException('Chưa cấu hình HRM_API_URL trong biến môi trường', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    try {
+      // Call HRM API
+      const response = await fetch(`${hrmApiUrl}/users`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 403 || response.status === 401) {
+          throw new HttpException('Tài khoản của bạn không có quyền lấy danh sách người dùng từ HRM', HttpStatus.FORBIDDEN);
+        }
+        throw new HttpException(`Lỗi khi gọi API HRM: ${response.statusText}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const hrmUsers = await response.json();
+      
+      if (!Array.isArray(hrmUsers)) {
+        throw new HttpException('Dữ liệu từ HRM không đúng định dạng', HttpStatus.BAD_REQUEST);
+      }
+
+      let syncedCount = 0;
+      
+      // Upsert each user
+      for (const hrmUser of hrmUsers) {
+        // Skip users without id or username/email
+        if (!hrmUser.id || (!hrmUser.email && !hrmUser.username)) continue;
+        
+        const emailOrUsername = hrmUser.email || hrmUser.username || `${hrmUser.id}@local.hrm`;
+        const name = hrmUser.name || hrmUser.username || `User ${hrmUser.id}`;
+        
+        await this.prisma.user.upsert({
+          where: { email: emailOrUsername },
+          update: {
+            name: name,
+            department: hrmUser.department || null,
+            isActive: hrmUser.status !== 'INACTIVE' && hrmUser.status !== 'BANNED' && hrmUser.status !== 0,
+          },
+          create: {
+            id: String(hrmUser.id),
+            email: emailOrUsername,
+            name: name,
+            role: 'TECHNICIAN', // Default role in CMMS
+            department: hrmUser.department || null,
+            isActive: hrmUser.status !== 'INACTIVE' && hrmUser.status !== 'BANNED' && hrmUser.status !== 0,
+          }
+        });
+        syncedCount++;
+      }
+
+      return { success: true, syncedCount };
+    } catch (err: any) {
+      if (err instanceof HttpException) throw err;
+      throw new HttpException(`Lỗi kết nối tới HRM: ${err.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 }
