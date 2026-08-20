@@ -470,11 +470,11 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
       style={{ 
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', 
         background: 'none', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.5 : 1, width: '90px'
+        opacity: disabled ? 0.5 : 1
       }}
     >
-      <div style={{ 
-        width: '50px', height: '50px', borderRadius: '50%', backgroundColor: color, 
+      <div className="action-grid-btn" style={{ 
+        borderRadius: '50%', backgroundColor: color, 
         display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
