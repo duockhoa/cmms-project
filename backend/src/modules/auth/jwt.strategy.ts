@@ -3,66 +3,95 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { passportJwtSecret } from 'jwks-rsa';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService) {
-    const hrmJwtSecret = configService.get<string>('HRM_JWT_SECRET');
-    const jwksUri = configService.get<string>('KEYCLOAK_JWKS_URI');
-    const issuer = configService.get<string>('KEYCLOAK_ISSUER');
-    const audience = configService.get<string>('KEYCLOAK_AUDIENCE');
+  private prisma: PrismaService;
 
-    if (hrmJwtSecret) {
-      // Use standard HRM JWT Secret
-      super({
-        jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-        ignoreExpiration: false,
-        secretOrKey: hrmJwtSecret,
-      });
-    } else {
-      // Fallback to Keycloak JWKS
+  constructor(configService: ConfigService, prisma: PrismaService) {
+    const hrmJwtSecret = configService.get<string>('HRM_JWT_SECRET');
+    
+    super(
+      hrmJwtSecret 
+        ? {
+            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            ignoreExpiration: false,
+            secretOrKey: hrmJwtSecret,
+          }
+        : {
+            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            ignoreExpiration: false,
+            audience: configService.get<string>('KEYCLOAK_AUDIENCE'),
+            issuer: configService.get<string>('KEYCLOAK_ISSUER'),
+            algorithms: ['RS256'],
+            secretOrKeyProvider: passportJwtSecret({
+              cache: true,
+              rateLimit: true,
+              jwksRequestsPerMinute: 5,
+              jwksUri: configService.get<string>('KEYCLOAK_JWKS_URI'),
+            }),
+          }
+    );
+    this.prisma = prisma;
+    
+    if (!hrmJwtSecret) {
+      const jwksUri = configService.get<string>('KEYCLOAK_JWKS_URI');
+      const issuer = configService.get<string>('KEYCLOAK_ISSUER');
+      const audience = configService.get<string>('KEYCLOAK_AUDIENCE');
       if (!jwksUri || !issuer || !audience) {
         throw new Error(
           'CRITICAL CONFIGURATION ERROR: You must define HRM_JWT_SECRET or Keycloak environment variables.',
         );
       }
-
-      super({
-        jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-        ignoreExpiration: false,
-        audience: audience,
-        issuer: issuer,
-        algorithms: ['RS256'],
-        secretOrKeyProvider: passportJwtSecret({
-          cache: true,
-          rateLimit: true,
-          jwksRequestsPerMinute: 5,
-          jwksUri: jwksUri,
-        }),
-      });
     }
   }
 
   async validate(payload: any) {
-    // payload represents decoded Keycloak JWT token
+    // payload represents decoded Keycloak/HRM JWT token
     if (!payload || !payload.sub) {
       throw new UnauthorizedException('Token payload is invalid or missing subject.');
     }
 
-    // Extract roles and username from keycloak token
-    // Keycloak typically puts client roles under resource_access.<client-id>.roles
-    // or realm roles under realm_access.roles
-    const realmRoles = payload.realm_access?.roles || [];
-    const clientRoles = payload.resource_access?.[payload.azp]?.roles || [];
-    // HRM roles might just be a flat array or a single string
-    const hrmRoles = Array.isArray(payload.roles) ? payload.roles : (payload.role ? [payload.role] : []);
+    // Try to find the user in the CMMS database by email or username
+    const emailOrUsername = payload.email || payload.username || `${payload.sub}@local.hrm`;
     
-    const roles = Array.from(new Set([...realmRoles, ...clientRoles, ...hrmRoles]));
+    let dbUser = await this.prisma.user.findFirst({
+      where: {
+        email: emailOrUsername
+      },
+      include: {
+        customRole: true
+      }
+    });
+
+    // Auto-provision user if they don't exist in CMMS yet
+    if (!dbUser) {
+      try {
+        dbUser = await this.prisma.user.create({
+          data: {
+            email: emailOrUsername,
+            name: payload.preferred_username || payload.name || payload.username || `User ${payload.sub}`,
+            role: 'TECHNICIAN', // Default role in CMMS until Admin changes it
+          },
+          include: {
+            customRole: true
+          }
+        });
+      } catch (err) {
+        throw new UnauthorizedException('Lỗi hệ thống: Không thể tạo tài khoản CMMS tự động từ HRM.');
+      }
+    }
+
+    // Combine roles from legacy 'role' field and new 'customRole'
+    const roles = [];
+    if (dbUser.role) roles.push(dbUser.role);
+    if (dbUser.customRole?.name) roles.push(dbUser.customRole.name);
 
     return {
-      id: payload.sub,
-      email: payload.email,
-      name: payload.preferred_username || payload.name,
+      id: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name,
       roles: roles,
       scope: payload.scope || '',
     };
