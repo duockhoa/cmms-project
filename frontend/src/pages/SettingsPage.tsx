@@ -7,14 +7,15 @@ import {
   Plus, Search, Edit2, Trash2, Save, RefreshCw, AlertTriangle
 } from 'lucide-react';
 
-import { Shield, Users, ListChecks } from 'lucide-react';
+import { Shield, Users, ListChecks, UserCheck } from 'lucide-react';
 import { RolesSettingsTab } from '../components/settings/RolesSettingsTab';
 import { UsersSettingsTab } from '../components/settings/UsersSettingsTab';
+import { TechniciansSettingsTab } from '../components/settings/TechniciansSettingsTab';
 import { ChecklistLibraryTab } from '../components/settings/ChecklistLibraryTab';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
-type SettingsTab = 'categories' | 'locations' | 'production-lines' | 'system-settings' | 'standard-parameters' | 'roles' | 'users' | 'checklist-library';
+type SettingsTab = 'categories' | 'locations' | 'production-lines' | 'system-settings' | 'standard-parameters' | 'roles' | 'users' | 'technicians' | 'checklist-library';
 
 export const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('categories');
@@ -414,6 +415,19 @@ export const SettingsPage: React.FC = () => {
               <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Tạo và cấp quyền truy cập.</div>
             </div>
           </button>
+          
+          <button
+            onClick={() => setActiveTab('technicians')}
+            style={activeTab === 'technicians' ? activeMenuStyles : inactiveMenuStyles}
+          >
+            <UserCheck size={16} />
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: '13.5px' }}>Kỹ thuật viên</div>
+              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>Chuyên môn và trạng thái làm việc.</div>
+            </div>
+          </button>
+
+          <hr style={{ borderColor: 'var(--border-color)', margin: '8px 0' }} />
 
           <button
             onClick={() => setActiveTab('users')}
@@ -444,6 +458,8 @@ export const SettingsPage: React.FC = () => {
             <RolesSettingsTab />
           ) : activeTab === 'users' ? (
             <UsersSettingsTab />
+          ) : activeTab === 'technicians' ? (
+            <TechniciansSettingsTab />
           ) : activeTab === 'checklist-library' ? (
             <ChecklistLibraryTab />
           ) : activeTab === 'system-settings' ? (

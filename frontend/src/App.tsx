@@ -11,7 +11,6 @@ import { ChecklistDetailPage } from './pages/ChecklistDetailPage';
 import { SparePartsPage } from './pages/SparePartsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { MaintenancePage } from './pages/MaintenancePage';
-import { TechniciansPage } from './pages/TechniciansPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AboutPage } from './pages/AboutPage';
 import { OperationLogFormPage } from './pages/OperationLogFormPage';
@@ -91,7 +90,6 @@ export function App() {
                 <Route path="/spare-parts" element={<SparePartsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/maintenance" element={<MaintenancePage />} />
-                <Route path="/technicians" element={<TechniciansPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/operation-logs" element={<OperationLogsPage />} />

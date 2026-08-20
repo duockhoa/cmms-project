@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import { api } from '../../services/api';
 import { Phone, Mail, CheckCircle, Clock, UserCheck, Search, Edit2, AlertCircle, RefreshCw } from 'lucide-react';
-import { Modal } from '../components/common/Modal';
-import { useToast } from '../components/common/Toast';
+import { Modal } from '../common/Modal';
+import { useToast } from '../common/Toast';
 
-export const TechniciansPage: React.FC = () => {
+export const TechniciansSettingsTab: React.FC = () => {
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,11 +131,14 @@ export const TechniciansPage: React.FC = () => {
 
   return (
     <div>
-      <div className="page-header">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
-          <h1 className="page-title">Kỹ thuật viên</h1>
-          <p className="page-subtitle">Quản lý đội ngũ kỹ thuật viên, chuyên môn và phân công công việc</p>
+          <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Danh sách Kỹ thuật viên</h3>
+          <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>Quản lý đội ngũ, chuyên môn và trạng thái công việc.</p>
         </div>
+        <button className="btn btn-secondary" onClick={loadData} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <RefreshCw size={14} /> Làm mới
+        </button>
       </div>
 
       {/* KPI Row */}
