@@ -15,6 +15,7 @@ interface EquipmentFormModalProps {
     serialNumber: string;
     specs: string;
     code: string;
+    accountingCode?: string;
   }) => void;
   initialData?: any;
 }
@@ -37,6 +38,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     serialNumber: '',
     specs: '',
     code: '',
+    accountingCode: '',
   });
 
   // Fetch categories and locations from DB
@@ -79,6 +81,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
             serialNumber: initialData.serialNumber || '',
             specs: initialData.specs || '',
             code: initialData.code || '',
+            accountingCode: initialData.accountingCode || '',
           });
         }
       });
@@ -100,6 +103,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
       serialNumber: '',
       specs: '',
       code: '',
+      accountingCode: '',
     });
   };
 
@@ -108,30 +112,41 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? "Chỉnh sửa thiết bị" : "Thêm thiết bị mới"}>
       <form onSubmit={handleSubmit}>
-        {isEdit && (
+        <div className="grid-2">
+          {isEdit ? (
+            <div className="form-group">
+              <label className="form-label">Mã thiết bị (Không thể sửa)</label>
+              <input 
+                type="text" 
+                className="form-input" 
+                disabled 
+                value={formData.code} 
+              />
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">Mã thiết bị (Để trống tự sinh)</label>
+              <input 
+                type="text" 
+                className="form-input" 
+                placeholder="Nhập mã thiết bị (ví dụ: EQ-0001)" 
+                value={formData.code} 
+                onChange={(e) => setFormData({ ...formData, code: e.target.value })} 
+              />
+            </div>
+          )}
+          
           <div className="form-group">
-            <label className="form-label">Mã thiết bị (Không thể sửa)</label>
+            <label className="form-label">Mã phụ (Kế toán)</label>
             <input 
               type="text" 
               className="form-input" 
-              disabled 
-              value={formData.code} 
+              placeholder="Nhập mã kế toán (Tùy chọn)" 
+              value={formData.accountingCode || ''} 
+              onChange={(e) => setFormData({ ...formData, accountingCode: e.target.value })} 
             />
           </div>
-        )}
-        
-        {!isEdit && (
-          <div className="form-group">
-            <label className="form-label">Mã thiết bị (Để trống tự sinh)</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              placeholder="Nhập mã thiết bị (ví dụ: EQ-0001)" 
-              value={formData.code} 
-              onChange={(e) => setFormData({ ...formData, code: e.target.value })} 
-            />
-          </div>
-        )}
+        </div>
 
         <div className="form-group">
           <label className="form-label">Tên thiết bị *</label>

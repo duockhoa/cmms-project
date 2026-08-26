@@ -13,6 +13,10 @@ export class CreateEquipmentDto {
   code: string;
 
   @IsString()
+  @IsOptional()
+  accountingCode?: string;
+
+  @IsString()
   @IsNotEmpty()
   name: string;
 
@@ -58,6 +62,10 @@ export class CreateEquipmentDto {
 }
 
 export class UpdateEquipmentDto {
+  @IsString()
+  @IsOptional()
+  accountingCode?: string;
+
   @IsString()
   @IsOptional()
   name?: string;

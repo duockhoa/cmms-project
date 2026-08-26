@@ -3,6 +3,7 @@ export type EquipmentStatus = 'OPERATIONAL' | 'UNDER_MAINTENANCE' | 'INCIDENT' |
 export interface Equipment {
   id: string;
   code: string;
+  accountingCode?: string;
   name: string;
   category: string;
   location: string;

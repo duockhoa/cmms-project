@@ -79,6 +79,7 @@ model Role {
 model Equipment {
   id                    String                @id @default(uuid())
   code                  String                @unique
+  accountingCode        String?               @unique
   name                  String
   category              String // Máy phay, Máy nén khí, Băng tải, Máy hàn...
   location              String // Xưởng A, Xưởng B, Phòng sạch...

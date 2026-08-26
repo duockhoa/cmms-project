@@ -236,7 +236,9 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
               <StatusBadge status={data.status} />
             </div>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-              Mã: <strong>{data.code}</strong> <span style={{ margin: '0 8px' }}>|</span> 
+              Mã: <strong>{data.code}</strong> 
+              {data.accountingCode && <><span style={{ margin: '0 8px' }}>|</span> Phụ (KT): <strong>{data.accountingCode}</strong></>}
+              <span style={{ margin: '0 8px' }}>|</span> 
               Số Serial: <strong>{data.serialNumber || '---'}</strong>
             </p>
           </div>

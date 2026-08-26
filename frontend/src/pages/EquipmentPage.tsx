@@ -224,7 +224,10 @@ export const EquipmentPage: React.FC = () => {
                     onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
                     onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    <td style={{ fontWeight: 700 }}>{item.code}</td>
+                    <td>
+                      <div style={{ fontWeight: 700 }}>{item.code}</div>
+                      {item.accountingCode && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.accountingCode}</div>}
+                    </td>
                     <td style={{ fontWeight: 600 }}>{item.name}</td>
                     <td>{item.category}</td>
                     <td>{item.location}</td>
