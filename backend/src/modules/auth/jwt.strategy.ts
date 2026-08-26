@@ -15,12 +15,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super(
       hrmJwtSecret 
         ? {
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            jwtFromRequest: ExtractJwt.fromExtractors([
+              ExtractJwt.fromAuthHeaderAsBearerToken(),
+              (request: any) => request?.query?.token as string,
+            ]),
             ignoreExpiration: false,
             secretOrKey: hrmJwtSecret,
+            passReqToCallback: true,
           }
         : {
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            jwtFromRequest: ExtractJwt.fromExtractors([
+              ExtractJwt.fromAuthHeaderAsBearerToken(),
+              (request: any) => request?.query?.token as string,
+            ]),
             ignoreExpiration: false,
             audience: configService.get<string>('KEYCLOAK_AUDIENCE'),
             issuer: configService.get<string>('KEYCLOAK_ISSUER'),
@@ -31,6 +38,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
               jwksRequestsPerMinute: 5,
               jwksUri: configService.get<string>('KEYCLOAK_JWKS_URI'),
             }),
+            passReqToCallback: true,
           }
     );
     this.prisma = prisma;
@@ -47,7 +55,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
   }
 
-  async validate(payload: any) {
+  async validate(req: any, payload: any) {
     // payload represents decoded Keycloak/HRM JWT token
     if (!payload || !payload.sub) {
       throw new UnauthorizedException('Token payload is invalid or missing subject.');
@@ -66,6 +74,39 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     });
 
+    let department = dbUser?.department || null;
+    let name = dbUser?.name || payload.preferred_username || payload.name || payload.username || `User ${payload.sub}`;
+    let specialty = dbUser?.specialty || null;
+    
+    // Nếu user chưa tồn tại hoặc thiếu department trong DB, thử lấy trực tiếp từ HRM để đồng bộ
+    if (!dbUser || dbUser.department === null) {
+      try {
+        let token = req.headers.authorization;
+        if (!token && req.query?.token) {
+          token = `Bearer ${req.query.token}`;
+        }
+        if (token) {
+          const hrmApiUrl = process.env.HRM_API_URL || 'https://hrm.example.com';
+          const res = await fetch(`${hrmApiUrl}/users/me`, {
+            headers: {
+              'Authorization': token,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (res.ok) {
+            const hrmUser = await res.json();
+            if (hrmUser) {
+              department = hrmUser.department || department;
+              name = hrmUser.name || name;
+              specialty = hrmUser.position || specialty;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch user profile from HRM during validation:', error);
+      }
+    }
+
     // Auto-provision user if they don't exist in CMMS yet
     if (!dbUser) {
       try {
@@ -73,8 +114,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         dbUser = await this.prisma.user.create({
           data: {
             email: emailOrUsername,
-            name: payload.preferred_username || payload.name || payload.username || `User ${payload.sub}`,
+            name: name,
             role: defaultRole, // Configurable via .env
+            department: department,
+            specialty: specialty,
           },
           include: {
             customRole: true
@@ -83,6 +126,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       } catch (err) {
         throw new UnauthorizedException('Lỗi hệ thống: Không thể tạo tài khoản CMMS tự động từ HRM.');
       }
+    } else if ((department && dbUser.department !== department) || (specialty && dbUser.specialty !== specialty) || (name && dbUser.name !== name)) {
+      // Cập nhật thông tin mới nhất từ HRM vào DB nếu phát hiện thay đổi
+      dbUser = await this.prisma.user.update({
+        where: { id: dbUser.id },
+        data: {
+          department: department || dbUser.department,
+          specialty: specialty || dbUser.specialty,
+          name: name || dbUser.name,
+        },
+        include: { customRole: true }
+      });
     }
 
     // Combine roles from legacy 'role' field and new 'customRole'
@@ -96,6 +150,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       name: dbUser.name,
       roles: roles,
       scope: payload.scope || '',
+      department: dbUser.department,
     };
   }
 }

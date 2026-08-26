@@ -12,7 +12,15 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    const authUrl = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrm.example.com';
+    const redirectUrl = encodeURIComponent(window.location.origin);
+    window.location.href = `${authUrl}/login?redirect=${redirectUrl}`;
+  };
 
   const fetchNotifications = async () => {
     try {
@@ -195,26 +203,58 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
         </button>
 
         {/* User Profile */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.1 }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-              {currentUser?.name || 'Đang tải...'}
-            </span>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-              {currentUser ? (currentUser.role === 'ADMIN' ? 'Quản trị viên' : currentUser.role === 'MANAGER' ? 'Quản lý' : 'Kỹ thuật viên') : ''}
-            </span>
+        <div style={{ position: 'relative' }}>
+          <div 
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+            onClick={() => setShowUserDropdown(!showUserDropdown)}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.1 }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {currentUser?.name || 'Đang tải...'}
+              </span>
+              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                {currentUser ? (currentUser.role === 'ADMIN' ? 'Quản trị viên' : currentUser.role === 'MANAGER' ? 'Quản lý' : 'Kỹ thuật viên') : ''}
+              </span>
+            </div>
+            {/* Circular Red Avatar */}
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '50%',
+              backgroundColor: '#b91c1c', color: '#ffffff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '13px', fontWeight: 700,
+              border: '2px solid rgba(255,255,255,0.2)',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              {currentUser?.name ? currentUser.name.split(' ').pop()?.substring(0, 2).toUpperCase() : 'U'}
+            </div>
           </div>
-          {/* Circular Red Avatar */}
-          <div style={{
-            width: '36px', height: '36px', borderRadius: '50%',
-            backgroundColor: '#b91c1c', color: '#ffffff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '13px', fontWeight: 700,
-            border: '2px solid rgba(255,255,255,0.2)',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            {currentUser?.name ? currentUser.name.split(' ').pop()?.substring(0, 2).toUpperCase() : 'U'}
-          </div>
+
+          {showUserDropdown && (
+            <div className="card" style={{
+              position: 'absolute', right: 0, top: '46px', width: '200px',
+              zIndex: 1000, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+              padding: '8px 0', border: '1px solid var(--border-color)',
+              display: 'flex', flexDirection: 'column'
+            }}>
+              <a 
+                href={import.meta.env.VITE_HRM_ROOT_URL || 'https://hrm.example.com'} 
+                style={{ padding: '10px 16px', color: 'var(--text-primary)', textDecoration: 'none', fontSize: '13px', cursor: 'pointer' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                Tất cả ứng dụng
+              </a>
+              <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }}></div>
+              <div 
+                onClick={handleLogout}
+                style={{ padding: '10px 16px', color: 'var(--danger)', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                Đăng xuất
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

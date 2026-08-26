@@ -30,7 +30,9 @@ const queryClient = new QueryClient({
 
 function LoginRedirect() {
   useEffect(() => {
-    window.location.href = import.meta.env.VITE_HRM_LOGIN_URL || '/';
+    const authUrl = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrm.example.com';
+    const redirectUrl = encodeURIComponent(window.location.origin);
+    window.location.href = `${authUrl}/login?redirect=${redirectUrl}`;
   }, []);
   return null;
 }
@@ -54,7 +56,9 @@ export function App() {
       // Check if logged in, if not, redirect to HRM
       const currentToken = localStorage.getItem('access_token');
       if (!currentToken && window.location.pathname !== '/login') {
-        window.location.href = import.meta.env.VITE_HRM_LOGIN_URL || '/login';
+        const authUrl = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrm.example.com';
+        const redirectUrl = encodeURIComponent(window.location.href);
+        window.location.href = `${authUrl}/login?redirect=${redirectUrl}`;
       }
     }
   }, []);
