@@ -15,7 +15,6 @@ import { OperationParametersTab } from '../components/equipment/OperationParamet
 import { EquipmentOperationLogsTab } from '../components/equipment/EquipmentOperationLogsTab';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
-const DEMO_USER_ID = (import.meta as any).env.VITE_USER_ID || 'tech-demo-id';
 
 interface EquipmentDetailPageProps {
   item: any;

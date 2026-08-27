@@ -107,15 +107,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
+    const adminCode = process.env.ADMIN_EMPLOYEE_CODE;
+    const isSuperAdmin = adminCode && (payload.username === adminCode || emailOrUsername.includes(adminCode));
+    const defaultRole = isSuperAdmin ? 'ADMIN' : (process.env.DEFAULT_SYNC_ROLE || 'TECHNICIAN');
+
     // Auto-provision user if they don't exist in CMMS yet
     if (!dbUser) {
       try {
-        const defaultRole = process.env.DEFAULT_SYNC_ROLE || 'TECHNICIAN';
         dbUser = await this.prisma.user.create({
           data: {
             email: emailOrUsername,
             name: name,
-            role: defaultRole, // Configurable via .env
+            role: defaultRole,
             department: department,
             specialty: specialty,
           },
@@ -126,17 +129,24 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       } catch (err) {
         throw new UnauthorizedException('Lỗi hệ thống: Không thể tạo tài khoản CMMS tự động từ HRM.');
       }
-    } else if ((department && dbUser.department !== department) || (specialty && dbUser.specialty !== specialty) || (name && dbUser.name !== name)) {
-      // Cập nhật thông tin mới nhất từ HRM vào DB nếu phát hiện thay đổi
-      dbUser = await this.prisma.user.update({
-        where: { id: dbUser.id },
-        data: {
-          department: department || dbUser.department,
-          specialty: specialty || dbUser.specialty,
-          name: name || dbUser.name,
-        },
-        include: { customRole: true }
-      });
+    } else {
+      // Check if we need to update info or upgrade to ADMIN
+      const needsUpdate = (department && dbUser.department !== department) || 
+                          (specialty && dbUser.specialty !== specialty) || 
+                          (name && dbUser.name !== name) ||
+                          (isSuperAdmin && dbUser.role !== 'ADMIN');
+      if (needsUpdate) {
+        dbUser = await this.prisma.user.update({
+          where: { id: dbUser.id },
+          data: {
+            department: department || dbUser.department,
+            specialty: specialty || dbUser.specialty,
+            name: name || dbUser.name,
+            role: isSuperAdmin ? 'ADMIN' : dbUser.role, // Upgrade to admin if matched
+          },
+          include: { customRole: true }
+        });
+      }
     }
 
     // Combine roles from legacy 'role' field and new 'customRole'

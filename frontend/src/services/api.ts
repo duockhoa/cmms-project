@@ -1,7 +1,6 @@
 export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_BASE = API_HOST + '/api/v1';
-const DEMO_USER_ID = import.meta.env.VITE_USER_ID || 'tech-demo-id';
-
+// Removed DEMO_USER_ID as the system relies on real authentication now.
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
   const token = localStorage.getItem('access_token');
   const headers: any = {

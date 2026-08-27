@@ -37,8 +37,7 @@ export default function LoginScreen() {
           Alert.alert('Lỗi', 'Không lấy được token xác thực.');
         }
       } else {
-        // Fallback for development since we don't have real HRM SSO yet
-        await fallbackDevLogin();
+        Alert.alert('Lỗi', 'Đăng nhập SSO bị huỷ hoặc thất bại.');
       }
     } catch (error) {
       console.error(error);
@@ -46,12 +45,6 @@ export default function LoginScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fallbackDevLogin = async () => {
-    // Lưu token giả để vào app
-    await SecureStore.setItemAsync('userToken', 'tech-demo-token');
-    router.replace('/(tabs)/home');
   };
 
   return (

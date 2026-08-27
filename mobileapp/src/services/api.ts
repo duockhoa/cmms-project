@@ -15,9 +15,6 @@ apiClient.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync('userToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-  } else {
-    // Demo fallback for testing without HRM SSO
-    config.headers['x-test-user-id'] = 'tech-demo-id';
   }
   return config;
 });
