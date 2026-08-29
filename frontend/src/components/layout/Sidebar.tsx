@@ -81,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
 
       {/* Footer */}
       <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border-color)', fontSize: '12px', color: 'var(--text-muted)' }}>
-        CMMS v1.0
+        DK.QLTB v1.0
       </div>
     </aside>
   );
