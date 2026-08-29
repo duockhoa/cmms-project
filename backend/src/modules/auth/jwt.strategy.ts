@@ -111,8 +111,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
-    const adminCode = process.env.ADMIN_EMPLOYEE_CODE;
-    const isSuperAdmin = adminCode && (payload.username === adminCode || emailOrUsername.includes(adminCode));
+    const adminCodes = [
+      process.env.ADMIN_EMPLOYEE_CODE,
+      ...(process.env.SUPER_ADMIN_EMPLOYEE_CODES ? process.env.SUPER_ADMIN_EMPLOYEE_CODES.split(',') : [])
+    ].filter(Boolean).map(c => c!.trim().toLowerCase());
+
+    const isSuperAdmin = adminCodes.some(code => 
+      (payload.username && payload.username.toString().toLowerCase() === code) ||
+      (payload.sub && payload.sub.toString().toLowerCase() === code) ||
+      (emailOrUsername && emailOrUsername.toString().toLowerCase().includes(code)) ||
+      (name && name.toString().toLowerCase().includes(code))
+    );
     const defaultRole = isSuperAdmin ? 'ADMIN' : (process.env.DEFAULT_SYNC_ROLE || 'USER');
 
     // Auto-provision user if they don't exist in CMMS yet
