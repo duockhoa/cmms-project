@@ -228,15 +228,6 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => navigate(`/equipment/${equipment.id}/operation-log-form`)}
-            title="Mở form nhập số liệu (quét QR)"
-            style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}
-          >
-            <QrCode size={13} /> Form Quét QR
-          </button>
-
-          <button
             className="btn btn-primary btn-sm"
             onClick={() => setIsFormOpen(true)}
             style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}

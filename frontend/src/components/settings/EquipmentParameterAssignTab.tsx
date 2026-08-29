@@ -557,17 +557,6 @@ export const EquipmentParameterAssignTab: React.FC = () => {
                     Xưởng: <strong>{selectedEquipment.location}</strong> &bull; Phân loại: <strong>{selectedEquipment.category}</strong>
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => navigate(`/equipment/${selectedEquipment.id}/operation-log-form`)}
-                    title="Mở form ghi sổ vận hành theo máy"
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <QrCode size={14} /> Thử nhập Sổ vận hành (QR)
-                  </button>
-                </div>
               </div>
 
               {/* 2 Main Sub-Tabs */}

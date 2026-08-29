@@ -49,7 +49,7 @@ export const OperationLogsPage: React.FC = () => {
     fetchData();
   }, []);
 
-  // QR Scanner Effect
+  // QR Scanner Effect: resolves equipment by code, id or URL and opens form
   useEffect(() => {
     if (showScanner) {
       const scanner = new Html5QrcodeScanner(
@@ -59,22 +59,64 @@ export const OperationLogsPage: React.FC = () => {
       );
 
       scanner.render(
-        (decodedText) => {
-          scanner.clear().catch(console.error);
-          setShowScanner(false);
-          
-          let eqId = decodedText.trim();
-          if (eqId.includes('/equipment/')) {
-            const match = eqId.match(/\/equipment\/([^/?#]+)/);
-            if (match) eqId = match[1];
-          } else {
-            eqId = eqId.replace('equipment/', '').replace('cmms-equipment:', '').trim();
-          }
+        async (decodedText) => {
+          try {
+            scanner.clear().catch(console.error);
+            setShowScanner(false);
 
-          if (eqId) {
-            navigate(`/equipment/${eqId}/operation-log-form`);
-          } else {
-            alert('Mã QR không hợp lệ!');
+            let rawText = decodedText.trim();
+            
+            // Try parsing JSON if QR holds JSON
+            if (rawText.startsWith('{') && rawText.endsWith('}')) {
+              try {
+                const parsed = JSON.parse(rawText);
+                rawText = parsed.code || parsed.equipmentCode || parsed.equipmentId || parsed.id || rawText;
+              } catch (_) {}
+            }
+
+            // Extract from URL if QR is a URL
+            if (rawText.includes('/equipment/')) {
+              const match = rawText.match(/\/equipment\/([^/?#]+)/);
+              if (match) rawText = match[1];
+            } else {
+              rawText = rawText
+                .replace(/^cmms-equipment:/i, '')
+                .replace(/^equipment:/i, '')
+                .replace(/^equipment\//i, '')
+                .trim();
+            }
+
+            // Look up in equipmentList by code, accountingCode or id
+            let matchedEq = equipmentList.find(
+              (eq) =>
+                eq.id?.toLowerCase() === rawText.toLowerCase() ||
+                eq.code?.toLowerCase() === rawText.toLowerCase() ||
+                eq.accountingCode?.toLowerCase() === rawText.toLowerCase()
+            );
+
+            // Fallback: search via API if not found in current list
+            if (!matchedEq) {
+              try {
+                const searchRes = await api.getEquipment({ search: rawText });
+                const searchItems = Array.isArray(searchRes) ? searchRes : searchRes?.items || [];
+                matchedEq = searchItems.find(
+                  (eq: any) =>
+                    eq.id?.toLowerCase() === rawText.toLowerCase() ||
+                    eq.code?.toLowerCase() === rawText.toLowerCase() ||
+                    eq.accountingCode?.toLowerCase() === rawText.toLowerCase()
+                ) || searchItems[0];
+              } catch (_) {}
+            }
+
+            if (matchedEq) {
+              // Automatically open the operation log recording form for the scanned equipment
+              navigate(`/equipment/${matchedEq.id}/operation-log-form`);
+            } else {
+              alert(`Không tìm thấy thiết bị với mã QR: "${rawText}". Vui lòng kiểm tra lại tem QR trên máy.`);
+            }
+          } catch (err: any) {
+            console.error('Lỗi xử lý QR:', err);
+            alert('Lỗi khi xử lý mã QR.');
           }
         },
         () => {}
@@ -84,7 +126,7 @@ export const OperationLogsPage: React.FC = () => {
         scanner.clear().catch(console.error);
       };
     }
-  }, [showScanner, navigate]);
+  }, [showScanner, equipmentList, navigate]);
 
   // Filtered Equipment
   const filteredEquipment = equipmentList.filter((eq) => {
