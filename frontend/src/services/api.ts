@@ -263,6 +263,10 @@ export const api = {
     request(`/equipment/${equipmentId}/technical-specs/bulk-assign`, { method: 'POST', body: JSON.stringify({ standardSpecIds }) }),
   batchUpdateEquipmentTechnicalSpecs: (equipmentId: string, items: any[]) =>
     request(`/equipment/${equipmentId}/technical-specs/batch`, { method: 'PUT', body: JSON.stringify({ items }) }),
+  syncEquipmentTechnicalSpecs: (equipmentId: string, items: any[]) =>
+    request(`/equipment/${equipmentId}/technical-specs/sync`, { method: 'POST', body: JSON.stringify({ items }) }),
+  syncEquipmentParameters: (equipmentId: string, items: any[]) =>
+    request(`/equipment/${equipmentId}/parameters/sync`, { method: 'POST', body: JSON.stringify({ items }) }),
 
   // Equipment Categories
   getEquipmentCategories: () => request('/equipment-categories'),

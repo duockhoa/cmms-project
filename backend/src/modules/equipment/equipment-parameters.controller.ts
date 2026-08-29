@@ -29,6 +29,14 @@ export class EquipmentParametersController {
     return this.service.bulkAssignFromStandard(equipmentId, body.standardParameterIds);
   }
 
+  @Post('sync')
+  async sync(
+    @Param('equipmentId') equipmentId: string,
+    @Body() body: { items: any[] },
+  ) {
+    return this.service.syncParameters(equipmentId, body.items || []);
+  }
+
   @Put('batch')
   async batchUpdate(
     @Param('equipmentId') equipmentId: string,

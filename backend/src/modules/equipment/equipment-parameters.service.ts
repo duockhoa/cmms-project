@@ -79,6 +79,80 @@ export class EquipmentParametersService {
     return this.getParameters(equipmentId);
   }
 
+  // Safe Full Sync for Checklist Matrix: Selected items are created/updated; unselected items are removed or deactivated
+  async syncParameters(equipmentId: string, selectedItems: Array<{
+    name: string;
+    unit?: string | null;
+    minSpec?: number | null;
+    maxSpec?: number | null;
+    standardValue?: number | null;
+  }>) {
+    const equipment = await this.prisma.equipment.findUnique({ where: { id: equipmentId } });
+    if (!equipment) {
+      throw new NotFoundException(`Equipment with ID ${equipmentId} not found`);
+    }
+
+    const existingParams = await this.prisma.equipmentParameter.findMany({
+      where: { equipmentId },
+      include: { _count: { select: { logs: true } } },
+    });
+
+    const selectedNameMap = new Map(
+      selectedItems.map((item) => [item.name.trim().toLowerCase(), item])
+    );
+
+    // 1. Process existing params
+    for (const existing of existingParams) {
+      const normalizedName = existing.name.trim().toLowerCase();
+      if (selectedNameMap.has(normalizedName)) {
+        const item = selectedNameMap.get(normalizedName)!;
+        await this.prisma.equipmentParameter.update({
+          where: { id: existing.id },
+          data: {
+            name: item.name,
+            unit: item.unit,
+            minSpec: item.minSpec,
+            maxSpec: item.maxSpec,
+            standardValue: item.standardValue,
+            isActive: true,
+          },
+        });
+        selectedNameMap.delete(normalizedName);
+      } else {
+        // Param is no longer selected
+        if (existing._count.logs > 0) {
+          // Has historical logs: deactivate so it won't break foreign keys
+          await this.prisma.equipmentParameter.update({
+            where: { id: existing.id },
+            data: { isActive: false },
+          });
+        } else {
+          // No logs: safely delete
+          await this.prisma.equipmentParameter.delete({
+            where: { id: existing.id },
+          });
+        }
+      }
+    }
+
+    // 2. Create newly selected params
+    for (const [, item] of selectedNameMap) {
+      await this.prisma.equipmentParameter.create({
+        data: {
+          equipmentId,
+          name: item.name,
+          unit: item.unit,
+          minSpec: item.minSpec,
+          maxSpec: item.maxSpec,
+          standardValue: item.standardValue,
+          isActive: true,
+        },
+      });
+    }
+
+    return this.getParameters(equipmentId);
+  }
+
   // Batch save / sync parameters for equipment
   async batchUpdateParameters(equipmentId: string, items: Array<{
     id?: string;

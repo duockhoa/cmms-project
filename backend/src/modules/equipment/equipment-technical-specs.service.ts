@@ -81,6 +81,62 @@ export class EquipmentTechnicalSpecsService {
     return this.getSpecs(equipmentId);
   }
 
+  // Full Safe Sync: selected items are created/updated; unselected items are deleted
+  async syncSpecs(equipmentId: string, selectedItems: Array<{ name: string; value: string; unit?: string | null; category?: string | null; notes?: string | null }>) {
+    const equipment = await this.prisma.equipment.findUnique({ where: { id: equipmentId } });
+    if (!equipment) {
+      throw new NotFoundException(`Equipment #${equipmentId} not found`);
+    }
+
+    const existingSpecs = await this.prisma.equipmentTechnicalSpec.findMany({
+      where: { equipmentId },
+    });
+
+    const selectedNameMap = new Map(
+      selectedItems.map((item) => [item.name.trim().toLowerCase(), item])
+    );
+
+    // 1. Process existing
+    for (const existing of existingSpecs) {
+      const normalizedName = existing.name.trim().toLowerCase();
+      if (selectedNameMap.has(normalizedName)) {
+        const item = selectedNameMap.get(normalizedName)!;
+        await this.prisma.equipmentTechnicalSpec.update({
+          where: { id: existing.id },
+          data: {
+            name: item.name,
+            value: item.value,
+            unit: item.unit,
+            category: item.category,
+            notes: item.notes,
+          },
+        });
+        selectedNameMap.delete(normalizedName);
+      } else {
+        // Spec is unselected -> delete
+        await this.prisma.equipmentTechnicalSpec.delete({
+          where: { id: existing.id },
+        });
+      }
+    }
+
+    // 2. Create newly selected
+    for (const [, item] of selectedNameMap) {
+      await this.prisma.equipmentTechnicalSpec.create({
+        data: {
+          equipmentId,
+          name: item.name,
+          value: item.value,
+          unit: item.unit,
+          category: item.category,
+          notes: item.notes,
+        },
+      });
+    }
+
+    return this.getSpecs(equipmentId);
+  }
+
   // Batch update all technical specs of an equipment
   async batchUpdateSpecs(equipmentId: string, items: Array<{ id?: string; name: string; value: string; unit?: string | null; category?: string | null; notes?: string | null }>) {
     const equipment = await this.prisma.equipment.findUnique({ where: { id: equipmentId } });

@@ -28,6 +28,14 @@ export class EquipmentTechnicalSpecsController {
     return this.service.bulkAssignFromStandard(equipmentId, body.standardSpecIds);
   }
 
+  @Post('sync')
+  sync(
+    @Param('equipmentId') equipmentId: string,
+    @Body() body: { items: any[] },
+  ) {
+    return this.service.syncSpecs(equipmentId, body.items || []);
+  }
+
   @Put('batch')
   batchUpdate(
     @Param('equipmentId') equipmentId: string,

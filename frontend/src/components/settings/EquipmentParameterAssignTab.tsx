@@ -1,15 +1,37 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api';
 import { 
-  Sliders, Plus, Edit2, Trash2, Search, RefreshCw, 
-  CheckSquare, Square, CheckCircle2, QrCode, 
-  MapPin, BookOpen, Gauge, CheckCheck, FileText, Activity
+  Sliders, Search, RefreshCw, CheckSquare, Square, 
+  Save, CheckCircle2, QrCode, MapPin, BookOpen, Gauge, 
+  CheckCheck, XSquare, Filter, AlertCircle, Sparkles
 } from 'lucide-react';
-import { Modal } from '../common/Modal';
-import { useToast, useConfirmDialog } from '../common/Toast';
+import { useToast } from '../common/Toast';
 import { useNavigate } from 'react-router-dom';
 
 type SubTab = 'TECHNICAL_SPECS' | 'OPERATING_PARAMS';
+type FilterStatus = 'ALL' | 'SELECTED' | 'UNSELECTED';
+
+interface TechSpecRow {
+  standardId: string;
+  name: string;
+  unit: string;
+  category: string;
+  description?: string;
+  isSelected: boolean;
+  value: string;
+  notes: string;
+}
+
+interface OpParamRow {
+  standardId: string;
+  name: string;
+  unit: string;
+  description?: string;
+  isSelected: boolean;
+  minSpec: string;
+  maxSpec: string;
+  standardValue: string;
+}
 
 export const EquipmentParameterAssignTab: React.FC = () => {
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
@@ -20,53 +42,30 @@ export const EquipmentParameterAssignTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
   // Filters for Equipment List
   const [eqSearch, setEqSearch] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('ALL');
 
-  // ===================== TAB 1: TECHNICAL SPECS STATE =====================
-  const [techSpecs, setTechSpecs] = useState<any[]>([]);
-  const [standardTechSpecs, setStandardTechSpecs] = useState<any[]>([]);
-  const [isTechLibraryModalOpen, setIsTechLibraryModalOpen] = useState(false);
-  const [techLibrarySearch, setTechLibrarySearch] = useState('');
-  const [selectedTechSpecIds, setSelectedTechSpecIds] = useState<string[]>([]);
+  // Matrix State: Full library lists with selection status for selected equipment
+  const [rawStandardTechSpecs, setRawStandardTechSpecs] = useState<any[]>([]);
+  const [rawStandardOpParams, setRawStandardOpParams] = useState<any[]>([]);
 
-  // Edit / Add Custom Tech Spec
-  const [isEditTechModalOpen, setIsEditTechModalOpen] = useState(false);
-  const [editingTechSpec, setEditingTechSpec] = useState<any | null>(null);
-  const [techForm, setTechForm] = useState({
-    name: '',
-    value: '',
-    unit: '',
-    category: '',
-    notes: '',
-  });
+  const [techSpecRows, setTechSpecRows] = useState<TechSpecRow[]>([]);
+  const [opParamRows, setOpParamRows] = useState<OpParamRow[]>([]);
 
-  // ===================== TAB 2: OPERATING PARAMS STATE =====================
-  const [operatingParams, setOperatingParams] = useState<any[]>([]);
-  const [standardOperatingParams, setStandardOperatingParams] = useState<any[]>([]);
-  const [isOpLibraryModalOpen, setIsOpLibraryModalOpen] = useState(false);
-  const [opLibrarySearch, setOpLibrarySearch] = useState('');
-  const [selectedOpParamIds, setSelectedOpParamIds] = useState<string[]>([]);
+  // Search & Filter inside Tabs
+  const [techSearch, setTechSearch] = useState('');
+  const [techFilterStatus, setTechFilterStatus] = useState<FilterStatus>('ALL');
 
-  // Edit / Add Custom Operating Param
-  const [isEditOpModalOpen, setIsEditOpModalOpen] = useState(false);
-  const [editingOpParam, setEditingOpParam] = useState<any | null>(null);
-  const [opForm, setOpForm] = useState({
-    name: '',
-    unit: '',
-    minSpec: '',
-    maxSpec: '',
-    standardValue: '',
-    isActive: true,
-  });
+  const [opSearch, setOpSearch] = useState('');
+  const [opFilterStatus, setOpFilterStatus] = useState<FilterStatus>('ALL');
 
   const toast = useToast();
-  const { confirm } = useConfirmDialog();
   const navigate = useNavigate();
 
-  // Initial Load
+  // 1. Initial Load
   useEffect(() => {
     loadInitial();
   }, []);
@@ -83,8 +82,11 @@ export const EquipmentParameterAssignTab: React.FC = () => {
       const eqArray = Array.isArray(eqs) ? eqs : eqs.items || [];
       setEquipmentList(eqArray);
       setLocations(Array.isArray(locs) ? locs : []);
-      setStandardTechSpecs(Array.isArray(stdTech) ? stdTech : []);
-      setStandardOperatingParams(Array.isArray(stdOp) ? stdOp : []);
+      
+      const techList = Array.isArray(stdTech) ? stdTech : [];
+      const opList = Array.isArray(stdOp) ? stdOp : [];
+      setRawStandardTechSpecs(techList);
+      setRawStandardOpParams(opList);
 
       if (eqArray.length > 0 && !selectedEqId) {
         setSelectedEqId(eqArray[0].id);
@@ -96,31 +98,85 @@ export const EquipmentParameterAssignTab: React.FC = () => {
     }
   };
 
-  // Load equipment's specs & params whenever selectedEqId changes
+  // 2. Load equipment's assigned specs & params whenever selectedEqId changes
   useEffect(() => {
-    if (selectedEqId) {
-      loadEquipmentData(selectedEqId);
-    } else {
-      setTechSpecs([]);
-      setOperatingParams([]);
+    if (selectedEqId && rawStandardTechSpecs.length >= 0 && rawStandardOpParams.length >= 0) {
+      loadEquipmentMatrix(selectedEqId);
     }
-  }, [selectedEqId]);
+  }, [selectedEqId, rawStandardTechSpecs, rawStandardOpParams]);
 
-  const loadEquipmentData = async (eqId: string) => {
+  const loadEquipmentMatrix = async (eqId: string) => {
     setDataLoading(true);
+    setHasChanges(false);
     try {
-      const [tsData, opData] = await Promise.all([
+      const [assignedTech, assignedOp] = await Promise.all([
         api.getEquipmentTechnicalSpecs(eqId).catch(() => []),
         api.getEquipmentParameters(eqId).catch(() => []),
       ]);
-      setTechSpecs(Array.isArray(tsData) ? tsData : []);
-      setOperatingParams(Array.isArray(opData) ? opData : []);
+
+      // Map assigned Tech Specs into Map
+      const assignedTechMap = new Map<string, any>();
+      (Array.isArray(assignedTech) ? assignedTech : []).forEach((item: any) => {
+        assignedTechMap.set(item.name.trim().toLowerCase(), item);
+      });
+
+      // Map assigned Op Params into Map
+      const assignedOpMap = new Map<string, any>();
+      (Array.isArray(assignedOp) ? assignedOp : []).forEach((item: any) => {
+        if (item.isActive !== false) {
+          assignedOpMap.set(item.name.trim().toLowerCase(), item);
+        }
+      });
+
+      // Build full Tech Spec Rows
+      const builtTechRows: TechSpecRow[] = rawStandardTechSpecs.map((std) => {
+        const assigned = assignedTechMap.get(std.name.trim().toLowerCase());
+        return {
+          standardId: std.id,
+          name: std.name,
+          unit: std.unit || '',
+          category: std.category || '',
+          description: std.description || '',
+          isSelected: !!assigned,
+          value: assigned ? assigned.value || '' : '',
+          notes: assigned ? assigned.notes || '' : '',
+        };
+      });
+
+      // Build full Operating Param Rows
+      const builtOpRows: OpParamRow[] = rawStandardOpParams.map((std) => {
+        const assigned = assignedOpMap.get(std.name.trim().toLowerCase());
+        return {
+          standardId: std.id,
+          name: std.name,
+          unit: std.unit || '',
+          description: std.description || '',
+          isSelected: !!assigned,
+          minSpec: assigned
+            ? (assigned.minSpec !== null && assigned.minSpec !== undefined ? String(assigned.minSpec) : '')
+            : (std.minSpec !== null && std.minSpec !== undefined ? String(std.minSpec) : ''),
+          maxSpec: assigned
+            ? (assigned.maxSpec !== null && assigned.maxSpec !== undefined ? String(assigned.maxSpec) : '')
+            : (std.maxSpec !== null && std.maxSpec !== undefined ? String(std.maxSpec) : ''),
+          standardValue: assigned
+            ? (assigned.standardValue !== null && assigned.standardValue !== undefined ? String(assigned.standardValue) : '')
+            : '',
+        };
+      });
+
+      setTechSpecRows(builtTechRows);
+      setOpParamRows(builtOpRows);
     } catch (e: any) {
-      toast.error('Lỗi tải thông số', e.message);
+      toast.error('Lỗi', e.message);
     } finally {
       setDataLoading(false);
     }
   };
+
+  // Selected Equipment
+  const selectedEquipment = useMemo(() => {
+    return equipmentList.find((eq) => eq.id === selectedEqId);
+  }, [equipmentList, selectedEqId]);
 
   // Filtered Equipment List
   const filteredEquipment = useMemo(() => {
@@ -135,255 +191,165 @@ export const EquipmentParameterAssignTab: React.FC = () => {
     });
   }, [equipmentList, eqSearch, selectedLocation]);
 
-  const selectedEquipment = useMemo(() => {
-    return equipmentList.find((eq) => eq.id === selectedEqId);
-  }, [equipmentList, selectedEqId]);
-
-  // ===================== TAB 1: TECHNICAL SPECS HANDLERS =====================
-  const filteredStdTechSpecs = useMemo(() => {
-    const existingNames = new Set(techSpecs.map((s) => s.name.trim().toLowerCase()));
-    return standardTechSpecs
-      .filter((s) => {
-        const matchSearch =
-          !techLibrarySearch.trim() ||
-          s.name?.toLowerCase().includes(techLibrarySearch.toLowerCase()) ||
-          (s.unit && s.unit.toLowerCase().includes(techLibrarySearch.toLowerCase())) ||
-          (s.category && s.category.toLowerCase().includes(techLibrarySearch.toLowerCase()));
-        return matchSearch;
-      })
-      .map((s) => ({
-        ...s,
-        isAlreadyAdded: existingNames.has(s.name.trim().toLowerCase()),
-      }));
-  }, [standardTechSpecs, techLibrarySearch, techSpecs]);
-
-  const handleOpenTechLibrary = () => {
-    setTechLibrarySearch('');
-    setSelectedTechSpecIds([]);
-    setIsTechLibraryModalOpen(true);
-  };
-
-  const toggleSelectTechSpec = (id: string) => {
-    setSelectedTechSpecIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAllTechSpecs = () => {
-    const available = filteredStdTechSpecs.filter((s) => !s.isAlreadyAdded).map((s) => s.id);
-    if (selectedTechSpecIds.length === available.length && available.length > 0) {
-      setSelectedTechSpecIds([]);
-    } else {
-      setSelectedTechSpecIds(available);
-    }
-  };
-
-  const handleApplyTechSpecs = async () => {
-    if (selectedTechSpecIds.length === 0) {
-      toast.error('Chưa chọn', 'Vui lòng tích chọn ít nhất 1 thông số kỹ thuật.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.bulkAssignEquipmentTechnicalSpecs(selectedEqId, selectedTechSpecIds);
-      toast.success('Thành công', `Đã gán ${selectedTechSpecIds.length} thông số kỹ thuật vào máy.`);
-      setIsTechLibraryModalOpen(false);
-      loadEquipmentData(selectedEqId);
-    } catch (e: any) {
-      toast.error('Lỗi', e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleOpenAddCustomTech = () => {
-    setEditingTechSpec(null);
-    setTechForm({ name: '', value: '', unit: '', category: 'Cơ khí', notes: '' });
-    setIsEditTechModalOpen(true);
-  };
-
-  const handleOpenEditTech = (item: any) => {
-    setEditingTechSpec(item);
-    setTechForm({
-      name: item.name || '',
-      value: item.value || '',
-      unit: item.unit || '',
-      category: item.category || '',
-      notes: item.notes || '',
-    });
-    setIsEditTechModalOpen(true);
-  };
-
-  const handleSaveTechForm = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!techForm.name.trim()) {
-      toast.error('Thiếu thông tin', 'Vui lòng nhập tên thông số kỹ thuật.');
-      return;
-    }
-    setSaving(true);
-    try {
-      const payload = {
-        name: techForm.name.trim(),
-        value: techForm.value.trim(),
-        unit: techForm.unit.trim() || null,
-        category: techForm.category.trim() || null,
-        notes: techForm.notes.trim() || null,
+  // ===================== TAB 1: TECH SPECS INTERACTION =====================
+  const handleToggleTechSpec = (indexInFull: number) => {
+    setTechSpecRows((prev) => {
+      const copy = [...prev];
+      copy[indexInFull] = {
+        ...copy[indexInFull],
+        isSelected: !copy[indexInFull].isSelected,
       };
-
-      if (editingTechSpec) {
-        await api.updateEquipmentTechnicalSpec(selectedEqId, editingTechSpec.id, payload);
-        toast.success('Thành công', 'Đã cập nhật thông số kỹ thuật.');
-      } else {
-        await api.createEquipmentTechnicalSpec(selectedEqId, payload);
-        toast.success('Thành công', 'Đã thêm thông số kỹ thuật mới.');
-      }
-      setIsEditTechModalOpen(false);
-      loadEquipmentData(selectedEqId);
-    } catch (e: any) {
-      toast.error('Lỗi', e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteTechSpec = async (item: any) => {
-    const ok = await confirm('Xóa thông số KT', `Bạn có chắc muốn xóa "${item.name}" khỏi máy?`);
-    if (ok) {
-      try {
-        await api.deleteEquipmentTechnicalSpec(selectedEqId, item.id);
-        toast.success('Đã xóa', 'Đã gỡ thông số khỏi thiết bị.');
-        loadEquipmentData(selectedEqId);
-      } catch (e: any) {
-        toast.error('Lỗi', e.message);
-      }
-    }
-  };
-
-  // ===================== TAB 2: OPERATING PARAMS HANDLERS =====================
-  const filteredStdOpParams = useMemo(() => {
-    const existingNames = new Set(operatingParams.map((p) => p.name.trim().toLowerCase()));
-    return standardOperatingParams
-      .filter((p) => {
-        const matchSearch =
-          !opLibrarySearch.trim() ||
-          p.name?.toLowerCase().includes(opLibrarySearch.toLowerCase()) ||
-          (p.unit && p.unit.toLowerCase().includes(opLibrarySearch.toLowerCase())) ||
-          (p.description && p.description.toLowerCase().includes(opLibrarySearch.toLowerCase()));
-        return matchSearch;
-      })
-      .map((p) => ({
-        ...p,
-        isAlreadyAdded: existingNames.has(p.name.trim().toLowerCase()),
-      }));
-  }, [standardOperatingParams, opLibrarySearch, operatingParams]);
-
-  const handleOpenOpLibrary = () => {
-    setOpLibrarySearch('');
-    setSelectedOpParamIds([]);
-    setIsOpLibraryModalOpen(true);
-  };
-
-  const toggleSelectOpParam = (id: string) => {
-    setSelectedOpParamIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAllOpParams = () => {
-    const available = filteredStdOpParams.filter((p) => !p.isAlreadyAdded).map((p) => p.id);
-    if (selectedOpParamIds.length === available.length && available.length > 0) {
-      setSelectedOpParamIds([]);
-    } else {
-      setSelectedOpParamIds(available);
-    }
-  };
-
-  const handleApplyOpParams = async () => {
-    if (selectedOpParamIds.length === 0) {
-      toast.error('Chưa chọn', 'Vui lòng tích chọn ít nhất 1 tham số vận hành.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.bulkAssignEquipmentParameters(selectedEqId, selectedOpParamIds);
-      toast.success('Thành công', `Đã gán ${selectedOpParamIds.length} tham số vận hành vào máy.`);
-      setIsOpLibraryModalOpen(false);
-      loadEquipmentData(selectedEqId);
-    } catch (e: any) {
-      toast.error('Lỗi', e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleOpenAddCustomOp = () => {
-    setEditingOpParam(null);
-    setOpForm({ name: '', unit: '', minSpec: '', maxSpec: '', standardValue: '', isActive: true });
-    setIsEditOpModalOpen(true);
-  };
-
-  const handleOpenEditOp = (item: any) => {
-    setEditingOpParam(item);
-    setOpForm({
-      name: item.name || '',
-      unit: item.unit || '',
-      minSpec: item.minSpec !== null && item.minSpec !== undefined ? String(item.minSpec) : '',
-      maxSpec: item.maxSpec !== null && item.maxSpec !== undefined ? String(item.maxSpec) : '',
-      standardValue: item.standardValue !== null && item.standardValue !== undefined ? String(item.standardValue) : '',
-      isActive: item.isActive !== undefined ? item.isActive : true,
+      return copy;
     });
-    setIsEditOpModalOpen(true);
+    setHasChanges(true);
   };
 
-  const handleSaveOpForm = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!opForm.name.trim()) {
-      toast.error('Thiếu thông tin', 'Vui lòng nhập tên tham số vận hành.');
-      return;
-    }
+  const handleTechSpecValueChange = (indexInFull: number, field: 'value' | 'notes', val: string) => {
+    setTechSpecRows((prev) => {
+      const copy = [...prev];
+      copy[indexInFull] = {
+        ...copy[indexInFull],
+        [field]: val,
+      };
+      return copy;
+    });
+    setHasChanges(true);
+  };
+
+  const handleSelectAllTech = (select: boolean) => {
+    setTechSpecRows((prev) =>
+      prev.map((row) => ({
+        ...row,
+        isSelected: select,
+      }))
+    );
+    setHasChanges(true);
+  };
+
+  const filteredTechRows = useMemo(() => {
+    return techSpecRows.map((row, fullIdx) => ({ row, fullIdx })).filter(({ row }) => {
+      if (techFilterStatus === 'SELECTED' && !row.isSelected) return false;
+      if (techFilterStatus === 'UNSELECTED' && row.isSelected) return false;
+      if (!techSearch.trim()) return true;
+      const term = techSearch.toLowerCase();
+      return (
+        row.name.toLowerCase().includes(term) ||
+        row.unit.toLowerCase().includes(term) ||
+        row.category.toLowerCase().includes(term) ||
+        row.value.toLowerCase().includes(term)
+      );
+    });
+  }, [techSpecRows, techSearch, techFilterStatus]);
+
+  const selectedTechCount = useMemo(() => techSpecRows.filter((r) => r.isSelected).length, [techSpecRows]);
+
+  // ===================== TAB 2: OPERATING PARAMS INTERACTION =====================
+  const handleToggleOpParam = (indexInFull: number) => {
+    setOpParamRows((prev) => {
+      const copy = [...prev];
+      copy[indexInFull] = {
+        ...copy[indexInFull],
+        isSelected: !copy[indexInFull].isSelected,
+      };
+      return copy;
+    });
+    setHasChanges(true);
+  };
+
+  const handleOpParamValueChange = (
+    indexInFull: number,
+    field: 'minSpec' | 'maxSpec' | 'standardValue',
+    val: string
+  ) => {
+    setOpParamRows((prev) => {
+      const copy = [...prev];
+      copy[indexInFull] = {
+        ...copy[indexInFull],
+        [field]: val,
+      };
+      return copy;
+    });
+    setHasChanges(true);
+  };
+
+  const handleSelectAllOp = (select: boolean) => {
+    setOpParamRows((prev) =>
+      prev.map((row) => ({
+        ...row,
+        isSelected: select,
+      }))
+    );
+    setHasChanges(true);
+  };
+
+  const filteredOpRows = useMemo(() => {
+    return opParamRows.map((row, fullIdx) => ({ row, fullIdx })).filter(({ row }) => {
+      if (opFilterStatus === 'SELECTED' && !row.isSelected) return false;
+      if (opFilterStatus === 'UNSELECTED' && row.isSelected) return false;
+      if (!opSearch.trim()) return true;
+      const term = opSearch.toLowerCase();
+      return (
+        row.name.toLowerCase().includes(term) ||
+        row.unit.toLowerCase().includes(term)
+      );
+    });
+  }, [opParamRows, opSearch, opFilterStatus]);
+
+  const selectedOpCount = useMemo(() => opParamRows.filter((r) => r.isSelected).length, [opParamRows]);
+
+  // ===================== SAVE ALL CHANGES FOR CURRENT EQUIPMENT =====================
+  const handleSaveAll = async () => {
+    if (!selectedEqId) return;
     setSaving(true);
     try {
-      const payload = {
-        name: opForm.name.trim(),
-        unit: opForm.unit.trim() || null,
-        minSpec: opForm.minSpec !== '' ? parseFloat(opForm.minSpec) : null,
-        maxSpec: opForm.maxSpec !== '' ? parseFloat(opForm.maxSpec) : null,
-        standardValue: opForm.standardValue !== '' ? parseFloat(opForm.standardValue) : null,
-        isActive: opForm.isActive,
-      };
+      if (activeSubTab === 'TECHNICAL_SPECS') {
+        // Prepare selected tech specs payload
+        const selectedTechItems = techSpecRows
+          .filter((r) => r.isSelected)
+          .map((r) => ({
+            name: r.name,
+            value: r.value.trim(),
+            unit: r.unit || null,
+            category: r.category || null,
+            notes: r.notes.trim() || null,
+          }));
 
-      if (editingOpParam) {
-        await api.updateEquipmentParameter(selectedEqId, editingOpParam.id, payload);
-        toast.success('Thành công', 'Đã cập nhật tham số vận hành.');
+        await api.syncEquipmentTechnicalSpecs(selectedEqId, selectedTechItems);
+        toast.success(
+          'Đã lưu thông số KT',
+          `Đã cập nhật ${selectedTechItems.length} thông số kỹ thuật cho thiết bị.`
+        );
       } else {
-        await api.createEquipmentParameter(selectedEqId, payload);
-        toast.success('Thành công', 'Đã thêm tham số vận hành mới.');
+        // Prepare selected op params payload
+        const selectedOpItems = opParamRows
+          .filter((r) => r.isSelected)
+          .map((r) => ({
+            name: r.name,
+            unit: r.unit || null,
+            minSpec: r.minSpec !== '' ? parseFloat(r.minSpec) : null,
+            maxSpec: r.maxSpec !== '' ? parseFloat(r.maxSpec) : null,
+            standardValue: r.standardValue !== '' ? parseFloat(r.standardValue) : null,
+          }));
+
+        await api.syncEquipmentParameters(selectedEqId, selectedOpItems);
+        toast.success(
+          'Đã lưu tham số vận hành',
+          `Đã cập nhật ${selectedOpItems.length} tham số vận hành cho thiết bị.`
+        );
       }
-      setIsEditOpModalOpen(false);
-      loadEquipmentData(selectedEqId);
+
+      setHasChanges(false);
+      loadEquipmentMatrix(selectedEqId);
     } catch (e: any) {
-      toast.error('Lỗi', e.message);
+      toast.error('Lỗi khi lưu', e.message);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDeleteOpParam = async (item: any) => {
-    const ok = await confirm('Xóa tham số vận hành', `Bạn có chắc muốn xóa "${item.name}" khỏi máy?`);
-    if (ok) {
-      try {
-        await api.deleteEquipmentParameter(selectedEqId, item.id);
-        toast.success('Đã xóa', 'Đã gỡ tham số vận hành khỏi máy.');
-        loadEquipmentData(selectedEqId);
-      } catch (e: any) {
-        toast.error('Lỗi', e.message);
-      }
     }
   };
 
   return (
     <div>
-      {/* Header */}
+      {/* Page Header */}
       <div
         style={{
           display: 'flex',
@@ -400,21 +366,43 @@ export const EquipmentParameterAssignTab: React.FC = () => {
             Thiết lập Thông số Kỹ thuật & Tham số Vận hành theo máy
           </h3>
           <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px', margin: 0 }}>
-            Tích chọn từ Thư viện Thông số KT (Hồ sơ NSX) và Thư viện Tham số Vận hành (Sổ vận hành / Quét QR).
+            Tích chọn trực tiếp để gắn thông số vào máy, bỏ tích để hủy liên kết. Nhập giá trị trực tiếp ngay trên bảng.
           </p>
         </div>
 
-        <button
-          className="btn btn-secondary"
-          onClick={loadInitial}
-          disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Làm mới
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            className="btn btn-secondary"
+            onClick={loadInitial}
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Làm mới
+          </button>
+
+          {selectedEquipment && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSaveAll}
+              disabled={saving}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 20px',
+                fontSize: '13.5px',
+                boxShadow: hasChanges ? '0 0 0 3px rgba(37, 99, 235, 0.25)' : 'none',
+              }}
+            >
+              {saving ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
+              Lưu thiết lập máy
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Main Split View */}
+      {/* Main Split View: Left Equipment List + Right Interactive Matrix */}
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
         {/* Left: Equipment Selector */}
         <div
@@ -428,7 +416,7 @@ export const EquipmentParameterAssignTab: React.FC = () => {
             display: 'flex',
             flexDirection: 'column',
             gap: '10px',
-            maxHeight: '700px',
+            maxHeight: '740px',
           }}
         >
           <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>
@@ -477,7 +465,7 @@ export const EquipmentParameterAssignTab: React.FC = () => {
               flexDirection: 'column',
               gap: '6px',
               paddingRight: '2px',
-              maxHeight: '520px',
+              maxHeight: '560px',
             }}
           >
             {filteredEquipment.length === 0 ? (
@@ -490,7 +478,14 @@ export const EquipmentParameterAssignTab: React.FC = () => {
                 return (
                   <div
                     key={eq.id}
-                    onClick={() => setSelectedEqId(eq.id)}
+                    onClick={() => {
+                      if (hasChanges) {
+                        if (!window.confirm('Bạn có thay đổi chưa lưu trên máy hiện tại. Chuyển sang máy khác?')) {
+                          return;
+                        }
+                      }
+                      setSelectedEqId(eq.id);
+                    }}
                     style={{
                       padding: '10px 12px',
                       borderRadius: '6px',
@@ -522,11 +517,11 @@ export const EquipmentParameterAssignTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Workspace for Selected Equipment */}
+        {/* Right: Interactive Matrix for Selected Equipment */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {selectedEquipment ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Selected Equipment Info Banner */}
+              {/* Top Banner Info */}
               <div
                 style={{
                   display: 'flex',
@@ -575,7 +570,7 @@ export const EquipmentParameterAssignTab: React.FC = () => {
                 </div>
               </div>
 
-              {/* Two Distinct Sub-Tabs */}
+              {/* 2 Main Sub-Tabs */}
               <div style={{ display: 'flex', borderBottom: '2px solid var(--border-color, #e2e8f0)', gap: '4px' }}>
                 <button
                   type="button"
@@ -600,14 +595,15 @@ export const EquipmentParameterAssignTab: React.FC = () => {
                   1. Thông số Kỹ thuật (Hồ sơ NSX)
                   <span
                     style={{
-                      padding: '1px 6px',
+                      padding: '1px 8px',
                       borderRadius: '10px',
                       fontSize: '11px',
                       backgroundColor: activeSubTab === 'TECHNICAL_SPECS' ? 'rgba(37, 99, 235, 0.1)' : 'var(--bg-hover, #f1f5f9)',
                       color: activeSubTab === 'TECHNICAL_SPECS' ? '#2563eb' : 'var(--text-secondary)',
+                      fontWeight: 700,
                     }}
                   >
-                    {techSpecs.length}
+                    Đã tích {selectedTechCount} / {techSpecRows.length}
                   </span>
                 </button>
 
@@ -631,112 +627,251 @@ export const EquipmentParameterAssignTab: React.FC = () => {
                   }}
                 >
                   <Gauge size={16} />
-                  2. Tham số Vận hành (Sổ vận hành / Theo dõi theo ca)
+                  2. Tham số Vận hành (Sổ vận hành / Quét QR)
                   <span
                     style={{
-                      padding: '1px 6px',
+                      padding: '1px 8px',
                       borderRadius: '10px',
                       fontSize: '11px',
                       backgroundColor: activeSubTab === 'OPERATING_PARAMS' ? 'rgba(37, 99, 235, 0.1)' : 'var(--bg-hover, #f1f5f9)',
                       color: activeSubTab === 'OPERATING_PARAMS' ? '#2563eb' : 'var(--text-secondary)',
+                      fontWeight: 700,
                     }}
                   >
-                    {operatingParams.length}
+                    Đã tích {selectedOpCount} / {opParamRows.length}
                   </span>
                 </button>
               </div>
 
-              {/* ===================== TAB 1 CONTENT: TECHNICAL SPECS ===================== */}
+              {/* Unsaved Changes Alert */}
+              {hasChanges && (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '6px',
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    color: '#b45309',
+                    fontSize: '12.5px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span>⚠️ Có thay đổi chưa lưu! Bấm <strong>"Lưu thiết lập máy"</strong> để lưu lại các thông số đã tích/bỏ tích.</span>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={handleSaveAll}
+                    disabled={saving}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Save size={13} /> Lưu ngay
+                  </button>
+                </div>
+              )}
+
+              {/* ===================== TAB 1: TECHNICAL SPECS DIRECT MATRIX ===================== */}
               {activeSubTab === 'TECHNICAL_SPECS' && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                      Các thông số kỹ thuật danh định của máy theo hồ sơ/catalogue từ Nhà sản xuất (Công suất, Điện áp, Dung tích, Trọng lượng...).
+                  {/* Toolbar inside Tab 1 */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '12px',
+                      flexWrap: 'wrap',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ position: 'relative', width: '260px' }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Tìm thông số KT..."
+                          value={techSearch}
+                          onChange={(e) => setTechSearch(e.target.value)}
+                          style={{ paddingLeft: '32px', height: '34px', fontSize: '12.5px' }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      </div>
+
+                      {/* Quick Filters */}
+                      <div style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color, #e2e8f0)' }}>
+                        <button
+                          type="button"
+                          onClick={() => setTechFilterStatus('ALL')}
+                          style={{
+                            padding: '6px 12px',
+                            border: 'none',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            backgroundColor: techFilterStatus === 'ALL' ? 'var(--accent-blue, #2563eb)' : '#ffffff',
+                            color: techFilterStatus === 'ALL' ? '#ffffff' : 'var(--text-primary)',
+                          }}
+                        >
+                          Tất cả ({techSpecRows.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTechFilterStatus('SELECTED')}
+                          style={{
+                            padding: '6px 12px',
+                            border: 'none',
+                            borderLeft: '1px solid var(--border-color, #e2e8f0)',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            backgroundColor: techFilterStatus === 'SELECTED' ? 'var(--accent-blue, #2563eb)' : '#ffffff',
+                            color: techFilterStatus === 'SELECTED' ? '#ffffff' : 'var(--text-primary)',
+                          }}
+                        >
+                          Đã chọn ({selectedTechCount})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTechFilterStatus('UNSELECTED')}
+                          style={{
+                            padding: '6px 12px',
+                            border: 'none',
+                            borderLeft: '1px solid var(--border-color, #e2e8f0)',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            backgroundColor: techFilterStatus === 'UNSELECTED' ? 'var(--accent-blue, #2563eb)' : '#ffffff',
+                            color: techFilterStatus === 'UNSELECTED' ? '#ffffff' : 'var(--text-primary)',
+                          }}
+                        >
+                          Chưa chọn ({techSpecRows.length - selectedTechCount})
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button className="btn btn-primary btn-sm" onClick={handleOpenTechLibrary}>
-                        <CheckSquare size={14} /> + Tích chọn từ thư viện thông số KT
+
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleSelectAllTech(true)}
+                        style={{ fontSize: '12px' }}
+                      >
+                        <CheckCheck size={13} /> Chọn tất cả
                       </button>
-                      <button className="btn btn-secondary btn-sm" onClick={handleOpenAddCustomTech}>
-                        <Plus size={14} /> Thêm thông số KT riêng
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleSelectAllTech(false)}
+                        style={{ fontSize: '12px' }}
+                      >
+                        <XSquare size={13} /> Bỏ chọn tất cả
                       </button>
                     </div>
                   </div>
 
+                  {/* Direct Table */}
                   {dataLoading ? (
                     <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                       <RefreshCw size={22} className="animate-spin" style={{ margin: '0 auto 8px auto' }} />
-                      Đang tải thông số kỹ thuật...
+                      Đang tải danh mục thông số kỹ thuật...
                     </div>
                   ) : (
                     <div style={{ border: '1px solid var(--border-color, #e2e8f0)', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
                       <table className="custom-table" style={{ margin: 0, width: '100%' }}>
                         <thead>
                           <tr>
-                            <th style={{ width: '50px', textAlign: 'center' }}>STT</th>
-                            <th style={{ minWidth: '180px' }}>Tên thông số kỹ thuật</th>
-                            <th style={{ minWidth: '160px' }}>Giá trị danh định (NSX)</th>
-                            <th style={{ width: '100px', textAlign: 'center' }}>Đơn vị</th>
+                            <th style={{ width: '50px', textAlign: 'center' }}>Áp dụng</th>
+                            <th style={{ minWidth: '180px' }}>Tên thông số kỹ thuật (NSX)</th>
+                            <th style={{ minWidth: '180px' }}>Giá trị danh định (Catalogue NSX)</th>
+                            <th style={{ width: '90px', textAlign: 'center' }}>Đơn vị</th>
                             <th style={{ width: '120px', textAlign: 'center' }}>Phân nhóm</th>
                             <th>Ghi chú</th>
-                            <th style={{ width: '80px', textAlign: 'center' }}>Thao tác</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {techSpecs.length > 0 ? (
-                            techSpecs.map((spec, idx) => (
-                              <tr key={spec.id}>
-                                <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>{idx + 1}</td>
-                                <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{spec.name}</td>
-                                <td>
-                                  <span style={{ fontWeight: 700, color: 'var(--accent-blue, #2563eb)' }}>
-                                    {spec.value || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontWeight: 400 }}>Chưa điền</span>}
-                                  </span>
-                                </td>
-                                <td style={{ textAlign: 'center' }}>
-                                  {spec.unit ? (
-                                    <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: '#f1f5f9', fontSize: '11.5px', fontWeight: 600 }}>
-                                      {spec.unit}
-                                    </span>
-                                  ) : '—'}
-                                </td>
-                                <td style={{ textAlign: 'center' }}>
-                                  {spec.category ? (
-                                    <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(37, 99, 235, 0.08)', color: '#2563eb', fontSize: '11px', fontWeight: 600 }}>
-                                      {spec.category}
-                                    </span>
-                                  ) : '—'}
-                                </td>
-                                <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{spec.notes || '—'}</td>
-                                <td style={{ textAlign: 'center' }}>
-                                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                                    <button
-                                      className="btn-icon"
-                                      onClick={() => handleOpenEditTech(spec)}
-                                      title="Sửa giá trị"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #e2e8f0', background: 'transparent', color: '#2563eb', cursor: 'pointer' }}
-                                    >
-                                      <Edit2 size={13} />
-                                    </button>
-                                    <button
-                                      className="btn-icon"
-                                      onClick={() => handleDeleteTechSpec(spec)}
-                                      title="Xóa"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #e2e8f0', background: 'transparent', color: '#dc2626', cursor: 'pointer' }}
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
+                          {filteredTechRows.map(({ row, fullIdx }) => (
+                            <tr
+                              key={row.standardId}
+                              style={{
+                                backgroundColor: row.isSelected ? 'rgba(37, 99, 235, 0.03)' : 'transparent',
+                                opacity: row.isSelected ? 1 : 0.65,
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <td style={{ textAlign: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={row.isSelected}
+                                  onChange={() => handleToggleTechSpec(fullIdx)}
+                                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                              </td>
+                              <td>
+                                <div
+                                  onClick={() => handleToggleTechSpec(fullIdx)}
+                                  style={{
+                                    fontWeight: row.isSelected ? 700 : 500,
+                                    color: row.isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                  }}
+                                >
+                                  {row.name}
+                                </div>
+                                {row.description && (
+                                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                    {row.description}
                                   </div>
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                                Máy này chưa được gán thông số kỹ thuật nào từ NSX. Hãy bấm <strong>"Tích chọn từ thư viện thông số KT"</strong> để gán.
+                                )}
+                              </td>
+                              <td>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  placeholder={row.isSelected ? 'Nhập giá trị theo máy...' : 'Tích để nhập'}
+                                  disabled={!row.isSelected}
+                                  value={row.value}
+                                  onChange={(e) => handleTechSpecValueChange(fullIdx, 'value', e.target.value)}
+                                  style={{
+                                    height: '32px',
+                                    fontSize: '13px',
+                                    fontWeight: row.isSelected ? 600 : 400,
+                                    backgroundColor: row.isSelected ? '#ffffff' : '#f8fafc',
+                                  }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                {row.unit ? (
+                                  <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: '#f1f5f9', fontSize: '11.5px', fontWeight: 600 }}>
+                                    {row.unit}
+                                  </span>
+                                ) : '—'}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                {row.category ? (
+                                  <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(37, 99, 235, 0.08)', color: '#2563eb', fontSize: '11px', fontWeight: 600 }}>
+                                    {row.category}
+                                  </span>
+                                ) : '—'}
+                              </td>
+                              <td>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  placeholder="Ghi chú..."
+                                  disabled={!row.isSelected}
+                                  value={row.notes}
+                                  onChange={(e) => handleTechSpecValueChange(fullIdx, 'notes', e.target.value)}
+                                  style={{
+                                    height: '32px',
+                                    fontSize: '12px',
+                                    backgroundColor: row.isSelected ? '#ffffff' : '#f8fafc',
+                                  }}
+                                />
                               </td>
                             </tr>
-                          )}
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -744,101 +879,237 @@ export const EquipmentParameterAssignTab: React.FC = () => {
                 </div>
               )}
 
-              {/* ===================== TAB 2 CONTENT: OPERATING PARAMS ===================== */}
+              {/* ===================== TAB 2: OPERATING PARAMS DIRECT MATRIX ===================== */}
               {activeSubTab === 'OPERATING_PARAMS' && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                      Các chỉ tiêu theo dõi động khi máy đang chạy thực tế (Nhiệt độ, Áp suất, Rung, Dòng điện...). Form Sổ vận hành & Quét QR sẽ tự động lấy các chỉ tiêu này.
+                  {/* Toolbar inside Tab 2 */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '12px',
+                      flexWrap: 'wrap',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ position: 'relative', width: '260px' }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Tìm tham số vận hành..."
+                          value={opSearch}
+                          onChange={(e) => setOpSearch(e.target.value)}
+                          style={{ paddingLeft: '32px', height: '34px', fontSize: '12.5px' }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      </div>
+
+                      {/* Quick Filters */}
+                      <div style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color, #e2e8f0)' }}>
+                        <button
+                          type="button"
+                          onClick={() => setOpFilterStatus('ALL')}
+                          style={{
+                            padding: '6px 12px',
+                            border: 'none',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            backgroundColor: opFilterStatus === 'ALL' ? 'var(--accent-blue, #2563eb)' : '#ffffff',
+                            color: opFilterStatus === 'ALL' ? '#ffffff' : 'var(--text-primary)',
+                          }}
+                        >
+                          Tất cả ({opParamRows.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOpFilterStatus('SELECTED')}
+                          style={{
+                            padding: '6px 12px',
+                            border: 'none',
+                            borderLeft: '1px solid var(--border-color, #e2e8f0)',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            backgroundColor: opFilterStatus === 'SELECTED' ? 'var(--accent-blue, #2563eb)' : '#ffffff',
+                            color: opFilterStatus === 'SELECTED' ? '#ffffff' : 'var(--text-primary)',
+                          }}
+                        >
+                          Đã chọn ({selectedOpCount})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOpFilterStatus('UNSELECTED')}
+                          style={{
+                            padding: '6px 12px',
+                            border: 'none',
+                            borderLeft: '1px solid var(--border-color, #e2e8f0)',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            backgroundColor: opFilterStatus === 'UNSELECTED' ? 'var(--accent-blue, #2563eb)' : '#ffffff',
+                            color: opFilterStatus === 'UNSELECTED' ? '#ffffff' : 'var(--text-primary)',
+                          }}
+                        >
+                          Chưa chọn ({opParamRows.length - selectedOpCount})
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button className="btn btn-primary btn-sm" onClick={handleOpenOpLibrary}>
-                        <CheckSquare size={14} /> + Tích chọn từ thư viện tham số vận hành
+
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleSelectAllOp(true)}
+                        style={{ fontSize: '12px' }}
+                      >
+                        <CheckCheck size={13} /> Chọn tất cả
                       </button>
-                      <button className="btn btn-secondary btn-sm" onClick={handleOpenAddCustomOp}>
-                        <Plus size={14} /> Thêm tham số vận hành riêng
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleSelectAllOp(false)}
+                        style={{ fontSize: '12px' }}
+                      >
+                        <XSquare size={13} /> Bỏ chọn tất cả
                       </button>
                     </div>
                   </div>
 
+                  {/* Direct Table */}
                   {dataLoading ? (
                     <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                       <RefreshCw size={22} className="animate-spin" style={{ margin: '0 auto 8px auto' }} />
-                      Đang tải tham số vận hành...
+                      Đang tải danh mục tham số vận hành...
                     </div>
                   ) : (
                     <div style={{ border: '1px solid var(--border-color, #e2e8f0)', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
                       <table className="custom-table" style={{ margin: 0, width: '100%' }}>
                         <thead>
                           <tr>
-                            <th style={{ width: '50px', textAlign: 'center' }}>STT</th>
+                            <th style={{ width: '50px', textAlign: 'center' }}>Theo dõi</th>
                             <th style={{ minWidth: '180px' }}>Tên tham số vận hành</th>
-                            <th style={{ width: '90px', textAlign: 'center' }}>Đơn vị</th>
-                            <th style={{ width: '150px', textAlign: 'center' }}>Tiêu chuẩn Min ~ Max</th>
-                            <th style={{ width: '110px', textAlign: 'center' }}>Giá trị chuẩn</th>
-                            <th style={{ width: '110px', textAlign: 'center' }}>Trạng thái</th>
-                            <th style={{ width: '80px', textAlign: 'center' }}>Thao tác</th>
+                            <th style={{ width: '80px', textAlign: 'center' }}>Đơn vị</th>
+                            <th style={{ width: '130px', textAlign: 'center' }}>Tiêu chuẩn Min</th>
+                            <th style={{ width: '130px', textAlign: 'center' }}>Tiêu chuẩn Max</th>
+                            <th style={{ width: '130px', textAlign: 'center' }}>Giá trị chuẩn</th>
+                            <th style={{ width: '100px', textAlign: 'center' }}>Trạng thái</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {operatingParams.length > 0 ? (
-                            operatingParams.map((param, idx) => (
-                              <tr key={param.id}>
-                                <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>{idx + 1}</td>
-                                <td><div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>{param.name}</div></td>
-                                <td style={{ textAlign: 'center' }}>
-                                  {param.unit ? (
-                                    <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: '#f1f5f9', fontSize: '11.5px', fontWeight: 600 }}>
-                                      {param.unit}
-                                    </span>
-                                  ) : '—'}
-                                </td>
-                                <td style={{ textAlign: 'center', fontSize: '12.5px', fontWeight: 600 }}>
-                                  {param.minSpec !== null && param.maxSpec !== null
-                                    ? `${param.minSpec} ~ ${param.maxSpec}`
-                                    : param.minSpec !== null
-                                    ? `≥ ${param.minSpec}`
-                                    : param.maxSpec !== null
-                                    ? `≤ ${param.maxSpec}`
-                                    : '—'}
-                                </td>
-                                <td style={{ textAlign: 'center', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                                  {param.standardValue !== null && param.standardValue !== undefined ? param.standardValue : '—'}
-                                </td>
-                                <td style={{ textAlign: 'center' }}>
-                                  <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, backgroundColor: param.isActive ? '#dcfce7' : '#f1f5f9', color: param.isActive ? '#16a34a' : '#64748b' }}>
-                                    {param.isActive ? 'Theo dõi' : 'Tạm dừng'}
-                                  </span>
-                                </td>
-                                <td style={{ textAlign: 'center' }}>
-                                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                                    <button
-                                      className="btn-icon"
-                                      onClick={() => handleOpenEditOp(param)}
-                                      title="Sửa ngưỡng"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #e2e8f0', background: 'transparent', color: '#2563eb', cursor: 'pointer' }}
-                                    >
-                                      <Edit2 size={13} />
-                                    </button>
-                                    <button
-                                      className="btn-icon"
-                                      onClick={() => handleDeleteOpParam(param)}
-                                      title="Xóa"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #e2e8f0', background: 'transparent', color: '#dc2626', cursor: 'pointer' }}
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
+                          {filteredOpRows.map(({ row, fullIdx }) => (
+                            <tr
+                              key={row.standardId}
+                              style={{
+                                backgroundColor: row.isSelected ? 'rgba(37, 99, 235, 0.03)' : 'transparent',
+                                opacity: row.isSelected ? 1 : 0.65,
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <td style={{ textAlign: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={row.isSelected}
+                                  onChange={() => handleToggleOpParam(fullIdx)}
+                                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                              </td>
+                              <td>
+                                <div
+                                  onClick={() => handleToggleOpParam(fullIdx)}
+                                  style={{
+                                    fontWeight: row.isSelected ? 700 : 500,
+                                    color: row.isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                  }}
+                                >
+                                  {row.name}
+                                </div>
+                                {row.description && (
+                                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                    {row.description}
                                   </div>
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                                Máy này chưa được gán tham số vận hành nào. Hãy bấm <strong>"Tích chọn từ thư viện tham số vận hành"</strong> để bắt đầu ghi Sổ vận hành.
+                                )}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                {row.unit ? (
+                                  <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: '#f1f5f9', fontSize: '11.5px', fontWeight: 600 }}>
+                                    {row.unit}
+                                  </span>
+                                ) : '—'}
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  className="form-input"
+                                  placeholder="Min..."
+                                  disabled={!row.isSelected}
+                                  value={row.minSpec}
+                                  onChange={(e) => handleOpParamValueChange(fullIdx, 'minSpec', e.target.value)}
+                                  style={{
+                                    height: '32px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    textAlign: 'center',
+                                    backgroundColor: row.isSelected ? '#ffffff' : '#f8fafc',
+                                  }}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  className="form-input"
+                                  placeholder="Max..."
+                                  disabled={!row.isSelected}
+                                  value={row.maxSpec}
+                                  onChange={(e) => handleOpParamValueChange(fullIdx, 'maxSpec', e.target.value)}
+                                  style={{
+                                    height: '32px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    textAlign: 'center',
+                                    backgroundColor: row.isSelected ? '#ffffff' : '#f8fafc',
+                                  }}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  className="form-input"
+                                  placeholder="Chuẩn..."
+                                  disabled={!row.isSelected}
+                                  value={row.standardValue}
+                                  onChange={(e) => handleOpParamValueChange(fullIdx, 'standardValue', e.target.value)}
+                                  style={{
+                                    height: '32px',
+                                    fontSize: '13px',
+                                    textAlign: 'center',
+                                    backgroundColor: row.isSelected ? '#ffffff' : '#f8fafc',
+                                  }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <span
+                                  style={{
+                                    padding: '2px 8px',
+                                    borderRadius: '10px',
+                                    fontSize: '11px',
+                                    fontWeight: 600,
+                                    backgroundColor: row.isSelected ? '#dcfce7' : '#f1f5f9',
+                                    color: row.isSelected ? '#16a34a' : '#94a3b8',
+                                  }}
+                                >
+                                  {row.isSelected ? 'Đang theo dõi' : 'Không dùng'}
+                                </span>
                               </td>
                             </tr>
-                          )}
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -853,221 +1124,6 @@ export const EquipmentParameterAssignTab: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* ===================== MODAL 1: PICK FROM TECH SPECS LIBRARY ===================== */}
-      <Modal
-        isOpen={isTechLibraryModalOpen}
-        onClose={() => setIsTechLibraryModalOpen(false)}
-        title="Tích chọn Thông số Kỹ thuật từ Thư viện chuẩn (NSX)"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Chọn các thông số kỹ thuật chuẩn của máy <strong>{selectedEquipment?.name}</strong>:
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Tìm thông số KT (Công suất, Điện áp, Dung tích...)..."
-                value={techLibrarySearch}
-                onChange={(e) => setTechLibrarySearch(e.target.value)}
-                style={{ paddingLeft: '32px', height: '36px', fontSize: '13px' }}
-              />
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            </div>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={handleSelectAllTechSpecs}>
-              <CheckCheck size={14} /> Chọn tất cả
-            </button>
-          </div>
-
-          <div style={{ maxHeight: '340px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#ffffff' }}>
-            {filteredStdTechSpecs.map((s) => {
-              const isSelected = selectedTechSpecIds.includes(s.id);
-              return (
-                <div
-                  key={s.id}
-                  onClick={() => { if (!s.isAlreadyAdded) toggleSelectTechSpec(s.id); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '10px 14px',
-                    borderBottom: '1px solid #e2e8f0',
-                    cursor: s.isAlreadyAdded ? 'not-allowed' : 'pointer',
-                    backgroundColor: s.isAlreadyAdded ? '#f8fafc' : isSelected ? 'rgba(37, 99, 235, 0.06)' : 'transparent',
-                    opacity: s.isAlreadyAdded ? 0.6 : 1,
-                  }}
-                >
-                  {s.isAlreadyAdded ? <CheckCircle2 size={18} style={{ color: '#10b981' }} /> : isSelected ? <CheckSquare size={18} style={{ color: '#2563eb' }} /> : <Square size={18} style={{ color: '#94a3b8' }} />}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)' }}>{s.name}</span>
-                      {s.unit && <span style={{ padding: '1px 6px', borderRadius: '4px', backgroundColor: '#f1f5f9', fontSize: '11px', fontWeight: 600 }}>{s.unit}</span>}
-                      {s.category && <span style={{ padding: '1px 6px', borderRadius: '4px', backgroundColor: 'rgba(37,99,235,0.08)', color: '#2563eb', fontSize: '11px', fontWeight: 600 }}>{s.category}</span>}
-                      {s.isAlreadyAdded && <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>(Đã có trong máy)</span>}
-                    </div>
-                    {s.description && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{s.description}</div>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="modal-footer" style={{ padding: '14px 0 0 0', marginTop: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsTechLibraryModalOpen(false)} disabled={saving}>Hủy</button>
-            <button type="button" className="btn btn-primary" onClick={handleApplyTechSpecs} disabled={saving || selectedTechSpecIds.length === 0} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {saving && <RefreshCw size={14} className="animate-spin" />}
-              Gán {selectedTechSpecIds.length} thông số KT vào máy
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ===================== MODAL 2: PICK FROM OPERATING PARAMS LIBRARY ===================== */}
-      <Modal
-        isOpen={isOpLibraryModalOpen}
-        onClose={() => setIsOpLibraryModalOpen(false)}
-        title="Tích chọn Tham số Vận hành từ Thư viện chuẩn (Sổ vận hành)"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Chọn các chỉ tiêu cần theo dõi khi máy <strong>{selectedEquipment?.name}</strong> đang hoạt động:
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Tìm tham số vận hành (Nhiệt độ, Áp suất, Rung, Dòng điện...)..."
-                value={opLibrarySearch}
-                onChange={(e) => setOpLibrarySearch(e.target.value)}
-                style={{ paddingLeft: '32px', height: '36px', fontSize: '13px' }}
-              />
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            </div>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={handleSelectAllOpParams}>
-              <CheckCheck size={14} /> Chọn tất cả
-            </button>
-          </div>
-
-          <div style={{ maxHeight: '340px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#ffffff' }}>
-            {filteredStdOpParams.map((p) => {
-              const isSelected = selectedOpParamIds.includes(p.id);
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => { if (!p.isAlreadyAdded) toggleSelectOpParam(p.id); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '10px 14px',
-                    borderBottom: '1px solid #e2e8f0',
-                    cursor: p.isAlreadyAdded ? 'not-allowed' : 'pointer',
-                    backgroundColor: p.isAlreadyAdded ? '#f8fafc' : isSelected ? 'rgba(37, 99, 235, 0.06)' : 'transparent',
-                    opacity: p.isAlreadyAdded ? 0.6 : 1,
-                  }}
-                >
-                  {p.isAlreadyAdded ? <CheckCircle2 size={18} style={{ color: '#10b981' }} /> : isSelected ? <CheckSquare size={18} style={{ color: '#2563eb' }} /> : <Square size={18} style={{ color: '#94a3b8' }} />}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)' }}>{p.name}</span>
-                      {p.unit && <span style={{ padding: '1px 6px', borderRadius: '4px', backgroundColor: '#f1f5f9', fontSize: '11px', fontWeight: 600 }}>{p.unit}</span>}
-                      {p.isAlreadyAdded && <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>(Đã có trong máy)</span>}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      Tiêu chuẩn chuẩn:{' '}
-                      <strong>{p.minSpec !== null && p.maxSpec !== null ? `${p.minSpec} ~ ${p.maxSpec}` : p.minSpec !== null ? `≥ ${p.minSpec}` : p.maxSpec !== null ? `≤ ${p.maxSpec}` : 'Chưa đặt'}</strong>
-                      {p.description && ` — ${p.description}`}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="modal-footer" style={{ padding: '14px 0 0 0', marginTop: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsOpLibraryModalOpen(false)} disabled={saving}>Hủy</button>
-            <button type="button" className="btn btn-primary" onClick={handleApplyOpParams} disabled={saving || selectedOpParamIds.length === 0} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {saving && <RefreshCw size={14} className="animate-spin" />}
-              Gán {selectedOpParamIds.length} tham số vận hành vào máy
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ===================== MODAL 3: EDIT TECH SPEC ===================== */}
-      <Modal isOpen={isEditTechModalOpen} onClose={() => setIsEditTechModalOpen(false)} title={editingTechSpec ? "Sửa thông số kỹ thuật" : "Thêm thông số kỹ thuật riêng"}>
-        <form onSubmit={handleSaveTechForm}>
-          <div className="form-group">
-            <label className="form-label">Tên thông số KT <span style={{ color: 'var(--danger)' }}>*</span></label>
-            <input type="text" className="form-input" required placeholder="VD: Công suất động cơ, Điện áp nguồn..." value={techForm.name} onChange={e => setTechForm({ ...techForm, name: e.target.value })} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Giá trị danh định (từ catalogue NSX) <span style={{ color: 'var(--danger)' }}>*</span></label>
-            <input type="text" className="form-input" required placeholder="VD: 7.5, 380, 1000L, 1500 x 800 x 1800..." value={techForm.value} onChange={e => setTechForm({ ...techForm, value: e.target.value })} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div className="form-group">
-              <label className="form-label">Đơn vị đo</label>
-              <input type="text" className="form-input" placeholder="VD: kW, V, Lít, mm, kg..." value={techForm.unit} onChange={e => setTechForm({ ...techForm, unit: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Phân nhóm</label>
-              <input type="text" className="form-input" placeholder="VD: Điện, Cơ khí, Dung tích..." value={techForm.category} onChange={e => setTechForm({ ...techForm, category: e.target.value })} />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Ghi chú</label>
-            <input type="text" className="form-input" placeholder="Ghi chú thêm..." value={techForm.notes} onChange={e => setTechForm({ ...techForm, notes: e.target.value })} />
-          </div>
-          <div className="modal-footer" style={{ padding: '16px 0 0 0', marginTop: '16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsEditTechModalOpen(false)}>Hủy</button>
-            <button type="submit" className="btn btn-primary">{editingTechSpec ? 'Cập nhật' : 'Thêm mới'}</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* ===================== MODAL 4: EDIT OP PARAM ===================== */}
-      <Modal isOpen={isEditOpModalOpen} onClose={() => setIsEditOpModalOpen(false)} title={editingOpParam ? "Sửa tham số vận hành" : "Thêm tham số vận hành riêng"}>
-        <form onSubmit={handleSaveOpForm}>
-          <div className="form-group">
-            <label className="form-label">Tên tham số vận hành <span style={{ color: 'var(--danger)' }}>*</span></label>
-            <input type="text" className="form-input" required placeholder="VD: Nhiệt độ tiệt trùng, Áp suất..." value={opForm.name} onChange={e => setOpForm({ ...opForm, name: e.target.value })} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Đơn vị đo</label>
-            <input type="text" className="form-input" placeholder="VD: °C, Bar, RPM, A, µS/cm..." value={opForm.unit} onChange={e => setOpForm({ ...opForm, unit: e.target.value })} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div className="form-group">
-              <label className="form-label">Tiêu chuẩn dưới (Min Spec)</label>
-              <input type="number" step="any" className="form-input" placeholder="VD: 121" value={opForm.minSpec} onChange={e => setOpForm({ ...opForm, minSpec: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Tiêu chuẩn trên (Max Spec)</label>
-              <input type="number" step="any" className="form-input" placeholder="VD: 125" value={opForm.maxSpec} onChange={e => setOpForm({ ...opForm, maxSpec: e.target.value })} />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Giá trị chuẩn (Standard Value)</label>
-            <input type="number" step="any" className="form-input" placeholder="VD: 121" value={opForm.standardValue} onChange={e => setOpForm({ ...opForm, standardValue: e.target.value })} />
-          </div>
-          <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
-              <input type="checkbox" checked={opForm.isActive} onChange={e => setOpForm({ ...opForm, isActive: e.target.checked })} style={{ width: '16px', height: '16px' }} />
-              Đang theo dõi chỉ tiêu này trên máy
-            </label>
-          </div>
-          <div className="modal-footer" style={{ padding: '16px 0 0 0', marginTop: '16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsEditOpModalOpen(false)}>Hủy</button>
-            <button type="submit" className="btn btn-primary">{editingOpParam ? 'Cập nhật' : 'Thêm mới'}</button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 };
