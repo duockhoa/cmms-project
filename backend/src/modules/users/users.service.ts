@@ -151,6 +151,55 @@ export class UsersService {
     });
   }
 
+  async createUser(data: any) {
+    return this.prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        role: data.role || 'USER',
+        roleId: data.roleId || null,
+        department: data.department || null,
+        specialty: data.specialty || null,
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      },
+      include: { customRole: true }
+    });
+  }
+
+  async updateUser(id: string, data: any) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`Không tìm thấy người dùng với ID: ${id}`);
+    }
+
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.role !== undefined) updateData.role = data.role;
+    if (data.roleId !== undefined) updateData.roleId = data.roleId || null;
+    if (data.department !== undefined) updateData.department = data.department;
+    if (data.specialty !== undefined) updateData.specialty = data.specialty;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        ...updateData,
+        version: { increment: 1 }
+      },
+      include: { customRole: true }
+    });
+  }
+
+  async deleteUser(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`Không tìm thấy người dùng với ID: ${id}`);
+    }
+
+    return this.prisma.user.delete({ where: { id } });
+  }
+
   async syncHrmUsers(accessToken: string) {
     const hrmApiUrl = process.env.HRM_API_URL;
     if (!hrmApiUrl) {

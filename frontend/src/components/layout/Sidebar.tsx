@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
+import { api } from '../../services/api';
 import {
   LayoutDashboard,
   Cpu,
@@ -23,7 +24,23 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) => {
-  const menuItems = [
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    api.getMe()
+      .then((res: any) => {
+        const u = res?.user || res;
+        if (u) {
+          const role = u.role?.toUpperCase();
+          if (role === 'ADMIN' || role === 'SUPER_ADMIN' || res?.permissions?.includes('ALL')) {
+            setIsAdmin(true);
+          }
+        }
+      })
+      .catch(() => null);
+  }, []);
+
+  const allMenuItems = [
     { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },
     { id: 'equipment', label: 'Thiết bị', icon: Cpu },
     { id: 'requests', label: 'Báo cáo sự cố', icon: AlertCircle },
@@ -34,7 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
     { id: 'reports', label: 'Báo cáo & Phân tích', icon: BarChart3 },
     { id: 'maintenance', label: 'Lịch bảo trì', icon: Calendar },
     { id: 'feedbacks', label: 'Góp ý & Báo lỗi', icon: MessageSquarePlus },
-    { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings },
+    ...(isAdmin ? [{ id: 'settings', label: 'Cài đặt hệ thống', icon: Settings }] : []),
     { id: 'about', label: 'Giới thiệu', icon: Info },
   ];
 
@@ -42,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`} style={{ top: '60px' }}>
       {/* Menu Navigation */}
       <nav style={{ padding: '12px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
-        {menuItems.map((item) => {
+        {allMenuItems.map((item) => {
           const Icon = item.icon;
           const targetPath = item.id === 'dashboard' ? '/' : `/${item.id}`;
           return (

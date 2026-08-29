@@ -260,6 +260,10 @@ export const api = {
     });
   },
 
+  createUser: (data: any) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id: string, data: any) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteUser: (id: string) => request(`/users/${id}`, { method: 'DELETE' }),
+
   syncHrmUsers: async () => {
     return request('/users/sync-hrm', {
       method: 'POST',

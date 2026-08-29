@@ -18,6 +18,7 @@ const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001
 type SettingsTab = 'categories' | 'locations' | 'production-lines' | 'system-settings' | 'standard-parameters' | 'roles' | 'users' | 'technicians' | 'checklist-library';
 
 export const SettingsPage: React.FC = () => {
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>('categories');
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +36,20 @@ export const SettingsPage: React.FC = () => {
   // Modal States
   const [isAddEditOpen, setIsAddEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
+
+  useEffect(() => {
+    api.getMe()
+      .then((res: any) => {
+        const u = res?.user || res;
+        const role = u?.role?.toUpperCase();
+        if (role === 'ADMIN' || role === 'SUPER_ADMIN' || res?.permissions?.includes('ALL')) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      })
+      .catch(() => setIsAdmin(false));
+  }, []);
   
   // Form State for Categories/Locations/ProductionLines
   const [itemForm, setItemForm] = useState({
@@ -325,6 +340,23 @@ export const SettingsPage: React.FC = () => {
   };
 
   const filteredItems = getFilteredItems();
+
+  if (isAdmin === false) {
+    return (
+      <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+          <Shield size={32} />
+        </div>
+        <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>Không có quyền truy cập</h2>
+        <p style={{ color: 'var(--text-secondary)', maxWidth: '460px', margin: '8px auto 20px', fontSize: '14px' }}>
+          Khu vực Cài đặt hệ thống chỉ dành riêng cho <strong>Quản trị viên (ADMIN)</strong> hoặc <strong>Super Admin</strong>.
+        </p>
+        <button className="btn btn-primary" onClick={() => window.location.href = '/'}>
+          Quay lại Trang chủ
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>

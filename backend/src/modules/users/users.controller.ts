@@ -1,9 +1,9 @@
-import { Controller, Get, Patch, Param, Body, Query, UseGuards, Post, Req } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, Query, UseGuards, Post, Delete, Req } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateTechnicalProfileDto } from './dto/update-technical-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ApiTags, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiResponse, ApiOperation } from '@nestjs/swagger';
 import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
 
 @ApiTags('Người dùng')
@@ -116,5 +116,26 @@ export class UsersController {
     @Body() body: { roleId: string | null }
   ) {
     return this.usersService.updateRole(id, body.roleId);
+  }
+
+  @ApiOperation({ summary: 'Tạo mới người dùng thủ công' })
+  @Post()
+  async createUser(@Body() body: any) {
+    return this.usersService.createUser(body);
+  }
+
+  @ApiOperation({ summary: 'Cập nhật thông tin người dùng' })
+  @Patch(':id')
+  async updateUser(
+    @Param('id') id: string,
+    @Body() body: any
+  ) {
+    return this.usersService.updateUser(id, body);
+  }
+
+  @ApiOperation({ summary: 'Xóa người dùng' })
+  @Delete(':id')
+  async deleteUser(@Param('id') id: string) {
+    return this.usersService.deleteUser(id);
   }
 }
