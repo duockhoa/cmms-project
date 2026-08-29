@@ -91,12 +91,19 @@ async function cleanTestData() {
     console.log('⚠️ Bỏ qua OperationLog:', e.message);
   }
 
-  // 6. Xóa Inventory Transactions test
+  // 6. Xóa Inventory Transactions & Items test
   try {
     await prisma.inventoryTransaction.deleteMany({});
     console.log('✅ Đã xóa InventoryTransaction');
   } catch (e) {
     console.log('⚠️ Bỏ qua InventoryTransaction:', e.message);
+  }
+
+  try {
+    await prisma.inventoryItem.deleteMany({});
+    console.log('✅ Đã xóa InventoryItem');
+  } catch (e) {
+    console.log('⚠️ Bỏ qua InventoryItem:', e.message);
   }
 
   // 7. Reset toàn bộ 199 thiết bị về trạng thái OPERATIONAL (bình thường)
