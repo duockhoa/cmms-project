@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
+import { StatusBadge } from '../components/common/Badge';
 import { Camera, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
@@ -141,16 +142,7 @@ export const OperationLogsPage: React.FC = () => {
                       <td>{eq.category}</td>
                       <td>{eq.location}</td>
                       <td>
-                        <span style={{ 
-                          backgroundColor: eq.status === 'ACTIVE' ? '#dcfce7' : eq.status === 'INACTIVE' ? '#fee2e2' : '#fef3c7', 
-                          color: eq.status === 'ACTIVE' ? '#16a34a' : eq.status === 'INACTIVE' ? '#dc2626' : '#d97706', 
-                          padding: '4px 10px', 
-                          borderRadius: '12px', 
-                          fontSize: '12px',
-                          fontWeight: 600
-                        }}>
-                          {eq.status === 'ACTIVE' ? 'Hoạt động' : eq.status === 'INACTIVE' ? 'Ngưng hoạt động' : 'Bảo trì'}
-                        </span>
+                        <StatusBadge status={eq.status} />
                       </td>
                     </tr>
                   ))}

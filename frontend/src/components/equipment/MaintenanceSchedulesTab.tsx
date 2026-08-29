@@ -1,4 +1,5 @@
 import React from 'react';
+import { StatusBadge } from '../common/Badge';
 
 interface MaintenanceSchedulesTabProps {
   schedulesList: any[];
@@ -19,7 +20,7 @@ export const MaintenanceSchedulesTab: React.FC<MaintenanceSchedulesTabProps> = (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{sch.title}</span>
-                  <span className="badge badge-warning" style={{ fontSize: '10px' }}>{sch.status}</span>
+                  <StatusBadge status={sch.status} />
                   <span className="badge badge-info" style={{ fontSize: '10px' }}>{sch.frequencyType}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>

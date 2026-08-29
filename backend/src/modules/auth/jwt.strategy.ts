@@ -67,7 +67,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     
     let dbUser = await this.prisma.user.findFirst({
       where: {
-        email: emailOrUsername
+        OR: [
+          { email: emailOrUsername },
+          ...(payload.username ? [{ email: `${payload.username}@local.hrm` }, { name: payload.username }] : []),
+          ...(payload.sub ? [{ email: `${payload.sub}@local.hrm` }] : []),
+        ]
       },
       include: {
         customRole: true
@@ -81,7 +85,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Nếu user chưa tồn tại hoặc thiếu department trong DB, thử lấy trực tiếp từ HRM để đồng bộ
     if (!dbUser || dbUser.department === null) {
       try {
-        let token = req.headers.authorization;
+        let token = req.headers?.authorization;
         if (!token && req.query?.token) {
           token = `Bearer ${req.query.token}`;
         }
@@ -94,7 +98,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             }
           });
           if (res.ok) {
-            const hrmUser = await res.json();
+            const hrmUser: any = await res.json();
             if (hrmUser) {
               department = hrmUser.department || department;
               name = hrmUser.name || name;
@@ -109,14 +113,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     const adminCode = process.env.ADMIN_EMPLOYEE_CODE;
     const isSuperAdmin = adminCode && (payload.username === adminCode || emailOrUsername.includes(adminCode));
-    const defaultRole = isSuperAdmin ? 'ADMIN' : (process.env.DEFAULT_SYNC_ROLE || 'TECHNICIAN');
+    const defaultRole = isSuperAdmin ? 'ADMIN' : (process.env.DEFAULT_SYNC_ROLE || 'USER');
 
     // Auto-provision user if they don't exist in CMMS yet
     if (!dbUser) {
       try {
         dbUser = await this.prisma.user.create({
           data: {
-            email: emailOrUsername,
+            email: emailOrUsername.includes('@') ? emailOrUsername : `${emailOrUsername}@local.hrm`,
             name: name,
             role: defaultRole,
             department: department,
@@ -126,8 +130,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             customRole: true
           }
         });
-      } catch (err) {
-        throw new UnauthorizedException('Lỗi hệ thống: Không thể tạo tài khoản CMMS tự động từ HRM.');
+      } catch (err: any) {
+        console.error('Prisma auto-provision error:', err);
+        throw new UnauthorizedException(`Lỗi hệ thống: Không thể tạo tài khoản CMMS tự động từ HRM (${err?.message || err}).`);
       }
     } else {
       // Check if we need to update info or upgrade to ADMIN

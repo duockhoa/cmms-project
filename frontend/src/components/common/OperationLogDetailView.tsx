@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { XOctagon, FileText, AlertTriangle, Plus, Activity, Clock } from 'lucide-react';
 import { api } from '../../services/api';
+import { StatusBadge } from './Badge';
 import { Modal } from './Modal';
 import { useToast } from './Toast';
 
@@ -143,7 +144,7 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
             <div><span style={{ color: 'var(--text-secondary)' }}>Mã thiết bị:</span> <strong>{equipment.code}</strong></div>
             <div><span style={{ color: 'var(--text-secondary)' }}>Tên thiết bị:</span> <strong>{equipment.name}</strong></div>
             <div><span style={{ color: 'var(--text-secondary)' }}>Khu vực:</span> <strong>{equipment.location}</strong></div>
-            <div><span style={{ color: 'var(--text-secondary)' }}>Trạng thái:</span> <strong>{equipment.status === 'ACTIVE' ? 'Hoạt động' : 'Ngưng hoạt động'}</strong></div>
+            <div><span style={{ color: 'var(--text-secondary)' }}>Trạng thái:</span> <StatusBadge status={equipment.status} /></div>
           </div>
         </div>
 

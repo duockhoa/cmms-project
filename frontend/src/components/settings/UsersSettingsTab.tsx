@@ -23,7 +23,9 @@ export const UsersSettingsTab: React.FC = () => {
       setUsers(uRes);
       setRoles(rRes);
       const adminRole = import.meta.env.VITE_SUPER_ADMIN_ROLE || 'ADMIN';
-      if (meRes && meRes.roles && meRes.roles.includes(adminRole)) {
+      const userObj = meRes?.user || meRes;
+      const userRole = userObj?.role;
+      if (userRole === adminRole || meRes?.permissions?.includes('ALL') || userRole === 'ADMIN') {
         setIsAdmin(true);
       }
     } catch (err: any) {
@@ -68,11 +70,9 @@ export const UsersSettingsTab: React.FC = () => {
           <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>Gán nhóm quyền cho nhân sự trong hệ thống.</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {isAdmin && (
-            <button className="btn btn-primary" onClick={handleSyncHrm} disabled={isSyncing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} /> Đồng bộ HRM
-            </button>
-          )}
+          <button className="btn btn-primary" onClick={handleSyncHrm} disabled={isSyncing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} /> Đồng bộ từ HRM
+          </button>
           <button className="btn btn-secondary" onClick={loadData} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Làm mới
           </button>

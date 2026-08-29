@@ -16,10 +16,9 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    const authUrl = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrm.example.com';
-    const redirectUrl = encodeURIComponent(window.location.origin);
-    window.location.href = `${authUrl}/login?redirect=${redirectUrl}`;
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    window.location.href = '/login';
   };
 
   const fetchNotifications = async () => {
@@ -35,8 +34,8 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
   useEffect(() => {
     const initData = async () => {
       try {
-        const user = await api.getMe();
-        setCurrentUser(user);
+        const res = await api.getMe();
+        setCurrentUser(res?.user || res);
       } catch (e) {
         console.error('Failed to load user profile in Navbar:', e);
       }
@@ -106,7 +105,7 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <img src="/dkpharmalogo.png" alt="DKPharma" style={{ height: '32px', objectFit: 'contain' }} />
           <div style={{ height: '20px', width: '1px', backgroundColor: 'var(--border-color)', margin: '0 4px' }}></div>
-          <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', letterSpacing: '0.5px' }}>CMMS BẢO TRÌ</span>
+          <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', letterSpacing: '0.5px' }}>DK.QLTB</span>
         </div>
       </div>
 
@@ -213,7 +212,7 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
                 {currentUser?.name || 'Đang tải...'}
               </span>
               <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                {currentUser ? (currentUser.role === 'ADMIN' ? 'Quản trị viên' : currentUser.role === 'MANAGER' ? 'Quản lý' : 'Kỹ thuật viên') : ''}
+                {currentUser ? (currentUser.role === 'ADMIN' ? 'Quản trị viên' : currentUser.role === 'MANAGER' ? 'Quản lý' : currentUser.role === 'TECHNICIAN' ? 'Kỹ thuật viên' : 'Người dùng') : ''}
               </span>
             </div>
             {/* Circular Red Avatar */}

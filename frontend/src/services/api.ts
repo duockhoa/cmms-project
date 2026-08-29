@@ -2,7 +2,7 @@ export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_BASE = API_HOST + '/api/v1';
 // Removed DEMO_USER_ID as the system relies on real authentication now.
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem('accessToken');
   const headers: any = {
     'Content-Type': 'application/json',
     ...options.headers
@@ -15,8 +15,8 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
   const res = await fetch(url, { ...options, headers });
   
   if (res.status === 401) {
-    localStorage.removeItem('access_token');
-    window.location.href = import.meta.env.VITE_HRM_LOGIN_URL || '/login';
+    localStorage.removeItem('accessToken');
+    window.location.href = '/login';
   }
   
   return res;
@@ -25,7 +25,7 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem('accessToken');
   
   const headers: any = {
     'Content-Type': 'application/json',
@@ -44,8 +44,8 @@ async function request(endpoint: string, options: RequestInit = {}) {
   try {
     const res = await fetch(url, config);
     if (res.status === 401) {
-      localStorage.removeItem('access_token');
-      window.location.href = import.meta.env.VITE_HRM_LOGIN_URL || '/login';
+      localStorage.removeItem('accessToken');
+      window.location.href = '/login';
       throw new Error('Unauthorized');
     }
     
@@ -187,7 +187,7 @@ export const api = {
   deleteAttachment: (id: string) =>
     request(`/attachments/${id}`, { method: 'DELETE' }),
   uploadAttachment: (formData: FormData) => {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem('accessToken');
     const headers: any = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -254,23 +254,16 @@ export const api = {
   deleteRole: (id: string) => request(`/roles/${id}`, { method: 'DELETE' }),
 
   updateUserRole: async (id: string, roleId: string | null) => {
-    const res = await fetchWithAuth(`${API_BASE}/api/v1/users/${id}/role`, {
+    return request(`/users/${id}/role`, {
       method: 'PATCH',
       body: JSON.stringify({ roleId }),
     });
-    if (!res.ok) throw new Error('Không thể cập nhật quyền người dùng');
-    return res.json();
   },
 
   syncHrmUsers: async () => {
-    const res = await fetchWithAuth(`${API_BASE}/api/v1/users/sync-hrm`, {
+    return request('/users/sync-hrm', {
       method: 'POST',
     });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => null);
-      throw new Error(errorData?.message || 'Không thể đồng bộ người dùng từ HRM');
-    }
-    return res.json();
   },
 
   // ==========================================

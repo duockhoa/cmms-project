@@ -14,6 +14,8 @@ import { LogsTab } from '../components/equipment/LogsTab';
 import { OperationParametersTab } from '../components/equipment/OperationParametersTab';
 import { EquipmentOperationLogsTab } from '../components/equipment/EquipmentOperationLogsTab';
 
+import { api } from '../services/api';
+
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
 interface EquipmentDetailPageProps {
@@ -42,16 +44,7 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
 
   const fetchDetail = () => {
     setLoading(true);
-    fetch(`${API_BASE}/api/v1/equipment/${item.id}`, {
-      headers: {
-        'x-user-id': DEMO_USER_ID,
-        'x-test-user-id': DEMO_USER_ID,
-      }
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Không thể tải chi tiết thiết bị');
-        return res.json();
-      })
+    api.getEquipmentById(item.id)
       .then(data => {
         setDetailData(data);
         setLoading(false);
@@ -104,23 +97,10 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/equipment/${data.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': DEMO_USER_ID,
-          'x-test-user-id': DEMO_USER_ID,
-        },
-        body: JSON.stringify({
-          expectedVersion: data.version,
-          specs: JSON.stringify(newSpecs)
-        })
+      await api.updateEquipment(data.id, {
+        expectedVersion: data.version,
+        specs: JSON.stringify(newSpecs)
       });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || 'Lỗi cập nhật thông số');
-      }
 
       setShowSpecModal(false);
       toast.success('Thành công', 'Đã cập nhật thông số thiết bị.');
@@ -142,20 +122,11 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     if (!selectedPartId) return;
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/equipment/${data.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': DEMO_USER_ID,
-          'x-test-user-id': DEMO_USER_ID,
-        },
-        body: JSON.stringify({
-          expectedVersion: data.version,
-          notes: data.notes
-        })
+      await api.updateEquipment(data.id, {
+        expectedVersion: data.version,
+        notes: data.notes
       });
 
-      if (!res.ok) throw new Error('Không thể liên kết phụ tùng');
       setShowPartModal(false);
       fetchDetail();
       toast.success('Thành công', 'Đã liên kết phụ tùng thành công.');
@@ -175,16 +146,7 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     formData.append('description', 'Tài liệu SOP');
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/attachments`, {
-        method: 'POST',
-        headers: {
-          'x-user-id': DEMO_USER_ID,
-          'x-test-user-id': DEMO_USER_ID,
-        },
-        body: formData
-      });
-
-      if (!res.ok) throw new Error('Lỗi khi tải lên tài liệu');
+      await api.uploadAttachment(formData);
       toast.success('Thành công', 'Tải lên tài liệu thành công.');
       fetchDetail();
     } catch (err: any) {

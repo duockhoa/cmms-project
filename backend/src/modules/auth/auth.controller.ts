@@ -53,7 +53,7 @@ export class AuthController {
       },
       permissions: permissions,
       scope: {
-        department: dbUser.role === 'MANAGER' ? 'Phân xưởng A' : 'ALL',
+        department: dbUser.role === 'MANAGER' ? (dbUser.department || 'ALL') : 'ALL',
         assignedOnly: dbUser.role === 'TECHNICIAN',
       },
     };

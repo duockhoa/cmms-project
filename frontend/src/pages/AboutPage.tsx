@@ -22,7 +22,7 @@ export const AboutPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <img src="/dkpharmalogo.png" alt="DKPharma Logo" style={{ height: '54px', objectFit: 'contain' }} />
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>CMMS Bảo trì</h1>
+            <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>DK.QLTB</h1>
             <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>Phiên bản 0.1.0</span>
           </div>
         </div>

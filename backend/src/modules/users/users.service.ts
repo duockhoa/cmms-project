@@ -173,13 +173,18 @@ export class UsersService {
         throw new HttpException(`Lỗi khi gọi API HRM: ${response.statusText}`, HttpStatus.BAD_REQUEST);
       }
 
-      const hrmUsers = await response.json();
+      const rawData = await response.json();
+      const hrmUsers = Array.isArray(rawData)
+        ? rawData
+        : (rawData.data || rawData.users || rawData.items || rawData.results || []);
       
-      if (!Array.isArray(hrmUsers)) {
-        throw new HttpException('Dữ liệu từ HRM không đúng định dạng', HttpStatus.BAD_REQUEST);
+      if (!Array.isArray(hrmUsers) || hrmUsers.length === 0) {
+        if (!Array.isArray(rawData)) {
+          throw new HttpException('Dữ liệu từ HRM không đúng định dạng danh sách người dùng', HttpStatus.BAD_REQUEST);
+        }
       }
 
-      const defaultRole = process.env.DEFAULT_SYNC_ROLE || 'TECHNICIAN';
+      const defaultRole = process.env.DEFAULT_SYNC_ROLE || 'USER';
       const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
       const inactiveStatusesStr = process.env.HRM_INACTIVE_STATUSES || 'INACTIVE,BANNED,0';
       const inactiveStatuses = inactiveStatusesStr.split(',').map(s => s.trim().toUpperCase());
@@ -191,15 +196,19 @@ export class UsersService {
         // Skip users without id or username/email
         if (!hrmUser.id || (!hrmUser.email && !hrmUser.username)) continue;
         
-        const emailOrUsername = hrmUser.email || hrmUser.username || `${hrmUser.id}${dummyDomain}`;
+        const emailOrUsername = (hrmUser.email && hrmUser.email.includes('@'))
+          ? hrmUser.email
+          : `${hrmUser.username || hrmUser.id}${dummyDomain}`;
         const name = hrmUser.name || hrmUser.username || `User ${hrmUser.id}`;
-        const isUserActive = !inactiveStatuses.includes(String(hrmUser.status).toUpperCase());
+        const isUserActive = !inactiveStatuses.includes(String(hrmUser.status || '').toUpperCase());
+        const position = hrmUser.position || hrmUser.role || null;
         
         await this.prisma.user.upsert({
           where: { email: emailOrUsername },
           update: {
             name: name,
             department: hrmUser.department || null,
+            specialty: position || undefined,
             isActive: isUserActive,
           },
           create: {
@@ -208,6 +217,7 @@ export class UsersService {
             name: name,
             role: defaultRole, // Configurable via .env
             department: hrmUser.department || null,
+            specialty: position || null,
             isActive: isUserActive,
           }
         });

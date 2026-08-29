@@ -33,9 +33,9 @@ export const RepairHistoryTab: React.FC<RepairHistoryTabProps> = ({ workOrdersLi
                 </span>
               </div>
               <h4 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--text-primary)' }}>{wo.title}</h4>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                 <span>Người phụ trách: {wo.technicianName || 'Chưa phân công'}</span>
-                <span>Trạng thái: {wo.actualEndDate ? 'Đã hoàn thành' : 'Đang xử lý'}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>Trạng thái: <StatusBadge status={wo.status} /></span>
               </div>
             </div>
           ))}
