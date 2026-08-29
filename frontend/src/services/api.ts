@@ -241,8 +241,30 @@ export const api = {
   // Standard Parameters
   getStandardParameters: () => request('/standard-parameters'),
   createStandardParameter: (data: any) => request('/standard-parameters', { method: 'POST', body: JSON.stringify(data) }),
-  updateStandardParameter: (id: string, data: any) => request(`/standard-parameters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateStandardParameter: (id: string, data: any) => request(`/standard-parameters/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteStandardParameter: (id: string) => request(`/standard-parameters/${id}`, { method: 'DELETE' }),
+
+  // Equipment Categories
+  getEquipmentCategories: () => request('/equipment-categories'),
+  createEquipmentCategory: (data: any) => request('/equipment-categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateEquipmentCategory: (id: string, data: any) => request(`/equipment-categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteEquipmentCategory: (id: string) => request(`/equipment-categories/${id}`, { method: 'DELETE' }),
+
+  // Locations / Workshops
+  getLocations: () => request('/locations'),
+  createLocation: (data: any) => request('/locations', { method: 'POST', body: JSON.stringify(data) }),
+  updateLocation: (id: string, data: any) => request(`/locations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteLocation: (id: string) => request(`/locations/${id}`, { method: 'DELETE' }),
+
+  // Production Lines
+  getProductionLines: () => request('/production-lines'),
+  createProductionLine: (data: any) => request('/production-lines', { method: 'POST', body: JSON.stringify(data) }),
+  updateProductionLine: (id: string, data: any) => request(`/production-lines/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteProductionLine: (id: string) => request(`/production-lines/${id}`, { method: 'DELETE' }),
+
+  // System Settings
+  getSystemSettings: () => request('/system-settings'),
+  updateSystemSetting: (data: { key: string; value: string }) => request('/system-settings', { method: 'POST', body: JSON.stringify(data) }),
 
   // ==========================================
   // ROLES & PERMISSIONS
