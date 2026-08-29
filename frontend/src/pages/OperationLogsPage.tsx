@@ -40,12 +40,20 @@ export const OperationLogsPage: React.FC = () => {
       scanner.render(
         (decodedText) => {
           // Xử lý khi quét thành công
-          // Giả sử mã QR chính là equipmentId hoặc có format "equipment/ID"
-          scanner.clear();
+          // Giả sử mã QR chính là equipmentId hoặc URL hoặc có format "equipment/ID"
+          scanner.clear().catch(console.error);
           setShowScanner(false);
-          const eqId = decodedText.replace('equipment/', '').replace('cmms-equipment:', '').trim();
+          
+          let eqId = decodedText.trim();
+          if (eqId.includes('/equipment/')) {
+            const match = eqId.match(/\/equipment\/([^/?#]+)/);
+            if (match) eqId = match[1];
+          } else {
+            eqId = eqId.replace('equipment/', '').replace('cmms-equipment:', '').trim();
+          }
+
           if (eqId) {
-            setSelectedEqId(eqId);
+            navigate(`/equipment/${eqId}/operation-log-form`);
           } else {
             alert('Mã QR không hợp lệ!');
           }

@@ -21,6 +21,22 @@ export class EquipmentParametersController {
     return this.service.createParameter(equipmentId, dto);
   }
 
+  @Post('bulk-assign')
+  async bulkAssign(
+    @Param('equipmentId') equipmentId: string,
+    @Body() body: { standardParameterIds: string[] },
+  ) {
+    return this.service.bulkAssignFromStandard(equipmentId, body.standardParameterIds);
+  }
+
+  @Put('batch')
+  async batchUpdate(
+    @Param('equipmentId') equipmentId: string,
+    @Body() body: { items: any[] },
+  ) {
+    return this.service.batchUpdateParameters(equipmentId, body.items);
+  }
+
   @Put(':id')
   async updateParameter(
     @Param('id') id: string,

@@ -39,4 +39,89 @@ export class EquipmentParametersService {
       where: { id },
     });
   }
+
+  // Bulk assign from standard parameter library
+  async bulkAssignFromStandard(equipmentId: string, standardParameterIds: string[]) {
+    const equipment = await this.prisma.equipment.findUnique({ where: { id: equipmentId } });
+    if (!equipment) {
+      throw new NotFoundException(`Equipment with ID ${equipmentId} not found`);
+    }
+
+    if (!standardParameterIds || standardParameterIds.length === 0) {
+      return this.getParameters(equipmentId);
+    }
+
+    const standardParams = await this.prisma.standardParameter.findMany({
+      where: { id: { in: standardParameterIds } },
+    });
+
+    const existingParams = await this.prisma.equipmentParameter.findMany({
+      where: { equipmentId },
+    });
+
+    const existingNames = new Set(existingParams.map((p) => p.name.trim().toLowerCase()));
+
+    for (const std of standardParams) {
+      if (!existingNames.has(std.name.trim().toLowerCase())) {
+        await this.prisma.equipmentParameter.create({
+          data: {
+            equipmentId,
+            name: std.name,
+            unit: std.unit,
+            minSpec: std.minSpec,
+            maxSpec: std.maxSpec,
+            isActive: true,
+          },
+        });
+      }
+    }
+
+    return this.getParameters(equipmentId);
+  }
+
+  // Batch save / sync parameters for equipment
+  async batchUpdateParameters(equipmentId: string, items: Array<{
+    id?: string;
+    name: string;
+    unit?: string | null;
+    minSpec?: number | null;
+    maxSpec?: number | null;
+    standardValue?: number | null;
+    isActive?: boolean;
+  }>) {
+    const equipment = await this.prisma.equipment.findUnique({ where: { id: equipmentId } });
+    if (!equipment) {
+      throw new NotFoundException(`Equipment with ID ${equipmentId} not found`);
+    }
+
+    for (const item of items) {
+      if (item.id) {
+        await this.prisma.equipmentParameter.update({
+          where: { id: item.id },
+          data: {
+            name: item.name,
+            unit: item.unit,
+            minSpec: item.minSpec,
+            maxSpec: item.maxSpec,
+            standardValue: item.standardValue,
+            isActive: item.isActive !== undefined ? item.isActive : true,
+          },
+        });
+      } else {
+        await this.prisma.equipmentParameter.create({
+          data: {
+            equipmentId,
+            name: item.name,
+            unit: item.unit,
+            minSpec: item.minSpec,
+            maxSpec: item.maxSpec,
+            standardValue: item.standardValue,
+            isActive: item.isActive !== undefined ? item.isActive : true,
+          },
+        });
+      }
+    }
+
+    return this.getParameters(equipmentId);
+  }
 }

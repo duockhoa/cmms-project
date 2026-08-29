@@ -3,7 +3,7 @@ import { api } from '../services/api';
 import { 
   Settings, Layers, MapPin, Cpu, Shield, Users, 
   ListChecks, UserCheck, Gauge, AlertTriangle, RefreshCw,
-  LucideIcon
+  LucideIcon, Sliders
 } from 'lucide-react';
 
 import { CategoriesSettingsTab } from '../components/settings/CategoriesSettingsTab';
@@ -15,12 +15,14 @@ import { SystemSettingsTab } from '../components/settings/SystemSettingsTab';
 import { RolesSettingsTab } from '../components/settings/RolesSettingsTab';
 import { UsersSettingsTab } from '../components/settings/UsersSettingsTab';
 import { TechniciansSettingsTab } from '../components/settings/TechniciansSettingsTab';
+import { EquipmentParameterAssignTab } from '../components/settings/EquipmentParameterAssignTab';
 
 export type SettingsTabId =
   | 'categories'
   | 'locations'
   | 'production-lines'
   | 'standard-parameters'
+  | 'equipment-parameters'
   | 'checklist-library'
   | 'system-settings'
   | 'users'
@@ -62,8 +64,14 @@ const SETTINGS_GROUPS: NavGroup[] = [
       {
         id: 'standard-parameters',
         label: 'Thông số kỹ thuật chuẩn',
-        description: 'Ngưỡng min/max & tiêu chuẩn đo',
+        description: 'Thư viện thông số & ngưỡng đo',
         icon: Gauge,
+      },
+      {
+        id: 'equipment-parameters',
+        label: 'Thiết lập thông số máy',
+        description: 'Tích chọn thông số theo từng máy',
+        icon: Sliders,
       },
     ],
   },
@@ -313,6 +321,7 @@ export const SettingsPage: React.FC = () => {
           {activeTab === 'locations' && <LocationsSettingsTab />}
           {activeTab === 'production-lines' && <ProductionLinesSettingsTab />}
           {activeTab === 'standard-parameters' && <StandardParametersTab />}
+          {activeTab === 'equipment-parameters' && <EquipmentParameterAssignTab />}
           {activeTab === 'checklist-library' && <ChecklistLibraryTab />}
           {activeTab === 'system-settings' && <SystemSettingsTab />}
           {activeTab === 'users' && <UsersSettingsTab />}
