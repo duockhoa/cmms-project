@@ -157,10 +157,10 @@ export const StandardParametersTab: React.FC = () => {
         <div>
           <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Gauge size={20} style={{ color: 'var(--accent-blue, #2563eb)' }} />
-            Thư viện thông số kỹ thuật chuẩn
+            Thư viện Tham số Vận hành chuẩn (Sổ vận hành & Giám sát theo ca)
           </h3>
           <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px', margin: 0 }}>
-            Định nghĩa sẵn các thông số máy móc (Nhiệt độ, Áp suất, Độ rung, Dòng điện...) và ngưỡng tiêu chuẩn Min/Max.
+            Quản lý các chỉ tiêu đo động khi thiết bị đang vận hành (Nhiệt độ, Áp suất, Độ rung, Dòng điện, pH...) kèm ngưỡng Min/Max.
           </p>
         </div>
 

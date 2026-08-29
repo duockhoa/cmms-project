@@ -100,6 +100,7 @@ model Equipment {
   schedules             MaintenanceSchedule[]
   executionLogs         WorkOrderExecutionLog[] @relation("EquipmentExecutionLogs")
   parameters            EquipmentParameter[]
+  technicalSpecs        EquipmentTechnicalSpec[]
   operationLogs         OperationLog[]
 }
 
@@ -523,7 +524,7 @@ model EquipmentParameter {
   id            String         @id @default(uuid())
   equipmentId   String
   equipment     Equipment      @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  name          String         // Tên thông số (VD: Nhiệt độ)
+  name          String         // Tên thông số vận hành (VD: Nhiệt độ, Áp suất, Rung...)
   unit          String?        // Đơn vị (VD: °C, Bar, RPM)
   minSpec       Float?         // Tiêu chuẩn dưới
   maxSpec       Float?         // Tiêu chuẩn trên
@@ -536,7 +537,7 @@ model EquipmentParameter {
 
 model StandardParameter {
   id            String         @id @default(uuid())
-  name          String         @unique
+  name          String         @unique // Tên tham số vận hành chuẩn (VD: Nhiệt độ tiệt trùng, Áp suất buồng...)
   unit          String?
   minSpec       Float?
   maxSpec       Float?
@@ -544,6 +545,32 @@ model StandardParameter {
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+// BẢNG 1: THƯ VIỆN THÔNG SỐ KỸ THUẬT CHUẨN TỪ NHÀ SẢN XUẤT (Công suất, Điện áp, Dung tích, Trọng lượng...)
+model StandardTechnicalSpec {
+  id          String   @id @default(uuid())
+  name        String   @unique // Tên thông số KT (VD: Công suất động cơ, Điện áp nguồn, Dung tích buồng...)
+  unit        String?  // Đơn vị (VD: kW, V, Lít, mm, kg, HP, Bar...)
+  category    String?  // Phân nhóm: Điện, Cơ khí, Kích thước, Dung tích, Áp lực...
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// BẢNG 1 (ÁP DỤNG VÀO THIẾT BỊ): THÔNG SỐ KỸ THUẬT DANH ĐỊNH THEO HỒ SƠ NSX CỦA TỪNG MÁY
+model EquipmentTechnicalSpec {
+  id          String    @id @default(uuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  name        String    // Tên thông số KT (VD: Công suất động cơ)
+  value       String    // Giá trị danh định từ NSX (VD: "7.5", "380", "1000", "1500 x 800 x 1800")
+  unit        String?   // Đơn vị (kW, V, Lít, mm, kg...)
+  category    String?   // Điện, Cơ khí, Kích thước...
+  notes       String?   // Ghi chú thêm
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model OperationLog {

@@ -8,6 +8,8 @@ import {
   SystemSettingController,
 } from './settings.controller';
 import { StandardParametersController } from './standard-parameters.controller';
+import { StandardTechnicalSpecsService } from './standard-technical-specs.service';
+import { StandardTechnicalSpecsController } from './standard-technical-specs.controller';
 import { RolesService } from './roles.service';
 import { RolesController } from './roles.controller';
 import { ChecklistLibraryService } from './checklist-library.service';
@@ -22,10 +24,23 @@ import { PrismaModule } from '../../prisma/prisma.module';
     ProductionLineController,
     SystemSettingController,
     StandardParametersController,
+    StandardTechnicalSpecsController,
     RolesController,
     ChecklistLibraryController,
   ],
-  providers: [SettingsService, StandardParametersService, RolesService, ChecklistLibraryService],
-  exports: [SettingsService, StandardParametersService, RolesService, ChecklistLibraryService],
+  providers: [
+    SettingsService, 
+    StandardParametersService, 
+    StandardTechnicalSpecsService,
+    RolesService, 
+    ChecklistLibraryService
+  ],
+  exports: [
+    SettingsService, 
+    StandardParametersService, 
+    StandardTechnicalSpecsService,
+    RolesService, 
+    ChecklistLibraryService
+  ],
 })
 export class SettingsModule {}

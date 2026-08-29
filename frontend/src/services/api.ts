@@ -242,11 +242,27 @@ export const api = {
   getAllOperationLogs: () => request('/operation-logs'),
   getOperationLogsReport: () => request('/analytics/operation-logs-report'),
 
-  // Standard Parameters
+  // Standard Operating Parameters (Tham số vận hành theo dõi theo ca)
   getStandardParameters: () => request('/standard-parameters'),
   createStandardParameter: (data: any) => request('/standard-parameters', { method: 'POST', body: JSON.stringify(data) }),
-  updateStandardParameter: (id: string, data: any) => request(`/standard-parameters/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateStandardParameter: (id: string, data: any) => request(`/standard-parameters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStandardParameter: (id: string) => request(`/standard-parameters/${id}`, { method: 'DELETE' }),
+
+  // Standard Technical Specs (Thư viện thông số kỹ thuật chuẩn từ NSX)
+  getStandardTechnicalSpecs: () => request('/standard-technical-specs'),
+  createStandardTechnicalSpec: (data: any) => request('/standard-technical-specs', { method: 'POST', body: JSON.stringify(data) }),
+  updateStandardTechnicalSpec: (id: string, data: any) => request(`/standard-technical-specs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStandardTechnicalSpec: (id: string) => request(`/standard-technical-specs/${id}`, { method: 'DELETE' }),
+
+  // Equipment Technical Specs (Thông số kỹ thuật gán cho máy theo hồ sơ NSX)
+  getEquipmentTechnicalSpecs: (equipmentId: string) => request(`/equipment/${equipmentId}/technical-specs`),
+  createEquipmentTechnicalSpec: (equipmentId: string, data: any) => request(`/equipment/${equipmentId}/technical-specs`, { method: 'POST', body: JSON.stringify(data) }),
+  updateEquipmentTechnicalSpec: (equipmentId: string, id: string, data: any) => request(`/equipment/${equipmentId}/technical-specs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteEquipmentTechnicalSpec: (equipmentId: string, id: string) => request(`/equipment/${equipmentId}/technical-specs/${id}`, { method: 'DELETE' }),
+  bulkAssignEquipmentTechnicalSpecs: (equipmentId: string, standardSpecIds: string[]) =>
+    request(`/equipment/${equipmentId}/technical-specs/bulk-assign`, { method: 'POST', body: JSON.stringify({ standardSpecIds }) }),
+  batchUpdateEquipmentTechnicalSpecs: (equipmentId: string, items: any[]) =>
+    request(`/equipment/${equipmentId}/technical-specs/batch`, { method: 'PUT', body: JSON.stringify({ items }) }),
 
   // Equipment Categories
   getEquipmentCategories: () => request('/equipment-categories'),

@@ -3,12 +3,13 @@ import { api } from '../services/api';
 import { 
   Settings, Layers, MapPin, Cpu, Shield, Users, 
   ListChecks, UserCheck, Gauge, AlertTriangle, RefreshCw,
-  LucideIcon, Sliders
+  LucideIcon, Sliders, BookOpen, Activity
 } from 'lucide-react';
 
 import { CategoriesSettingsTab } from '../components/settings/CategoriesSettingsTab';
 import { LocationsSettingsTab } from '../components/settings/LocationsSettingsTab';
 import { ProductionLinesSettingsTab } from '../components/settings/ProductionLinesSettingsTab';
+import { StandardTechnicalSpecsTab } from '../components/settings/StandardTechnicalSpecsTab';
 import { StandardParametersTab } from '../components/settings/StandardParametersTab';
 import { ChecklistLibraryTab } from '../components/settings/ChecklistLibraryTab';
 import { SystemSettingsTab } from '../components/settings/SystemSettingsTab';
@@ -21,6 +22,7 @@ export type SettingsTabId =
   | 'categories'
   | 'locations'
   | 'production-lines'
+  | 'standard-technical-specs'
   | 'standard-parameters'
   | 'equipment-parameters'
   | 'checklist-library'
@@ -62,15 +64,21 @@ const SETTINGS_GROUPS: NavGroup[] = [
         icon: Layers,
       },
       {
+        id: 'standard-technical-specs',
+        label: 'Thư viện Thông số KT (NSX)',
+        description: 'Công suất, Điện áp, Kích thước, Dung tích...',
+        icon: BookOpen,
+      },
+      {
         id: 'standard-parameters',
-        label: 'Thông số kỹ thuật chuẩn',
-        description: 'Thư viện thông số & ngưỡng đo',
+        label: 'Thư viện Tham số Vận hành',
+        description: 'Nhiệt độ, Áp suất, Rung, Dòng điện, pH...',
         icon: Gauge,
       },
       {
         id: 'equipment-parameters',
         label: 'Thiết lập thông số máy',
-        description: 'Tích chọn thông số theo từng máy',
+        description: 'Gán thông số KT & tham số vận hành',
         icon: Sliders,
       },
     ],
@@ -320,6 +328,7 @@ export const SettingsPage: React.FC = () => {
           {activeTab === 'categories' && <CategoriesSettingsTab />}
           {activeTab === 'locations' && <LocationsSettingsTab />}
           {activeTab === 'production-lines' && <ProductionLinesSettingsTab />}
+          {activeTab === 'standard-technical-specs' && <StandardTechnicalSpecsTab />}
           {activeTab === 'standard-parameters' && <StandardParametersTab />}
           {activeTab === 'equipment-parameters' && <EquipmentParameterAssignTab />}
           {activeTab === 'checklist-library' && <ChecklistLibraryTab />}
