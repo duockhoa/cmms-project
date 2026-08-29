@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useToast } from '../components/common/Toast';
 
-const HRM_API_URL = import.meta.env.VITE_HRM_ROOT_URL || 'http://localhost:3000';
+const HRM_API_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const toast = useToast();
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // If already logged in, redirect
+  // If already logged in, redirect to home
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (token) {
@@ -20,101 +23,123 @@ export function LoginPage() {
     }
   }, [navigate]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
+    setErrorMessage('');
+
+    if (!username.trim() || !password.trim()) {
+      toast.error('Thiếu thông tin', 'Vui lòng nhập đầy đủ Username và Password.');
+      return;
+    }
 
     try {
-      const res = await fetch(`${HRM_API_URL}/auth/login`, {
+      setIsLoading(true);
+
+      const response = await fetch(`${HRM_API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.message || 'Sai tên đăng nhập hoặc mật khẩu');
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.message || 'Sai tên đăng nhập hoặc mật khẩu.');
       }
 
-      const data = await res.json();
-      const token = data.accessToken || data.access_token || data.token;
+      const data = await response.json();
+      const accessToken = data.accessToken || data.access_token || data.token;
+      const refreshToken = data.refreshToken;
 
-      if (!token) {
-        throw new Error('Không nhận được token từ server');
+      if (!accessToken) {
+        throw new Error('Không nhận được mã xác thực từ máy chủ.');
       }
 
-      // Store tokens
-      localStorage.setItem('accessToken', token);
-      if (data.refreshToken) {
-        localStorage.setItem('refreshToken', data.refreshToken);
+      // Save tokens
+      localStorage.setItem('accessToken', accessToken);
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
       }
+
+      toast.success('Thành công', 'Đăng nhập thành công!');
 
       // Redirect to intended destination or home
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
       navigate(redirectTo, { replace: true });
-    } catch (err: any) {
-      setError(err.message || 'Đăng nhập thất bại');
+    } catch (error: any) {
+      const msg = error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
+      setErrorMessage(msg);
+      toast.error('Đăng nhập thất bại', msg);
+      console.error('Login failed:', error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="lp-page">
-      <div className="lp-card">
-        {/* Logo */}
-        <div className="lp-logo-wrap">
-          <img src="/dkpharmalogo.png" alt="DKPharma" className="lp-logo-img" />
+    <div className="login-wrapper">
+      <div className="login-card">
+        {/* Logo & Header */}
+        <div className="login-logo-container">
+          <img
+            src="/dkpharmalogo.png"
+            alt="DKPharma Logo"
+            className="login-logo"
+          />
         </div>
 
-        <h1 className="lp-title">Đăng Nhập Vào DKPharma</h1>
+        <h2 className="login-title">ĐĂNG NHẬP HỆ THỐNG</h2>
+        <p className="login-subtitle">Hệ thống Quản lý Thiết bị & Bảo trì CMMS</p>
 
-        {/* Error */}
-        {error && (
-          <div className="lp-error">
-            <AlertCircle size={15} />
-            <span>{error}</span>
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="login-alert-error">
+            <span>{errorMessage}</span>
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="lp-form">
-          <div className="lp-field">
-            <label htmlFor="lp-username" className="lp-label">Username</label>
+        {/* Form FormField structure matching other internal apps */}
+        <form onSubmit={onSubmit} className="login-form">
+          {/* Username Field */}
+          <div className="form-item">
+            <label className="form-label" htmlFor="username">
+              Username
+            </label>
             <input
-              id="lp-username"
+              id="username"
               type="text"
-              className="lp-input"
               placeholder="Username"
+              className="form-control"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
               autoFocus
+              disabled={isLoading}
               required
-              disabled={loading}
             />
           </div>
 
-          <div className="lp-field">
-            <label htmlFor="lp-password" className="lp-label">Password</label>
-            <div className="lp-input-wrap">
+          {/* Password Field */}
+          <div className="form-item">
+            <label className="form-label" htmlFor="password">
+              Password
+            </label>
+            <div className="relative-input-wrap">
               <input
-                id="lp-password"
+                id="password"
                 type={showPassword ? 'text' : 'password'}
-                className="lp-input"
                 placeholder="Password"
+                className="form-control"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
+                disabled={isLoading}
                 required
-                disabled={loading}
               />
               <button
                 type="button"
-                className="lp-eye"
                 onClick={() => setShowPassword(!showPassword)}
+                className="password-toggle-btn"
                 tabIndex={-1}
                 aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
               >
@@ -123,251 +148,262 @@ export function LoginPage() {
             </div>
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
-            className="lp-submit"
-            disabled={loading || !username || !password}
+            className="login-submit-btn"
+            disabled={isLoading || !username || !password}
           >
-            {loading ? (
-              <>
-                <Loader2 size={16} className="lp-spinner" />
-                Đang nhập...
-              </>
-            ) : (
-              'Đăng Nhập'
-            )}
+            {isLoading && <Loader2 size={18} className="animate-spin mr-2" />}
+            Đăng Nhập
           </button>
         </form>
 
-        {/* Footer links */}
-        <div className="lp-links">
-          <p className="lp-link-row">
-            Bạn chưa có tài khoản? <a href={`${HRM_API_URL}/register`} className="lp-link">Đăng ký</a>
+        {/* Links */}
+        <div className="login-footer-links">
+          <p className="login-footer-text">
+            Bạn chưa có tài khoản?{' '}
+            <a
+              href={`${HRM_API_URL}/register`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="login-link"
+            >
+              Đăng ký
+            </a>
           </p>
-          <a href={`${HRM_API_URL}/forgot-password`} className="lp-link">Lấy lại mật khẩu...</a>
+          <a
+            href={`${HRM_API_URL}/forgot-password`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="login-link"
+          >
+            Lấy lại mật khẩu...
+          </a>
         </div>
 
-        <p className="lp-policy">
+        <p className="login-policy">
           Đăng nhập đồng nghĩa với đã đồng ý điều khoản và chính sách của chúng tôi.
         </p>
       </div>
 
       <style>{`
-        .lp-page {
+        .login-wrapper {
           position: fixed;
           inset: 0;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #eef1f5;
+          background: #f1f5f9;
           font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           z-index: 9999;
+          padding: 16px;
         }
 
-        .lp-card {
+        .login-card {
           width: 100%;
-          max-width: 430px;
-          margin: 0 16px;
-          padding: 40px 40px 32px;
-          background: #fff;
+          max-width: 420px;
+          padding: 36px 32px 28px;
+          background: #ffffff;
           border-radius: 12px;
-          box-shadow: 0 2px 16px rgba(0, 0, 0, 0.07);
-          animation: lpFadeIn 0.35s ease both;
+          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+          border: 1px solid #e2e8f0;
+          animation: loginFadeIn 0.3s ease-out;
         }
 
-        @keyframes lpFadeIn {
-          from { opacity: 0; transform: translateY(12px); }
+        @keyframes loginFadeIn {
+          from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Logo */
-        .lp-logo-wrap {
+        .login-logo-container {
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-bottom: 20px;
+          margin-bottom: 16px;
         }
 
-        .lp-logo-img {
-          height: 56px;
+        .login-logo {
+          height: 48px;
           width: auto;
           object-fit: contain;
         }
 
-        /* Title */
-        .lp-title {
+        .login-title {
           text-align: center;
-          font-size: 18px;
+          font-size: 17px;
           font-weight: 700;
-          color: #1a2a3a;
-          margin-bottom: 28px;
+          color: #0f172a;
+          letter-spacing: 0.3px;
+          margin: 0 0 4px 0;
         }
 
-        /* Error */
-        .lp-error {
+        .login-subtitle {
+          text-align: center;
+          font-size: 12.5px;
+          color: #64748b;
+          margin: 0 0 22px 0;
+        }
+
+        .login-alert-error {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 10px 12px;
+          padding: 10px 14px;
           margin-bottom: 16px;
-          background: #fef2f2;
+          background-color: #fef2f2;
           border: 1px solid #fecaca;
           border-radius: 8px;
           color: #dc2626;
           font-size: 13px;
+          line-height: 1.4;
         }
 
-        /* Form */
-        .lp-form {
+        .login-form {
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 16px;
         }
 
-        .lp-field {
+        .form-item {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 6px;
         }
 
-        .lp-label {
+        .form-label {
           font-size: 13px;
           font-weight: 600;
-          color: #1a2a3a;
+          color: #1e293b;
         }
 
-        .lp-input-wrap {
+        .form-control {
+          width: 100%;
+          padding: 9px 12px;
+          font-size: 13.5px;
+          background-color: #ffffff;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          color: #0f172a;
+          outline: none;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+          box-sizing: border-box;
+        }
+
+        .form-control:focus {
+          border-color: #2563eb;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+
+        .form-control:disabled {
+          background-color: #f8fafc;
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+
+        .relative-input-wrap {
           position: relative;
           display: flex;
           align-items: center;
-        }
-
-        .lp-input {
           width: 100%;
-          padding: 10px 0;
-          background: transparent;
-          border: none;
-          border-bottom: 1.5px solid #d1d5db;
-          color: #1a2a3a;
-          font-size: 14px;
-          font-family: inherit;
-          outline: none;
-          transition: border-color 0.2s;
         }
 
-        .lp-input::placeholder {
-          color: #9ca3af;
+        .relative-input-wrap .form-control {
+          padding-right: 40px;
         }
 
-        .lp-input:focus {
-          border-bottom-color: #1a3c6e;
-        }
-
-        .lp-input:disabled {
-          opacity: 0.5;
-        }
-
-        .lp-input-wrap .lp-input {
-          padding-right: 36px;
-        }
-
-        .lp-eye {
+        .password-toggle-btn {
           position: absolute;
-          right: 0;
+          right: 10px;
           top: 50%;
           transform: translateY(-50%);
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 4px;
           background: none;
           border: none;
-          color: #6b7280;
+          color: #94a3b8;
           cursor: pointer;
+          padding: 4px;
           border-radius: 4px;
+          transition: color 0.15s ease;
         }
 
-        .lp-eye:hover {
-          color: #374151;
+        .password-toggle-btn:hover {
+          color: #475569;
         }
 
-        /* Submit */
-        .lp-submit {
+        .login-submit-btn {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 8px;
           width: 100%;
-          padding: 12px 20px;
-          margin-top: 4px;
-          background: #1a3c6e;
-          border: none;
-          border-radius: 8px;
-          color: #fff;
+          padding: 11px 16px;
+          margin-top: 6px;
+          background-color: #0f172a;
+          border: 1px solid #0f172a;
+          border-radius: 6px;
+          color: #ffffff;
           font-size: 14px;
           font-weight: 600;
-          font-family: inherit;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: background-color 0.15s ease, opacity 0.15s ease;
         }
 
-        .lp-submit:hover:not(:disabled) {
-          background: #15325c;
+        .login-submit-btn:hover:not(:disabled) {
+          background-color: #1e293b;
         }
 
-        .lp-submit:disabled {
-          opacity: 0.55;
+        .login-submit-btn:disabled {
+          opacity: 0.6;
           cursor: not-allowed;
         }
 
-        .lp-spinner {
-          animation: lpSpin 1s linear infinite;
+        .animate-spin {
+          animation: spin 1s linear infinite;
         }
 
-        @keyframes lpSpin {
+        @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
 
-        /* Links */
-        .lp-links {
+        .login-footer-links {
           text-align: center;
-          margin-top: 20px;
+          margin-top: 18px;
           display: flex;
           flex-direction: column;
           gap: 4px;
         }
 
-        .lp-link-row {
+        .login-footer-text {
           font-size: 13px;
-          color: #6b7280;
+          color: #64748b;
           margin: 0;
         }
 
-        .lp-link {
+        .login-link {
           color: #2563eb;
           text-decoration: none;
           font-size: 13px;
           font-weight: 500;
         }
 
-        .lp-link:hover {
+        .login-link:hover {
           text-decoration: underline;
         }
 
-        /* Policy */
-        .lp-policy {
+        .login-policy {
           text-align: center;
-          font-size: 11px;
-          color: #9ca3af;
+          font-size: 11.5px;
+          color: #94a3b8;
           margin-top: 16px;
-          line-height: 1.5;
+          line-height: 1.4;
         }
 
-        /* Responsive */
         @media (max-width: 480px) {
-          .lp-card {
-            padding: 32px 24px 24px;
+          .login-card {
+            padding: 28px 20px 20px;
           }
         }
       `}</style>
