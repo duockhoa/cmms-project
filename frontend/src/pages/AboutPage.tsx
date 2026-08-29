@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../components/common/Toast';
+import { FeedbackModal } from '../components/feedback/FeedbackModal';
+import { MessageSquarePlus, ListFilter } from 'lucide-react';
 
 export const AboutPage: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   return (
     <div style={{
@@ -53,9 +56,9 @@ export const AboutPage: React.FC = () => {
       </div>
 
       {/* Action Buttons Block */}
-      <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px' }}>
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px', flexWrap: 'wrap' }}>
         <button
-          onClick={() => toast.success('Đóng góp ý kiến', 'Cảm ơn ý kiến đóng góp của bạn!')}
+          onClick={() => setIsFeedbackOpen(true)}
           style={{
             padding: '10px 24px',
             borderRadius: '8px',
@@ -66,6 +69,9 @@ export const AboutPage: React.FC = () => {
             fontSize: '14px',
             cursor: 'pointer',
             minWidth: '100px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
             transition: 'all 0.2s ease'
           }}
           onMouseOver={(e) => {
@@ -75,8 +81,30 @@ export const AboutPage: React.FC = () => {
             (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#ffffff';
           }}
         >
-          Góp ý
+          <MessageSquarePlus size={16} /> Góp ý & Báo lỗi
         </button>
+
+        <button
+          onClick={() => navigate('/feedbacks')}
+          style={{
+            padding: '10px 24px',
+            borderRadius: '8px',
+            border: '1px solid var(--border-color)',
+            backgroundColor: 'var(--bg-secondary)',
+            color: 'var(--text-primary)',
+            fontWeight: 600,
+            fontSize: '14px',
+            cursor: 'pointer',
+            minWidth: '100px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <ListFilter size={16} /> Danh sách Yêu cầu
+        </button>
+
         <button
           onClick={() => navigate('/')}
           style={{
@@ -98,9 +126,16 @@ export const AboutPage: React.FC = () => {
             (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#2563eb';
           }}
         >
-          OK
+          Trang chủ
         </button>
       </div>
+
+      {/* Modal */}
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        onSuccess={() => navigate('/feedbacks')}
+      />
     </div>
   );
 };

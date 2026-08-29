@@ -283,4 +283,16 @@ export const api = {
   addChecklistTemplateItems: (templateId: string, items: any[]) => request(`/checklist-templates/${templateId}/items`, { method: 'POST', body: JSON.stringify(items) }),
   deleteChecklistTemplateItem: (templateId: string, itemId: string) => request(`/checklist-templates/${templateId}/items/${itemId}`, { method: 'DELETE' }),
   reorderChecklistTemplateItems: (templateId: string, items: any[]) => request(`/checklist-templates/${templateId}/items/reorder`, { method: 'PUT', body: JSON.stringify(items) }),
+
+  // ==========================================
+  // FEEDBACKS & BUG REPORTS
+  // ==========================================
+  getFeedbacks: (params?: { status?: string; type?: string; search?: string }) => {
+    const query = new URLSearchParams(params as any).toString();
+    return request(`/feedbacks${query ? `?${query}` : ''}`);
+  },
+  getFeedbackById: (id: string) => request(`/feedbacks/${id}`),
+  createFeedback: (data: any) => request('/feedbacks', { method: 'POST', body: JSON.stringify(data) }),
+  updateFeedback: (id: string, data: any) => request(`/feedbacks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteFeedback: (id: string) => request(`/feedbacks/${id}`, { method: 'DELETE' }),
 };

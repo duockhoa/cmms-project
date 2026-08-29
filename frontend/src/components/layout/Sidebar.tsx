@@ -13,7 +13,8 @@ import {
   Settings,
   Info,
   AlertCircle,
-  ClipboardList
+  ClipboardList,
+  MessageSquarePlus,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -32,6 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
     { id: 'spare-parts', label: 'Kho phụ tùng', icon: Package },
     { id: 'reports', label: 'Báo cáo & Phân tích', icon: BarChart3 },
     { id: 'maintenance', label: 'Lịch bảo trì', icon: Calendar },
+    { id: 'feedbacks', label: 'Góp ý & Báo lỗi', icon: MessageSquarePlus },
     { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings },
     { id: 'about', label: 'Giới thiệu', icon: Info },
   ];

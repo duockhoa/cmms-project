@@ -13,6 +13,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { MaintenancePage } from './pages/MaintenancePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AboutPage } from './pages/AboutPage';
+import { FeedbacksPage } from './pages/FeedbacksPage';
 import { OperationLogFormPage } from './pages/OperationLogFormPage';
 import { OperationLogsPage } from './pages/OperationLogsPage';
 import { LoginPage } from './pages/LoginPage';
@@ -95,6 +96,7 @@ function AppLayout() {
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/feedbacks" element={<FeedbacksPage />} />
             <Route path="/operation-logs" element={<OperationLogsPage />} />
             <Route path="/equipment/:id/operation-log-form" element={<OperationLogFormPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

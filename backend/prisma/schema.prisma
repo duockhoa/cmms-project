@@ -559,3 +559,26 @@ model OperationLog {
   recordedBy    User               @relation("UserOperationLogs", fields: [recordedById], references: [id], onDelete: Restrict)
   notes         String?            @db.Text
 }
+
+model AppFeedback {
+  id                     String    @id @default(uuid())
+  code                   String    @unique // Mã góp ý / lỗi: FB-2026-001
+  title                  String    // Nội dung / Tiêu đề
+  description            String    @db.Text // Mô tả yêu cầu / Lỗi
+  type                   String    @default("BUG") // BUG, FEATURE, IMPROVEMENT, OTHER
+  requesterName          String    // Người yêu cầu
+  department             String?   // Bộ phận
+  phone                  String?   // SĐT liên hệ (nếu có)
+  createdAt              DateTime  @default(now()) // Ngày đề xuất
+  response               String?   @db.Text // Phản hồi
+  rootCause              String?   @db.Text // Nguyên nhân (nếu lỗi)
+  handlerName            String?   // Người xử lý
+  expectedCompletionDate DateTime? // Ngày dự kiến hoàn thành
+  status                 String    @default("PENDING") // PENDING (Chờ xử lý), IN_PROGRESS (Đang xử lý), RESOLVED (Đã hoàn thành), REJECTED (Từ chối), CLOSED (Đã đóng)
+  actualCompletionDate   DateTime? // Ngày thực tế hoàn thành
+  completionImages       String?   @db.Text // Hình ảnh hoàn thành (JSON string mảng url)
+  attachments            String?   @db.Text // Hình ảnh / file đính kèm khi tạo (JSON string mảng url)
+  notes                  String?   @db.Text // Ghi chú
+  updatedAt              DateTime  @updatedAt
+}
+
