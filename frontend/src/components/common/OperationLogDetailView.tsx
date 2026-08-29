@@ -1,13 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  XOctagon, Plus, Activity, Clock, CheckCircle2, 
-  Search, RefreshCw, QrCode, Maximize2, Minimize2, ChevronLeft, ChevronRight, Sliders
+  XOctagon, Activity, Clock, CheckCircle2, 
+  Search, RefreshCw, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { StatusBadge } from './Badge';
-import { Modal } from './Modal';
-import { useToast } from './Toast';
-import { useNavigate } from 'react-router-dom';
 
 interface EquipmentOperationDetailViewProps {
   equipmentId: string;
@@ -38,14 +35,6 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
   const [loading, setLoading] = useState(true);
   const [filterSearch, setFilterSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'OUTLIER' | 'NORMAL'>('ALL');
-  
-  const toast = useToast();
-  const navigate = useNavigate();
-
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [formData, setFormData] = useState<Record<string, string>>({});
-  const [formNotes, setFormNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -127,42 +116,6 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
     });
   }, [groupedSessions, filterSearch, filterStatus]);
 
-  const handleInputChange = (paramId: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [paramId]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setSubmitting(true);
-      const submitLogs = Object.keys(formData)
-        .map((paramId) => ({
-          parameterId: paramId,
-          value: Number(formData[paramId]),
-          notes: formNotes.trim() || undefined,
-        }))
-        .filter((log) => !isNaN(log.value));
-
-      if (submitLogs.length === 0) {
-        toast.warning('Thiếu dữ liệu', 'Vui lòng nhập ít nhất một thông số hợp lệ.');
-        setSubmitting(false);
-        return;
-      }
-
-      await api.submitOperationLogs(equipmentId, submitLogs);
-      toast.success('Thành công', 'Đã lưu thông số vận hành thành công!');
-
-      setFormData({});
-      setFormNotes('');
-      setIsFormOpen(false);
-      fetchData();
-    } catch (error: any) {
-      toast.error('Lỗi', error.message || 'Lỗi khi lưu thông số vận hành.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   if (loading || !equipment) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
@@ -223,17 +176,6 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
             <span>Phân loại: <strong style={{ color: 'var(--text-primary)' }}>{equipment.category}</strong></span>
             <StatusBadge status={equipment.status} />
           </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setIsFormOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}
-          >
-            <Plus size={14} /> + Nhập ca mới
-          </button>
         </div>
       </div>
 
@@ -379,7 +321,7 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
         {/* Full-Width Logbook Grid */}
         {filteredSessions.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: '12.5px' }}>
-            Chưa có bản ghi nào. Hãy bấm <strong>"+ Nhập ca mới"</strong> hoặc quét QR để ghi số liệu vận hành.
+            Chưa có bản ghi nào. Người vận hành chỉ cần quét mã QR trên thiết bị để ghi số liệu vận hành.
           </div>
         ) : (
           <div
@@ -541,65 +483,6 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
           </div>
         )}
       </div>
-
-      {/* Input Modal */}
-      {isFormOpen && (
-        <Modal
-          isOpen={isFormOpen}
-          onClose={() => setIsFormOpen(false)}
-          title={`Ghi nhận Thông số Vận hành - ${equipment.code}`}
-        >
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '14px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-              Điền các giá trị thực tế đo được theo ca cho máy <strong>{equipment.name}</strong>:
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto', paddingRight: '4px' }}>
-              {parameters.map((param) => (
-                <div key={param.id} className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px', fontSize: '12.5px' }}>
-                    <span style={{ fontWeight: 600 }}>{param.name}</span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>
-                      Chuẩn: {param.minSpec ?? '-'} ~ {param.maxSpec ?? '-'} {param.unit}
-                    </span>
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="number"
-                      step="any"
-                      className="form-input"
-                      placeholder="Nhập giá trị đo..."
-                      value={formData[param.id] || ''}
-                      onChange={(e) => handleInputChange(param.id, e.target.value)}
-                      style={{ height: '34px', fontSize: '13px' }}
-                    />
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '12.5px', width: '45px' }}>{param.unit}</span>
-                  </div>
-                </div>
-              ))}
-
-              <div className="form-group" style={{ marginTop: '6px' }}>
-                <label className="form-label" style={{ fontSize: '12.5px' }}>Ghi chú / Giải trình (tùy chọn)</label>
-                <textarea
-                  className="form-input"
-                  rows={2}
-                  placeholder="Ghi chú thêm tình trạng vận hành máy..."
-                  value={formNotes}
-                  onChange={(e) => setFormNotes(e.target.value)}
-                  style={{ fontSize: '12px' }}
-                />
-              </div>
-            </div>
-
-            <div className="modal-footer" style={{ padding: '14px 0 0 0', marginTop: '14px', borderTop: '1px solid var(--border-color, #e2e8f0)', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setIsFormOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-primary btn-sm" disabled={submitting}>
-                {submitting ? 'Đang lưu...' : 'Lưu bản ghi'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
     </div>
   );
 };
