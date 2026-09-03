@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useToast } from '../components/common/Toast';
 import { 
-  Camera, X, ArrowLeft, Zap, Droplets, Cpu, 
+  Camera, ArrowLeft, Zap, Droplets, Cpu, 
   CheckCircle2, AlertTriangle, Clock, RefreshCw, 
-  Search, ShieldAlert, FileText, ChevronRight
+  ChevronRight
 } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
@@ -21,7 +21,6 @@ export const UtilityScanPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Form State cho Điện & Nước
-  const [shift, setShift] = useState<string>('Ca 1');
   const [readingValue, setReadingValue] = useState<string>('');
   const [normalValue, setNormalValue] = useState<string>('');
   const [peakValue, setPeakValue] = useState<string>('');
@@ -66,12 +65,11 @@ export const UtilityScanPage: React.FC = () => {
   useEffect(() => {
     let scanner: any = null;
     if (scanning && !selectedPoint) {
-      // Delay nhỏ để DOM render phần tử "utility-qr-reader"
       const timer = setTimeout(() => {
         try {
           scanner = new Html5QrcodeScanner(
             'utility-qr-reader',
-            { fps: 10, qrbox: { width: 250, height: 250 } },
+            { fps: 10, qrbox: { width: 220, height: 220 } },
             false,
           );
 
@@ -103,7 +101,6 @@ export const UtilityScanPage: React.FC = () => {
                 if (found) {
                   handleSelectPoint(found);
                 } else {
-                  // Thử gọi backend tìm kiếm
                   try {
                     const res = await api.getUtilityPointByIdOrCode(cleanCode);
                     if (res) {
@@ -118,9 +115,7 @@ export const UtilityScanPage: React.FC = () => {
                 console.error(e);
               }
             },
-            (error: any) => {
-              // Ignore scan frame error
-            },
+            () => {},
           );
         } catch (e) {
           console.error('Lỗi khởi tạo máy quét:', e);
@@ -139,7 +134,6 @@ export const UtilityScanPage: React.FC = () => {
   const handleSelectPoint = (point: any) => {
     setSelectedPoint(point);
     setScanning(false);
-    // Reset inputs
     setReadingValue('');
     setNormalValue('');
     setPeakValue('');
@@ -173,7 +167,6 @@ export const UtilityScanPage: React.FC = () => {
       setSubmitting(true);
       await api.recordUtilityReading({
         pointId: selectedPoint.id,
-        shift,
         readingValue: parseFloat(readingValue),
         normalValue: normalValue ? parseFloat(normalValue) : undefined,
         peakValue: peakValue ? parseFloat(peakValue) : undefined,
@@ -188,7 +181,6 @@ export const UtilityScanPage: React.FC = () => {
         `Đã ghi nhận chỉ số ${selectedPoint.name}: ${readingValue} ${selectedPoint.unit} (Tiêu thụ: +${calculatedConsumption.toLocaleString()} ${selectedPoint.unit}).`,
       );
 
-      // Reset để quét điểm tiếp theo
       setSelectedPoint(null);
       setScanning(true);
     } catch (error: any) {
@@ -227,23 +219,12 @@ export const UtilityScanPage: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: '640px', margin: '0 auto', padding: '16px', minHeight: '85vh' }}>
+    <div className="utility-scan-container">
       {/* Header Điều hướng */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div className="utility-scan-header">
         <button
           onClick={() => navigate('/utilities')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-secondary, #64748b)',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 600,
-            padding: '6px 0',
-          }}
+          className="scan-back-btn"
         >
           <ArrowLeft size={18} />
           <span>Bảng Quản Lý Tiện Ích</span>
@@ -255,19 +236,7 @@ export const UtilityScanPage: React.FC = () => {
               setSelectedPoint(null);
               setScanning(true);
             }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              backgroundColor: '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              borderRadius: '6px',
-              padding: '6px 12px',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#0f172a',
-              cursor: 'pointer',
-            }}
+            className="scan-other-btn"
           >
             <Camera size={16} />
             <span>Quét Mã Khác</span>
@@ -277,63 +246,41 @@ export const UtilityScanPage: React.FC = () => {
 
       {/* 1. MÀN HÌNH QUÉT CAMERA QR */}
       {scanning && !selectedPoint && (
-        <div className="card" style={{ padding: '20px', borderRadius: '12px', textAlign: 'center', backgroundColor: '#ffffff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-          <div style={{ display: 'inline-flex', padding: '12px', borderRadius: '50%', backgroundColor: '#eff6ff', color: '#2563eb', marginBottom: '12px' }}>
-            <Camera size={32} />
+        <div className="card scan-card">
+          <div className="scan-icon-circle">
+            <Camera size={30} />
           </div>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 6px 0', color: '#0f172a' }}>
+          <h2 className="scan-title">
             QUÉT MÃ QR TIỆN ÍCH / NĂNG LƯỢNG
           </h2>
-          <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px 0' }}>
-            Hướng camera vào tem mã QR dán trên mặt đồng hồ điện, đồng hồ nước hoặc tủ điều khiển hệ thống máy.
+          <p className="scan-subtitle">
+            Hướng camera vào tem mã QR dán trên mặt đồng hồ điện, nước hoặc tủ máy.
           </p>
 
           {/* Camera Scanner Box */}
-          <div
-            id="utility-qr-reader"
-            style={{
-              width: '100%',
-              maxWidth: '360px',
-              margin: '0 auto',
-              borderRadius: '10px',
-              overflow: 'hidden',
-              border: '2px dashed #94a3b8',
-              backgroundColor: '#f8fafc',
-            }}
-          />
+          <div className="scanner-viewport-wrapper">
+            <div id="utility-qr-reader" />
+          </div>
 
           {/* Hoặc chọn thủ công từ danh sách */}
-          <div style={{ marginTop: '24px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '10px' }}>
-              HOẶC CHỌN TRỰC TIẾP TỪ DANH SÁCH ĐIỂM ĐO:
+          <div className="scan-manual-list-wrapper">
+            <span className="scan-manual-title">
+              HOẶC CHỌN ĐIỂM ĐO TỪ DANH SÁCH:
             </span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+            <div className="scan-points-list">
               {points.map((p) => (
                 <div
                   key={p.id}
                   onClick={() => handleSelectPoint(p)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
-                    cursor: 'pointer',
-                    backgroundColor: '#ffffff',
-                    transition: 'background-color 0.15s ease',
-                    textAlign: 'left',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                  className="scan-point-item"
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {p.type === 'ELECTRICITY' && <Zap size={18} color="#eab308" />}
                     {p.type === 'WATER' && <Droplets size={18} color="#0ea5e9" />}
                     {p.type === 'SYSTEM_AUX' && <Cpu size={18} color="#8b5cf6" />}
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>{p.name}</div>
-                      <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                      <div className="point-item-name">{p.name}</div>
+                      <div className="point-item-sub">
                         {p.code} • {p.location}
                       </div>
                     </div>
@@ -348,16 +295,12 @@ export const UtilityScanPage: React.FC = () => {
 
       {/* 2. MÀN HÌNH FORM NHẬP KHI ĐÃ CHỌN ĐIỂM ĐO */}
       {selectedPoint && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="scan-form-container">
           {/* Card Tóm tắt Thiết bị được chọn */}
           <div
-            className="card"
+            className="card scan-selected-card"
             style={{
-              padding: '16px 20px',
-              borderRadius: '12px',
-              backgroundColor: '#ffffff',
               borderLeft: selectedPoint.type === 'ELECTRICITY' ? '5px solid #eab308' : selectedPoint.type === 'WATER' ? '5px solid #0ea5e9' : '5px solid #8b5cf6',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
@@ -377,29 +320,18 @@ export const UtilityScanPage: React.FC = () => {
               <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>{selectedPoint.code}</span>
             </div>
 
-            <h3 style={{ fontSize: '17px', fontWeight: 700, margin: '0 0 4px 0', color: '#0f172a' }}>
+            <h3 className="selected-point-title">
               {selectedPoint.name}
             </h3>
-            <p style={{ fontSize: '12.5px', color: '#64748b', margin: 0 }}>
-              Vị trí: <strong>{selectedPoint.location}</strong> {selectedPoint.multiplier > 1 ? `• Hệ số nhân CT: x${selectedPoint.multiplier}` : ''}
+            <p className="selected-point-loc">
+              Vị trí: <strong>{selectedPoint.location}</strong> {selectedPoint.multiplier > 1 ? `• CT: x${selectedPoint.multiplier}` : ''}
             </p>
 
             {/* Chỉ số lần trước để đối chiếu */}
-            <div
-              style={{
-                marginTop: '12px',
-                padding: '10px 14px',
-                backgroundColor: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
+            <div className="last-reading-box">
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Chỉ số ghi nhận gần nhất:</span>
-                <span style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                <span className="last-reading-value">
                   {previousValue.toLocaleString()} {selectedPoint.unit}
                 </span>
               </div>
@@ -409,87 +341,42 @@ export const UtilityScanPage: React.FC = () => {
 
           {/* FORM 1: NHẬP SỐ ĐIỆN HOẶC SỐ NƯỚC */}
           {(selectedPoint.type === 'ELECTRICITY' || selectedPoint.type === 'WATER') && (
-            <form onSubmit={handleSubmitReading} className="card" style={{ padding: '20px', borderRadius: '12px', backgroundColor: '#ffffff', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-              <h4 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 16px 0', color: '#0f172a' }}>
-                GHI NHẬN CHỈ SỐ THEO CA
+            <form onSubmit={handleSubmitReading} className="card scan-input-card">
+              <h4 className="form-card-title">
+                GHI NHẬN CHỈ SỐ ĐỒNG HỒ
               </h4>
-
-              {/* Ca trực */}
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '6px' }}>
-                  Ca trực
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                  {['Ca 1', 'Ca 2', 'Ca 3'].map((c) => (
-                    <button
-                      type="button"
-                      key={c}
-                      onClick={() => setShift(c)}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: shift === c ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                        backgroundColor: shift === c ? '#eff6ff' : '#ffffff',
-                        color: shift === c ? '#1e40af' : '#475569',
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {/* Ô nhập chỉ số mới */}
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '6px' }}>
+                <label className="form-label-scan required">
                   Chỉ số mới trên đồng hồ ({selectedPoint.unit}) <span style={{ color: '#dc2626' }}>*</span>
                 </label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="any"
                   required
                   placeholder={`Ví dụ: ${previousValue + 10}`}
                   value={readingValue}
                   onChange={(e) => setReadingValue(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    borderRadius: '8px',
-                    border: isOutlierOrReverse ? '2px solid #dc2626' : '2px solid #cbd5e1',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    backgroundColor: '#ffffff',
-                  }}
+                  className={`scan-number-input ${isOutlierOrReverse ? 'error' : ''}`}
                   autoFocus
                 />
               </div>
 
               {/* Hộp Realtime: Tính toán sản lượng tiêu thụ */}
               {readingValue && !isNaN(currentNum) && (
-                <div
-                  style={{
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    marginBottom: '16px',
-                    backgroundColor: isOutlierOrReverse ? '#fef2f2' : '#f0fdf4',
-                    border: isOutlierOrReverse ? '1px solid #fecaca' : '1px solid #bbf7d0',
-                  }}
-                >
+                <div className={`consumption-box ${isOutlierOrReverse ? 'outlier' : 'normal'}`}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12.5px', color: isOutlierOrReverse ? '#991b1b' : '#166534', fontWeight: 600 }}>
-                      Sản lượng tiêu thụ ca này:
+                    <span style={{ fontSize: '12.5px', fontWeight: 600 }}>
+                      Sản lượng tiêu thụ:
                     </span>
-                    <span style={{ fontSize: '18px', fontWeight: 800, color: isOutlierOrReverse ? '#dc2626' : '#15803d' }}>
+                    <span className="consumption-number">
                       +{calculatedConsumption.toLocaleString()} {selectedPoint.unit}
                     </span>
                   </div>
                   {diff < 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '12px', color: '#dc2626', fontWeight: 600 }}>
+                    <div className="consumption-warning">
                       <AlertTriangle size={15} />
                       <span>Cảnh báo: Chỉ số mới nhỏ hơn chỉ số cũ! Vui lòng kiểm tra lại.</span>
                     </div>
@@ -499,42 +386,42 @@ export const UtilityScanPage: React.FC = () => {
 
               {/* Nếu là điện 3 giá: Mở rộng nhập T1, T2, T3 */}
               {selectedPoint.tariffType === 'THREE_PHASE' && (
-                <div style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '14px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '8px' }}>
+                <div className="three-phase-box">
+                  <span className="three-phase-title">
                     Chi tiết 3 biểu giá (Tùy chọn):
                   </span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  <div className="three-phase-grid">
                     <div>
-                      <label style={{ fontSize: '11px', color: '#64748b' }}>T1 (Bình thường)</label>
+                      <label>T1 (Bình thường)</label>
                       <input
                         type="number"
+                        inputMode="decimal"
                         step="any"
                         placeholder="kWh"
                         value={normalValue}
                         onChange={(e) => setNormalValue(e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                       />
                     </div>
                     <div>
-                      <label style={{ fontSize: '11px', color: '#64748b' }}>T2 (Cao điểm)</label>
+                      <label>T2 (Cao điểm)</label>
                       <input
                         type="number"
+                        inputMode="decimal"
                         step="any"
                         placeholder="kWh"
                         value={peakValue}
                         onChange={(e) => setPeakValue(e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                       />
                     </div>
                     <div>
-                      <label style={{ fontSize: '11px', color: '#64748b' }}>T3 (Thấp điểm)</label>
+                      <label>T3 (Thấp điểm)</label>
                       <input
                         type="number"
+                        inputMode="decimal"
                         step="any"
                         placeholder="kWh"
                         value={offPeakValue}
                         onChange={(e) => setOffPeakValue(e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                       />
                     </div>
                   </div>
@@ -543,7 +430,7 @@ export const UtilityScanPage: React.FC = () => {
 
               {/* Ghi chú */}
               <div style={{ marginBottom: '18px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '4px' }}>
+                <label className="form-label-scan">
                   Ghi chú / Hiện tượng bất thường (nếu có)
                 </label>
                 <textarea
@@ -551,7 +438,7 @@ export const UtilityScanPage: React.FC = () => {
                   placeholder="Ví dụ: Đồng hồ chạy êm, không rung giật..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                  className="scan-textarea"
                 />
               </div>
 
@@ -559,42 +446,27 @@ export const UtilityScanPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={submitting || !readingValue}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  backgroundColor: '#0f172a',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  cursor: submitting ? 'not-allowed' : 'pointer',
-                  opacity: submitting || !readingValue ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                }}
+                className="scan-submit-btn"
               >
                 {submitting ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                <span>XÁC NHẬN LƯU CHỈ SỐ CA</span>
+                <span>XÁC NHẬN LƯU CHỈ SỐ</span>
               </button>
             </form>
           )}
 
           {/* FORM 2: THEO DÕI BẬT / TẮT HỆ THỐNG PHỤ TRỢ */}
           {selectedPoint.type === 'SYSTEM_AUX' && (
-            <form onSubmit={handleSubmitSystemStatus} className="card" style={{ padding: '20px', borderRadius: '12px', backgroundColor: '#ffffff', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-              <h4 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 16px 0', color: '#0f172a' }}>
+            <form onSubmit={handleSubmitSystemStatus} className="card scan-input-card">
+              <h4 className="form-card-title">
                 THEO DÕI BẬT / TẮT & GIỜ CHẠY MÁY
               </h4>
 
               {/* Chọn trạng thái máy */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '8px' }}>
+                <label className="form-label-scan">
                   Trạng thái vận hành hiện tại:
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                <div className="status-buttons-grid">
                   {[
                     { key: 'RUNNING', label: 'BẬT MÁY (RUNNING)', color: '#16a34a', bg: '#f0fdf4' },
                     { key: 'OFF', label: 'TẮT MÁY (OFF)', color: '#64748b', bg: '#f8fafc' },
@@ -605,16 +477,11 @@ export const UtilityScanPage: React.FC = () => {
                       type="button"
                       key={s.key}
                       onClick={() => setSystemStatus(s.key)}
+                      className={`status-btn ${systemStatus === s.key ? 'active' : ''}`}
                       style={{
-                        padding: '12px 10px',
-                        borderRadius: '8px',
-                        border: systemStatus === s.key ? `2px solid ${s.color}` : '1px solid #cbd5e1',
+                        borderColor: systemStatus === s.key ? s.color : '#cbd5e1',
                         backgroundColor: systemStatus === s.key ? s.bg : '#ffffff',
                         color: systemStatus === s.key ? s.color : '#475569',
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        textAlign: 'center',
                       }}
                     >
                       {s.label}
@@ -625,31 +492,23 @@ export const UtilityScanPage: React.FC = () => {
 
               {/* Số giờ chạy tích lũy (Hour meter) */}
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '6px' }}>
+                <label className="form-label-scan">
                   Số giờ chạy trên đồng hồ (Hour meter):
                 </label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="any"
                   placeholder="Ví dụ: 3450 Giờ"
                   value={runningHours}
                   onChange={(e) => setRunningHours(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    fontSize: '16px',
-                    fontWeight: 700,
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
+                  className="scan-input"
                 />
               </div>
 
               {/* Lý do bật / tắt */}
               <div style={{ marginBottom: '18px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '4px' }}>
+                <label className="form-label-scan">
                   Lý do / Mô tả chi tiết (nếu tắt hoặc có sự cố)
                 </label>
                 <textarea
@@ -657,7 +516,7 @@ export const UtilityScanPage: React.FC = () => {
                   placeholder="Ví dụ: Bật cấp lạnh cho xưởng sản xuất, hoặc Tắt máy do hết ca..."
                   value={statusReason}
                   onChange={(e) => setStatusReason(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                  className="scan-textarea"
                 />
               </div>
 
@@ -665,21 +524,7 @@ export const UtilityScanPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={submitting}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  backgroundColor: '#0f172a',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  cursor: submitting ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                }}
+                className="scan-submit-btn"
               >
                 {submitting ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                 <span>CẬP NHẬT TRẠNG THÁI HỆ THỐNG</span>
@@ -688,6 +533,417 @@ export const UtilityScanPage: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Responsive Styles */}
+      <style>{`
+        .utility-scan-container {
+          max-width: 640px;
+          margin: 0 auto;
+          padding: 16px;
+          min-height: 85vh;
+        }
+
+        .utility-scan-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 16px;
+          gap: 8px;
+        }
+
+        .scan-back-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: none;
+          border: none;
+          color: var(--text-secondary, #64748b);
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          padding: 6px 0;
+        }
+
+        .scan-other-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          background-color: #f1f5f9;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          padding: 6px 12px;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #0f172a;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .scan-card {
+          padding: 24px 20px;
+          border-radius: 12px;
+          text-align: center;
+          background-color: #ffffff;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .scan-icon-circle {
+          display: inline-flex;
+          padding: 12px;
+          border-radius: 50%;
+          background-color: #eff6ff;
+          color: #2563eb;
+          margin-bottom: 12px;
+        }
+
+        .scan-title {
+          font-size: 17px;
+          font-weight: 700;
+          margin: 0 0 6px 0;
+          color: #0f172a;
+        }
+
+        .scan-subtitle {
+          font-size: 13px;
+          color: #64748b;
+          margin: 0 0 16px 0;
+          line-height: 1.4;
+        }
+
+        .scanner-viewport-wrapper {
+          width: 100%;
+          max-width: 340px;
+          margin: 0 auto;
+          border-radius: 10px;
+          overflow: hidden;
+          border: 2px dashed #94a3b8;
+          background-color: #f8fafc;
+        }
+
+        .scan-manual-list-wrapper {
+          margin-top: 24px;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 16px;
+          text-align: left;
+        }
+
+        .scan-manual-title {
+          font-size: 12px;
+          font-weight: 700;
+          color: #64748b;
+          display: block;
+          margin-bottom: 10px;
+          letter-spacing: 0.3px;
+        }
+
+        .scan-points-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          max-height: 240px;
+          overflow-y: auto;
+        }
+
+        .scan-point-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 12px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          cursor: pointer;
+          background-color: #ffffff;
+          transition: background-color 0.15s ease;
+        }
+
+        .scan-point-item:hover, .scan-point-item:active {
+          background-color: #f8fafc;
+        }
+
+        .point-item-name {
+          font-weight: 700;
+          font-size: 13.5px;
+          color: #0f172a;
+        }
+
+        .point-item-sub {
+          font-size: 11.5px;
+          color: #64748b;
+        }
+
+        .scan-form-container {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .scan-selected-card {
+          padding: 16px 18px;
+          border-radius: 12px;
+          background-color: #ffffff;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .selected-point-title {
+          font-size: 16px;
+          font-weight: 700;
+          margin: 0 0 4px 0;
+          color: #0f172a;
+        }
+
+        .selected-point-loc {
+          font-size: 12px;
+          color: #64748b;
+          margin: 0;
+        }
+
+        .last-reading-box {
+          margin-top: 12px;
+          padding: 10px 14px;
+          background-color: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .last-reading-value {
+          font-size: 16px;
+          font-weight: 800;
+          color: #0f172a;
+        }
+
+        .scan-input-card {
+          padding: 18px;
+          border-radius: 12px;
+          background-color: #ffffff;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .form-card-title {
+          font-size: 14.5px;
+          font-weight: 700;
+          margin: 0 0 14px 0;
+          color: #0f172a;
+        }
+
+        .form-label-scan {
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #334155;
+          display: block;
+          margin-bottom: 6px;
+        }
+
+        .shift-buttons-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+        }
+
+        .shift-btn {
+          padding: 10px;
+          border-radius: 6px;
+          border: 1px solid #cbd5e1;
+          background-color: #ffffff;
+          color: #475569;
+          font-weight: 700;
+          font-size: 13px;
+          cursor: pointer;
+          touch-action: manipulation;
+        }
+
+        .shift-btn.active {
+          border: 2px solid #2563eb;
+          background-color: #eff6ff;
+          color: #1e40af;
+        }
+
+        .scan-number-input {
+          width: 100%;
+          padding: 12px 14px;
+          font-size: 18px;
+          font-weight: 700;
+          border-radius: 8px;
+          border: 2px solid #cbd5e1;
+          outline: none;
+          box-sizing: border-box;
+          background-color: #ffffff;
+          transition: border-color 0.15s ease;
+        }
+
+        .scan-number-input:focus {
+          border-color: #2563eb;
+        }
+
+        .scan-number-input.error {
+          border-color: #dc2626;
+        }
+
+        .consumption-box {
+          padding: 12px 14px;
+          border-radius: 8px;
+          margin-bottom: 14px;
+        }
+
+        .consumption-box.normal {
+          background-color: #f0fdf4;
+          border: 1px solid #bbf7d0;
+          color: #166534;
+        }
+
+        .consumption-box.outlier {
+          background-color: #fef2f2;
+          border: 1px solid #fecaca;
+          color: #991b1b;
+        }
+
+        .consumption-number {
+          font-size: 17px;
+          font-weight: 800;
+        }
+
+        .consumption-box.normal .consumption-number {
+          color: #15803d;
+        }
+
+        .consumption-box.outlier .consumption-number {
+          color: #dc2626;
+        }
+
+        .consumption-warning {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 6px;
+          font-size: 12px;
+          color: #dc2626;
+          font-weight: 600;
+        }
+
+        .three-phase-box {
+          padding: 12px;
+          background-color: #f8fafc;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          margin-bottom: 14px;
+        }
+
+        .three-phase-title {
+          font-size: 12px;
+          font-weight: 700;
+          color: #475569;
+          display: block;
+          margin-bottom: 8px;
+        }
+
+        .three-phase-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+        }
+
+        .three-phase-grid label {
+          font-size: 11px;
+          color: #64748b;
+          display: block;
+          margin-bottom: 2px;
+        }
+
+        .three-phase-grid input {
+          width: 100%;
+          padding: 8px;
+          font-size: 13px;
+          border-radius: 6px;
+          border: 1px solid #cbd5e1;
+          box-sizing: border-box;
+        }
+
+        .status-buttons-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
+        }
+
+        .status-btn {
+          padding: 12px 10px;
+          border-radius: 8px;
+          border: 1px solid #cbd5e1;
+          font-weight: 700;
+          font-size: 12.5px;
+          cursor: pointer;
+          text-align: center;
+          touch-action: manipulation;
+          transition: all 0.15s ease;
+        }
+
+        .scan-input {
+          width: 100%;
+          padding: 10px 12px;
+          font-size: 15px;
+          font-weight: 600;
+          border-radius: 8px;
+          border: 1px solid #cbd5e1;
+          outline: none;
+          box-sizing: border-box;
+        }
+
+        .scan-textarea {
+          width: 100%;
+          padding: 10px 12px;
+          font-size: 13px;
+          border-radius: 8px;
+          border: 1px solid #cbd5e1;
+          box-sizing: border-box;
+          outline: none;
+          font-family: inherit;
+        }
+
+        .scan-submit-btn {
+          width: 100%;
+          padding: 14px;
+          background-color: #0f172a;
+          color: #ffffff;
+          border: none;
+          border-radius: 8px;
+          font-size: 14.5px;
+          font-weight: 700;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          touch-action: manipulation;
+        }
+
+        .scan-submit-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 480px) {
+          .utility-scan-container {
+            padding: 10px 8px;
+          }
+          .scan-card, .scan-input-card, .scan-selected-card {
+            padding: 14px 12px;
+          }
+          .three-phase-grid {
+            grid-template-columns: 1fr;
+            gap: 6px;
+          }
+          .status-buttons-grid {
+            grid-template-columns: 1fr;
+            gap: 6px;
+          }
+          .status-btn {
+            padding: 10px 8px;
+            font-size: 12px;
+          }
+        }
+      `}</style>
     </div>
   );
 };

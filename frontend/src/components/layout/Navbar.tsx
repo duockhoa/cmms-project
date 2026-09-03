@@ -80,6 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
           />
 
           <div
+            className="navbar-brand-divider"
             style={{
               height: '22px',
               width: '1px',
@@ -88,6 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
           />
 
           <h1
+            className="navbar-app-title"
             style={{
               fontSize: '16.5px',
               fontWeight: 700,
@@ -104,14 +106,16 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
       </div>
 
       {/* Right side: Search, Notification, Theme toggle, UserCard */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <HeaderSearch />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="navbar-search-wrapper">
+          <HeaderSearch />
+        </div>
 
         <NotificationDropdown currentUser={currentUser} />
 
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="btn btn-secondary btn-sm"
+          className="btn btn-secondary btn-sm navbar-theme-btn"
           style={{
             width: '36px',
             height: '36px',
@@ -129,6 +133,19 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
 
         <UserCard user={currentUser} />
       </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .navbar-app-title, .navbar-brand-divider {
+            display: none !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .navbar-search-wrapper {
+            display: none !important;
+          }
+        }
+      `}</style>
     </header>
   );
 };

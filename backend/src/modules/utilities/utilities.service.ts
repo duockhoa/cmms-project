@@ -177,7 +177,7 @@ export class UtilitiesService {
     const reading = await this.prisma.utilityReading.create({
       data: {
         pointId: point.id,
-        shift: data.shift || 'Ca Ngày',
+        shift: data.shift || null,
         readingValue: Number(data.readingValue),
         previousValue: previousValue,
         consumption: Number(consumption.toFixed(2)),
