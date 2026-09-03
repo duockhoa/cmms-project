@@ -17,16 +17,25 @@ import { PrismaModule } from '../../prisma/prisma.module';
 })
 export class AuthModule {
   constructor(private configService: ConfigService) {
-    // Fail-closed enforcement: crash application on start if Keycloak config is missing
-    // Skip verification if running in test environment to avoid crashing Jest
+    // Không kiểm tra biến môi trường khi chạy Jest
     if (process.env.NODE_ENV !== 'test') {
-      const jwksUri = this.configService.get<string>('KEYCLOAK_JWKS_URI');
-      const issuer = this.configService.get<string>('KEYCLOAK_ISSUER');
-      const audience = this.configService.get<string>('KEYCLOAK_AUDIENCE');
+      const hrmJwtSecret =
+        this.configService.get<string>('HRM_JWT_SECRET');
 
-      if (!jwksUri || !issuer || !audience) {
+      const jwksUri =
+        this.configService.get<string>('KEYCLOAK_JWKS_URI');
+      const issuer =
+        this.configService.get<string>('KEYCLOAK_ISSUER');
+      const audience =
+        this.configService.get<string>('KEYCLOAK_AUDIENCE');
+
+      const hasHrmJwt = Boolean(hrmJwtSecret);
+      const hasKeycloak = Boolean(jwksUri && issuer && audience);
+
+      // Backend chỉ dừng nếu cả HRM JWT và Keycloak đều chưa được cấu hình
+      if (!hasHrmJwt && !hasKeycloak) {
         throw new Error(
-          'CRITICAL CONFIGURATION ERROR: Keycloak environment variables (KEYCLOAK_JWKS_URI, KEYCLOAK_ISSUER, KEYCLOAK_AUDIENCE) must be defined.',
+          'CRITICAL CONFIGURATION ERROR: Define HRM_JWT_SECRET or complete Keycloak configuration.',
         );
       }
     }
