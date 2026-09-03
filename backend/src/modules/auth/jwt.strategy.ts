@@ -57,20 +57,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(req: any, payload: any) {
     // payload represents decoded Keycloak/HRM JWT token
-    if (!payload || !payload.sub) {
+    const sub = payload?.sub || payload?.id || payload?.userId || payload?._id || payload?.username;
+    if (!payload || !sub) {
+      console.error('JwtStrategy validation failed: Payload missing subject identifier.', payload);
       throw new UnauthorizedException('Token payload is invalid or missing subject.');
     }
 
     // Try to find the user in the CMMS database by email or username
     const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
-    const emailOrUsername = payload.email || payload.username || `${payload.sub}${dummyDomain}`;
+    const emailOrUsername = payload.email || payload.username || `${sub}${dummyDomain}`;
     
     let dbUser = await this.prisma.user.findFirst({
       where: {
         OR: [
           { email: emailOrUsername },
           ...(payload.username ? [{ email: `${payload.username}@local.hrm` }, { name: payload.username }] : []),
-          ...(payload.sub ? [{ email: `${payload.sub}@local.hrm` }] : []),
+          ...(sub ? [{ email: `${sub}@local.hrm` }] : []),
         ]
       },
       include: {
@@ -79,7 +81,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     let department = dbUser?.department || null;
-    let name = dbUser?.name || payload.preferred_username || payload.name || payload.username || `User ${payload.sub}`;
+    let name = dbUser?.name || payload.preferred_username || payload.name || payload.username || `User ${sub}`;
     let specialty = dbUser?.specialty || null;
     
     // Nếu user chưa tồn tại hoặc thiếu department trong DB, thử lấy trực tiếp từ HRM để đồng bộ
@@ -118,7 +120,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     const isSuperAdmin = adminCodes.some(code => 
       (payload.username && payload.username.toString().toLowerCase() === code) ||
-      (payload.sub && payload.sub.toString().toLowerCase() === code) ||
+      (sub && sub.toString().toLowerCase() === code) ||
       (emailOrUsername && emailOrUsername.toString().toLowerCase().includes(code)) ||
       (name && name.toString().toLowerCase().includes(code))
     );
@@ -140,8 +142,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           }
         });
       } catch (err: any) {
-        console.error('Prisma auto-provision error:', err);
-        throw new UnauthorizedException(`Lỗi hệ thống: Không thể tạo tài khoản CMMS tự động từ HRM (${err?.message || err}).`);
+        console.warn('Prisma auto-provision conflict or error, retrying lookup:', err?.message || err);
+        // Fallback for race condition: another request just created this user
+        dbUser = await this.prisma.user.findFirst({
+          where: {
+            OR: [
+              { email: emailOrUsername },
+              { email: emailOrUsername.includes('@') ? emailOrUsername : `${emailOrUsername}@local.hrm` },
+              ...(payload.username ? [{ email: `${payload.username}@local.hrm` }, { name: payload.username }] : []),
+            ]
+          },
+          include: {
+            customRole: true
+          }
+        });
+
+        if (!dbUser) {
+          console.error('Prisma auto-provision fatal error:', err);
+          throw new UnauthorizedException(`Lỗi hệ thống: Không thể tạo tài khoản CMMS tự động từ HRM (${err?.message || err}).`);
+        }
       }
     } else {
       // Check if we need to update info or upgrade to ADMIN

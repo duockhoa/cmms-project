@@ -48,7 +48,7 @@ export function LoginPage() {
 
       const data = await response.json();
       const accessToken = data.accessToken || data.access_token || data.token;
-      const refreshToken = data.refreshToken;
+      const refreshToken = data.refreshToken || data.refresh_token;
 
       if (!accessToken) {
         throw new Error('Không nhận được mã xác thực từ máy chủ.');

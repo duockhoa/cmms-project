@@ -1,8 +1,66 @@
 export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_BASE = API_HOST + '/api/v1';
-// Removed DEMO_USER_ID as the system relies on real authentication now.
+const HRM_ROOT_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
+
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (!refreshToken) {
+    return null;
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const response = await fetch(`${HRM_ROOT_URL}/auth/refresh-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Refresh token HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const newAccessToken = data.accessToken || data.access_token || data.token;
+      const newRefreshToken = data.refreshToken || data.refresh_token;
+
+      if (!newAccessToken) {
+        throw new Error('No access token returned from refresh endpoint');
+      }
+
+      localStorage.setItem('accessToken', newAccessToken);
+      if (newRefreshToken) {
+        localStorage.setItem('refreshToken', newRefreshToken);
+      }
+      return newAccessToken;
+    } catch (error) {
+      console.warn('Refresh token failed:', error);
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+function handleAuthFailure() {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  if (window.location.pathname !== '/login') {
+    const currentPath = window.location.pathname + window.location.search;
+    window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+  }
+}
+
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
-  const token = localStorage.getItem('accessToken');
+  let token = localStorage.getItem('accessToken');
   const headers: any = {
     'Content-Type': 'application/json',
     ...options.headers
@@ -12,20 +70,24 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
     headers['Authorization'] = `Bearer ${token}`;
   }
   
-  const res = await fetch(url, { ...options, headers });
+  let res = await fetch(url, { ...options, headers });
   
   if (res.status === 401) {
-    localStorage.removeItem('accessToken');
-    window.location.href = '/login';
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      headers['Authorization'] = `Bearer ${newToken}`;
+      res = await fetch(url, { ...options, headers });
+    } else {
+      handleAuthFailure();
+    }
   }
   
   return res;
 };
 
-
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
-  const token = localStorage.getItem('accessToken');
+  let token = localStorage.getItem('accessToken');
   
   const headers: any = {
     'Content-Type': 'application/json',
@@ -42,10 +104,21 @@ async function request(endpoint: string, options: RequestInit = {}) {
   };
 
   try {
-    const res = await fetch(url, config);
+    let res = await fetch(url, config);
+
     if (res.status === 401) {
-      localStorage.removeItem('accessToken');
-      window.location.href = '/login';
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        headers['Authorization'] = `Bearer ${newToken}`;
+        res = await fetch(url, { ...options, headers });
+      } else {
+        handleAuthFailure();
+        throw new Error('Unauthorized');
+      }
+    }
+
+    if (res.status === 401) {
+      handleAuthFailure();
       throw new Error('Unauthorized');
     }
     
