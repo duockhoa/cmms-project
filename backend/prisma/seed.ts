@@ -442,6 +442,130 @@ async function main() {
     });
   }
   console.log(`✅ Đã nạp thành công ${utilityPointsToSeed.length} điểm đo & hệ thống tiện ích phụ trợ vào CSDL.`);
+
+  // 4. SEED CÁC NHÓM QUYỀN CHÍNH (RBAC ROLES)
+  const allModules = [
+    'equipment', 'requests', 'operation_logs', 'utilities',
+    'work_orders', 'checklists', 'inventory', 'reports',
+    'schedules', 'feedbacks', 'settings'
+  ];
+  const allActions = ['read', 'write', 'delete', 'approve'];
+
+  // Super Admin: full permissions
+  const superAdminPerms: string[] = [];
+  allModules.forEach(m => allActions.forEach(a => superAdminPerms.push(`${m}:${a}`)));
+
+  // Manager: read, write, approve
+  const managerPerms: string[] = [];
+  allModules.filter(m => m !== 'settings').forEach(m => {
+    managerPerms.push(`${m}:read`, `${m}:write`, `${m}:approve`);
+  });
+  managerPerms.push('settings:read');
+
+  // Technician:
+  const techPerms = [
+    'equipment:read', 'requests:read', 'requests:write',
+    'operation_logs:read', 'operation_logs:write',
+    'utilities:read', 'utilities:write',
+    'work_orders:read', 'work_orders:write',
+    'checklists:read', 'checklists:write',
+    'inventory:read', 'schedules:read',
+    'feedbacks:read', 'feedbacks:write'
+  ];
+
+  // Utilities Operator:
+  const utilOperatorPerms = [
+    'utilities:read', 'utilities:write',
+    'operation_logs:read', 'operation_logs:write',
+    'equipment:read', 'requests:read', 'requests:write',
+    'feedbacks:read', 'feedbacks:write'
+  ];
+
+  // User / Operator:
+  const userPerms = [
+    'equipment:read', 'requests:read', 'requests:write',
+    'operation_logs:read', 'feedbacks:read', 'feedbacks:write'
+  ];
+
+  const standardRolesToSeed = [
+    {
+      name: 'Quản trị viên toàn quyền (Super Admin)',
+      description: 'Toàn quyền kiểm soát, cấu hình hệ thống và phê duyệt dữ liệu.',
+      permissions: JSON.stringify(superAdminPerms),
+    },
+    {
+      name: 'Quản lý Kỹ thuật & Cơ điện (Maintenance Manager)',
+      description: 'Quản lý thiết bị, công việc, tiện ích điện nước và phê duyệt yêu cầu bảo trì.',
+      permissions: JSON.stringify(managerPerms),
+    },
+    {
+      name: 'Kỹ thuật viên Bảo trì (Technician)',
+      description: 'Thực hiện bảo trì, xử lý sự cố, ghi nhận checklist và đề xuất vật tư.',
+      permissions: JSON.stringify(techPerms),
+    },
+    {
+      name: 'Nhân viên Vận hành & Tuần ca Tiện ích (Utilities Operator)',
+      description: 'Ghi nhận số điện, số nước theo ca, theo dõi bật/tắt hệ thống và ghi sổ vận hành.',
+      permissions: JSON.stringify(utilOperatorPerms),
+    },
+    {
+      name: 'Nhân viên Nhà máy / Người dùng (Operator)',
+      description: 'Xem thông tin thiết bị, báo cáo sự cố hư hỏng và gửi phản hồi góp ý.',
+      permissions: JSON.stringify(userPerms),
+    },
+  ];
+
+  for (const r of standardRolesToSeed) {
+    await prisma.role.upsert({
+      where: { name: r.name },
+      update: {
+        description: r.description,
+        permissions: r.permissions,
+        isActive: true,
+      },
+      create: {
+        name: r.name,
+        description: r.description,
+        permissions: r.permissions,
+        isActive: true,
+      },
+    });
+  }
+  console.log(`✅ Đã nạp thành công ${standardRolesToSeed.length} Nhóm quyền chính (RBAC) vào CSDL.`);
+
+  // 5. TỰ ĐỘNG GÁN NHÓM QUYỀN MẶC ĐỊNH CHO NGƯỜI DÙNG CHƯA CÓ ROLE_ID
+  const [adminRole, managerRole, techRole, userRole] = await Promise.all([
+    prisma.role.findFirst({ where: { name: { contains: 'Super Admin' } } }),
+    prisma.role.findFirst({ where: { name: { contains: 'Manager' } } }),
+    prisma.role.findFirst({ where: { name: { contains: 'Technician' } } }),
+    prisma.role.findFirst({ where: { name: { contains: 'Operator' } } }),
+  ]);
+
+  if (adminRole) {
+    await prisma.user.updateMany({
+      where: { role: 'ADMIN', roleId: null },
+      data: { roleId: adminRole.id },
+    });
+  }
+  if (managerRole) {
+    await prisma.user.updateMany({
+      where: { role: 'MANAGER', roleId: null },
+      data: { roleId: managerRole.id },
+    });
+  }
+  if (techRole) {
+    await prisma.user.updateMany({
+      where: { role: 'TECHNICIAN', roleId: null },
+      data: { roleId: techRole.id },
+    });
+  }
+  if (userRole) {
+    await prisma.user.updateMany({
+      where: { role: 'USER', roleId: null },
+      data: { roleId: userRole.id },
+    });
+  }
+  console.log('✅ Đã tự động đồng bộ Nhóm quyền (RBAC) cho người dùng tương ứng với Vai trò hiện tại.');
 }
 
 main()

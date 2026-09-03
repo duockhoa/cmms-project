@@ -5,10 +5,16 @@ import { Modal } from '../common/Modal';
 import { Plus, Edit2, Trash2, RefreshCw } from 'lucide-react';
 
 const MODULES = [
-  { id: 'equipment', name: 'Thiết bị' },
-  { id: 'work_orders', name: 'Sửa chữa (Work Orders)' },
+  { id: 'equipment', name: 'Thiết bị & Máy móc' },
+  { id: 'requests', name: 'Báo cáo sự cố' },
+  { id: 'operation_logs', name: 'Sổ vận hành máy' },
+  { id: 'utilities', name: 'Điện, Nước & Tiện ích' },
+  { id: 'work_orders', name: 'Phiếu bảo trì (Work Orders)' },
+  { id: 'checklists', name: 'Checklist bảo trì' },
   { id: 'inventory', name: 'Kho & Phụ tùng' },
-  { id: 'schedules', name: 'Lịch bảo trì' },
+  { id: 'reports', name: 'Báo cáo & Phân tích' },
+  { id: 'schedules', name: 'Lịch bảo trì định kỳ' },
+  { id: 'feedbacks', name: 'Góp ý & Báo lỗi' },
   { id: 'settings', name: 'Cài đặt hệ thống' },
 ];
 
