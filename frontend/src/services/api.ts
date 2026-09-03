@@ -418,4 +418,68 @@ export const api = {
   createFeedback: (data: any) => request('/feedbacks', { method: 'POST', body: JSON.stringify(data) }),
   updateFeedback: (id: string, data: any) => request(`/feedbacks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteFeedback: (id: string) => request(`/feedbacks/${id}`, { method: 'DELETE' }),
+
+  // ==========================================
+  // UTILITIES & ENERGY MONITORING (ĐIỆN, NƯỚC, HỆ THỐNG PHỤ TRỢ)
+  // ==========================================
+  getUtilityPoints: (params?: { type?: string; location?: string; search?: string; isActive?: boolean }) => {
+    const query = new URLSearchParams(params as any).toString();
+    return request(`/utilities/points${query ? `?${query}` : ''}`);
+  },
+  getUtilityPointByIdOrCode: (idOrCode: string) => request(`/utilities/points/${idOrCode}`),
+  createUtilityPoint: (data: any) => request('/utilities/points', { method: 'POST', body: JSON.stringify(data) }),
+  updateUtilityPoint: (id: string, data: any) => request(`/utilities/points/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUtilityPoint: (id: string) => request(`/utilities/points/${id}`, { method: 'DELETE' }),
+
+  recordUtilityReading: (data: {
+    pointId?: string;
+    code?: string;
+    shift?: string;
+    readingValue: number;
+    normalValue?: number;
+    peakValue?: number;
+    offPeakValue?: number;
+    powerKw?: number;
+    powerFactorCosPhi?: number;
+    imageUrl?: string;
+    notes?: string;
+  }) => request('/utilities/readings', { method: 'POST', body: JSON.stringify(data) }),
+
+  getUtilityReadings: (params?: {
+    pointId?: string;
+    type?: string;
+    shift?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams(params as any).toString();
+    return request(`/utilities/readings${query ? `?${query}` : ''}`);
+  },
+
+  recordUtilitySystemStatus: (data: {
+    pointId?: string;
+    code?: string;
+    status: 'RUNNING' | 'OFF' | 'STANDBY' | 'FAULT' | 'MAINTENANCE';
+    runningHours?: number;
+    reason?: string;
+    parametersJson?: string;
+  }) => request('/utilities/system-status', { method: 'POST', body: JSON.stringify(data) }),
+
+  getUtilityStatusLogs: (params?: {
+    pointId?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams(params as any).toString();
+    return request(`/utilities/system-status/history${query ? `?${query}` : ''}`);
+  },
+
+  getUtilityAnalytics: (params?: { days?: number }) => {
+    const query = new URLSearchParams(params as any).toString();
+    return request(`/utilities/analytics${query ? `?${query}` : ''}`);
+  },
 };

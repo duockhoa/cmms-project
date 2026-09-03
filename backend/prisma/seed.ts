@@ -312,6 +312,136 @@ async function main() {
     });
   }
   console.log(`✅ Đã nạp thành công ${standardParamsToSeed.length} thông số kỹ thuật chuẩn vào Thư viện.`);
+
+  // 3. SEED ĐIỂM ĐO TIỆN ÍCH & NĂNG LƯỢNG (ĐIỆN, NƯỚC, HỆ THỐNG PHỤ TRỢ)
+  const utilityPointsToSeed = [
+    {
+      code: 'ELEC-MSB-01',
+      name: 'Tủ điện tổng Trạm biến áp MSB-01',
+      type: 'ELECTRICITY',
+      location: 'Trạm điện ngoài trời',
+      tariffType: 'THREE_PHASE',
+      multiplier: 120.0,
+      unit: 'kWh',
+      lastReadingValue: 125430.0,
+      description: 'Đo tổng điện năng tiêu thụ toàn nhà máy qua biến dòng 600/5A (hệ số x120)',
+    },
+    {
+      code: 'ELEC-DB-MM',
+      name: 'Tủ điện phân phối Xưởng Mắt Mũi DB-01',
+      type: 'ELECTRICITY',
+      location: 'Xưởng Mắt mũi',
+      tariffType: 'SINGLE',
+      multiplier: 20.0,
+      unit: 'kWh',
+      lastReadingValue: 48920.0,
+      description: 'Cấp nguồn cho toàn bộ phòng sạch và dây chuyền chiết rót xưởng Mắt Mũi',
+    },
+    {
+      code: 'ELEC-DB-TUDL',
+      name: 'Tủ điện phân phối Xưởng TUDL DB-02',
+      type: 'ELECTRICITY',
+      location: 'Xưởng TUDL',
+      tariffType: 'SINGLE',
+      multiplier: 30.0,
+      unit: 'kWh',
+      lastReadingValue: 62150.0,
+      description: 'Cấp nguồn cho hệ thống máy dập viên, bao phim xưởng TUDL',
+    },
+    {
+      code: 'WATER-MAIN',
+      name: 'Đồng hồ nước cấp tổng nhà máy',
+      type: 'WATER',
+      location: 'Cổng bảo vệ / Trạm cấp nước',
+      tariffType: 'SINGLE',
+      multiplier: 1.0,
+      unit: 'm3',
+      lastReadingValue: 18450.0,
+      description: 'Đồng hồ đo nước sạch cấp từ mạng lưới thủy cục',
+    },
+    {
+      code: 'WATER-RO',
+      name: 'Đồng hồ nước cấp Cụm xử lý RO',
+      type: 'WATER',
+      location: 'Phòng phụ trợ RO',
+      tariffType: 'SINGLE',
+      multiplier: 1.0,
+      unit: 'm3',
+      lastReadingValue: 5620.0,
+      description: 'Đo lượng nước thô đầu vào hệ thống thẩm thấu ngược sản xuất nước tinh khiết',
+    },
+    {
+      code: 'SYS-CHILLER-01',
+      name: 'Hệ thống Chiller giải nhiệt nước 01',
+      type: 'SYSTEM_AUX',
+      location: 'Tầng kỹ thuật HVAC',
+      unit: 'Giờ',
+      currentStatus: 'RUNNING',
+      lastReadingValue: 3420.0,
+      description: 'Cung cấp nước lạnh 7°C cho các dàn AHU phòng sạch',
+    },
+    {
+      code: 'SYS-BOILER-01',
+      name: 'Hệ thống Nồi hơi điện / dầu 01',
+      type: 'SYSTEM_AUX',
+      location: 'Nhà lò hơi',
+      unit: 'Giờ',
+      currentStatus: 'RUNNING',
+      lastReadingValue: 1890.0,
+      description: 'Cung cấp hơi nóng bão hòa cho tiệt trùng và sấy',
+    },
+    {
+      code: 'SYS-COMPRESS-01',
+      name: 'Hệ thống Máy nén khí trục vít 01',
+      type: 'SYSTEM_AUX',
+      location: 'Phòng máy nén khí',
+      unit: 'Giờ',
+      currentStatus: 'RUNNING',
+      lastReadingValue: 4150.0,
+      description: 'Cung cấp khí nén sạch áp suất 7.5 Bar cho máy móc đóng gói',
+    },
+    {
+      code: 'SYS-HVAC-01',
+      name: 'Hệ thống HVAC / AHU Xưởng Mắt Mũi',
+      type: 'SYSTEM_AUX',
+      location: 'Tầng kỹ thuật',
+      unit: 'Giờ',
+      currentStatus: 'RUNNING',
+      lastReadingValue: 5600.0,
+      description: 'Hệ thống điều hòa không khí và xử lý bụi, áp suất phòng sạch cấp D',
+    },
+  ];
+
+  for (const up of utilityPointsToSeed) {
+    await prisma.utilityPoint.upsert({
+      where: { code: up.code },
+      update: {
+        name: up.name,
+        type: up.type as any,
+        location: up.location,
+        tariffType: (up.tariffType || 'SINGLE') as any,
+        multiplier: up.multiplier || 1.0,
+        unit: up.unit,
+        currentStatus: (up.currentStatus || 'RUNNING') as any,
+        description: up.description,
+        isActive: true,
+      },
+      create: {
+        code: up.code,
+        name: up.name,
+        type: up.type as any,
+        location: up.location,
+        tariffType: (up.tariffType || 'SINGLE') as any,
+        multiplier: up.multiplier || 1.0,
+        unit: up.unit,
+        currentStatus: (up.currentStatus || 'RUNNING') as any,
+        lastReadingValue: up.lastReadingValue || 0,
+        description: up.description,
+        isActive: true,
+      },
+    });
+  }
+  console.log(`✅ Đã nạp thành công ${utilityPointsToSeed.length} điểm đo & hệ thống tiện ích phụ trợ vào CSDL.`);
 }
 
 main()

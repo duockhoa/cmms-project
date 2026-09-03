@@ -59,6 +59,8 @@ model User {
   executionLogs         WorkOrderExecutionLog[] @relation("UserExecutionLogs")
   classifiedWorkOrders  WorkOrder[]            @relation("WorkOrderClassificationReporter")
   operationLogs         OperationLog[]         @relation("UserOperationLogs")
+  utilityReadings       UtilityReading[]       @relation("UserUtilityReadings")
+  utilityStatusLogs     UtilitySystemStatusLog[] @relation("UserUtilityStatusLogs")
   
   // Custom Role Association
   roleId                String?
@@ -608,4 +610,94 @@ model AppFeedback {
   notes                  String?   @db.Text // Ghi chú
   updatedAt              DateTime  @updatedAt
 }
+
+enum UtilityType {
+  ELECTRICITY    // Điện
+  WATER          // Nước
+  SYSTEM_AUX     // Hệ thống phụ trợ (HVAC, Chiller, Nồi hơi, Khí nén...)
+  STEAM          // Hơi
+  COMPRESSED_AIR // Khí nén
+}
+
+enum UtilityMeterTariffType {
+  SINGLE         // 1 giá
+  THREE_PHASE    // 3 giá (Bình thường, Cao điểm, Thấp điểm)
+}
+
+enum UtilitySystemStatus {
+  RUNNING        // Đang chạy
+  OFF            // Tắt
+  STANDBY        // Chờ
+  FAULT          // Sự cố
+  MAINTENANCE    // Đang bảo trì
+}
+
+// 1. Danh mục Đồng hồ / Hệ thống Tiện ích
+model UtilityPoint {
+  id               String                  @id @default(uuid())
+  code             String                  @unique // VD: ELEC-MSB-01, WATER-TONG, SYS-CHILLER-01
+  name             String                  // Tên điểm đo / hệ thống (VD: Đồng hồ điện xưởng Non-Beta, Hệ thống Chiller 01)
+  type             UtilityType             // ELECTRICITY, WATER, SYSTEM_AUX
+  location         String                  // Vị trí (Xưởng Non-Beta, Trạm biến áp...)
+  tariffType       UtilityMeterTariffType  @default(SINGLE)
+  multiplier       Float                   @default(1.0) // Hệ số nhân biến dòng (CT)
+  unit             String                  // kWh, m3, Giờ
+  currentStatus    UtilitySystemStatus?    @default(RUNNING) // Áp dụng cho SYSTEM_AUX
+  lastReadingValue Float?                  @default(0)   // Lưu chỉ số gần nhất để tra cứu nhanh
+  lastReadingAt    DateTime?
+  description      String?
+  isActive         Boolean                 @default(true)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  readings         UtilityReading[]
+  statusLogs       UtilitySystemStatusLog[]
+}
+
+// 2. Nhật ký Ghi nhận Số Điện / Nước theo ca
+model UtilityReading {
+  id                String        @id @default(uuid())
+  pointId           String
+  point             UtilityPoint  @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  shift             String?       // Ca 1, Ca 2, Ca 3, hoặc Ngày/Đêm
+  
+  // Chỉ số đo đếm
+  readingValue      Float         // Chỉ số chính (hoặc tổng kWh / m3)
+  previousValue     Float         // Chỉ số lần trước
+  consumption       Float         // Lượng tiêu thụ = (readingValue - previousValue) * multiplier
+  
+  // Áp dụng cho điện 3 biểu giá
+  normalValue       Float?        // T1: Bình thường
+  peakValue         Float?        // T2: Cao điểm
+  offPeakValue      Float?        // T3: Thấp điểm
+  
+  // Chỉ số kỹ thuật mở rộng (tùy chọn)
+  powerKw           Float?        // Công suất tức thời
+  powerFactorCosPhi Float?        // Cos phi
+  
+  imageUrl          String?       @db.Text // Ảnh chụp mặt đồng hồ đối chứng
+  notes             String?       @db.Text
+  isAbnormal        Boolean       @default(false) // Cảnh báo tiêu thụ nhảy vọt
+  recordedAt        DateTime      @default(now())
+  recordedById      String
+  recordedByName    String?
+  recordedByUser    User?         @relation("UserUtilityReadings", fields: [recordedById], references: [id], onDelete: Restrict)
+}
+
+// 3. Nhật ký Theo dõi Bật / Tắt & Giờ chạy Hệ thống
+model UtilitySystemStatusLog {
+  id              String              @id @default(uuid())
+  pointId         String
+  point           UtilityPoint        @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  status          UtilitySystemStatus // RUNNING, OFF, STANDBY, FAULT, MAINTENANCE
+  runningHours    Float?              // Số giờ chạy lũy kế đọc trên đồng hồ (Hour meter)
+  runningDelta    Float?              // Số giờ chạy tăng thêm so với lần trước
+  reason          String?             // Lý do bật/tắt/sự cố
+  parametersJson  String?             @db.Text // Lưu snapshot áp suất, nhiệt độ lúc bật/tắt (JSON)
+  recordedAt      DateTime            @default(now())
+  recordedById    String
+  recordedByName  String?
+  recordedByUser  User?               @relation("UserUtilityStatusLogs", fields: [recordedById], references: [id], onDelete: Restrict)
+}
+
 

@@ -16,6 +16,7 @@ import {
   AlertCircle,
   ClipboardList,
   MessageSquarePlus,
+  Zap,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -45,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
     { id: 'equipment', label: 'Thiết bị', icon: Cpu },
     { id: 'requests', label: 'Báo cáo sự cố', icon: AlertCircle },
     { id: 'operation-logs', label: 'Sổ vận hành', icon: ClipboardList },
+    { id: 'utilities', label: 'Điện, Nước & Tiện ích', icon: Zap },
     { id: 'work-orders', label: 'Phiếu bảo trì (WO)', icon: Wrench },
     { id: 'checklists', label: 'Checklist bảo trì', icon: CheckSquare },
     { id: 'spare-parts', label: 'Kho phụ tùng', icon: Package },

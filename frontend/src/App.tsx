@@ -16,6 +16,8 @@ import { AboutPage } from './pages/AboutPage';
 import { FeedbacksPage } from './pages/FeedbacksPage';
 import { OperationLogFormPage } from './pages/OperationLogFormPage';
 import { OperationLogsPage } from './pages/OperationLogsPage';
+import { UtilitiesPage } from './pages/UtilitiesPage';
+import { UtilityScanPage } from './pages/UtilityScanPage';
 import { LoginPage } from './pages/LoginPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -99,6 +101,8 @@ function AppLayout() {
             <Route path="/feedbacks" element={<FeedbacksPage />} />
             <Route path="/operation-logs" element={<OperationLogsPage />} />
             <Route path="/equipment/:id/operation-log-form" element={<OperationLogFormPage />} />
+            <Route path="/utilities" element={<UtilitiesPage />} />
+            <Route path="/utilities/scan" element={<UtilityScanPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
