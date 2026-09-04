@@ -49,22 +49,23 @@ export class FeedbacksService {
   async findAll(params?: { status?: string; type?: string; search?: string }) {
     const where: any = {};
 
-    if (params?.status) {
-      where.status = params.status;
+    if (params?.status && params.status !== 'undefined' && params.status !== 'ALL' && params.status.trim()) {
+      where.status = params.status.trim();
     }
 
-    if (params?.type) {
-      where.type = params.type;
+    if (params?.type && params.type !== 'undefined' && params.type !== 'ALL' && params.type.trim()) {
+      where.type = params.type.trim();
     }
 
-    if (params?.search) {
+    if (params?.search && params.search !== 'undefined' && params.search.trim()) {
+      const q = params.search.trim();
       where.OR = [
-        { code: { contains: params.search } },
-        { title: { contains: params.search } },
-        { description: { contains: params.search } },
-        { requesterName: { contains: params.search } },
-        { department: { contains: params.search } },
-        { handlerName: { contains: params.search } },
+        { code: { contains: q } },
+        { title: { contains: q } },
+        { description: { contains: q } },
+        { requesterName: { contains: q } },
+        { department: { contains: q } },
+        { handlerName: { contains: q } },
       ];
     }
 

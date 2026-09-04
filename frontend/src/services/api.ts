@@ -132,29 +132,35 @@ async function request(endpoint: string, options: RequestInit = {}) {
   }
 }
 
+function toQueryString(params?: Record<string, any>): string {
+  if (!params) return '';
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '' && value !== 'undefined') {
+      searchParams.append(key, String(value));
+    }
+  }
+  const str = searchParams.toString();
+  return str ? `?${str}` : '';
+}
+
 export const api = {
   // Analytics
   getDashboard: () => request('/analytics/dashboard'),
-  getKpis: (params?: { timezone?: string; actedById?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/analytics/kpis${query ? `?${query}` : ''}`);
-  },
+  getKpis: (params?: { timezone?: string; actedById?: string }) =>
+    request(`/analytics/kpis${toQueryString(params)}`),
 
   // Equipment
-  getEquipment: (params?: { search?: string; category?: string; status?: string; location?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/equipment${query ? `?${query}` : ''}`);
-  },
+  getEquipment: (params?: { search?: string; category?: string; status?: string; location?: string }) =>
+    request(`/equipment${toQueryString(params)}`),
   getEquipmentById: (id: string) => request(`/equipment/${id}`),
   createEquipment: (data: any) => request('/equipment', { method: 'POST', body: JSON.stringify(data) }),
   updateEquipment: (id: string, data: any) => request(`/equipment/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteEquipment: (id: string) => request(`/equipment/${id}`, { method: 'DELETE' }),
 
   // Maintenance Requests
-  getRequests: (params?: { status?: string; priority?: string; search?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/requests${query ? `?${query}` : ''}`);
-  },
+  getRequests: (params?: { status?: string; priority?: string; search?: string }) =>
+    request(`/requests${toQueryString(params)}`),
   getRequestById: (id: string) => request(`/requests/${id}`),
   createRequest: (data: any) => request('/requests', { method: 'POST', body: JSON.stringify(data) }),
   approveRequest: (id: string, body?: any) =>
@@ -171,10 +177,8 @@ export const api = {
     request(`/requests/${id}/history`),
 
   // Work Orders
-  getWorkOrders: (params?: { status?: string; priority?: string; search?: string; equipmentId?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/work-orders${query ? `?${query}` : ''}`);
-  },
+  getWorkOrders: (params?: { status?: string; priority?: string; search?: string; equipmentId?: string }) =>
+    request(`/work-orders${toQueryString(params)}`),
   getWorkOrderById: (id: string) => request(`/work-orders/${id}`),
   getWorkOrdersByEquipmentQr: (qrToken: string, scanMethod: string = 'QR_SCAN') =>
     request(`/work-orders/by-equipment-qr/${qrToken}?scanMethod=${scanMethod}`),
@@ -202,10 +206,8 @@ export const api = {
   deleteWorkOrder: (id: string) => request(`/work-orders/${id}`, { method: 'DELETE' }),
 
   // Schedules (Phase 3.7)
-  getSchedules: (params?: any) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/maintenance-schedules${query ? `?${query}` : ''}`);
-  },
+  getSchedules: (params?: any) =>
+    request(`/maintenance-schedules${toQueryString(params)}`),
   getScheduleById: (id: string) => request(`/maintenance-schedules/${id}`),
   createSchedule: (data: any) => request('/maintenance-schedules', { method: 'POST', body: JSON.stringify(data) }),
   updateSchedule: (id: string, data: any) => request(`/maintenance-schedules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -411,8 +413,7 @@ export const api = {
   // FEEDBACKS & BUG REPORTS
   // ==========================================
   getFeedbacks: (params?: { status?: string; type?: string; search?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/feedbacks${query ? `?${query}` : ''}`);
+    return request(`/feedbacks${toQueryString(params)}`);
   },
   getFeedbackById: (id: string) => request(`/feedbacks/${id}`),
   createFeedback: (data: any) => request('/feedbacks', { method: 'POST', body: JSON.stringify(data) }),
@@ -423,8 +424,7 @@ export const api = {
   // UTILITIES & ENERGY MONITORING (ĐIỆN, NƯỚC, HỆ THỐNG PHỤ TRỢ)
   // ==========================================
   getUtilityPoints: (params?: { type?: string; location?: string; search?: string; isActive?: boolean }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/utilities/points${query ? `?${query}` : ''}`);
+    return request(`/utilities/points${toQueryString(params)}`);
   },
   getUtilityPointByIdOrCode: (idOrCode: string) => request(`/utilities/points/${idOrCode}`),
   createUtilityPoint: (data: any) => request('/utilities/points', { method: 'POST', body: JSON.stringify(data) }),
@@ -454,8 +454,7 @@ export const api = {
     page?: number;
     limit?: number;
   }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/utilities/readings${query ? `?${query}` : ''}`);
+    return request(`/utilities/readings${toQueryString(params)}`);
   },
 
   recordUtilitySystemStatus: (data: {
@@ -474,12 +473,10 @@ export const api = {
     page?: number;
     limit?: number;
   }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/utilities/system-status/history${query ? `?${query}` : ''}`);
+    return request(`/utilities/system-status/history${toQueryString(params)}`);
   },
 
   getUtilityAnalytics: (params?: { days?: number }) => {
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/utilities/analytics${query ? `?${query}` : ''}`);
+    return request(`/utilities/analytics${toQueryString(params)}`);
   },
 };

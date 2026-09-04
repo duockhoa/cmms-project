@@ -25,11 +25,12 @@ export const FeedbacksPage: React.FC = () => {
       const data = await api.getFeedbacks({
         status: statusFilter || undefined,
         type: typeFilter || undefined,
-        search: searchTerm || undefined,
+        search: searchTerm.trim() || undefined,
       });
-      setFeedbacks(data);
+      setFeedbacks(Array.isArray(data) ? data : (data?.items || []));
     } catch (err) {
       console.error('Lỗi khi tải danh sách góp ý/báo lỗi:', err);
+      setFeedbacks([]);
     } finally {
       setLoading(false);
     }
