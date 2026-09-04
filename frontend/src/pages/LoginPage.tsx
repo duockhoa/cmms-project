@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 
+import { extractAndSaveTokensFromUrl, getAccessToken, saveAuthTokens } from '../utils/authStorage';
+
 const HRM_API_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
 
 export function LoginPage() {
@@ -15,11 +17,14 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // If already logged in, redirect to home
+  // Auto-login if token present in URL or shared root domain cookies (*.dkpharma.io.vn)
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
+    extractAndSaveTokensFromUrl();
+    const token = getAccessToken();
     if (token) {
-      navigate('/', { replace: true });
+      const params = new URLSearchParams(window.location.search);
+      const redirectTo = params.get('redirect') || '/';
+      navigate(redirectTo, { replace: true });
     }
   }, [navigate]);
 
@@ -54,11 +59,8 @@ export function LoginPage() {
         throw new Error('Không nhận được mã xác thực từ máy chủ.');
       }
 
-      // Save tokens
-      localStorage.setItem('accessToken', accessToken);
-      if (refreshToken) {
-        localStorage.setItem('refreshToken', refreshToken);
-      }
+      // Save tokens to both localStorage AND shared domain cookies (*.dkpharma.io.vn)
+      saveAuthTokens(accessToken, refreshToken);
 
       toast.success('Thành công', 'Đăng nhập thành công!');
 

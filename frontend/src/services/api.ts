@@ -1,3 +1,5 @@
+import { getAccessToken, getRefreshToken, saveAuthTokens, clearAuthTokens } from '../utils/authStorage';
+
 export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_BASE = API_HOST + '/api/v1';
 const HRM_ROOT_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
@@ -9,7 +11,7 @@ async function refreshAccessToken(): Promise<string | null> {
     return refreshPromise;
   }
 
-  const refreshToken = localStorage.getItem('refreshToken');
+  const refreshToken = getRefreshToken();
   if (!refreshToken) {
     return null;
   }
@@ -34,10 +36,7 @@ async function refreshAccessToken(): Promise<string | null> {
         throw new Error('No access token returned from refresh endpoint');
       }
 
-      localStorage.setItem('accessToken', newAccessToken);
-      if (newRefreshToken) {
-        localStorage.setItem('refreshToken', newRefreshToken);
-      }
+      saveAuthTokens(newAccessToken, newRefreshToken);
       return newAccessToken;
     } catch (error) {
       console.warn('Refresh token failed:', error);
@@ -51,8 +50,7 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 function handleAuthFailure() {
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('refreshToken');
+  clearAuthTokens();
   if (window.location.pathname !== '/login') {
     const currentPath = window.location.pathname + window.location.search;
     window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
@@ -60,7 +58,7 @@ function handleAuthFailure() {
 }
 
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
-  let token = localStorage.getItem('accessToken');
+  let token = getAccessToken();
   const headers: any = {
     'Content-Type': 'application/json',
     ...options.headers
@@ -70,13 +68,13 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
     headers['Authorization'] = `Bearer ${token}`;
   }
   
-  let res = await fetch(url, { ...options, headers });
+  let res = await fetch(url, { credentials: 'include', ...options, headers });
   
   if (res.status === 401) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       headers['Authorization'] = `Bearer ${newToken}`;
-      res = await fetch(url, { ...options, headers });
+      res = await fetch(url, { credentials: 'include', ...options, headers });
     } else {
       handleAuthFailure();
     }
@@ -87,7 +85,7 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
-  let token = localStorage.getItem('accessToken');
+  let token = getAccessToken();
   
   const headers: any = {
     'Content-Type': 'application/json',
@@ -99,6 +97,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
   }
 
   const config: RequestInit = {
+    credentials: 'include',
     headers,
     ...options,
   };
@@ -110,7 +109,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
       const newToken = await refreshAccessToken();
       if (newToken) {
         headers['Authorization'] = `Bearer ${newToken}`;
-        res = await fetch(url, { ...options, headers });
+        res = await fetch(url, config);
       } else {
         handleAuthFailure();
         throw new Error('Unauthorized');
@@ -260,7 +259,7 @@ export const api = {
   deleteAttachment: (id: string) =>
     request(`/attachments/${id}`, { method: 'DELETE' }),
   uploadAttachment: (formData: FormData) => {
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     const headers: any = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -268,6 +267,7 @@ export const api = {
     
     return fetch(`${API_BASE}/attachments`, {
       method: 'POST',
+      credentials: 'include',
       headers,
       body: formData,
     }).then(async (res) => {

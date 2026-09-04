@@ -2,14 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Settings, User, LayoutGrid, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+import { clearAuthTokens } from '../../utils/authStorage';
+
 export default function UserCard({ user }: { user: any }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    clearAuthTokens();
     window.location.href = '/login';
   };
 
@@ -33,7 +34,7 @@ export default function UserCard({ user }: { user: any }) {
     return name.substring(0, 2).toUpperCase();
   };
 
-  const hrmRootUrl = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
+  const portalUrl = import.meta.env.VITE_PORTAL_URL || 'https://app.dkpharma.io.vn';
 
   return (
     <div style={{ position: 'relative' }} ref={dropdownRef}>
@@ -169,7 +170,7 @@ export default function UserCard({ user }: { user: any }) {
           <div
             onClick={() => {
               setIsOpen(false);
-              window.open(hrmRootUrl, '_blank');
+              window.open(portalUrl, '_blank');
             }}
             style={{
               display: 'flex',

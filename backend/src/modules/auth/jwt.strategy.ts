@@ -5,6 +5,17 @@ import { passportJwtSecret } from 'jwks-rsa';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 
+const cookieExtractor = (request: any): string | null => {
+  if (request?.cookies?.accessToken) return request.cookies.accessToken;
+  if (request?.cookies?.access_token) return request.cookies.access_token;
+  if (request?.cookies?.token) return request.cookies.token;
+  if (request?.headers?.cookie) {
+    const match = (request.headers.cookie as string).match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
+    if (match) return decodeURIComponent(match[1]);
+  }
+  return null;
+};
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   private prisma: PrismaService;
@@ -18,6 +29,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             jwtFromRequest: ExtractJwt.fromExtractors([
               ExtractJwt.fromAuthHeaderAsBearerToken(),
               (request: any) => request?.query?.token as string,
+              (request: any) => request?.query?.accessToken as string,
+              cookieExtractor,
             ]),
             ignoreExpiration: false,
             secretOrKey: hrmJwtSecret,
@@ -27,6 +40,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             jwtFromRequest: ExtractJwt.fromExtractors([
               ExtractJwt.fromAuthHeaderAsBearerToken(),
               (request: any) => request?.query?.token as string,
+              (request: any) => request?.query?.accessToken as string,
+              cookieExtractor,
             ]),
             ignoreExpiration: false,
             audience: configService.get<string>('KEYCLOAK_AUDIENCE'),

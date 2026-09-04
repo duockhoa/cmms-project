@@ -23,6 +23,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ToastProvider } from './components/common/Toast';
 
+import { extractAndSaveTokensFromUrl, getAccessToken } from './utils/authStorage';
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -36,18 +38,15 @@ const queryClient = new QueryClient({
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
-  // SSO Token Interceptor — accept token from query param (backward compat with HRM SSO)
-  const params = new URLSearchParams(window.location.search);
-  const queryToken = params.get('token');
-  if (queryToken) {
-    localStorage.setItem('accessToken', queryToken);
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }
+  // Intercept incoming tokens from query param or hash fragment (e.g., from Central Portal / SSO)
+  extractAndSaveTokensFromUrl();
 
-  const token = localStorage.getItem('accessToken');
+  // Check active token from localStorage or shared root domain cookie (*.dkpharma.io.vn)
+  const token = getAccessToken();
 
   if (!token) {
-    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+    const redirectTarget = location.pathname + location.search;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(redirectTarget)}`} replace />;
   }
 
   return <>{children}</>;
