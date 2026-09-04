@@ -324,6 +324,7 @@ async function main() {
       multiplier: 120.0,
       unit: 'kWh',
       lastReadingValue: 125430.0,
+      isSupplyMeter: true,
       description: 'Đo tổng điện năng tiêu thụ toàn nhà máy qua biến dòng 600/5A (hệ số x120)',
     },
     {
@@ -335,6 +336,7 @@ async function main() {
       multiplier: 20.0,
       unit: 'kWh',
       lastReadingValue: 48920.0,
+      isSupplyMeter: false,
       description: 'Cấp nguồn cho toàn bộ phòng sạch và dây chuyền chiết rót xưởng Mắt Mũi',
     },
     {
@@ -346,6 +348,7 @@ async function main() {
       multiplier: 30.0,
       unit: 'kWh',
       lastReadingValue: 62150.0,
+      isSupplyMeter: false,
       description: 'Cấp nguồn cho hệ thống máy dập viên, bao phim xưởng TUDL',
     },
     {
@@ -357,6 +360,7 @@ async function main() {
       multiplier: 1.0,
       unit: 'm3',
       lastReadingValue: 18450.0,
+      isSupplyMeter: true,
       description: 'Đồng hồ đo nước sạch cấp từ mạng lưới thủy cục',
     },
     {
@@ -368,6 +372,7 @@ async function main() {
       multiplier: 1.0,
       unit: 'm3',
       lastReadingValue: 5620.0,
+      isSupplyMeter: false,
       description: 'Đo lượng nước thô đầu vào hệ thống thẩm thấu ngược sản xuất nước tinh khiết',
     },
     {
@@ -378,6 +383,7 @@ async function main() {
       unit: 'Giờ',
       currentStatus: 'RUNNING',
       lastReadingValue: 3420.0,
+      isSupplyMeter: false,
       description: 'Cung cấp nước lạnh 7°C cho các dàn AHU phòng sạch',
     },
     {
@@ -388,6 +394,7 @@ async function main() {
       unit: 'Giờ',
       currentStatus: 'RUNNING',
       lastReadingValue: 1890.0,
+      isSupplyMeter: false,
       description: 'Cung cấp hơi nóng bão hòa cho tiệt trùng và sấy',
     },
     {
@@ -398,6 +405,7 @@ async function main() {
       unit: 'Giờ',
       currentStatus: 'RUNNING',
       lastReadingValue: 4150.0,
+      isSupplyMeter: false,
       description: 'Cung cấp khí nén sạch áp suất 7.5 Bar cho máy móc đóng gói',
     },
     {
@@ -408,6 +416,7 @@ async function main() {
       unit: 'Giờ',
       currentStatus: 'RUNNING',
       lastReadingValue: 5600.0,
+      isSupplyMeter: false,
       description: 'Hệ thống điều hòa không khí và xử lý bụi, áp suất phòng sạch cấp D',
     },
   ];
@@ -423,6 +432,7 @@ async function main() {
         multiplier: up.multiplier || 1.0,
         unit: up.unit,
         currentStatus: (up.currentStatus || 'RUNNING') as any,
+        isSupplyMeter: up.isSupplyMeter ?? false,
         description: up.description,
         isActive: true,
       },
@@ -436,6 +446,7 @@ async function main() {
         unit: up.unit,
         currentStatus: (up.currentStatus || 'RUNNING') as any,
         lastReadingValue: up.lastReadingValue || 0,
+        isSupplyMeter: up.isSupplyMeter ?? false,
         description: up.description,
         isActive: true,
       },

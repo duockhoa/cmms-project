@@ -91,6 +91,7 @@ export class UtilitiesService {
         unit: data.unit || (data.type === 'ELECTRICITY' ? 'kWh' : data.type === 'WATER' ? 'm3' : 'Giờ'),
         currentStatus: data.currentStatus || 'RUNNING',
         lastReadingValue: Number(data.lastReadingValue) || 0,
+        isSupplyMeter: Boolean(data.isSupplyMeter),
         description: data.description,
         isActive: data.isActive !== false,
       },
@@ -109,6 +110,7 @@ export class UtilitiesService {
     if (data.unit !== undefined) updateData.unit = data.unit;
     if (data.currentStatus !== undefined) updateData.currentStatus = data.currentStatus;
     if (data.lastReadingValue !== undefined) updateData.lastReadingValue = Number(data.lastReadingValue);
+    if (data.isSupplyMeter !== undefined) updateData.isSupplyMeter = Boolean(data.isSupplyMeter);
     if (data.description !== undefined) updateData.description = data.description;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
@@ -489,6 +491,175 @@ export class UtilitiesService {
         water: allPoints.filter((p) => p.type === 'WATER').length,
         aux: auxSystems.length,
       },
+    };
+  }
+
+  // ==========================================
+  // 5. BÁO CÁO TÍCH LŨY THEO KỲ (ĐIỆN & NƯỚC)
+  // ==========================================
+  async getCumulativeReport(query: {
+    type?: 'ELECTRICITY' | 'WATER';
+    month?: number;
+    year?: number;
+  }) {
+    const type = query.type || 'ELECTRICITY';
+    const month = Number(query.month) || (new Date().getMonth() + 1);
+    const year = Number(query.year) || new Date().getFullYear();
+
+    let startDate: Date;
+    let endDate: Date;
+    let cycleDescription: string;
+
+    if (type === 'ELECTRICITY') {
+      // Kỳ điện: Từ ngày 01 đến ngày cuối cùng của tháng đó
+      startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      const lastDay = endDate.getDate();
+      cycleDescription = `Từ 01/${String(month).padStart(2, '0')}/${year} đến ${String(lastDay).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+    } else {
+      // Kỳ nước: Từ ngày 21 của tháng liền kề trước đó đến ngày 20 của tháng tiếp theo
+      startDate = new Date(year, month - 2, 21, 0, 0, 0, 0);
+      endDate = new Date(year, month - 1, 20, 23, 59, 59, 999);
+      const prevMonth = startDate.getMonth() + 1;
+      const prevYear = startDate.getFullYear();
+      cycleDescription = `Từ 21/${String(prevMonth).padStart(2, '0')}/${prevYear} đến 20/${String(month).padStart(2, '0')}/${year}`;
+    }
+
+    // 1. Lấy tất cả các điểm đo thuộc loại tiện ích này
+    const points = await this.prisma.utilityPoint.findMany({
+      where: {
+        type: type as any,
+        isActive: true,
+      },
+      include: {
+        readings: {
+          where: {
+            recordedAt: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
+          orderBy: { recordedAt: 'asc' },
+        },
+      },
+      orderBy: [
+        { isSupplyMeter: 'desc' },
+        { code: 'asc' },
+      ],
+    });
+
+    let totalSupply = 0;
+    let totalConsumption = 0;
+    let totalNormal = 0;
+    let totalPeak = 0;
+    let totalOffPeak = 0;
+
+    const metersBreakdown = points.map((p) => {
+      const readings = p.readings;
+      const count = readings.length;
+
+      let periodConsumption = 0;
+      let startValue = p.lastReadingValue || 0;
+      let endValue = p.lastReadingValue || 0;
+      let normalVal = 0;
+      let peakVal = 0;
+      let offPeakVal = 0;
+
+      if (count > 0) {
+        startValue = readings[0].previousValue ?? readings[0].readingValue;
+        endValue = readings[count - 1].readingValue;
+        periodConsumption = readings.reduce((acc, r) => acc + (r.consumption || 0), 0);
+
+        if (p.tariffType === 'THREE_PHASE') {
+          const firstNormal = readings[0].normalValue || 0;
+          const lastNormal = readings[count - 1].normalValue || 0;
+          normalVal = Math.max(0, (lastNormal - firstNormal) * p.multiplier);
+
+          const firstPeak = readings[0].peakValue || 0;
+          const lastPeak = readings[count - 1].peakValue || 0;
+          peakVal = Math.max(0, (lastPeak - firstPeak) * p.multiplier);
+
+          const firstOffPeak = readings[0].offPeakValue || 0;
+          const lastOffPeak = readings[count - 1].offPeakValue || 0;
+          offPeakVal = Math.max(0, (lastOffPeak - firstOffPeak) * p.multiplier);
+        }
+      }
+
+      periodConsumption = Number(periodConsumption.toFixed(2));
+      const isSupply = Boolean(p.isSupplyMeter || p.code.includes('MSB') || p.code.includes('MAIN') || p.code.includes('TONG'));
+
+      if (isSupply) {
+        totalSupply += periodConsumption;
+      } else {
+        totalConsumption += periodConsumption;
+      }
+
+      if (p.tariffType === 'THREE_PHASE') {
+        totalNormal += normalVal;
+        totalPeak += peakVal;
+        totalOffPeak += offPeakVal;
+      }
+
+      return {
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        location: p.location,
+        type: p.type,
+        tariffType: p.tariffType,
+        multiplier: p.multiplier,
+        unit: p.unit,
+        isSupplyMeter: isSupply,
+        readingsCount: count,
+        startValue,
+        endValue,
+        periodConsumption,
+        normalConsumption: Number(normalVal.toFixed(2)),
+        peakConsumption: Number(peakVal.toFixed(2)),
+        offPeakConsumption: Number(offPeakVal.toFixed(2)),
+      };
+    });
+
+    totalSupply = Number(totalSupply.toFixed(2));
+    totalConsumption = Number(totalConsumption.toFixed(2));
+    const delta = Number((totalSupply - totalConsumption).toFixed(2));
+    const lossRate = totalSupply > 0 ? Number(((delta / totalSupply) * 100).toFixed(2)) : 0;
+
+    const breakdownWithShare = metersBreakdown.map((m) => {
+      let sharePercent = 0;
+      if (!m.isSupplyMeter && totalConsumption > 0) {
+        sharePercent = Number(((m.periodConsumption / totalConsumption) * 100).toFixed(2));
+      } else if (m.isSupplyMeter && totalSupply > 0) {
+        sharePercent = Number(((m.periodConsumption / totalSupply) * 100).toFixed(2));
+      }
+      return {
+        ...m,
+        sharePercent,
+      };
+    });
+
+    return {
+      type,
+      month,
+      year,
+      cycleDescription,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      summary: {
+        totalSupply,
+        totalConsumption,
+        delta,
+        lossRate,
+        unit: type === 'ELECTRICITY' ? 'kWh' : 'm³',
+        threePhaseBreakdown: type === 'ELECTRICITY' ? {
+          normal: Number(totalNormal.toFixed(2)),
+          peak: Number(totalPeak.toFixed(2)),
+          offPeak: Number(totalOffPeak.toFixed(2)),
+        } : null,
+      },
+      supplyMeters: breakdownWithShare.filter((m) => m.isSupplyMeter),
+      consumptionMeters: breakdownWithShare.filter((m) => !m.isSupplyMeter),
+      allMeters: breakdownWithShare,
     };
   }
 }

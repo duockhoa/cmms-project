@@ -479,4 +479,12 @@ export const api = {
   getUtilityAnalytics: (params?: { days?: number }) => {
     return request(`/utilities/analytics${toQueryString(params)}`);
   },
+
+  getCumulativeUtilityReport: (params?: {
+    type?: 'ELECTRICITY' | 'WATER';
+    month?: number;
+    year?: number;
+  }) => {
+    return request(`/utilities/reports/cumulative${toQueryString(params)}`);
+  },
 };

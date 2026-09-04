@@ -6,7 +6,8 @@ import {
   Zap, Droplets, Cpu, QrCode, BarChart3, 
   RefreshCw, Plus, Edit2, Trash2, 
   Printer, Download, Search, CheckCircle2, 
-  Clock, Settings, FileText, ArrowRight
+  Clock, Settings, FileText, ArrowRight,
+  Calendar, PieChart, AlertTriangle, Layers
 } from 'lucide-react';
 
 export const UtilitiesPage: React.FC = () => {
@@ -14,7 +15,7 @@ export const UtilitiesPage: React.FC = () => {
   const toast = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'readings' | 'statusLogs' | 'points'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'readings' | 'statusLogs' | 'points' | 'cumulative'>('overview');
   const [loading, setLoading] = useState(false);
 
   // Dữ liệu chính
@@ -22,6 +23,14 @@ export const UtilitiesPage: React.FC = () => {
   const [readings, setReadings] = useState<any[]>([]);
   const [statusLogs, setStatusLogs] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
+
+  // Báo cáo tích lũy theo kỳ
+  const [cumulativeType, setCumulativeType] = useState<'ELECTRICITY' | 'WATER'>('ELECTRICITY');
+  const [cumulativeMonth, setCumulativeMonth] = useState<number>(new Date().getMonth() + 1);
+  const [cumulativeYear, setCumulativeYear] = useState<number>(new Date().getFullYear());
+  const [cumulativeData, setCumulativeData] = useState<any | null>(null);
+  const [cumulativeLoading, setCumulativeLoading] = useState(false);
+  const [cumulativeFilterRole, setCumulativeFilterRole] = useState<'ALL' | 'SUPPLY' | 'CONSUMPTION'>('ALL');
 
   // Bộ lọc
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -39,6 +48,7 @@ export const UtilitiesPage: React.FC = () => {
     multiplier: 1.0,
     unit: 'kWh',
     description: '',
+    isSupplyMeter: false,
   });
 
   // Modal Xem & In mã QR
@@ -71,9 +81,78 @@ export const UtilitiesPage: React.FC = () => {
     }
   };
 
+  // Tải báo cáo tích lũy theo kỳ
+  const loadCumulativeReport = async () => {
+    setCumulativeLoading(true);
+    try {
+      const data = await api.getCumulativeUtilityReport({
+        type: cumulativeType,
+        month: cumulativeMonth,
+        year: cumulativeYear,
+      });
+      setCumulativeData(data);
+    } catch (err: any) {
+      console.error('Lỗi khi tải báo cáo tích lũy:', err);
+      toast.error('Lỗi tải báo cáo', err?.message || 'Không thể tải dữ liệu báo cáo tích lũy.');
+    } finally {
+      setCumulativeLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'cumulative') {
+      loadCumulativeReport();
+    }
+  }, [activeTab, cumulativeType, cumulativeMonth, cumulativeYear]);
+
+  // Xuất file CSV báo cáo tích lũy
+  const handleExportCumulativeCSV = () => {
+    if (!cumulativeData) {
+      toast.error('Chưa có dữ liệu', 'Vui lòng chờ tải dữ liệu báo cáo xong.');
+      return;
+    }
+    const { summary, supplyMeters, consumptionMeters, cycleDescription, type, month, year } = cumulativeData;
+    const unit = summary?.unit || '';
+
+    let csv = '\uFEFF'; // UTF-8 BOM
+    csv += `BÁO CÁO TÍCH LŨY ${type === 'ELECTRICITY' ? 'ĐIỆN NĂNG' : 'NƯỚC SẠCH'} THEO KỲ\n`;
+    csv += `Chu kỳ tính toán:;${cycleDescription}\n`;
+    csv += `Kỳ Tháng/Năm:;${month}/${year}\n`;
+    csv += `Ngày xuất báo cáo:;${new Date().toLocaleString('vi-VN')}\n\n`;
+
+    csv += `TỔNG KẾT ĐỐI SOÁT;\n`;
+    csv += `Tổng cấp vào (${unit}):;${summary.totalSupply}\n`;
+    csv += `Tổng đo tiêu thụ (${unit}):;${summary.totalConsumption}\n`;
+    csv += `Chênh lệch hao hụt (${unit}):;${summary.delta}\n`;
+    csv += `Tỷ lệ hao hụt (%):;${summary.lossRate}%\n\n`;
+
+    csv += `CHI TIẾT ĐỒNG HỒ NGUỒN TỔNG CẤP;\n`;
+    csv += `STT;Mã;Tên đồng hồ;Vị trí;Số đầu kỳ;Số cuối kỳ;Hệ số;Sản lượng (${unit});Tỷ trọng (%)\n`;
+    (supplyMeters || []).forEach((m: any, i: number) => {
+      csv += `${i + 1};${m.code};${m.name};${m.location};${m.startValue};${m.endValue};${m.multiplier};${m.periodConsumption};${m.sharePercent}%\n`;
+    });
+    csv += `\n`;
+
+    csv += `CHI TIẾT ĐỒNG HỒ ĐO TIÊU THỤ NỘI BỘ;\n`;
+    csv += `STT;Mã;Tên đồng hồ;Vị trí;Số đầu kỳ;Số cuối kỳ;Hệ số;Sản lượng (${unit});Tỷ trọng (%)\n`;
+    (consumptionMeters || []).forEach((m: any, i: number) => {
+      csv += `${i + 1};${m.code};${m.name};${m.location};${m.startValue};${m.endValue};${m.multiplier};${m.periodConsumption};${m.sharePercent}%\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Bao_cao_tich_luy_${type.toLowerCase()}_ky_${month}_${year}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Xuất file thành công', `Đã tải xuống file CSV báo cáo kỳ ${month}/${year}.`);
+  };
 
   // Mở modal thêm điểm đo
   const handleOpenAddPoint = () => {
@@ -87,6 +166,7 @@ export const UtilitiesPage: React.FC = () => {
       multiplier: 1.0,
       unit: 'kWh',
       description: '',
+      isSupplyMeter: false,
     });
     setShowPointModal(true);
   };
@@ -103,6 +183,7 @@ export const UtilitiesPage: React.FC = () => {
       multiplier: point.multiplier || 1.0,
       unit: point.unit || 'kWh',
       description: point.description || '',
+      isSupplyMeter: Boolean(point.isSupplyMeter),
     });
     setShowPointModal(true);
   };
@@ -262,6 +343,7 @@ export const UtilitiesPage: React.FC = () => {
             { key: 'readings', label: `Sổ Ghi (${readings.length})`, fullLabel: `Sổ Ghi Điện & Nước (${readings.length})`, icon: FileText },
             { key: 'statusLogs', label: `Bật / Tắt (${statusLogs.length})`, fullLabel: `Lịch Sử Bật / Tắt (${statusLogs.length})`, icon: Cpu },
             { key: 'points', label: `Điểm Đo (${points.length})`, fullLabel: `Danh Mục Điểm Đo & Tem (${points.length})`, icon: Settings },
+            { key: 'cumulative', label: 'Báo Cáo Kỳ', fullLabel: 'Báo Cáo Tích Lũy Điện / Nước', icon: Calendar },
           ].map((t) => {
             const Icon = t.icon;
             const isActive = activeTab === t.key;
@@ -1014,6 +1096,418 @@ export const UtilitiesPage: React.FC = () => {
         </div>
       )}
 
+      {/* TAB 5: BÁO CÁO TÍCH LŨY THEO KỲ (ĐIỆN & NƯỚC) */}
+      {activeTab === 'cumulative' && (
+        <div className="util-tab-content">
+          {/* 1. Header & Bộ lọc Chu kỳ */}
+          <div className="card util-section-card" style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}>
+                {/* Chọn loại Điện / Nước */}
+                <div style={{ display: 'inline-flex', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '8px', gap: '4px' }}>
+                  <button
+                    onClick={() => setCumulativeType('ELECTRICITY')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '8px 14px', border: 'none', borderRadius: '6px',
+                      fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                      backgroundColor: cumulativeType === 'ELECTRICITY' ? '#ffffff' : 'transparent',
+                      color: cumulativeType === 'ELECTRICITY' ? '#ca8a04' : '#64748b',
+                      boxShadow: cumulativeType === 'ELECTRICITY' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <Zap size={16} />
+                    <span>Kỳ Điện (01 ➔ Cuối tháng)</span>
+                  </button>
+
+                  <button
+                    onClick={() => setCumulativeType('WATER')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '8px 14px', border: 'none', borderRadius: '6px',
+                      fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                      backgroundColor: cumulativeType === 'WATER' ? '#ffffff' : 'transparent',
+                      color: cumulativeType === 'WATER' ? '#0284c7' : '#64748b',
+                      boxShadow: cumulativeType === 'WATER' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <Droplets size={16} />
+                    <span>Kỳ Nước (21 ➔ 20)</span>
+                  </button>
+                </div>
+
+                {/* Chọn Tháng */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Tháng:</span>
+                  <select
+                    value={cumulativeMonth}
+                    onChange={(e) => setCumulativeMonth(parseInt(e.target.value, 10))}
+                    className="modal-select"
+                    style={{ width: '105px', height: '36px', padding: '0 8px', fontSize: '13px' }}
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                      <option key={m} value={m}>Tháng {m < 10 ? `0${m}` : m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Chọn Năm */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Năm:</span>
+                  <select
+                    value={cumulativeYear}
+                    onChange={(e) => setCumulativeYear(parseInt(e.target.value, 10))}
+                    className="modal-select"
+                    style={{ width: '90px', height: '36px', padding: '0 8px', fontSize: '13px' }}
+                  >
+                    {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Nút hành động */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={loadCumulativeReport}
+                  className="btn-action-outline"
+                  title="Tải lại số liệu"
+                  disabled={cumulativeLoading}
+                >
+                  <RefreshCw size={15} className={cumulativeLoading ? 'animate-spin' : ''} />
+                  <span>{cumulativeLoading ? 'Đang tính...' : 'Tính Lại'}</span>
+                </button>
+
+                <button
+                  onClick={handleExportCumulativeCSV}
+                  className="btn-action-outline"
+                  style={{ backgroundColor: '#10b981', color: '#ffffff', borderColor: '#10b981' }}
+                  title="Xuất file CSV"
+                >
+                  <Download size={15} />
+                  <span>Xuất Báo Cáo (CSV)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Banner Thông Tin Chu Kỳ */}
+            <div style={{
+              marginTop: '16px', padding: '12px 16px', borderRadius: '8px',
+              backgroundColor: cumulativeType === 'ELECTRICITY' ? '#fefce8' : '#f0f9ff',
+              border: `1px solid ${cumulativeType === 'ELECTRICITY' ? '#fde047' : '#bae6fd'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Calendar size={18} color={cumulativeType === 'ELECTRICITY' ? '#ca8a04' : '#0284c7'} />
+                <div>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginRight: '8px' }}>
+                    {cumulativeData?.cycleDescription || `Chu kỳ tính toán Tháng ${cumulativeMonth}/${cumulativeYear}`}
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    ({cumulativeType === 'ELECTRICITY' 
+                      ? 'Kỳ điện tính từ ngày đầu tiên đến ngày cuối cùng của tháng' 
+                      : 'Kỳ nước tính từ ngày 21 tháng trước đến ngày 20 tháng sau'})
+                  </span>
+                </div>
+              </div>
+              <span style={{ fontSize: '12px', fontWeight: 700, padding: '3px 10px', borderRadius: '12px', backgroundColor: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}>
+                Đơn vị: {cumulativeData?.summary?.unit || (cumulativeType === 'ELECTRICITY' ? 'kWh' : 'm³')}
+              </span>
+            </div>
+          </div>
+
+          {/* 2. 4 Thẻ KPI TỔNG KẾT ĐỐI SOÁT */}
+          <div className="util-kpi-grid" style={{ marginBottom: '20px' }}>
+            {/* Card 1: Tổng Cấp Vào */}
+            <div className="card util-kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+              <div className="kpi-top">
+                <span className="kpi-label" style={{ color: '#1d4ed8' }}>1. TỔNG CẤP VÀO (TỪ NHÀ CUNG CẤP)</span>
+                <div className="kpi-icon-box" style={{ backgroundColor: '#eff6ff', color: '#2563eb' }}>
+                  <Layers size={16} />
+                </div>
+              </div>
+              <div className="kpi-val" style={{ color: '#1d4ed8' }}>
+                {cumulativeData?.summary?.totalSupply?.toLocaleString() || 0}{' '}
+                <span className="kpi-unit">{cumulativeData?.summary?.unit}</span>
+              </div>
+              <div className="kpi-sub">
+                Gồm {cumulativeData?.supplyMeters?.length || 0} đồng hồ nguồn tổng cấp
+              </div>
+            </div>
+
+            {/* Card 2: Tổng Đo Tiêu Thụ */}
+            <div className="card util-kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
+              <div className="kpi-top">
+                <span className="kpi-label" style={{ color: '#047857' }}>2. TỔNG LƯỢNG SỬ DỤNG (ĐO ĐƯỢC)</span>
+                <div className="kpi-icon-box" style={{ backgroundColor: '#f0fdf4', color: '#16a34a' }}>
+                  {cumulativeType === 'ELECTRICITY' ? <Zap size={16} /> : <Droplets size={16} />}
+                </div>
+              </div>
+              <div className="kpi-val" style={{ color: '#047857' }}>
+                {cumulativeData?.summary?.totalConsumption?.toLocaleString() || 0}{' '}
+                <span className="kpi-unit">{cumulativeData?.summary?.unit}</span>
+              </div>
+              <div className="kpi-sub">
+                Tổng của {cumulativeData?.consumptionMeters?.length || 0} đồng hồ đo phân xưởng
+              </div>
+            </div>
+
+            {/* Card 3: Chênh Lệch Đối Soát */}
+            <div className="card util-kpi-card" style={{
+              borderLeft: `4px solid ${
+                (cumulativeData?.summary?.delta || 0) < 0 ? '#ef4444' : (cumulativeData?.summary?.lossRate || 0) > 6 ? '#f59e0b' : '#3b82f6'
+              }`
+            }}>
+              <div className="kpi-top">
+                <span className="kpi-label">3. CHÊNH LỆCH (CẤP - DÙNG)</span>
+                <div className="kpi-icon-box" style={{ backgroundColor: '#f8fafc', color: '#64748b' }}>
+                  <PieChart size={16} />
+                </div>
+              </div>
+              <div className="kpi-val" style={{
+                color: (cumulativeData?.summary?.delta || 0) < 0 ? '#ef4444' : (cumulativeData?.summary?.lossRate || 0) > 6 ? '#d97706' : '#2563eb'
+              }}>
+                {(cumulativeData?.summary?.delta || 0) > 0 ? '+' : ''}
+                {cumulativeData?.summary?.delta?.toLocaleString() || 0}{' '}
+                <span className="kpi-unit">{cumulativeData?.summary?.unit}</span>
+              </div>
+              <div className="kpi-sub">
+                {(cumulativeData?.summary?.delta || 0) >= 0 ? 'Lượng hao hụt / thất thoát' : 'Cảnh báo: Dùng vượt lượng cấp!'}
+              </div>
+            </div>
+
+            {/* Card 4: Tỷ Lệ Hao Hụt */}
+            <div className="card util-kpi-card" style={{
+              borderLeft: `4px solid ${
+                (cumulativeData?.summary?.lossRate || 0) > 6 ? '#ef4444' : (cumulativeData?.summary?.lossRate || 0) > 3 ? '#f59e0b' : '#10b981'
+              }`
+            }}>
+              <div className="kpi-top">
+                <span className="kpi-label">4. TỶ LỆ HAO HỤT (%)</span>
+                <div className="kpi-icon-box" style={{
+                  backgroundColor: (cumulativeData?.summary?.lossRate || 0) > 6 ? '#fef2f2' : '#f0fdf4',
+                  color: (cumulativeData?.summary?.lossRate || 0) > 6 ? '#dc2626' : '#16a34a'
+                }}>
+                  <AlertTriangle size={16} />
+                </div>
+              </div>
+              <div className="kpi-val" style={{
+                color: (cumulativeData?.summary?.lossRate || 0) > 6 ? '#dc2626' : (cumulativeData?.summary?.lossRate || 0) > 3 ? '#d97706' : '#16a34a'
+              }}>
+                {cumulativeData?.summary?.lossRate || 0}%
+              </div>
+              <div className="kpi-sub">
+                {(cumulativeData?.summary?.lossRate || 0) <= 3
+                  ? 'Mức an toàn (< 3%)'
+                  : (cumulativeData?.summary?.lossRate || 0) <= 6
+                  ? 'Mức tiêu chuẩn (3 - 6%)'
+                  : 'Cảnh báo: Thất thoát cao (> 6%)'}
+              </div>
+            </div>
+          </div>
+
+          {/* Thanh Tiến Trình Đối Chiếu Trực Quan */}
+          <div className="card util-section-card" style={{ marginBottom: '20px' }}>
+            <h3 className="section-title" style={{ marginBottom: '14px' }}>
+              <PieChart size={17} color="#2563eb" />
+              <span>ĐỐI CHIẾU CÂN BẰNG TỔNG CẤP VÀ TIÊU THỤ (KỲ {cumulativeMonth}/{cumulativeYear})</span>
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>
+                    1. Nguồn Tổng Cấp Vào ({cumulativeData?.summary?.totalSupply?.toLocaleString() || 0} {cumulativeData?.summary?.unit})
+                  </span>
+                  <span style={{ fontWeight: 700, color: '#2563eb' }}>100%</span>
+                </div>
+                <div style={{ height: '14px', backgroundColor: '#e2e8f0', borderRadius: '7px', overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: '100%', backgroundColor: '#3b82f6', borderRadius: '7px' }} />
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>
+                    2. Tổng Đo Tiêu Thụ ({cumulativeData?.summary?.totalConsumption?.toLocaleString() || 0} {cumulativeData?.summary?.unit})
+                  </span>
+                  <span style={{ fontWeight: 700, color: '#10b981' }}>
+                    {cumulativeData?.summary?.totalSupply > 0 
+                      ? Math.round((cumulativeData?.summary?.totalConsumption / cumulativeData?.summary?.totalSupply) * 100) 
+                      : 0}%
+                  </span>
+                </div>
+                <div style={{ height: '14px', backgroundColor: '#e2e8f0', borderRadius: '7px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${Math.min(100, cumulativeData?.summary?.totalSupply > 0 
+                      ? (cumulativeData?.summary?.totalConsumption / cumulativeData?.summary?.totalSupply) * 100 
+                      : 0)}%`,
+                    height: '100%',
+                    backgroundColor: '#10b981',
+                    borderRadius: '7px',
+                    transition: 'width 0.4s ease'
+                  }} />
+                </div>
+              </div>
+
+              {/* Phân tích điện 3 giá nếu có */}
+              {cumulativeType === 'ELECTRICITY' && cumulativeData?.summary?.threePhaseBreakdown && (
+                <div style={{
+                  marginTop: '10px', paddingTop: '14px', borderTop: '1px dashed #cbd5e1',
+                  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px'
+                }}>
+                  <div style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', display: 'block' }}>Biểu giá T1 (Bình thường):</span>
+                    <strong style={{ fontSize: '15px', color: '#0f172a' }}>
+                      {cumulativeData.summary.threePhaseBreakdown.normal.toLocaleString()} kWh
+                    </strong>
+                  </div>
+                  <div style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: '#fef2f2', border: '1px solid #fecaca' }}>
+                    <span style={{ fontSize: '12px', color: '#dc2626', display: 'block' }}>Biểu giá T2 (Cao điểm):</span>
+                    <strong style={{ fontSize: '15px', color: '#dc2626' }}>
+                      {cumulativeData.summary.threePhaseBreakdown.peak.toLocaleString()} kWh
+                    </strong>
+                  </div>
+                  <div style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                    <span style={{ fontSize: '12px', color: '#16a34a', display: 'block' }}>Biểu giá T3 (Thấp điểm):</span>
+                    <strong style={{ fontSize: '15px', color: '#16a34a' }}>
+                      {cumulativeData.summary.threePhaseBreakdown.offPeak.toLocaleString()} kWh
+                    </strong>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 3. BẢNG CHI TIẾT CÁC ĐỒNG HỒ ĐO TRONG KỲ */}
+          <div className="card util-section-card">
+            <div className="section-card-header" style={{ marginBottom: '16px' }}>
+              <div>
+                <h3 className="section-title">
+                  <FileText size={18} color="#0284c7" />
+                  <span>DANH SÁCH ĐỒNG HỒ & SẢN LƯỢNG TRONG KỲ</span>
+                </h3>
+                <p className="section-sub">
+                  Chi tiết chỉ số đầu kỳ, cuối kỳ, sản lượng thực tế và tỷ trọng của từng điểm đo.
+                </p>
+              </div>
+
+              {/* Bộ lọc vai trò */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {[
+                  { key: 'ALL', label: `Tất cả (${cumulativeData?.allMeters?.length || 0})` },
+                  { key: 'SUPPLY', label: `Nguồn Tổng Cấp (${cumulativeData?.supplyMeters?.length || 0})` },
+                  { key: 'CONSUMPTION', label: `Đo Tiêu Thụ (${cumulativeData?.consumptionMeters?.length || 0})` },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setCumulativeFilterRole(tab.key as any)}
+                    className={`filter-chip ${cumulativeFilterRole === tab.key ? 'active' : ''}`}
+                    style={{ fontSize: '12.5px', padding: '6px 12px' }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="table-responsive">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '50px', textAlign: 'center' }}>STT</th>
+                    <th>Mã Điểm Đo</th>
+                    <th>Tên Đồng Hồ / Thiết Bị</th>
+                    <th style={{ width: '150px' }}>Phân Loại</th>
+                    <th>Vị Trí Lắp Đặt</th>
+                    <th style={{ textAlign: 'center' }}>Lần Ghi</th>
+                    <th style={{ textAlign: 'right' }}>Số Đầu Kỳ</th>
+                    <th style={{ textAlign: 'right' }}>Số Cuối Kỳ</th>
+                    <th style={{ textAlign: 'center' }}>Hệ Số CT</th>
+                    <th style={{ textAlign: 'right', fontWeight: 800 }}>Sản Lượng ({cumulativeData?.summary?.unit})</th>
+                    <th style={{ textAlign: 'right' }}>Tỷ Trọng (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cumulativeLoading ? (
+                    <tr>
+                      <td colSpan={11} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                        Đang tính toán sản lượng kỳ...
+                      </td>
+                    </tr>
+                  ) : !cumulativeData?.allMeters || cumulativeData.allMeters.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                        Chưa có điểm đo nào cho loại tiện ích này.
+                      </td>
+                    </tr>
+                  ) : (
+                    cumulativeData.allMeters
+                      .filter((m: any) => {
+                        if (cumulativeFilterRole === 'SUPPLY') return m.isSupplyMeter;
+                        if (cumulativeFilterRole === 'CONSUMPTION') return !m.isSupplyMeter;
+                        return true;
+                      })
+                      .map((m: any, idx: number) => (
+                        <tr key={m.id}>
+                          <td style={{ textAlign: 'center', color: '#64748b', fontSize: '12px' }}>{idx + 1}</td>
+                          <td>
+                            <strong style={{ color: '#2563eb', fontSize: '13px' }}>{m.code}</strong>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>{m.name}</div>
+                          </td>
+                          <td>
+                            {m.isSupplyMeter ? (
+                              <span style={{
+                                padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700,
+                                backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                              }}>
+                                <Layers size={12} /> NGUỒN TỔNG CẤP
+                              </span>
+                            ) : (
+                              <span style={{
+                                padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 600,
+                                backgroundColor: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                              }}>
+                                <CheckCircle2 size={12} /> TIÊU THỤ NỘI BỘ
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ fontSize: '12.5px', color: '#475569' }}>{m.location}</td>
+                          <td style={{ textAlign: 'center', fontSize: '12px' }}>
+                            <span style={{ padding: '2px 8px', borderRadius: '10px', backgroundColor: '#f1f5f9', color: '#334155' }}>
+                              {m.readingsCount} lần
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right', fontSize: '12.5px', color: '#64748b' }}>
+                            {m.startValue.toLocaleString()}
+                          </td>
+                          <td style={{ textAlign: 'right', fontSize: '12.5px', color: '#0f172a', fontWeight: 600 }}>
+                            {m.endValue.toLocaleString()}
+                          </td>
+                          <td style={{ textAlign: 'center', fontSize: '12px' }}>
+                            x{m.multiplier}
+                          </td>
+                          <td style={{ textAlign: 'right', fontSize: '13.5px', fontWeight: 800, color: m.isSupplyMeter ? '#1d4ed8' : '#047857' }}>
+                            {m.periodConsumption.toLocaleString()} {m.unit}
+                          </td>
+                          <td style={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
+                            {m.sharePercent}%
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: THÊM / SỬA ĐIỂM ĐO */}
       {showPointModal && (
         <div className="util-modal-overlay">
@@ -1092,6 +1586,19 @@ export const UtilitiesPage: React.FC = () => {
                     className="modal-input"
                   />
                 </div>
+              </div>
+
+              <div style={{ padding: '10px 14px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input
+                  type="checkbox"
+                  id="isSupplyMeterCheckbox"
+                  checked={pointForm.isSupplyMeter}
+                  onChange={(e) => setPointForm({ ...pointForm, isSupplyMeter: e.target.checked })}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <label htmlFor="isSupplyMeterCheckbox" style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', cursor: 'pointer', margin: 0 }}>
+                  Đồng hồ nguồn tổng cấp (Nguồn cấp vào từ Điện lực / Thủy cục)
+                </label>
               </div>
 
               <div>

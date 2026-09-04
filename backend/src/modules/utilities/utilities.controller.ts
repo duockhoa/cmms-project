@@ -119,4 +119,20 @@ export class UtilitiesController {
       days: days ? parseInt(days, 10) : 7,
     });
   }
+
+  // ==========================================
+  // 5. BÁO CÁO TÍCH LŨY THEO KỲ (ĐIỆN & NƯỚC)
+  // ==========================================
+  @Get('reports/cumulative')
+  async getCumulativeReport(
+    @Query('type') type?: 'ELECTRICITY' | 'WATER',
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+  ) {
+    return this.utilitiesService.getCumulativeReport({
+      type,
+      month: month ? parseInt(month, 10) : undefined,
+      year: year ? parseInt(year, 10) : undefined,
+    });
+  }
 }
