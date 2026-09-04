@@ -647,6 +647,7 @@ model UtilityPoint {
   lastReadingAt    DateTime?
   description      String?
   isSupplyMeter    Boolean                 @default(false) // Đồng hồ tổng cấp từ nhà cung cấp (Điện lực / Thủy cục)
+  isRecycledWater  Boolean                 @default(false) // Đồng hồ đo nước tái sử dụng (không cộng dồn vào tổng dùng để chống tính trùng)
   isActive         Boolean                 @default(true)
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt

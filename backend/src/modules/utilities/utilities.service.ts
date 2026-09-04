@@ -32,7 +32,7 @@ export class UtilitiesService {
       ];
     }
 
-    return this.prisma.utilityPoint.findMany({
+    const points = await this.prisma.utilityPoint.findMany({
       where,
       orderBy: [{ type: 'asc' }, { code: 'asc' }],
       include: {
@@ -45,6 +45,29 @@ export class UtilitiesService {
           orderBy: { recordedAt: 'desc' },
         },
       },
+    });
+
+    return points.map((p) => {
+      if (p.type === 'SYSTEM_AUX') {
+        const baseHours = p.lastReadingValue || 0;
+        const startAt = p.lastReadingAt || (p.statusLogs.length > 0 ? p.statusLogs[0].recordedAt : null);
+        if (p.currentStatus === 'RUNNING' && startAt) {
+          const elapsedMs = Math.max(0, Date.now() - new Date(startAt).getTime());
+          const elapsedHours = Math.round((elapsedMs / (1000 * 60 * 60)) * 10) / 10;
+          const liveRunningHours = Math.round((baseHours + elapsedHours) * 10) / 10;
+          return {
+            ...p,
+            liveRunningHours,
+            sessionHours: elapsedHours,
+          };
+        }
+        return {
+          ...p,
+          liveRunningHours: baseHours,
+          sessionHours: 0,
+        };
+      }
+      return p;
     });
   }
 
@@ -92,6 +115,7 @@ export class UtilitiesService {
         currentStatus: data.currentStatus || 'RUNNING',
         lastReadingValue: Number(data.lastReadingValue) || 0,
         isSupplyMeter: Boolean(data.isSupplyMeter),
+        isRecycledWater: Boolean(data.isRecycledWater),
         description: data.description,
         isActive: data.isActive !== false,
       },
@@ -111,6 +135,7 @@ export class UtilitiesService {
     if (data.currentStatus !== undefined) updateData.currentStatus = data.currentStatus;
     if (data.lastReadingValue !== undefined) updateData.lastReadingValue = Number(data.lastReadingValue);
     if (data.isSupplyMeter !== undefined) updateData.isSupplyMeter = Boolean(data.isSupplyMeter);
+    if (data.isRecycledWater !== undefined) updateData.isRecycledWater = Boolean(data.isRecycledWater);
     if (data.description !== undefined) updateData.description = data.description;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
@@ -306,17 +331,35 @@ export class UtilitiesService {
       throw new NotFoundException('Không tìm thấy hệ thống phụ trợ.');
     }
 
+    const prevHours = point.statusLogs.length > 0 && point.statusLogs[0].runningHours !== null
+      ? point.statusLogs[0].runningHours
+      : point.lastReadingValue || 0;
+
     let runningDelta: number | null = null;
+    let finalRunningHours: number | null = null;
+
     if (data.runningHours !== undefined && data.runningHours !== null) {
-      const prevHours = point.statusLogs.length > 0 ? point.statusLogs[0].runningHours || 0 : point.lastReadingValue || 0;
-      runningDelta = Number(data.runningHours) >= prevHours ? Number(data.runningHours) - prevHours : 0;
+      finalRunningHours = Number(data.runningHours);
+      runningDelta = finalRunningHours >= prevHours ? Math.round((finalRunningHours - prevHours) * 100) / 100 : 0;
+    } else {
+      // Tự động tính số giờ đã chạy nếu hệ thống trước đó đang BẬT (RUNNING)
+      const startAt = point.lastReadingAt || (point.statusLogs.length > 0 ? point.statusLogs[0].recordedAt : null);
+      if (point.currentStatus === 'RUNNING' && startAt) {
+        const elapsedMs = Math.max(0, Date.now() - new Date(startAt).getTime());
+        const elapsedHours = Math.round((elapsedMs / (1000 * 60 * 60)) * 100) / 100;
+        runningDelta = elapsedHours;
+        finalRunningHours = Math.round((prevHours + elapsedHours) * 100) / 100;
+      } else {
+        finalRunningHours = prevHours;
+        runningDelta = 0;
+      }
     }
 
     const statusLog = await this.prisma.utilitySystemStatusLog.create({
       data: {
         pointId: point.id,
         status: data.status,
-        runningHours: data.runningHours !== undefined ? Number(data.runningHours) : null,
+        runningHours: finalRunningHours,
         runningDelta: runningDelta,
         reason: data.reason,
         parametersJson: data.parametersJson,
@@ -325,12 +368,12 @@ export class UtilitiesService {
       },
     });
 
-    // Cập nhật trạng thái hệ thống
+    // Cập nhật trạng thái hệ thống: tích lũy giờ chạy vào lastReadingValue và ghi nhận mốc thời gian
     await this.prisma.utilityPoint.update({
       where: { id: point.id },
       data: {
         currentStatus: data.status,
-        ...(data.runningHours !== undefined ? { lastReadingValue: Number(data.runningHours) } : {}),
+        lastReadingValue: finalRunningHours !== null ? finalRunningHours : point.lastReadingValue,
         lastReadingAt: new Date(),
       },
     });
@@ -550,6 +593,7 @@ export class UtilitiesService {
 
     let totalSupply = 0;
     let totalConsumption = 0;
+    let totalRecycled = 0;
     let totalNormal = 0;
     let totalPeak = 0;
     let totalOffPeak = 0;
@@ -587,9 +631,13 @@ export class UtilitiesService {
 
       periodConsumption = Number(periodConsumption.toFixed(2));
       const isSupply = Boolean(p.isSupplyMeter || p.code.includes('MSB') || p.code.includes('MAIN') || p.code.includes('TONG'));
+      const isRecycled = Boolean(!isSupply && p.isRecycledWater);
 
       if (isSupply) {
         totalSupply += periodConsumption;
+      } else if (isRecycled) {
+        // Nước tái sử dụng: TUYỆT ĐỐI KHÔNG cộng vào totalConsumption để tránh tính trùng 2 lần!
+        totalRecycled += periodConsumption;
       } else {
         totalConsumption += periodConsumption;
       }
@@ -610,6 +658,7 @@ export class UtilitiesService {
         multiplier: p.multiplier,
         unit: p.unit,
         isSupplyMeter: isSupply,
+        isRecycledWater: isRecycled,
         readingsCount: count,
         startValue,
         endValue,
@@ -622,15 +671,19 @@ export class UtilitiesService {
 
     totalSupply = Number(totalSupply.toFixed(2));
     totalConsumption = Number(totalConsumption.toFixed(2));
+    totalRecycled = Number(totalRecycled.toFixed(2));
     const delta = Number((totalSupply - totalConsumption).toFixed(2));
     const lossRate = totalSupply > 0 ? Number(((delta / totalSupply) * 100).toFixed(2)) : 0;
+    const recycleRate = totalSupply > 0 ? Number(((totalRecycled / totalSupply) * 100).toFixed(2)) : 0;
 
     const breakdownWithShare = metersBreakdown.map((m) => {
       let sharePercent = 0;
-      if (!m.isSupplyMeter && totalConsumption > 0) {
+      if (!m.isSupplyMeter && !m.isRecycledWater && totalConsumption > 0) {
         sharePercent = Number(((m.periodConsumption / totalConsumption) * 100).toFixed(2));
       } else if (m.isSupplyMeter && totalSupply > 0) {
         sharePercent = Number(((m.periodConsumption / totalSupply) * 100).toFixed(2));
+      } else if (m.isRecycledWater && totalRecycled > 0) {
+        sharePercent = Number(((m.periodConsumption / totalRecycled) * 100).toFixed(2));
       }
       return {
         ...m,
@@ -648,6 +701,8 @@ export class UtilitiesService {
       summary: {
         totalSupply,
         totalConsumption,
+        totalRecycled,
+        recycleRate,
         delta,
         lossRate,
         unit: type === 'ELECTRICITY' ? 'kWh' : 'm³',
@@ -658,7 +713,8 @@ export class UtilitiesService {
         } : null,
       },
       supplyMeters: breakdownWithShare.filter((m) => m.isSupplyMeter),
-      consumptionMeters: breakdownWithShare.filter((m) => !m.isSupplyMeter),
+      consumptionMeters: breakdownWithShare.filter((m) => !m.isSupplyMeter && !m.isRecycledWater),
+      recycledMeters: breakdownWithShare.filter((m) => m.isRecycledWater),
       allMeters: breakdownWithShare,
     };
   }

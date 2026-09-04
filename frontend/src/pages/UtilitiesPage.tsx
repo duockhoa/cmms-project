@@ -30,7 +30,7 @@ export const UtilitiesPage: React.FC = () => {
   const [cumulativeYear, setCumulativeYear] = useState<number>(new Date().getFullYear());
   const [cumulativeData, setCumulativeData] = useState<any | null>(null);
   const [cumulativeLoading, setCumulativeLoading] = useState(false);
-  const [cumulativeFilterRole, setCumulativeFilterRole] = useState<'ALL' | 'SUPPLY' | 'CONSUMPTION'>('ALL');
+  const [cumulativeFilterRole, setCumulativeFilterRole] = useState<'ALL' | 'SUPPLY' | 'CONSUMPTION' | 'RECYCLED'>('ALL');
 
   // Bộ lọc
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -49,10 +49,37 @@ export const UtilitiesPage: React.FC = () => {
     unit: 'kWh',
     description: '',
     isSupplyMeter: false,
+    isRecycledWater: false,
   });
 
   // Modal Xem & In mã QR
   const [printPoint, setPrintPoint] = useState<any | null>(null);
+
+  // Mốc thời gian thực để tính giờ chạy hệ thống phụ trợ (tự động nhảy theo thời gian thực)
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 15000); // Tự động đồng bộ mỗi 15 giây
+    return () => clearInterval(timer);
+  }, []);
+
+  // Hàm tính toán số giờ chạy thực tế (tích lũy + thời gian đang chạy từ lúc bật đến nay)
+  const getLiveHourMeter = (sys: any) => {
+    const baseHours = sys.lastReadingValue || 0;
+    const startAt = sys.lastReadingAt || (sys.statusLogs?.length > 0 ? sys.statusLogs[0].recordedAt : null);
+    if (sys.currentStatus !== 'RUNNING' || !startAt) {
+      return { total: baseHours, sessionDelta: 0, isRunning: false };
+    }
+    const elapsedMs = Math.max(0, currentTime - new Date(startAt).getTime());
+    const elapsedHours = elapsedMs / (1000 * 60 * 60);
+    return {
+      total: Math.round((baseHours + elapsedHours) * 10) / 10,
+      sessionDelta: Math.round(elapsedHours * 10) / 10,
+      isRunning: true,
+    };
+  };
 
   // Tải toàn bộ dữ liệu tiện ích
   const loadData = async () => {
@@ -115,7 +142,7 @@ export const UtilitiesPage: React.FC = () => {
       toast.error('Chưa có dữ liệu', 'Vui lòng chờ tải dữ liệu báo cáo xong.');
       return;
     }
-    const { summary, supplyMeters, consumptionMeters, cycleDescription, type, month, year } = cumulativeData;
+    const { summary, supplyMeters, consumptionMeters, recycledMeters, cycleDescription, type, month, year } = cumulativeData;
     const unit = summary?.unit || '';
 
     let csv = '\uFEFF'; // UTF-8 BOM
@@ -127,6 +154,10 @@ export const UtilitiesPage: React.FC = () => {
     csv += `TỔNG KẾT ĐỐI SOÁT;\n`;
     csv += `Tổng cấp vào (${unit}):;${summary.totalSupply}\n`;
     csv += `Tổng đo tiêu thụ (${unit}):;${summary.totalConsumption}\n`;
+    if (summary.totalRecycled !== undefined && summary.totalRecycled > 0) {
+      csv += `Lượng nước tái sử dụng (${unit}):;${summary.totalRecycled} (Không tính vào tổng dùng để chống tính trùng)\n`;
+      csv += `Tỷ lệ tái sử dụng (%):;${summary.recycleRate}%\n`;
+    }
     csv += `Chênh lệch hao hụt (${unit}):;${summary.delta}\n`;
     csv += `Tỷ lệ hao hụt (%):;${summary.lossRate}%\n\n`;
 
@@ -142,6 +173,15 @@ export const UtilitiesPage: React.FC = () => {
     (consumptionMeters || []).forEach((m: any, i: number) => {
       csv += `${i + 1};${m.code};${m.name};${m.location};${m.startValue};${m.endValue};${m.multiplier};${m.periodConsumption};${m.sharePercent}%\n`;
     });
+
+    if (recycledMeters && recycledMeters.length > 0) {
+      csv += `\n`;
+      csv += `CHI TIẾT ĐỒNG HỒ ĐO NƯỚC TÁI SỬ DỤNG (KHÔNG CỘNG DỒN VÀO TỔNG DÙNG);\n`;
+      csv += `STT;Mã;Tên đồng hồ;Vị trí;Số đầu kỳ;Số cuối kỳ;Hệ số;Sản lượng (${unit});Tỷ trọng tái sinh (%)\n`;
+      recycledMeters.forEach((m: any, i: number) => {
+        csv += `${i + 1};${m.code};${m.name};${m.location};${m.startValue};${m.endValue};${m.multiplier};${m.periodConsumption};${m.sharePercent}%\n`;
+      });
+    }
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -167,6 +207,7 @@ export const UtilitiesPage: React.FC = () => {
       unit: 'kWh',
       description: '',
       isSupplyMeter: false,
+      isRecycledWater: false,
     });
     setShowPointModal(true);
   };
@@ -184,6 +225,7 @@ export const UtilitiesPage: React.FC = () => {
       unit: point.unit || 'kWh',
       description: point.description || '',
       isSupplyMeter: Boolean(point.isSupplyMeter),
+      isRecycledWater: Boolean(point.isRecycledWater),
     });
     setShowPointModal(true);
   };
@@ -457,6 +499,7 @@ export const UtilitiesPage: React.FC = () => {
 
             <div className="aux-matrix-grid">
               {points.filter((p) => p.type === 'SYSTEM_AUX').map((sys) => {
+                const liveHour = getLiveHourMeter(sys);
                 const statusColor =
                   sys.currentStatus === 'RUNNING' ? '#16a34a' : sys.currentStatus === 'OFF' ? '#64748b' : sys.currentStatus === 'STANDBY' ? '#ea580c' : '#dc2626';
                 const statusBg =
@@ -487,11 +530,18 @@ export const UtilitiesPage: React.FC = () => {
                     <div className="aux-hour-box">
                       <div>
                         <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Đồng hồ giờ chạy (Hour meter):</span>
-                        <span className="aux-hour-val">
-                          {sys.lastReadingValue?.toLocaleString() || 0} Giờ
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
+                          <span className="aux-hour-val">
+                            {liveHour.total.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} Giờ
+                          </span>
+                          {liveHour.isRunning && (
+                            <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700, backgroundColor: '#dcfce7', padding: '1px 6px', borderRadius: '4px' }}>
+                              (+{liveHour.sessionDelta.toFixed(1)}h ca này)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <Clock size={16} color="#94a3b8" />
+                      <Clock size={16} color={liveHour.isRunning ? '#16a34a' : '#94a3b8'} />
                     </div>
 
                     {/* Nút thao tác nhanh trạng thái */}
@@ -981,23 +1031,57 @@ export const UtilitiesPage: React.FC = () => {
                         <td style={{ fontWeight: 700, fontSize: '13px' }}>{p.code}</td>
                         <td style={{ fontWeight: 600, fontSize: '13px' }}>{p.name}</td>
                         <td>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              backgroundColor: p.type === 'ELECTRICITY' ? '#fef9c3' : p.type === 'WATER' ? '#e0f2fe' : '#f3e8ff',
-                              color: p.type === 'ELECTRICITY' ? '#854d0e' : p.type === 'WATER' ? '#0369a1' : '#6b21a8',
-                            }}
-                          >
-                            {p.type === 'ELECTRICITY' ? 'Điện' : p.type === 'WATER' ? 'Nước' : 'Phụ trợ'}
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                backgroundColor: p.type === 'ELECTRICITY' ? '#fef9c3' : p.type === 'WATER' ? '#e0f2fe' : '#f3e8ff',
+                                color: p.type === 'ELECTRICITY' ? '#854d0e' : p.type === 'WATER' ? '#0369a1' : '#6b21a8',
+                              }}
+                            >
+                              {p.type === 'ELECTRICITY' ? 'Điện' : p.type === 'WATER' ? 'Nước' : 'Phụ trợ'}
+                            </span>
+                            {p.isSupplyMeter && (
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: '4px',
+                                  backgroundColor: '#f1f5f9',
+                                  color: '#475569',
+                                  border: '1px solid #cbd5e1',
+                                }}
+                              >
+                                ĐH Tổng cấp
+                              </span>
+                            )}
+                            {p.isRecycledWater && (
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: '4px',
+                                  backgroundColor: '#ccfbf1',
+                                  color: '#0f766e',
+                                  border: '1px solid #99f6e4',
+                                }}
+                              >
+                                🔄 Tái sử dụng
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td style={{ fontSize: '12.5px', color: '#475569' }}>{p.location}</td>
                         <td style={{ fontSize: '12.5px' }}>x{p.multiplier || 1}</td>
                         <td style={{ fontSize: '13px', fontWeight: 700 }}>
-                          {p.lastReadingValue?.toLocaleString() || 0} {p.unit}
+                          {p.type === 'SYSTEM_AUX'
+                            ? `${getLiveHourMeter(p).total.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} Giờ`
+                            : `${p.lastReadingValue?.toLocaleString() || 0} ${p.unit}`}
                         </td>
                         <td>
                           <button
@@ -1039,18 +1123,30 @@ export const UtilitiesPage: React.FC = () => {
                 <div key={p.id} className="card mobile-point-card">
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <span style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a' }}>{p.code}</span>
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        backgroundColor: p.type === 'ELECTRICITY' ? '#fef9c3' : p.type === 'WATER' ? '#e0f2fe' : '#f3e8ff',
-                        color: p.type === 'ELECTRICITY' ? '#854d0e' : p.type === 'WATER' ? '#0369a1' : '#6b21a8',
-                      }}
-                    >
-                      {p.type === 'ELECTRICITY' ? 'Điện' : p.type === 'WATER' ? 'Nước' : 'Phụ trợ'}
-                    </span>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: p.type === 'ELECTRICITY' ? '#fef9c3' : p.type === 'WATER' ? '#e0f2fe' : '#f3e8ff',
+                          color: p.type === 'ELECTRICITY' ? '#854d0e' : p.type === 'WATER' ? '#0369a1' : '#6b21a8',
+                        }}
+                      >
+                        {p.type === 'ELECTRICITY' ? 'Điện' : p.type === 'WATER' ? 'Nước' : 'Phụ trợ'}
+                      </span>
+                      {p.isSupplyMeter && (
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}>
+                          ĐH Tổng
+                        </span>
+                      )}
+                      {p.isRecycledWater && (
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', backgroundColor: '#ccfbf1', color: '#0f766e', border: '1px solid #99f6e4' }}>
+                          🔄 Tái SD
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div style={{ fontWeight: 700, fontSize: '14px', color: '#1e293b', marginBottom: '2px' }}>{p.name}</div>
@@ -1061,7 +1157,9 @@ export const UtilitiesPage: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', backgroundColor: '#f8fafc', borderRadius: '6px', marginBottom: '10px' }}>
                     <span style={{ fontSize: '11.5px', color: '#64748b' }}>Chỉ số gần nhất:</span>
                     <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
-                      {p.lastReadingValue?.toLocaleString() || 0} {p.unit}
+                      {p.type === 'SYSTEM_AUX'
+                        ? `${getLiveHourMeter(p).total.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} Giờ`
+                        : `${p.lastReadingValue?.toLocaleString() || 0} ${p.unit}`}
                     </span>
                   </div>
 
@@ -1219,52 +1317,62 @@ export const UtilitiesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 2. 4 Thẻ KPI TỔNG KẾT ĐỐI SOÁT */}
-          <div className="util-kpi-grid" style={{ marginBottom: '20px' }}>
+          {/* 2. Thẻ KPI TỔNG KẾT ĐỐI SOÁT */}
+          <div className={`cumulative-kpi-grid ${cumulativeType === 'WATER' ? 'five-cols' : ''}`} style={{ marginBottom: '16px' }}>
             {/* Card 1: Tổng Cấp Vào */}
-            <div className="card util-kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+            <div className="card cumulative-kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
               <div className="kpi-top">
-                <span className="kpi-label" style={{ color: '#1d4ed8' }}>1. TỔNG CẤP VÀO (TỪ NHÀ CUNG CẤP)</span>
+                <span className="kpi-label" style={{ color: '#1d4ed8' }} title="1. TỔNG CẤP VÀO (TỪ NHÀ CUNG CẤP)">
+                  1. TỔNG CẤP VÀO
+                </span>
                 <div className="kpi-icon-box" style={{ backgroundColor: '#eff6ff', color: '#2563eb' }}>
-                  <Layers size={16} />
+                  <Layers size={15} />
                 </div>
               </div>
               <div className="kpi-val" style={{ color: '#1d4ed8' }}>
                 {cumulativeData?.summary?.totalSupply?.toLocaleString() || 0}{' '}
                 <span className="kpi-unit">{cumulativeData?.summary?.unit}</span>
               </div>
-              <div className="kpi-sub">
-                Gồm {cumulativeData?.supplyMeters?.length || 0} đồng hồ nguồn tổng cấp
+              <div className="kpi-sub" title={`Gồm ${cumulativeData?.supplyMeters?.length || 0} đồng hồ nguồn tổng cấp`}>
+                Gồm {cumulativeData?.supplyMeters?.length || 0} ĐH nguồn tổng
               </div>
             </div>
 
             {/* Card 2: Tổng Đo Tiêu Thụ */}
-            <div className="card util-kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
+            <div className="card cumulative-kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
               <div className="kpi-top">
-                <span className="kpi-label" style={{ color: '#047857' }}>2. TỔNG LƯỢNG SỬ DỤNG (ĐO ĐƯỢC)</span>
+                <span className="kpi-label" style={{ color: '#047857' }} title="2. TỔNG LƯỢNG SỬ DỤNG (ĐO ĐƯỢC)">
+                  2. TỔNG SỬ DỤNG
+                </span>
                 <div className="kpi-icon-box" style={{ backgroundColor: '#f0fdf4', color: '#16a34a' }}>
-                  {cumulativeType === 'ELECTRICITY' ? <Zap size={16} /> : <Droplets size={16} />}
+                  {cumulativeType === 'ELECTRICITY' ? <Zap size={15} /> : <Droplets size={15} />}
                 </div>
               </div>
               <div className="kpi-val" style={{ color: '#047857' }}>
                 {cumulativeData?.summary?.totalConsumption?.toLocaleString() || 0}{' '}
                 <span className="kpi-unit">{cumulativeData?.summary?.unit}</span>
               </div>
-              <div className="kpi-sub">
-                Tổng của {cumulativeData?.consumptionMeters?.length || 0} đồng hồ đo phân xưởng
+              <div className="kpi-sub" title={
+                cumulativeType === 'WATER' && (cumulativeData?.recycledMeters?.length || 0) > 0
+                  ? `Tổng ${cumulativeData?.consumptionMeters?.length || 0} ĐH (đã trừ ${cumulativeData?.recycledMeters?.length} ĐH tái sử dụng)`
+                  : `Tổng ${cumulativeData?.consumptionMeters?.length || 0} ĐH đo phân xưởng`
+              }>
+                {cumulativeType === 'WATER' && (cumulativeData?.recycledMeters?.length || 0) > 0
+                  ? `${cumulativeData?.consumptionMeters?.length || 0} ĐH (trừ ${cumulativeData?.recycledMeters?.length} ĐH tái SD)`
+                  : `Tổng ${cumulativeData?.consumptionMeters?.length || 0} ĐH phân xưởng`}
               </div>
             </div>
 
             {/* Card 3: Chênh Lệch Đối Soát */}
-            <div className="card util-kpi-card" style={{
+            <div className="card cumulative-kpi-card" style={{
               borderLeft: `4px solid ${
                 (cumulativeData?.summary?.delta || 0) < 0 ? '#ef4444' : (cumulativeData?.summary?.lossRate || 0) > 6 ? '#f59e0b' : '#3b82f6'
               }`
             }}>
               <div className="kpi-top">
-                <span className="kpi-label">3. CHÊNH LỆCH (CẤP - DÙNG)</span>
+                <span className="kpi-label" title="3. CHÊNH LỆCH (CẤP - DÙNG)">3. CHÊNH LỆCH</span>
                 <div className="kpi-icon-box" style={{ backgroundColor: '#f8fafc', color: '#64748b' }}>
-                  <PieChart size={16} />
+                  <PieChart size={15} />
                 </div>
               </div>
               <div className="kpi-val" style={{
@@ -1274,24 +1382,24 @@ export const UtilitiesPage: React.FC = () => {
                 {cumulativeData?.summary?.delta?.toLocaleString() || 0}{' '}
                 <span className="kpi-unit">{cumulativeData?.summary?.unit}</span>
               </div>
-              <div className="kpi-sub">
-                {(cumulativeData?.summary?.delta || 0) >= 0 ? 'Lượng hao hụt / thất thoát' : 'Cảnh báo: Dùng vượt lượng cấp!'}
+              <div className="kpi-sub" title={(cumulativeData?.summary?.delta || 0) >= 0 ? 'Lượng hao hụt / thất thoát' : 'Cảnh báo: Dùng vượt lượng cấp!'}>
+                {(cumulativeData?.summary?.delta || 0) >= 0 ? 'Lượng hao hụt / thất thoát' : 'Dùng vượt lượng cấp!'}
               </div>
             </div>
 
             {/* Card 4: Tỷ Lệ Hao Hụt */}
-            <div className="card util-kpi-card" style={{
+            <div className="card cumulative-kpi-card" style={{
               borderLeft: `4px solid ${
                 (cumulativeData?.summary?.lossRate || 0) > 6 ? '#ef4444' : (cumulativeData?.summary?.lossRate || 0) > 3 ? '#f59e0b' : '#10b981'
               }`
             }}>
               <div className="kpi-top">
-                <span className="kpi-label">4. TỶ LỆ HAO HỤT (%)</span>
+                <span className="kpi-label" title="4. TỶ LỆ HAO HỤT (%)">4. TỶ LỆ HAO HỤT</span>
                 <div className="kpi-icon-box" style={{
                   backgroundColor: (cumulativeData?.summary?.lossRate || 0) > 6 ? '#fef2f2' : '#f0fdf4',
                   color: (cumulativeData?.summary?.lossRate || 0) > 6 ? '#dc2626' : '#16a34a'
                 }}>
-                  <AlertTriangle size={16} />
+                  <AlertTriangle size={15} />
                 </div>
               </div>
               <div className="kpi-val" style={{
@@ -1299,14 +1407,41 @@ export const UtilitiesPage: React.FC = () => {
               }}>
                 {cumulativeData?.summary?.lossRate || 0}%
               </div>
-              <div className="kpi-sub">
-                {(cumulativeData?.summary?.lossRate || 0) <= 3
+              <div className="kpi-sub" title={
+                (cumulativeData?.summary?.lossRate || 0) <= 3
                   ? 'Mức an toàn (< 3%)'
                   : (cumulativeData?.summary?.lossRate || 0) <= 6
                   ? 'Mức tiêu chuẩn (3 - 6%)'
-                  : 'Cảnh báo: Thất thoát cao (> 6%)'}
+                  : 'Cảnh báo: Thất thoát cao (> 6%)'
+              }>
+                {(cumulativeData?.summary?.lossRate || 0) <= 3
+                  ? 'Mức an toàn (< 3%)'
+                  : (cumulativeData?.summary?.lossRate || 0) <= 6
+                  ? 'Tiêu chuẩn (3 - 6%)'
+                  : 'Cảnh báo cao (> 6%)'}
               </div>
             </div>
+
+            {/* Card 5: Lượng nước tái sử dụng (Chỉ hiện khi xem nước) */}
+            {cumulativeType === 'WATER' && (
+              <div className="card cumulative-kpi-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
+                <div className="kpi-top">
+                  <span className="kpi-label" style={{ color: '#6b21a8' }} title="5. NƯỚC TÁI SỬ DỤNG (TIẾT KIỆM)">
+                    5. NƯỚC TÁI SỬ DỤNG
+                  </span>
+                  <div className="kpi-icon-box" style={{ backgroundColor: '#f5f3ff', color: '#7c3aed' }}>
+                    <RefreshCw size={15} />
+                  </div>
+                </div>
+                <div className="kpi-val" style={{ color: '#6b21a8' }}>
+                  {cumulativeData?.summary?.totalRecycled?.toLocaleString() || 0}{' '}
+                  <span className="kpi-unit">m³</span>
+                </div>
+                <div className="kpi-sub" title={`Tỷ lệ tái sinh: ${cumulativeData?.summary?.recycleRate || 0}% (Không cộng vào tổng dùng)`}>
+                  Tái sinh: <strong style={{ color: '#7c3aed' }}>{cumulativeData?.summary?.recycleRate || 0}%</strong> (Không cộng tổng)
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Thanh Tiến Trình Đối Chiếu Trực Quan */}
@@ -1332,7 +1467,7 @@ export const UtilitiesPage: React.FC = () => {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
                   <span style={{ fontWeight: 600, color: '#1e293b' }}>
-                    2. Tổng Đo Tiêu Thụ ({cumulativeData?.summary?.totalConsumption?.toLocaleString() || 0} {cumulativeData?.summary?.unit})
+                    2. Tổng Tiêu Thụ Thực Tế ({cumulativeData?.summary?.totalConsumption?.toLocaleString() || 0} {cumulativeData?.summary?.unit})
                   </span>
                   <span style={{ fontWeight: 700, color: '#10b981' }}>
                     {cumulativeData?.summary?.totalSupply > 0 
@@ -1352,6 +1487,29 @@ export const UtilitiesPage: React.FC = () => {
                   }} />
                 </div>
               </div>
+
+              {/* Nước tái sử dụng nếu có */}
+              {cumulativeType === 'WATER' && (cumulativeData?.summary?.totalRecycled || 0) > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                    <span style={{ fontWeight: 600, color: '#6b21a8' }}>
+                      3. Nước Tái Sử Dụng / Tiết Kiệm ({cumulativeData?.summary?.totalRecycled?.toLocaleString()} m³) - Không cộng vào tổng dùng
+                    </span>
+                    <span style={{ fontWeight: 700, color: '#7c3aed' }}>
+                      {cumulativeData?.summary?.recycleRate || 0}%
+                    </span>
+                  </div>
+                  <div style={{ height: '14px', backgroundColor: '#e2e8f0', borderRadius: '7px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${Math.min(100, cumulativeData?.summary?.recycleRate || 0)}%`,
+                      height: '100%',
+                      backgroundColor: '#8b5cf6',
+                      borderRadius: '7px',
+                      transition: 'width 0.4s ease'
+                    }} />
+                  </div>
+                </div>
+              )}
 
               {/* Phân tích điện 3 giá nếu có */}
               {cumulativeType === 'ELECTRICITY' && cumulativeData?.summary?.threePhaseBreakdown && (
@@ -1396,11 +1554,12 @@ export const UtilitiesPage: React.FC = () => {
               </div>
 
               {/* Bộ lọc vai trò */}
-              <div style={{ display: 'flex', gap: '6px' }}>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {[
                   { key: 'ALL', label: `Tất cả (${cumulativeData?.allMeters?.length || 0})` },
                   { key: 'SUPPLY', label: `Nguồn Tổng Cấp (${cumulativeData?.supplyMeters?.length || 0})` },
                   { key: 'CONSUMPTION', label: `Đo Tiêu Thụ (${cumulativeData?.consumptionMeters?.length || 0})` },
+                  ...(cumulativeType === 'WATER' ? [{ key: 'RECYCLED', label: `Nước Tái Sử Dụng (${cumulativeData?.recycledMeters?.length || 0})` }] : []),
                 ].map((tab) => (
                   <button
                     key={tab.key}
@@ -1421,7 +1580,7 @@ export const UtilitiesPage: React.FC = () => {
                     <th style={{ width: '50px', textAlign: 'center' }}>STT</th>
                     <th>Mã Điểm Đo</th>
                     <th>Tên Đồng Hồ / Thiết Bị</th>
-                    <th style={{ width: '150px' }}>Phân Loại</th>
+                    <th style={{ width: '170px' }}>Phân Loại</th>
                     <th>Vị Trí Lắp Đặt</th>
                     <th style={{ textAlign: 'center' }}>Lần Ghi</th>
                     <th style={{ textAlign: 'right' }}>Số Đầu Kỳ</th>
@@ -1448,7 +1607,8 @@ export const UtilitiesPage: React.FC = () => {
                     cumulativeData.allMeters
                       .filter((m: any) => {
                         if (cumulativeFilterRole === 'SUPPLY') return m.isSupplyMeter;
-                        if (cumulativeFilterRole === 'CONSUMPTION') return !m.isSupplyMeter;
+                        if (cumulativeFilterRole === 'CONSUMPTION') return !m.isSupplyMeter && !m.isRecycledWater;
+                        if (cumulativeFilterRole === 'RECYCLED') return m.isRecycledWater;
                         return true;
                       })
                       .map((m: any, idx: number) => (
@@ -1467,6 +1627,13 @@ export const UtilitiesPage: React.FC = () => {
                                 backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'inline-flex', alignItems: 'center', gap: '4px'
                               }}>
                                 <Layers size={12} /> NGUỒN TỔNG CẤP
+                              </span>
+                            ) : m.isRecycledWater ? (
+                              <span style={{
+                                padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700,
+                                backgroundColor: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                              }} title="Đồng hồ nước tái sử dụng - không cộng dồn vào tổng dùng để chống tính trùng">
+                                <RefreshCw size={12} /> NƯỚC TÁI SỬ DỤNG
                               </span>
                             ) : (
                               <span style={{
@@ -1492,7 +1659,7 @@ export const UtilitiesPage: React.FC = () => {
                           <td style={{ textAlign: 'center', fontSize: '12px' }}>
                             x{m.multiplier}
                           </td>
-                          <td style={{ textAlign: 'right', fontSize: '13.5px', fontWeight: 800, color: m.isSupplyMeter ? '#1d4ed8' : '#047857' }}>
+                          <td style={{ textAlign: 'right', fontSize: '13.5px', fontWeight: 800, color: m.isSupplyMeter ? '#1d4ed8' : m.isRecycledWater ? '#7c3aed' : '#047857' }}>
                             {m.periodConsumption.toLocaleString()} {m.unit}
                           </td>
                           <td style={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
@@ -1593,13 +1760,42 @@ export const UtilitiesPage: React.FC = () => {
                   type="checkbox"
                   id="isSupplyMeterCheckbox"
                   checked={pointForm.isSupplyMeter}
-                  onChange={(e) => setPointForm({ ...pointForm, isSupplyMeter: e.target.checked })}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setPointForm({
+                      ...pointForm,
+                      isSupplyMeter: checked,
+                      ...(checked ? { isRecycledWater: false } : {}),
+                    });
+                  }}
                   style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                 />
                 <label htmlFor="isSupplyMeterCheckbox" style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', cursor: 'pointer', margin: 0 }}>
                   Đồng hồ nguồn tổng cấp (Nguồn cấp vào từ Điện lực / Thủy cục)
                 </label>
               </div>
+
+              {pointForm.type === 'WATER' && (
+                <div style={{ padding: '10px 14px', backgroundColor: '#f5f3ff', borderRadius: '8px', border: '1px solid #ddd6fe', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="checkbox"
+                    id="isRecycledWaterCheckbox"
+                    checked={pointForm.isRecycledWater}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setPointForm({
+                        ...pointForm,
+                        isRecycledWater: checked,
+                        ...(checked ? { isSupplyMeter: false } : {}),
+                      });
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="isRecycledWaterCheckbox" style={{ fontSize: '13px', fontWeight: 600, color: '#6b21a8', cursor: 'pointer', margin: 0 }}>
+                    Đồng hồ đo nước tái sử dụng / tuần hoàn (Hệ thống tự động loại trừ khỏi Tổng sử dụng để tránh tính trùng 2 lần)
+                  </label>
+                </div>
+              )}
 
               <div>
                 <label className="modal-label">Ghi chú mô tả</label>
@@ -1842,6 +2038,70 @@ export const UtilitiesPage: React.FC = () => {
         .kpi-water { border-left: 4px solid #0ea5e9; }
         .kpi-aux { border-left: 4px solid #16a34a; }
         .kpi-points { border-left: 4px solid #8b5cf6; }
+
+        /* Cumulative Periodic Report KPI Grid */
+        .cumulative-kpi-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 10px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .cumulative-kpi-grid.five-cols {
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+        .cumulative-kpi-card {
+          padding: 10px 12px;
+          border-radius: 8px;
+          background-color: #ffffff;
+          box-sizing: border-box;
+          min-width: 0;
+        }
+        .cumulative-kpi-card .kpi-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 4px;
+        }
+        .cumulative-kpi-card .kpi-label {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .cumulative-kpi-card .kpi-icon-box {
+          padding: 4px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .cumulative-kpi-card .kpi-val {
+          font-size: 20px;
+          font-weight: 800;
+          color: #0f172a;
+          line-height: 1.2;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .cumulative-kpi-card .kpi-unit {
+          font-size: 11.5px;
+          font-weight: 600;
+          color: #64748b;
+        }
+        .cumulative-kpi-card .kpi-sub {
+          font-size: 10.5px;
+          color: #64748b;
+          margin-top: 2px;
+          line-height: 1.25;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
 
         .kpi-top {
           display: flex;
@@ -2490,7 +2750,9 @@ export const UtilitiesPage: React.FC = () => {
 
         /* TABLET (<= 1024px) */
         @media (max-width: 1024px) {
-          .util-kpi-grid {
+          .util-kpi-grid,
+          .cumulative-kpi-grid,
+          .cumulative-kpi-grid.five-cols {
             grid-template-columns: repeat(2, 1fr);
           }
         }
@@ -2583,7 +2845,9 @@ export const UtilitiesPage: React.FC = () => {
 
         /* SMALL MOBILE (<= 480px) */
         @media (max-width: 480px) {
-          .util-kpi-grid {
+          .util-kpi-grid,
+          .cumulative-kpi-grid,
+          .cumulative-kpi-grid.five-cols {
             grid-template-columns: repeat(2, 1fr);
             gap: 8px;
           }
