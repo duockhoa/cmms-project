@@ -249,13 +249,22 @@ export class UtilitiesService {
         orderBy: { recordedAt: 'desc' },
         include: {
           point: true,
+          recordedByUser: {
+            select: { id: true, name: true, email: true },
+          },
         },
       }),
       this.prisma.utilityReading.count({ where }),
     ]);
 
+    const mappedItems = items.map((r) => ({
+      ...r,
+      consumptionDelta: r.consumption,
+      recordedBy: r.recordedByUser || { name: r.recordedByName || '---' },
+    }));
+
     return {
-      items,
+      items: mappedItems,
       total,
       page,
       totalPages: Math.ceil(total / limit),
@@ -362,13 +371,21 @@ export class UtilitiesService {
         orderBy: { recordedAt: 'desc' },
         include: {
           point: true,
+          recordedByUser: {
+            select: { id: true, name: true, email: true },
+          },
         },
       }),
       this.prisma.utilitySystemStatusLog.count({ where }),
     ]);
 
+    const mappedItems = items.map((log) => ({
+      ...log,
+      recordedBy: log.recordedByUser || { name: log.recordedByName || '---' },
+    }));
+
     return {
-      items,
+      items: mappedItems,
       total,
       page,
       totalPages: Math.ceil(total / limit),

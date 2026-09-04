@@ -55,9 +55,13 @@ export const UtilitiesPage: React.FC = () => {
         api.getUtilityAnalytics({ days: 7 }),
       ]);
 
-      setPoints(Array.isArray(pointsRes) ? pointsRes : []);
-      setReadings(Array.isArray(readingsRes) ? readingsRes : []);
-      setStatusLogs(Array.isArray(logsRes) ? logsRes : []);
+      const pointsList = Array.isArray(pointsRes) ? pointsRes : (pointsRes?.items || []);
+      const readingsList = Array.isArray(readingsRes) ? readingsRes : (readingsRes?.items || []);
+      const logsList = Array.isArray(logsRes) ? logsRes : (logsRes?.items || []);
+
+      setPoints(pointsList);
+      setReadings(readingsList);
+      setStatusLogs(logsList);
       setAnalytics(analyticsRes || null);
     } catch (err: any) {
       console.error('Lỗi khi tải dữ liệu tiện ích:', err);
@@ -183,9 +187,9 @@ export const UtilitiesPage: React.FC = () => {
       r.point?.type === 'ELECTRICITY' ? 'Điện' : 'Nước',
       r.previousValue,
       r.readingValue,
-      r.consumptionDelta,
+      r.consumption ?? r.consumptionDelta ?? ((r.readingValue || 0) - (r.previousValue || 0)),
       r.point?.unit || '',
-      `"${r.recordedBy?.name || ''}"`,
+      `"${r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name || ''}"`,
       `"${(r.notes || '').replace(/"/g, '""')}"`,
     ]);
 
@@ -631,10 +635,10 @@ export const UtilitiesPage: React.FC = () => {
                         </td>
                         <td>
                           <span className="delta-badge-table">
-                            +{r.consumptionDelta?.toLocaleString()} {r.point?.unit}
+                            +{(r.consumption ?? r.consumptionDelta ?? ((r.readingValue || 0) - (r.previousValue || 0)))?.toLocaleString()} {r.point?.unit}
                           </span>
                         </td>
-                        <td style={{ fontSize: '12.5px' }}>{r.recordedBy?.name || '---'}</td>
+                        <td style={{ fontSize: '12.5px' }}>{r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name || '---'}</td>
                         <td style={{ fontSize: '12px', color: '#64748b', maxWidth: '180px' }}>
                           {r.notes || '---'}
                         </td>
@@ -681,13 +685,15 @@ export const UtilitiesPage: React.FC = () => {
                     </div>
                     <div className="mobile-val-delta">
                       <span className="val-lbl">Tiêu thụ</span>
-                      <span className="val-txt-delta">+{r.consumptionDelta?.toLocaleString()} {r.point?.unit}</span>
+                      <span className="val-txt-delta">+{(r.consumption ?? r.consumptionDelta ?? ((r.readingValue || 0) - (r.previousValue || 0)))?.toLocaleString()} {r.point?.unit}</span>
                     </div>
                   </div>
 
-                  {(r.notes || r.recordedBy?.name) && (
+                  {(r.notes || r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name) && (
                     <div className="mobile-log-footer">
-                      {r.recordedBy?.name && <span>KTV: <strong>{r.recordedBy.name}</strong></span>}
+                      {(r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name) && (
+                        <span>KTV: <strong>{r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name}</strong></span>
+                      )}
                       {r.notes && <span style={{ color: '#64748b' }}>• {r.notes}</span>}
                     </div>
                   )}
@@ -774,7 +780,7 @@ export const UtilitiesPage: React.FC = () => {
                           <td style={{ fontSize: '12.5px', color: '#475569', maxWidth: '240px' }}>
                             {log.reason || '---'}
                           </td>
-                          <td style={{ fontSize: '12.5px' }}>{log.recordedBy?.name || '---'}</td>
+                          <td style={{ fontSize: '12.5px' }}>{log.recordedByName || log.recordedByUser?.name || log.recordedBy?.name || '---'}</td>
                         </tr>
                       );
                     })
@@ -837,7 +843,7 @@ export const UtilitiesPage: React.FC = () => {
                     )}
 
                     <div className="mobile-log-footer" style={{ marginTop: '8px' }}>
-                      <span>KTV: <strong>{log.recordedBy?.name || '---'}</strong></span>
+                      <span>KTV: <strong>{log.recordedByName || log.recordedByUser?.name || log.recordedBy?.name || '---'}</strong></span>
                     </div>
                   </div>
                 );
