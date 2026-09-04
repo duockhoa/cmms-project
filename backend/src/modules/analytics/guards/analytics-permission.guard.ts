@@ -14,12 +14,8 @@ export class AnalyticsPermissionGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     
-    // Extract actor ID from request.user (already authenticated by JwtAuthGuard), or header, or query
-    const userId =
-      request.user?.id ||
-      request.headers['x-user-id'] ||
-      request.query?.actedById ||
-      request.body?.actedById;
+    // Extract actor ID directly from authenticated request.user (set by JwtAuthGuard)
+    const userId = request.user?.id;
 
     if (!userId || typeof userId !== 'string' || !userId.trim()) {
       throw new ForbiddenException('Không xác định được danh tính người dùng để truy cập Báo cáo & Phân tích');
