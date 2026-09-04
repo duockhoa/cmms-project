@@ -18,7 +18,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    const userId = request.headers['x-user-id'];
+    const userId = request.user?.id || request.headers['x-user-id'];
 
     if (!userId) {
       throw new ForbiddenException('Không xác định được danh tính người dùng');

@@ -206,6 +206,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       id: dbUser.id,
       email: dbUser.email,
       name: dbUser.name,
+      role: dbUser.role,
       roles: roles,
       scope: payload.scope || '',
       department: dbUser.department,

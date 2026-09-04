@@ -14,18 +14,37 @@ export class AnalyticsPermissionGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     
-    // Extract actor ID from header or query (convention used in CMMS API: x-user-id or actedById)
-    const userId = request.headers['x-user-id'] || request.query?.actedById || request.body?.actedById;
+    // Extract actor ID from request.user (already authenticated by JwtAuthGuard), or header, or query
+    const userId =
+      request.user?.id ||
+      request.headers['x-user-id'] ||
+      request.query?.actedById ||
+      request.body?.actedById;
 
     if (!userId || typeof userId !== 'string' || !userId.trim()) {
-      throw new UnauthorizedException('Yêu cầu truyền x-user-id hoặc actedById hợp lệ để xác thực');
+      throw new ForbiddenException('Không xác định được danh tính người dùng để truy cập Báo cáo & Phân tích');
     }
 
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { id: userId.trim() },
     });
 
+    if (!user && request.user?.email) {
+      user = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: request.user.email },
+            { name: request.user.name },
+          ],
+        },
+      });
+    }
+
     if (!user || !user.isActive) {
+      // If user is validated by JWT as ADMIN, allow fallback
+      if (request.user?.role === 'ADMIN' || request.user?.roles?.includes('ADMIN')) {
+        return true;
+      }
       throw new ForbiddenException('Tài khoản người dùng không tồn tại hoặc đã bị vô hiệu hóa');
     }
 
@@ -34,6 +53,7 @@ export class AnalyticsPermissionGuard implements CanActivate {
       id: user.id,
       name: user.name,
       role: user.role,
+      roles: request.user?.roles || [user.role],
       department: user.department,
       isActive: user.isActive,
     };
