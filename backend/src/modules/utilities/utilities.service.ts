@@ -561,6 +561,7 @@ export class UtilitiesService {
       },
       include: {
         readings: {
+          where: { isVoided: false },
           take: 1,
           orderBy: { recordedAt: 'desc' },
         },
@@ -651,6 +652,78 @@ export class UtilitiesService {
     return reading;
   }
 
+  // ==========================================
+  // ĐÁNH DẤU HỦY KẾT QUẢ SAI (AUDIT TRAIL)
+  // ==========================================
+  async voidReading(
+    id: string,
+    data: { reason: string },
+    actor: any,
+  ) {
+    const reading = await this.prisma.utilityReading.findUnique({
+      where: { id },
+      include: { point: true },
+    });
+
+    if (!reading) {
+      throw new NotFoundException('Không tìm thấy bản ghi số điện/nước.');
+    }
+
+    if (reading.isVoided) {
+      throw new BadRequestException('Bản ghi này đã được đánh dấu hủy trước đó.');
+    }
+
+    const voidReason = data.reason?.trim();
+    if (!voidReason) {
+      throw new BadRequestException('Vui lòng cung cấp lý do hủy kết quả ghi sai.');
+    }
+
+    // Đánh dấu hủy bản ghi (Audit trail: giữ nguyên bản ghi không xóa)
+    const updated = await this.prisma.utilityReading.update({
+      where: { id },
+      data: {
+        isVoided: true,
+        voidReason,
+        voidedAt: new Date(),
+        voidedById: actor?.id || 'system',
+        voidedByName: actor?.name || actor?.email || 'Người vận hành',
+      },
+    });
+
+    // Tự động rollback lastReadingValue của điểm đo về bản ghi hợp lệ gần nhất (nếu bản ghi bị hủy là bản ghi mới nhất)
+    const latestValid = await this.prisma.utilityReading.findFirst({
+      where: {
+        pointId: reading.pointId,
+        isVoided: false,
+      },
+      orderBy: { recordedAt: 'desc' },
+    });
+
+    if (latestValid) {
+      await this.prisma.utilityPoint.update({
+        where: { id: reading.pointId },
+        data: {
+          lastReadingValue: latestValid.readingValue,
+          lastReadingAt: latestValid.recordedAt,
+        },
+      });
+    } else {
+      await this.prisma.utilityPoint.update({
+        where: { id: reading.pointId },
+        data: {
+          lastReadingValue: reading.previousValue,
+          lastReadingAt: null,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: `Đã đánh dấu hủy bản ghi sai của ${reading.point.name}. Dữ liệu được bảo toàn trong nhật ký kiểm toán.`,
+      reading: updated,
+    };
+  }
+
   async getReadings(query: {
     pointId?: string;
     type?: string;
@@ -669,6 +742,11 @@ export class UtilitiesService {
     }
     if (query.shift) {
       where.shift = query.shift;
+    }
+    if ((query as any).status === 'ACTIVE') {
+      where.isVoided = false;
+    } else if ((query as any).status === 'VOIDED') {
+      where.isVoided = true;
     }
     if (query.startDate || query.endDate) {
       where.recordedAt = {};
@@ -995,6 +1073,7 @@ export class UtilitiesService {
       include: {
         readings: {
           where: {
+            isVoided: false,
             recordedAt: {
               gte: startDate,
               lte: endDate,

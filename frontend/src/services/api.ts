@@ -509,6 +509,7 @@ export const api = {
     pointId?: string;
     type?: string;
     shift?: string;
+    status?: string;
     startDate?: string;
     endDate?: string;
     page?: number;
@@ -516,6 +517,8 @@ export const api = {
   }) => {
     return request(`/utilities/readings${toQueryString(params)}`);
   },
+  voidUtilityReading: (id: string, reason: string) =>
+    request(`/utilities/readings/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
 
   recordUtilitySystemStatus: (data: {
     pointId?: string;

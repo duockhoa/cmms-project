@@ -109,6 +109,7 @@ export class UtilitiesController {
     @Query('pointId') pointId?: string,
     @Query('type') type?: string,
     @Query('shift') shift?: string,
+    @Query('status') status?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('page') page?: string,
@@ -118,11 +119,21 @@ export class UtilitiesController {
       pointId,
       type,
       shift,
+      status,
       startDate,
       endDate,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 50,
-    });
+    } as any);
+  }
+
+  @Post('readings/:id/void')
+  async voidReading(
+    @Param('id') id: string,
+    @Body() body: { reason: string },
+    @Req() req: any,
+  ) {
+    return this.utilitiesService.voidReading(id, body, req.user);
   }
 
   // ==========================================

@@ -692,6 +692,13 @@ model UtilityReading {
   recordedById      String
   recordedByName    String?
   recordedByUser    User?         @relation("UserUtilityReadings", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  // Cơ chế đánh dấu hủy kết quả sai (Audit Trail - Không xóa)
+  isVoided          Boolean       @default(false)
+  voidReason        String?       @db.Text
+  voidedAt          DateTime?
+  voidedById        String?
+  voidedByName      String?
 }
 
 // 3. Nhật ký Theo dõi Bật / Tắt & Giờ chạy Hệ thống

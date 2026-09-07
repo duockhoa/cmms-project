@@ -7,7 +7,8 @@ import {
   RefreshCw, Plus, Edit2, Trash2, 
   Printer, Download, Search, CheckCircle2, 
   Clock, Settings, FileText, ArrowRight,
-  Calendar, PieChart, AlertTriangle, Layers
+  Calendar, PieChart, AlertTriangle, Layers,
+  Ban, XCircle, ShieldAlert
 } from 'lucide-react';
 
 export const UtilitiesPage: React.FC = () => {
@@ -35,6 +36,12 @@ export const UtilitiesPage: React.FC = () => {
   // Bộ lọc
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterSearch, setFilterSearch] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'VOIDED'>('ACTIVE');
+
+  // Modal Đánh dấu Hủy kết quả sai
+  const [voidModalReading, setVoidModalReading] = useState<any | null>(null);
+  const [voidReason, setVoidReason] = useState<string>('');
+  const [voiding, setVoiding] = useState<boolean>(false);
 
   // Modal State cho Thêm/Sửa Điểm đo
   const [showPointModal, setShowPointModal] = useState(false);
@@ -332,16 +339,46 @@ export const UtilitiesPage: React.FC = () => {
   const filteredReadings = useMemo(() => {
     return readings.filter((r) => {
       if (filterType !== 'ALL' && r.point?.type !== filterType) return false;
+      if (filterStatus === 'ACTIVE' && r.isVoided) return false;
+      if (filterStatus === 'VOIDED' && !r.isVoided) return false;
       if (filterSearch.trim()) {
         const q = filterSearch.toLowerCase();
         const matchCode = r.point?.code?.toLowerCase().includes(q);
         const matchName = r.point?.name?.toLowerCase().includes(q);
         const matchLoc = r.point?.location?.toLowerCase().includes(q);
-        if (!matchCode && !matchName && !matchLoc) return false;
+        const matchNotes = r.notes?.toLowerCase().includes(q);
+        const matchVoidReason = r.voidReason?.toLowerCase().includes(q);
+        if (!matchCode && !matchName && !matchLoc && !matchNotes && !matchVoidReason) return false;
       }
       return true;
     });
-  }, [readings, filterType, filterSearch]);
+  }, [readings, filterType, filterStatus, filterSearch]);
+
+  // Xử lý xác nhận hủy kết quả sai
+  const handleConfirmVoidReading = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voidModalReading) return;
+    if (!voidReason.trim()) {
+      toast.error('Thiếu thông tin', 'Vui lòng nhập lý do hủy kết quả ghi sai!');
+      return;
+    }
+
+    try {
+      setVoiding(true);
+      await api.voidUtilityReading(voidModalReading.id, voidReason.trim());
+      toast.success(
+        'Đã đánh dấu hủy',
+        `Bản ghi số của [${voidModalReading.point?.name}] đã được đánh dấu hủy và bảo toàn trong nhật ký kiểm toán.`
+      );
+      setVoidModalReading(null);
+      setVoidReason('');
+      await loadData();
+    } catch (err: any) {
+      toast.error('Lỗi hủy bản ghi', err?.message || 'Không thể hủy bản ghi.');
+    } finally {
+      setVoiding(false);
+    }
+  };
 
   return (
     <div className="util-page-root">
@@ -710,6 +747,17 @@ export const UtilitiesPage: React.FC = () => {
               <option value="WATER">Nước (m³)</option>
             </select>
 
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+              className="filter-select"
+              style={{ fontWeight: 600, color: filterStatus === 'VOIDED' ? '#dc2626' : filterStatus === 'ACTIVE' ? '#16a34a' : '#0f172a' }}
+            >
+              <option value="ACTIVE">Chỉ bản ghi hợp lệ</option>
+              <option value="ALL">Tất cả (gồm đã hủy)</option>
+              <option value="VOIDED">Chỉ bản ghi đã hủy</option>
+            </select>
+
             <button
               onClick={handleExportReadingsCSV}
               className="btn-export-csv"
@@ -732,50 +780,116 @@ export const UtilitiesPage: React.FC = () => {
                     <th>Chỉ số mới</th>
                     <th>Tiêu thụ (Δ)</th>
                     <th>Người ghi</th>
-                    <th>Ghi chú</th>
+                    <th>Trạng thái & Ghi chú</th>
+                    <th style={{ textAlign: 'center', width: '100px' }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredReadings.length === 0 ? (
                     <tr>
-                      <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                      <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
                         Chưa có bản ghi số điện/nước nào phù hợp.
                       </td>
                     </tr>
                   ) : (
-                    filteredReadings.map((r) => (
-                      <tr key={r.id}>
-                        <td style={{ fontSize: '12.5px', whiteSpace: 'nowrap' }}>
-                          {new Date(r.recordedAt).toLocaleString('vi-VN', {
-                            hour: '2-digit', minute: '2-digit',
-                            day: '2-digit', month: '2-digit', year: 'numeric',
-                          })}
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            {r.point?.type === 'ELECTRICITY' ? <Zap size={14} color="#eab308" /> : <Droplets size={14} color="#0ea5e9" />}
-                            <span>{r.point?.name}</span>
-                          </div>
-                          <span style={{ fontSize: '11px', color: '#64748b' }}>{r.point?.code}</span>
-                        </td>
-                        <td style={{ fontSize: '12px', color: '#475569' }}>{r.point?.location}</td>
-                        <td style={{ fontSize: '12.5px', color: '#64748b' }}>
-                          {r.previousValue?.toLocaleString()} {r.point?.unit}
-                        </td>
-                        <td style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                          {r.readingValue?.toLocaleString()} {r.point?.unit}
-                        </td>
-                        <td>
-                          <span className="delta-badge-table">
-                            +{(r.consumption ?? r.consumptionDelta ?? ((r.readingValue || 0) - (r.previousValue || 0)))?.toLocaleString()} {r.point?.unit}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: '12.5px' }}>{r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name || '---'}</td>
-                        <td style={{ fontSize: '12px', color: '#64748b', maxWidth: '180px' }}>
-                          {r.notes || '---'}
-                        </td>
-                      </tr>
-                    ))
+                    filteredReadings.map((r) => {
+                      const isVoided = Boolean(r.isVoided);
+                      return (
+                        <tr
+                          key={r.id}
+                          style={{
+                            backgroundColor: isVoided ? '#fef2f2' : undefined,
+                            opacity: isVoided ? 0.78 : 1,
+                          }}
+                        >
+                          <td style={{ fontSize: '12.5px', whiteSpace: 'nowrap', textDecoration: isVoided ? 'line-through' : undefined }}>
+                            {new Date(r.recordedAt).toLocaleString('vi-VN', {
+                              hour: '2-digit', minute: '2-digit',
+                              day: '2-digit', month: '2-digit', year: 'numeric',
+                            })}
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {r.point?.type === 'ELECTRICITY' ? <Zap size={14} color="#eab308" /> : <Droplets size={14} color="#0ea5e9" />}
+                              <span style={{ textDecoration: isVoided ? 'line-through' : undefined }}>{r.point?.name}</span>
+                            </div>
+                            <span style={{ fontSize: '11px', color: '#64748b' }}>{r.point?.code}</span>
+                          </td>
+                          <td style={{ fontSize: '12px', color: '#475569' }}>{r.point?.location}</td>
+                          <td style={{ fontSize: '12.5px', color: '#64748b', textDecoration: isVoided ? 'line-through' : undefined }}>
+                            {r.previousValue?.toLocaleString()} {r.point?.unit}
+                          </td>
+                          <td style={{ fontSize: '13px', fontWeight: 700, color: isVoided ? '#dc2626' : '#0f172a', textDecoration: isVoided ? 'line-through' : undefined }}>
+                            {r.readingValue?.toLocaleString()} {r.point?.unit}
+                          </td>
+                          <td>
+                            {isVoided ? (
+                              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#fee2e2', color: '#dc2626', fontWeight: 700 }}>
+                                ĐÃ HỦY (KHÔNG TÍNH)
+                              </span>
+                            ) : (
+                              <span className="delta-badge-table">
+                                +{(r.consumption ?? r.consumptionDelta ?? ((r.readingValue || 0) - (r.previousValue || 0)))?.toLocaleString()} {r.point?.unit}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ fontSize: '12.5px' }}>{r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name || '---'}</td>
+                          <td style={{ fontSize: '12px', color: '#64748b', maxWidth: '220px' }}>
+                            {isVoided ? (
+                              <div>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 700, fontSize: '11.5px' }}>
+                                  <Ban size={12} /> Đã hủy kết quả
+                                </span>
+                                {r.voidReason && (
+                                  <div style={{ color: '#991b1b', fontSize: '11px', marginTop: '2px' }}>
+                                    Lý do: <em>{r.voidReason}</em>
+                                  </div>
+                                )}
+                                {r.voidedByName && (
+                                  <div style={{ color: '#6b7280', fontSize: '10.5px' }}>
+                                    Bởi: {r.voidedByName}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              r.notes || '---'
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {!isVoided ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVoidModalReading(r);
+                                  setVoidReason('');
+                                }}
+                                className="btn btn-sm"
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: '#dc2626',
+                                  backgroundColor: '#fef2f2',
+                                  border: '1px solid #fecaca',
+                                  borderRadius: '4px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  cursor: 'pointer',
+                                }}
+                                title="Đánh dấu hủy kết quả ghi sai này (giữ nguyên nhật ký kiểm toán)"
+                              >
+                                <Ban size={12} /> Hủy số sai
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic' }}>
+                                Đã lưu vết
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -789,48 +903,97 @@ export const UtilitiesPage: React.FC = () => {
                 Chưa có bản ghi số điện/nước nào.
               </div>
             ) : (
-              filteredReadings.map((r) => (
-                <div key={r.id} className="card mobile-log-card">
-                  <div className="mobile-log-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
-                      {r.point?.type === 'ELECTRICITY' ? <Zap size={16} color="#eab308" /> : <Droplets size={16} color="#0ea5e9" />}
-                      <span className="mobile-log-point-name">{r.point?.name}</span>
+              filteredReadings.map((r) => {
+                const isVoided = Boolean(r.isVoided);
+                return (
+                  <div
+                    key={r.id}
+                    className="card mobile-log-card"
+                    style={{
+                      backgroundColor: isVoided ? '#fef2f2' : undefined,
+                      borderColor: isVoided ? '#fca5a5' : undefined,
+                      opacity: isVoided ? 0.82 : 1,
+                    }}
+                  >
+                    <div className="mobile-log-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                        {r.point?.type === 'ELECTRICITY' ? <Zap size={16} color="#eab308" /> : <Droplets size={16} color="#0ea5e9" />}
+                        <span className="mobile-log-point-name" style={{ textDecoration: isVoided ? 'line-through' : undefined }}>{r.point?.name}</span>
+                      </div>
+                      <span className="log-time-badge">
+                        {new Date(r.recordedAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                      </span>
                     </div>
-                    <span className="log-time-badge">
-                      {new Date(r.recordedAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                    </span>
-                  </div>
 
-                  <div className="mobile-log-meta">
-                    <span>{r.point?.code} • {r.point?.location}</span>
-                  </div>
-
-                  <div className="mobile-log-values-row">
-                    <div className="mobile-val-box">
-                      <span className="val-lbl">Số cũ</span>
-                      <span className="val-txt">{r.previousValue?.toLocaleString()}</span>
-                    </div>
-                    <ArrowRight size={14} color="#94a3b8" />
-                    <div className="mobile-val-box">
-                      <span className="val-lbl">Số mới</span>
-                      <span className="val-txt new">{r.readingValue?.toLocaleString()}</span>
-                    </div>
-                    <div className="mobile-val-delta">
-                      <span className="val-lbl">Tiêu thụ</span>
-                      <span className="val-txt-delta">+{(r.consumption ?? r.consumptionDelta ?? ((r.readingValue || 0) - (r.previousValue || 0)))?.toLocaleString()} {r.point?.unit}</span>
-                    </div>
-                  </div>
-
-                  {(r.notes || r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name) && (
-                    <div className="mobile-log-footer">
-                      {(r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name) && (
-                        <span>KTV: <strong>{r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name}</strong></span>
+                    <div className="mobile-log-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{r.point?.code} • {r.point?.location}</span>
+                      {isVoided && (
+                        <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#dc2626', backgroundColor: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>
+                          ĐÃ HỦY
+                        </span>
                       )}
-                      {r.notes && <span style={{ color: '#64748b' }}>• {r.notes}</span>}
                     </div>
-                  )}
-                </div>
-              ))
+
+                    <div className="mobile-log-values-row">
+                      <div className="mobile-val-box">
+                        <span className="val-lbl">Số cũ</span>
+                        <span className="val-txt" style={{ textDecoration: isVoided ? 'line-through' : undefined }}>{r.previousValue?.toLocaleString()}</span>
+                      </div>
+                      <ArrowRight size={14} color="#94a3b8" />
+                      <div className="mobile-val-box">
+                        <span className="val-lbl">Số mới</span>
+                        <span className="val-txt new" style={{ color: isVoided ? '#dc2626' : undefined, textDecoration: isVoided ? 'line-through' : undefined }}>{r.readingValue?.toLocaleString()}</span>
+                      </div>
+                      <div className="mobile-val-delta">
+                        <span className="val-lbl">Tiêu thụ</span>
+                        <span className="val-txt-delta" style={{ textDecoration: isVoided ? 'line-through' : undefined }}>
+                          +{(r.consumption ?? r.consumptionDelta ?? ((r.readingValue || 0) - (r.previousValue || 0)))?.toLocaleString()} {r.point?.unit}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isVoided && r.voidReason && (
+                      <div style={{ padding: '6px 8px', borderRadius: '4px', backgroundColor: '#fee2e2', color: '#991b1b', fontSize: '11.5px', marginBottom: '8px' }}>
+                        <strong>Lý do hủy:</strong> {r.voidReason} (bởi: {r.voidedByName || 'KTV'})
+                      </div>
+                    )}
+
+                    <div className="mobile-log-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        {(r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name) && (
+                          <span>KTV: <strong>{r.recordedByName || r.recordedByUser?.name || r.recordedBy?.name}</strong></span>
+                        )}
+                        {r.notes && !isVoided && <span style={{ color: '#64748b' }}>• {r.notes}</span>}
+                      </div>
+
+                      {!isVoided && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVoidModalReading(r);
+                            setVoidReason('');
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#dc2626',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #fecaca',
+                            borderRadius: '4px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Ban size={12} /> Hủy sai
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -1865,6 +2028,98 @@ export const UtilitiesPage: React.FC = () => {
                 <span>In Tem Ngay</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ĐÁNH DẤU HỦY KẾT QUẢ GHI SAI (AUDIT TRAIL) */}
+      {voidModalReading && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-container" style={{ maxWidth: '480px', padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', borderBottom: '1px solid #fee2e2', paddingBottom: '12px' }}>
+              <div style={{ padding: '8px', borderRadius: '50%', backgroundColor: '#fee2e2', color: '#dc2626' }}>
+                <ShieldAlert size={22} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#991b1b' }}>
+                  Xác nhận Hủy Kết Quả Ghi Sai
+                </h3>
+                <span style={{ fontSize: '11.5px', color: '#6b7280' }}>
+                  Cơ chế Audit Trail: Dữ liệu được bảo toàn lưu vết, không bị xóa khỏi CSDL.
+                </span>
+              </div>
+            </div>
+
+            <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px', marginBottom: '14px', fontSize: '12.5px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#64748b' }}>Điểm đo / Đồng hồ:</span>
+                <strong>{voidModalReading.point?.name} ({voidModalReading.point?.code})</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#64748b' }}>Thời gian ghi:</span>
+                <span>{new Date(voidModalReading.recordedAt).toLocaleString('vi-VN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#64748b' }}>Chỉ số ghi nhận:</span>
+                <strong style={{ color: '#dc2626', fontSize: '14px' }}>
+                  {voidModalReading.readingValue?.toLocaleString()} {voidModalReading.point?.unit}
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Sản lượng tính sai:</span>
+                <span style={{ color: '#b45309', fontWeight: 700 }}>
+                  +{voidModalReading.consumption?.toLocaleString()} {voidModalReading.point?.unit}
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmVoidReading}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Lý do đánh dấu hủy <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  className="modal-textarea"
+                  rows={3}
+                  required
+                  placeholder="Ví dụ: Nhân viên nhìn nhầm số hàng chục, nhập thừa số 0, hoặc ghi nhầm đồng hồ..."
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                  style={{ width: '100%', borderColor: '#cbd5e1', fontSize: '13px' }}
+                />
+                <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                  * Sau khi hủy, chỉ số đồng hồ sẽ tự động được hoàn nguyên về số hợp lệ gần nhất để NV tiếp tục ghi số đúng.
+                </small>
+              </div>
+
+              <div className="modal-actions-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVoidModalReading(null);
+                    setVoidReason('');
+                  }}
+                  className="btn-modal-cancel"
+                  disabled={voiding}
+                >
+                  Đóng / Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-submit"
+                  disabled={voiding || !voidReason.trim()}
+                  style={{
+                    backgroundColor: '#dc2626',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  {voiding ? <RefreshCw size={14} className="animate-spin" /> : <Ban size={14} />}
+                  <span>Xác nhận Hủy Kết Quả</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
