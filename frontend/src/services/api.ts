@@ -1,4 +1,5 @@
 import { getAccessToken, getRefreshToken, saveAuthTokens, clearAuthTokens } from '../utils/authStorage';
+import { catalogCache } from './catalogCache';
 
 export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_BASE = API_HOST + '/api/v1';
@@ -151,12 +152,29 @@ export const api = {
     request(`/analytics/kpis${toQueryString(params)}`),
 
   // Equipment
-  getEquipment: (params?: { search?: string; category?: string; status?: string; location?: string }) =>
-    request(`/equipment${toQueryString(params)}`),
+  getEquipment: (params?: { search?: string; category?: string; status?: string; location?: string }) => {
+    const isUnfiltered = !params || (!params.search && !params.category && !params.status && !params.location);
+    if (isUnfiltered) {
+      return catalogCache.fetchWithCache('equipment_all', () => request('/equipment'));
+    }
+    return request(`/equipment${toQueryString(params)}`);
+  },
   getEquipmentById: (id: string) => request(`/equipment/${id}`),
-  createEquipment: (data: any) => request('/equipment', { method: 'POST', body: JSON.stringify(data) }),
-  updateEquipment: (id: string, data: any) => request(`/equipment/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteEquipment: (id: string) => request(`/equipment/${id}`, { method: 'DELETE' }),
+  createEquipment: async (data: any) => {
+    const res = await request('/equipment', { method: 'POST', body: JSON.stringify(data) });
+    catalogCache.invalidate('equipment');
+    return res;
+  },
+  updateEquipment: async (id: string, data: any) => {
+    const res = await request(`/equipment/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+    catalogCache.invalidate('equipment');
+    return res;
+  },
+  deleteEquipment: async (id: string) => {
+    const res = await request(`/equipment/${id}`, { method: 'DELETE' });
+    catalogCache.invalidate('equipment');
+    return res;
+  },
 
   // Maintenance Requests
   getRequests: (params?: { status?: string; priority?: string; search?: string }) =>
@@ -221,22 +239,47 @@ export const api = {
 
   // Inventory
   getInventory: (params?: { category?: string; search?: string }) => {
+    const isUnfiltered = !params || (!params.search && !params.category);
+    if (isUnfiltered) {
+      return catalogCache.fetchWithCache('inventory_all', () => request('/inventory'));
+    }
     const query = new URLSearchParams(params as any).toString();
     return request(`/inventory${query ? `?${query}` : ''}`);
   },
-  createInventory: (data: any) => request('/inventory', { method: 'POST', body: JSON.stringify(data) }),
-  updateInventory: (id: string, data: any) => request(`/inventory/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  adjustInventoryStock: (id: string, changeQuantity: number) =>
-    request(`/inventory/${id}/adjust`, { method: 'POST', body: JSON.stringify({ changeQuantity }) }),
-  adjustIn: (itemId: string, body: any) =>
-    request(`/inventory/${itemId}/adjust-in`, { method: 'POST', body: JSON.stringify(body) }),
-  adjustOut: (itemId: string, body: any) =>
-    request(`/inventory/${itemId}/adjust-out`, { method: 'POST', body: JSON.stringify(body) }),
+  createInventory: async (data: any) => {
+    const res = await request('/inventory', { method: 'POST', body: JSON.stringify(data) });
+    catalogCache.invalidate('inventory');
+    return res;
+  },
+  updateInventory: async (id: string, data: any) => {
+    const res = await request(`/inventory/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+    catalogCache.invalidate('inventory');
+    return res;
+  },
+  adjustInventoryStock: async (id: string, changeQuantity: number) => {
+    const res = await request(`/inventory/${id}/adjust`, { method: 'POST', body: JSON.stringify({ changeQuantity }) });
+    catalogCache.invalidate('inventory');
+    return res;
+  },
+  adjustIn: async (itemId: string, body: any) => {
+    const res = await request(`/inventory/${itemId}/adjust-in`, { method: 'POST', body: JSON.stringify(body) });
+    catalogCache.invalidate('inventory');
+    return res;
+  },
+  adjustOut: async (itemId: string, body: any) => {
+    const res = await request(`/inventory/${itemId}/adjust-out`, { method: 'POST', body: JSON.stringify(body) });
+    catalogCache.invalidate('inventory');
+    return res;
+  },
   getInventoryTransactions: (itemId: string, query?: any) => {
     const q = new URLSearchParams(query as any).toString();
     return request(`/inventory/${itemId}/transactions${q ? `?${q}` : ''}`);
   },
-  deleteInventory: (id: string) => request(`/inventory/${id}`, { method: 'DELETE' }),
+  deleteInventory: async (id: string) => {
+    const res = await request(`/inventory/${id}`, { method: 'DELETE' });
+    catalogCache.invalidate('inventory');
+    return res;
+  },
 
   returnWorkOrderMaterial: (workOrderId: string, body: any) =>
     request(`/work-orders/${workOrderId}/material-returns`, { method: 'POST', body: JSON.stringify(body) }),
@@ -245,11 +288,15 @@ export const api = {
 
   // Users & Technicians
   getUsers: (params?: { role?: string; includeInactive?: boolean }) => {
+    const isUnfiltered = !params || (!params.role && !params.includeInactive);
+    if (isUnfiltered) {
+      return catalogCache.fetchWithCache('users_all', () => request('/users'));
+    }
     const query = new URLSearchParams(params as any).toString();
     return request(`/users${query ? `?${query}` : ''}`);
   },
   getUserById: (id: string) => request(`/users/${id}`),
-  getDepartments: () => request('/users/departments'),
+  getDepartments: () => catalogCache.fetchWithCache('departments_all', () => request('/users/departments')),
   updateUserTechnicalProfile: (id: string, body: { specialty?: string; isActive?: boolean; expectedVersion: number }) =>
     request(`/users/${id}/technical-profile`, { method: 'PATCH', body: JSON.stringify(body) }),
   updateUserAvailability: (id: string, body: { status: string; expectedVersion: number }) =>
@@ -486,5 +533,14 @@ export const api = {
     year?: number;
   }) => {
     return request(`/utilities/reports/cumulative${toQueryString(params)}`);
+  },
+
+  // Master Catalog Cache Interface
+  catalog: {
+    getEquipment: () => catalogCache.fetchWithCache('equipment_all', () => request('/equipment')),
+    getInventory: () => catalogCache.fetchWithCache('inventory_all', () => request('/inventory')),
+    getUsers: () => catalogCache.fetchWithCache('users_all', () => request('/users')),
+    getDepartments: () => catalogCache.fetchWithCache('departments_all', () => request('/users/departments')),
+    invalidate: (key: string) => catalogCache.invalidate(key),
   },
 };
