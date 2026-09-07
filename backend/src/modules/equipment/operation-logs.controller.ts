@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { OperationLogsService } from './operation-logs.service';
 import { SubmitOperationLogsDto } from './dto/operation-log.dto';
+import { VoidOperationLogSessionDto } from './dto/void-operation-log.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('equipment/:equipmentId/operation-logs')
@@ -21,6 +22,16 @@ export class OperationLogsController {
   ) {
     const userId = req.user.id;
     return this.service.submitLogs(equipmentId, userId, dto);
+  }
+
+  @Post('void-session')
+  async voidSession(
+    @Param('equipmentId') equipmentId: string,
+    @Body() dto: VoidOperationLogSessionDto,
+    @Req() req: any,
+  ) {
+    const userId = req.user.id;
+    return this.service.voidSessionLogs(equipmentId, userId, dto);
   }
 }
 

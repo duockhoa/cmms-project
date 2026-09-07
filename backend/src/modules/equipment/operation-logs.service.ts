@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SubmitOperationLogsDto } from './dto/operation-log.dto';
+import { VoidOperationLogSessionDto } from './dto/void-operation-log.dto';
 
 @Injectable()
 export class OperationLogsService {
@@ -16,6 +17,9 @@ export class OperationLogsService {
         recordedBy: {
           select: { id: true, name: true, email: true },
         },
+        voidedBy: {
+          select: { id: true, name: true, email: true },
+        },
       },
     });
   }
@@ -28,6 +32,9 @@ export class OperationLogsService {
         equipment: { select: { id: true, name: true, code: true } },
         parameter: true,
         recordedBy: {
+          select: { id: true, name: true, email: true },
+        },
+        voidedBy: {
           select: { id: true, name: true, email: true },
         },
       },
@@ -74,4 +81,44 @@ export class OperationLogsService {
       createData.map(data => this.prisma.operationLog.create({ data, include: { parameter: true } }))
     );
   }
+
+  async voidSessionLogs(equipmentId: string, userId: string, dto: VoidOperationLogSessionDto) {
+    const equipment = await this.prisma.equipment.findUnique({ where: { id: equipmentId } });
+    if (!equipment) {
+      throw new NotFoundException(`Equipment with ID ${equipmentId} not found`);
+    }
+
+    const whereClause: any = { equipmentId };
+    if (dto.logIds && dto.logIds.length > 0) {
+      whereClause.id = { in: dto.logIds };
+    } else if (dto.recordedAt) {
+      const targetDate = new Date(dto.recordedAt);
+      const startWindow = new Date(targetDate.getTime() - 5000);
+      const endWindow = new Date(targetDate.getTime() + 5000);
+      whereClause.recordedAt = {
+        gte: startWindow,
+        lte: endWindow,
+      };
+    } else {
+      throw new BadRequestException('Vui lòng cung cấp logIds hoặc thời gian recordedAt của phiên ghi cần hủy');
+    }
+
+    // Mark as voided - strictly preserving original record in database (no deletion)
+    const updated = await this.prisma.operationLog.updateMany({
+      where: whereClause,
+      data: {
+        isVoided: true,
+        voidReason: dto.reason,
+        voidedAt: new Date(),
+        voidedById: userId,
+      },
+    });
+
+    return {
+      success: true,
+      count: updated.count,
+      message: `Đã đánh dấu hủy ${updated.count} bản ghi dữ liệu sai. Dữ liệu được lưu vết toàn vẹn trong nhật ký kiểm toán.`,
+    };
+  }
 }
+

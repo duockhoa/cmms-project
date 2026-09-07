@@ -84,9 +84,9 @@ export class AnalyticsService {
   }
 
   async getOperationLogsReport(limit: number = 50) {
-    // Get latest outlier logs
+    // Get latest outlier logs (excluding voided erroneous logs)
     const outliers = await this.prisma.operationLog.findMany({
-      where: { isOutlier: true },
+      where: { isOutlier: true, isVoided: false },
       orderBy: { recordedAt: 'desc' },
       take: limit,
       include: {
@@ -96,10 +96,10 @@ export class AnalyticsService {
       },
     });
 
-    // Group by equipment to find those with most issues
+    // Group by equipment to find those with most issues (excluding voided)
     const grouped = await this.prisma.operationLog.groupBy({
       by: ['equipmentId'],
-      where: { isOutlier: true },
+      where: { isOutlier: true, isVoided: false },
       _count: { isOutlier: true },
       orderBy: { _count: { isOutlier: 'desc' } },
       take: 10,

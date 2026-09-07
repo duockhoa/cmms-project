@@ -361,6 +361,8 @@ export const api = {
   },
 
   submitOperationLogs: (equipmentId: string, logs: any) => request(`/equipment/${equipmentId}/operation-logs`, { method: 'POST', body: JSON.stringify({ logs }) }),
+  voidOperationLogSession: (equipmentId: string, data: { logIds?: string[]; recordedAt?: string; reason: string }) =>
+    request(`/equipment/${equipmentId}/operation-logs/void-session`, { method: 'POST', body: JSON.stringify(data) }),
   getAllOperationLogs: () => request('/operation-logs'),
   getOperationLogsReport: () => request('/analytics/operation-logs-report'),
 
