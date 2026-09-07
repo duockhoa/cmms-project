@@ -5,7 +5,7 @@ import { useToast } from '../components/common/Toast';
 import { 
   Camera, ArrowLeft, Zap, Droplets, Cpu, 
   CheckCircle2, AlertTriangle, Clock, RefreshCw, 
-  ChevronRight
+  ChevronRight, QrCode, ShieldCheck
 } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
@@ -152,7 +152,8 @@ export const UtilityScanPage: React.FC = () => {
   const currentNum = parseFloat(readingValue);
   const diff = !isNaN(currentNum) ? currentNum - previousValue : 0;
   const calculatedConsumption = diff >= 0 ? diff * multiplier : 0;
-  const isOutlierOrReverse = !isNaN(currentNum) && (diff < 0 || (previousValue > 0 && diff > previousValue * 1.5));
+  const isSmallerThanPrevious = !isNaN(currentNum) && previousValue > 0 && currentNum < previousValue;
+  const isOutlier = !isNaN(currentNum) && previousValue > 0 && diff > previousValue * 1.5;
 
   // Gửi form ghi số Điện / Nước
   const handleSubmitReading = async (e: React.FormEvent) => {
@@ -160,6 +161,13 @@ export const UtilityScanPage: React.FC = () => {
     if (!selectedPoint) return;
     if (isNaN(parseFloat(readingValue))) {
       toast.error('Thiếu thông tin', 'Vui lòng nhập chỉ số mới hợp lệ.');
+      return;
+    }
+    if (isSmallerThanPrevious) {
+      toast.error(
+        'Chặn chỉ số không hợp lệ',
+        `Chỉ số mới (${currentNum}) không được nhỏ hơn chỉ số trước (${previousValue} ${selectedPoint.unit}). Vui lòng kiểm tra lại mặt đồng hồ!`,
+      );
       return;
     }
 
@@ -262,32 +270,18 @@ export const UtilityScanPage: React.FC = () => {
             <div id="utility-qr-reader" />
           </div>
 
-          {/* Hoặc chọn thủ công từ danh sách */}
-          <div className="scan-manual-list-wrapper">
-            <span className="scan-manual-title">
-              HOẶC CHỌN ĐIỂM ĐO TỪ DANH SÁCH:
-            </span>
-            <div className="scan-points-list">
-              {points.map((p) => (
-                <div
-                  key={p.id}
-                  onClick={() => handleSelectPoint(p)}
-                  className="scan-point-item"
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {p.type === 'ELECTRICITY' && <Zap size={18} color="#eab308" />}
-                    {p.type === 'WATER' && <Droplets size={18} color="#0ea5e9" />}
-                    {p.type === 'SYSTEM_AUX' && <Cpu size={18} color="#8b5cf6" />}
-                    <div>
-                      <div className="point-item-name">{p.name}</div>
-                      <div className="point-item-sub">
-                        {p.code} • {p.location}
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} color="#94a3b8" />
-                </div>
-              ))}
+          {/* Thông báo bắt buộc quét mã QR tại vị trí hiện trường */}
+          <div className="scan-compliance-notice">
+            <div className="scan-compliance-icon">
+              <ShieldCheck size={22} />
+            </div>
+            <div className="scan-compliance-body">
+              <div className="scan-compliance-title">
+                Yêu cầu bắt buộc quét mã QR tại vị trí đồng hồ
+              </div>
+              <div className="scan-compliance-desc">
+                Nhân viên vận hành bắt buộc phải <strong>có mặt trực tiếp tại vị trí đồng hồ đo hoặc tủ điện / máy</strong> và hướng camera vào tem mã QR để ghi số liệu. Hệ thống không cho phép chọn thủ công từ xa nhằm đảm bảo tính trung thực và trách nhiệm kiểm tra hiện trường.
+              </div>
             </div>
           </div>
         </div>
@@ -359,14 +353,45 @@ export const UtilityScanPage: React.FC = () => {
                   placeholder={`Ví dụ: ${previousValue + 10}`}
                   value={readingValue}
                   onChange={(e) => setReadingValue(e.target.value)}
-                  className={`scan-number-input ${isOutlierOrReverse ? 'error' : ''}`}
+                  className={`scan-number-input ${isSmallerThanPrevious ? 'error' : isOutlier ? 'error' : ''}`}
+                  style={isSmallerThanPrevious ? { borderColor: '#ef4444', backgroundColor: '#fef2f2', color: '#b91c1c' } : undefined}
                   autoFocus
                 />
               </div>
 
-              {/* Hộp Realtime: Tính toán sản lượng tiêu thụ */}
-              {readingValue && !isNaN(currentNum) && (
-                <div className={`consumption-box ${isOutlierOrReverse ? 'outlier' : 'normal'}`}>
+              {/* Hộp Cảnh báo CHẶN nếu số sau < số trước */}
+              {isSmallerThanPrevious && (
+                <div
+                  style={{
+                    backgroundColor: '#fef2f2',
+                    border: '1.5px solid #f87171',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    marginBottom: '14px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    color: '#991b1b',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                    boxShadow: '0 2px 6px rgba(239, 68, 68, 0.1)',
+                  }}
+                >
+                  <AlertTriangle size={22} color="#dc2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '13.5px', marginBottom: '3px', color: '#b91c1c' }}>
+                      ⛔ CẢNH BÁO CHẶN: Số sau không được nhỏ hơn số trước!
+                    </div>
+                    <div>
+                      Chỉ số vừa nhập (<strong>{currentNum}</strong>) nhỏ hơn chỉ số kỳ trước (<strong>{previousValue.toLocaleString()} {selectedPoint.unit}</strong>). Chỉ số đồng hồ không được phép giảm. Nút lưu đã bị khóa, vui lòng kiểm tra lại mặt đồng hồ thực tế!
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Hộp Realtime: Tính toán sản lượng tiêu thụ khi chỉ số hợp lệ */}
+              {readingValue && !isNaN(currentNum) && !isSmallerThanPrevious && (
+                <div className={`consumption-box ${isOutlier ? 'outlier' : 'normal'}`}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '12.5px', fontWeight: 600 }}>
                       Sản lượng tiêu thụ:
@@ -375,10 +400,10 @@ export const UtilityScanPage: React.FC = () => {
                       +{calculatedConsumption.toLocaleString()} {selectedPoint.unit}
                     </span>
                   </div>
-                  {diff < 0 && (
+                  {isOutlier && (
                     <div className="consumption-warning">
                       <AlertTriangle size={15} />
-                      <span>Cảnh báo: Chỉ số mới nhỏ hơn chỉ số cũ! Vui lòng kiểm tra lại.</span>
+                      <span>Cảnh báo: Sản lượng tăng đột biến (&gt; 150% so với kỳ trước). Vui lòng kiểm tra lại.</span>
                     </div>
                   )}
                 </div>
@@ -445,11 +470,12 @@ export const UtilityScanPage: React.FC = () => {
               {/* Nút gửi */}
               <button
                 type="submit"
-                disabled={submitting || !readingValue}
+                disabled={submitting || !readingValue || isSmallerThanPrevious}
                 className="scan-submit-btn"
+                style={isSmallerThanPrevious ? { opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#9ca3af' } : undefined}
               >
                 {submitting ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                <span>XÁC NHẬN LƯU CHỈ SỐ</span>
+                <span>{isSmallerThanPrevious ? 'ĐÃ KHÓA (SỐ SAU < SỐ TRƯỚC)' : 'XÁC NHẬN LƯU CHỈ SỐ'}</span>
               </button>
             </form>
           )}
@@ -620,55 +646,44 @@ export const UtilityScanPage: React.FC = () => {
           background-color: #f8fafc;
         }
 
-        .scan-manual-list-wrapper {
+        .scan-compliance-notice {
           margin-top: 24px;
-          border-top: 1px solid #e2e8f0;
-          padding-top: 16px;
+          padding: 14px 16px;
+          border-radius: 10px;
+          background-color: #f0fdf4;
+          border: 1px solid #bbf7d0;
           text-align: left;
-        }
-
-        .scan-manual-title {
-          font-size: 12px;
-          font-weight: 700;
-          color: #64748b;
-          display: block;
-          margin-bottom: 10px;
-          letter-spacing: 0.3px;
-        }
-
-        .scan-points-list {
           display: flex;
-          flex-direction: column;
-          gap: 8px;
-          max-height: 240px;
-          overflow-y: auto;
+          gap: 12px;
+          align-items: flex-start;
         }
 
-        .scan-point-item {
+        .scan-compliance-icon {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          padding: 10px 12px;
+          justify-content: center;
+          padding: 8px;
           border-radius: 8px;
-          border: 1px solid #e2e8f0;
-          cursor: pointer;
-          background-color: #ffffff;
-          transition: background-color 0.15s ease;
+          background-color: #dcfce7;
+          color: #15803d;
+          flex-shrink: 0;
         }
 
-        .scan-point-item:hover, .scan-point-item:active {
-          background-color: #f8fafc;
+        .scan-compliance-body {
+          flex: 1;
         }
 
-        .point-item-name {
+        .scan-compliance-title {
+          font-size: 13px;
           font-weight: 700;
-          font-size: 13.5px;
-          color: #0f172a;
+          color: #14532d;
+          margin-bottom: 4px;
         }
 
-        .point-item-sub {
-          font-size: 11.5px;
-          color: #64748b;
+        .scan-compliance-desc {
+          font-size: 12px;
+          color: #166534;
+          line-height: 1.5;
         }
 
         .scan-form-container {

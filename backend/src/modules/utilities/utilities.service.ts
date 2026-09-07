@@ -190,15 +190,52 @@ export class UtilitiesService {
       throw new NotFoundException('Không tìm thấy điểm đo cần ghi nhận chỉ số.');
     }
 
+    const previousReading = point.readings.length > 0 ? point.readings[0] : null;
     const previousValue =
-      point.readings.length > 0
-        ? point.readings[0].readingValue
-        : point.lastReadingValue || 0;
+      previousReading ? previousReading.readingValue : point.lastReadingValue || 0;
+
+    const newReading = Number(data.readingValue);
+    if (isNaN(newReading)) {
+      throw new BadRequestException('Chỉ số ghi nhận không hợp lệ.');
+    }
+
+    // Cơ chế chặn: Số sau không được nhỏ hơn số trước
+    if (previousValue > 0 && newReading < previousValue) {
+      throw new BadRequestException(
+        `Chỉ số mới (${newReading}) không được nhỏ hơn chỉ số trước (${previousValue}) của điểm đo ${point.code} - ${point.name}. Vui lòng kiểm tra lại mặt đồng hồ!`,
+      );
+    }
+
+    // Kiểm tra các chỉ số thành phần 3 biểu giá (nếu có)
+    if (data.normalValue !== undefined && data.normalValue !== null && previousReading?.normalValue) {
+      const newNormal = Number(data.normalValue);
+      if (newNormal < previousReading.normalValue) {
+        throw new BadRequestException(
+          `Chỉ số giờ bình thường T1 (${newNormal}) không được nhỏ hơn chỉ số trước (${previousReading.normalValue}). Vui lòng kiểm tra lại!`,
+        );
+      }
+    }
+    if (data.peakValue !== undefined && data.peakValue !== null && previousReading?.peakValue) {
+      const newPeak = Number(data.peakValue);
+      if (newPeak < previousReading.peakValue) {
+        throw new BadRequestException(
+          `Chỉ số giờ cao điểm T2 (${newPeak}) không được nhỏ hơn chỉ số trước (${previousReading.peakValue}). Vui lòng kiểm tra lại!`,
+        );
+      }
+    }
+    if (data.offPeakValue !== undefined && data.offPeakValue !== null && previousReading?.offPeakValue) {
+      const newOffPeak = Number(data.offPeakValue);
+      if (newOffPeak < previousReading.offPeakValue) {
+        throw new BadRequestException(
+          `Chỉ số giờ thấp điểm T3 (${newOffPeak}) không được nhỏ hơn chỉ số trước (${previousReading.offPeakValue}). Vui lòng kiểm tra lại!`,
+        );
+      }
+    }
 
     const multiplier = point.multiplier || 1.0;
-    const diff = Number(data.readingValue) - previousValue;
+    const diff = newReading - previousValue;
     const consumption = diff >= 0 ? diff * multiplier : 0;
-    const isAbnormal = diff < 0 || (diff > 0 && previousValue > 0 && diff > previousValue * 1.5);
+    const isAbnormal = previousValue > 0 && diff > previousValue * 1.5;
 
     // 2. Tạo bản ghi chỉ số
     const reading = await this.prisma.utilityReading.create({
