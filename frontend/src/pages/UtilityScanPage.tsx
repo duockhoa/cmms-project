@@ -7,6 +7,7 @@ import {
   CheckCircle2, AlertTriangle, Clock, RefreshCw, 
   ChevronRight, QrCode, ShieldCheck
 } from 'lucide-react';
+import { formatVN } from '../utils/formatters';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 export const UtilityScanPage: React.FC = () => {
@@ -186,7 +187,7 @@ export const UtilityScanPage: React.FC = () => {
 
       toast.success(
         'Thành công',
-        `Đã ghi nhận chỉ số ${selectedPoint.name}: ${readingValue} ${selectedPoint.unit} (Tiêu thụ: +${calculatedConsumption.toLocaleString()} ${selectedPoint.unit}).`,
+        `Đã ghi nhận chỉ số ${selectedPoint.name}: ${readingValue} ${selectedPoint.unit} (Tiêu thụ: +${formatVN(calculatedConsumption)} ${selectedPoint.unit}).`,
       );
 
       setSelectedPoint(null);
@@ -326,7 +327,7 @@ export const UtilityScanPage: React.FC = () => {
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Chỉ số ghi nhận gần nhất:</span>
                 <span className="last-reading-value">
-                  {previousValue.toLocaleString()} {selectedPoint.unit}
+                  {formatVN(previousValue)} {selectedPoint.unit}
                 </span>
               </div>
               <Clock size={20} color="#94a3b8" />
@@ -383,7 +384,7 @@ export const UtilityScanPage: React.FC = () => {
                       ⛔ CẢNH BÁO CHẶN: Số sau không được nhỏ hơn số trước!
                     </div>
                     <div>
-                      Chỉ số vừa nhập (<strong>{currentNum}</strong>) nhỏ hơn chỉ số kỳ trước (<strong>{previousValue.toLocaleString()} {selectedPoint.unit}</strong>). Chỉ số đồng hồ không được phép giảm. Nút lưu đã bị khóa, vui lòng kiểm tra lại mặt đồng hồ thực tế!
+                      Chỉ số vừa nhập (<strong>{currentNum}</strong>) nhỏ hơn chỉ số kỳ trước (<strong>{formatVN(previousValue)} {selectedPoint.unit}</strong>). Chỉ số đồng hồ không được phép giảm. Nút lưu đã bị khóa, vui lòng kiểm tra lại mặt đồng hồ thực tế!
                     </div>
                   </div>
                 </div>
@@ -397,7 +398,7 @@ export const UtilityScanPage: React.FC = () => {
                       Sản lượng tiêu thụ:
                     </span>
                     <span className="consumption-number">
-                      +{calculatedConsumption.toLocaleString()} {selectedPoint.unit}
+                      +{formatVN(calculatedConsumption)} {selectedPoint.unit}
                     </span>
                   </div>
                   {isOutlier && (

@@ -573,7 +573,7 @@ export const UtilitiesPage: React.FC = () => {
                           </span>
                           {liveHour.isRunning && (
                             <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700, backgroundColor: '#dcfce7', padding: '1px 6px', borderRadius: '4px' }}>
-                              (+{liveHour.sessionDelta.toFixed(1)}h ca này)
+                              (+{liveHour.sessionDelta.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h ca này)
                             </span>
                           )}
                         </div>

@@ -17,6 +17,7 @@ import {
   ArrowUpRight,
   Clock
 } from 'lucide-react';
+import { formatVN } from '../../utils/formatters';
 import { useToast } from '../common/Toast';
 
 interface PeriodMeterItem {
@@ -165,7 +166,7 @@ export const UtilitySettingsTab: React.FC = () => {
       const diff = currNum !== undefined && currNum >= num ? (currNum - num) * (meter.multiplier || 1) : 0;
       toast.success(
         'Đã lưu thành công',
-        `Đã chốt đầu kỳ: ${num.toLocaleString()} ${meter.unit} | Hiện tại: ${(currNum ?? num).toLocaleString()} ${meter.unit} (Sản lượng: +${diff.toLocaleString()} ${meter.unit}).`
+        `Đã chốt đầu kỳ: ${formatVN(num)} ${meter.unit} | Hiện tại: ${formatVN(currNum ?? num)} ${meter.unit} (Sản lượng: +${formatVN(diff)} ${meter.unit}).`
       );
 
       // Cập nhật lại local state
@@ -520,13 +521,13 @@ export const UtilitySettingsTab: React.FC = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                         <span style={{ color: '#64748b' }}>Chỉ số đầu kỳ đã chốt:</span>
                         <strong style={{ color: '#0f172a' }}>
-                          {meter.baselineValue ? `${meter.baselineValue.toLocaleString()} ${meter.unit}` : 'Chưa có mốc'}
+                          {meter.baselineValue ? `${formatVN(meter.baselineValue)} ${meter.unit}` : 'Chưa có mốc'}
                         </strong>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ color: '#64748b' }}>Chỉ số hiện tại (mặt đồng hồ):</span>
                         <strong style={{ color: '#047857' }}>
-                          {meter.lastReadingValue ? `${meter.lastReadingValue.toLocaleString()} ${meter.unit}` : 'Chưa có dữ liệu'}
+                          {meter.lastReadingValue ? `${formatVN(meter.lastReadingValue)} ${meter.unit}` : 'Chưa có dữ liệu'}
                         </strong>
                       </div>
                     </div>
@@ -589,7 +590,7 @@ export const UtilitySettingsTab: React.FC = () => {
                               Sản lượng từ đầu kỳ đến nay:
                             </span>
                             <strong style={{ fontSize: '14px', color: '#047857' }}>
-                              +{diffUnits.toLocaleString()} {meter.unit}
+                              +{formatVN(diffUnits)} {meter.unit}
                             </strong>
                           </div>
                         );
@@ -897,7 +898,7 @@ export const UtilitySettingsTab: React.FC = () => {
 
                       {/* Calculated Consumption to date */}
                       <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                        +{diffUnits.toLocaleString()} {meter.unit}
+                        +{formatVN(diffUnits)} {meter.unit}
                       </td>
 
                       {/* Notes */}

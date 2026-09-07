@@ -758,7 +758,7 @@ export const WorkOrdersPage: React.FC = () => {
                       <td>{item.title}</td>
                       <td><span className={`badge badge-${item.priority === 'HIGH' || item.priority === 'URGENT' ? 'danger' : 'warning'}`}>{item.priority}</span></td>
                       <td><StatusBadge status={item.status} /></td>
-                      <td>{new Date(item.createdAt).toLocaleDateString()}</td>
+                      <td>{new Date(item.createdAt).toLocaleDateString('vi-VN')}</td>
                       <td>
                         <button
                           className="btn btn-primary btn-sm"

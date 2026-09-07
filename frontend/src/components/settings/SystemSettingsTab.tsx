@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Settings, Save, RefreshCw, AlertCircle, CheckCircle2, Zap, Droplets } from 'lucide-react';
+import { formatVN } from '../../utils/formatters';
 import { useToast } from '../common/Toast';
 
 export const SystemSettingsTab: React.FC = () => {
@@ -319,7 +320,7 @@ export const SystemSettingsTab: React.FC = () => {
                               return (
                                 <div style={{ fontSize: '11.5px', padding: '4px 8px', borderRadius: '4px', backgroundColor: '#ecfdf5', color: '#065f46', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span>Sản lượng từ đầu kỳ đến nay:</span>
-                                  <strong>+{diff.toLocaleString()} {m.unit}</strong>
+                                  <strong>+{formatVN(diff)} {m.unit}</strong>
                                 </div>
                               );
                             }

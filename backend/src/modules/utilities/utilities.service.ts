@@ -568,6 +568,29 @@ export class UtilitiesService {
   // ==========================================
   // 2. GHI NHẬN CHỈ SỐ ĐIỆN / NƯỚC THEO CA
   // ==========================================
+  // HÀM CHUẨN HÓA SỐ TỪ CHUẨN VIỆT NAM HOẶC QUỐC TẾ
+  // ==========================================
+  private parseLocaleNumber(val: any): number | null {
+    if (val === undefined || val === null || val === '') return null;
+    if (typeof val === 'number') return isNaN(val) ? null : val;
+    let s = String(val).trim();
+    if (s.includes('.') && s.includes(',')) {
+      if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+        // Định dạng VN: 1.234,56
+        s = s.replace(/\./g, '').replace(',', '.');
+      } else {
+        // Định dạng US: 1,234.56
+        s = s.replace(/,/g, '');
+      }
+    } else if (s.includes(',') && !s.includes('.')) {
+      // Định dạng số thập phân VN: 1234,56
+      s = s.replace(',', '.');
+    }
+    const n = Number(s);
+    return isNaN(n) ? null : n;
+  }
+
+  // ==========================================
   async recordReading(
     data: {
       pointId?: string;
@@ -609,8 +632,8 @@ export class UtilitiesService {
     const previousValue =
       previousReading ? previousReading.readingValue : point.lastReadingValue || 0;
 
-    const newReading = Number(data.readingValue);
-    if (isNaN(newReading)) {
+    const newReading = this.parseLocaleNumber(data.readingValue);
+    if (newReading === null) {
       throw new BadRequestException('Chỉ số ghi nhận không hợp lệ.');
     }
 
@@ -621,30 +644,27 @@ export class UtilitiesService {
       );
     }
 
+    const normalVal = this.parseLocaleNumber(data.normalValue);
+    const peakVal = this.parseLocaleNumber(data.peakValue);
+    const offPeakVal = this.parseLocaleNumber(data.offPeakValue);
+    const powerKw = this.parseLocaleNumber(data.powerKw);
+    const cosPhi = this.parseLocaleNumber(data.powerFactorCosPhi);
+
     // Kiểm tra các chỉ số thành phần 3 biểu giá (nếu có)
-    if (data.normalValue !== undefined && data.normalValue !== null && previousReading?.normalValue) {
-      const newNormal = Number(data.normalValue);
-      if (newNormal < previousReading.normalValue) {
-        throw new BadRequestException(
-          `Chỉ số giờ bình thường T1 (${newNormal}) không được nhỏ hơn chỉ số trước (${previousReading.normalValue}). Vui lòng kiểm tra lại!`,
-        );
-      }
+    if (normalVal !== null && previousReading?.normalValue && normalVal < previousReading.normalValue) {
+      throw new BadRequestException(
+        `Chỉ số giờ bình thường T1 (${normalVal}) không được nhỏ hơn chỉ số trước (${previousReading.normalValue}). Vui lòng kiểm tra lại!`,
+      );
     }
-    if (data.peakValue !== undefined && data.peakValue !== null && previousReading?.peakValue) {
-      const newPeak = Number(data.peakValue);
-      if (newPeak < previousReading.peakValue) {
-        throw new BadRequestException(
-          `Chỉ số giờ cao điểm T2 (${newPeak}) không được nhỏ hơn chỉ số trước (${previousReading.peakValue}). Vui lòng kiểm tra lại!`,
-        );
-      }
+    if (peakVal !== null && previousReading?.peakValue && peakVal < previousReading.peakValue) {
+      throw new BadRequestException(
+        `Chỉ số giờ cao điểm T2 (${peakVal}) không được nhỏ hơn chỉ số trước (${previousReading.peakValue}). Vui lòng kiểm tra lại!`,
+      );
     }
-    if (data.offPeakValue !== undefined && data.offPeakValue !== null && previousReading?.offPeakValue) {
-      const newOffPeak = Number(data.offPeakValue);
-      if (newOffPeak < previousReading.offPeakValue) {
-        throw new BadRequestException(
-          `Chỉ số giờ thấp điểm T3 (${newOffPeak}) không được nhỏ hơn chỉ số trước (${previousReading.offPeakValue}). Vui lòng kiểm tra lại!`,
-        );
-      }
+    if (offPeakVal !== null && previousReading?.offPeakValue && offPeakVal < previousReading.offPeakValue) {
+      throw new BadRequestException(
+        `Chỉ số giờ thấp điểm T3 (${offPeakVal}) không được nhỏ hơn chỉ số trước (${previousReading.offPeakValue}). Vui lòng kiểm tra lại!`,
+      );
     }
 
     const multiplier = point.multiplier || 1.0;
@@ -657,14 +677,14 @@ export class UtilitiesService {
       data: {
         pointId: point.id,
         shift: data.shift || null,
-        readingValue: Number(data.readingValue),
+        readingValue: newReading,
         previousValue: previousValue,
         consumption: Number(consumption.toFixed(2)),
-        normalValue: data.normalValue ? Number(data.normalValue) : null,
-        peakValue: data.peakValue ? Number(data.peakValue) : null,
-        offPeakValue: data.offPeakValue ? Number(data.offPeakValue) : null,
-        powerKw: data.powerKw ? Number(data.powerKw) : null,
-        powerFactorCosPhi: data.powerFactorCosPhi ? Number(data.powerFactorCosPhi) : null,
+        normalValue: normalVal,
+        peakValue: peakVal,
+        offPeakValue: offPeakVal,
+        powerKw: powerKw,
+        powerFactorCosPhi: cosPhi,
         imageUrl: data.imageUrl,
         notes: data.notes,
         isAbnormal: isAbnormal,
@@ -677,12 +697,183 @@ export class UtilitiesService {
     await this.prisma.utilityPoint.update({
       where: { id: point.id },
       data: {
-        lastReadingValue: Number(data.readingValue),
+        lastReadingValue: newReading,
         lastReadingAt: new Date(),
       },
     });
 
     return reading;
+  }
+
+  // ==========================================
+  // 2.1 ĐỒNG BỘ CHỈ SỐ ĐIỆN TỰ ĐỘNG TỪ AMISS (EVN)
+  // ==========================================
+  async syncEvnReadings(body: any, actor: any) {
+    const rawItems = Array.isArray(body)
+      ? body
+      : Array.isArray(body?.items)
+      ? body.items
+      : [body];
+
+    if (!rawItems || rawItems.length === 0) {
+      throw new BadRequestException('Không có dữ liệu đồng bộ.');
+    }
+
+    // Lấy trước tất cả các điểm đo điện đang hoạt động
+    const elecPoints = await this.prisma.utilityPoint.findMany({
+      where: { type: 'ELECTRICITY', isActive: true },
+    });
+
+    if (elecPoints.length === 0) {
+      throw new NotFoundException('Hệ thống chưa có điểm đo Điện nào để đồng bộ.');
+    }
+
+    const systemUser =
+      (await this.prisma.user.findFirst({
+        where: { role: 'ADMIN' },
+        select: { id: true, name: true },
+      })) || (await this.prisma.user.findFirst({ select: { id: true, name: true } }));
+
+    const recorderId =
+      actor?.id && actor.id !== 'system-evn-bot'
+        ? actor.id
+        : systemUser?.id || 'admin';
+    const recorderName = 'EVN Auto-Sync Bot';
+
+    const results = [];
+
+    for (const item of rawItems) {
+      if (!item) continue;
+
+      // 1. Tìm điểm đo phù hợp
+      const queryCode = String(item.meterCode || item.code || item.socongto || '').trim().toUpperCase();
+      let targetPoint = elecPoints.find(
+        (p) => p.code.toUpperCase() === queryCode || p.id === queryCode,
+      );
+
+      // Nếu không khớp chính xác, tìm theo số công tơ trong mô tả hoặc code chứa số công tơ
+      if (!targetPoint && queryCode) {
+        targetPoint = elecPoints.find(
+          (p) => p.code.toUpperCase().includes(queryCode) || p.description?.toUpperCase().includes(queryCode),
+        );
+      }
+
+      // Nếu vẫn không có mã, fallback vào điểm đo Nguồn tổng cấp (isSupplyMeter = true)
+      if (!targetPoint) {
+        targetPoint = elecPoints.find((p) => p.isSupplyMeter) || elecPoints[0];
+      }
+
+      if (!targetPoint) continue;
+
+      // 2. Phân tích thời gian ghi nhận (timemeter: "DD/MM/YYYY HH:mm" hoặc ISO)
+      let recordedAt = new Date();
+      if (item.timemeter) {
+        const match = String(item.timemeter).match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/);
+        if (match) {
+          const [, day, month, year, hour, minute] = match;
+          recordedAt = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), 0, 0);
+        } else {
+          const parsed = new Date(item.timemeter);
+          if (!isNaN(parsed.getTime())) recordedAt = parsed;
+        }
+      } else if (item.recordedAt) {
+        const parsed = new Date(item.recordedAt);
+        if (!isNaN(parsed.getTime())) recordedAt = parsed;
+      }
+
+      // 3. Trích xuất chỉ số đo đếm
+      const readingVal = this.parseLocaleNumber(item.readingValue ?? item.pgiaotong);
+      if (readingVal === null || readingVal < 0) {
+        continue;
+      }
+
+      const normalVal = this.parseLocaleNumber(item.normalValue ?? item.pgiao1);
+      const peakVal = this.parseLocaleNumber(item.peakValue ?? item.pgiao2);
+      const offPeakVal = this.parseLocaleNumber(item.offPeakValue ?? item.pgiao3);
+      const powerKw = this.parseLocaleNumber(item.powerKw ?? item.pmax1);
+
+      // 4. Cơ chế chống trùng lặp (Upsert): Tìm bản ghi cùng điểm đo trong cửa sổ ±5 phút
+      const windowStart = new Date(recordedAt.getTime() - 5 * 60 * 1000);
+      const windowEnd = new Date(recordedAt.getTime() + 5 * 60 * 1000);
+
+      const existingReading = await this.prisma.utilityReading.findFirst({
+        where: {
+          pointId: targetPoint.id,
+          isVoided: false,
+          recordedAt: {
+            gte: windowStart,
+            lte: windowEnd,
+          },
+        },
+      });
+
+      if (existingReading) {
+        // Cập nhật bản ghi hiện tại
+        const updated = await this.prisma.utilityReading.update({
+          where: { id: existingReading.id },
+          data: {
+            readingValue: readingVal,
+            normalValue: normalVal ?? existingReading.normalValue,
+            peakValue: peakVal ?? existingReading.peakValue,
+            offPeakValue: offPeakVal ?? existingReading.offPeakValue,
+            powerKw: powerKw ?? existingReading.powerKw,
+            notes: item.notes || existingReading.notes,
+          },
+        });
+        results.push({ action: 'updated', id: updated.id, pointCode: targetPoint.code, recordedAt });
+      } else {
+        // Tạo mới: Tìm chỉ số gần nhất trước mốc thời gian này để tính delta consumption
+        const priorReading = await this.prisma.utilityReading.findFirst({
+          where: {
+            pointId: targetPoint.id,
+            isVoided: false,
+            recordedAt: { lt: recordedAt },
+          },
+          orderBy: { recordedAt: 'desc' },
+        });
+
+        const prevVal = priorReading ? priorReading.readingValue : (targetPoint.lastReadingValue || readingVal);
+        const diff = readingVal >= prevVal ? readingVal - prevVal : 0;
+        const consumption = Number((diff * (targetPoint.multiplier || 1.0)).toFixed(2));
+
+        const created = await this.prisma.utilityReading.create({
+          data: {
+            pointId: targetPoint.id,
+            recordedAt,
+            readingValue: readingVal,
+            previousValue: prevVal,
+            consumption,
+            normalValue: normalVal,
+            peakValue: peakVal,
+            offPeakValue: offPeakVal,
+            powerKw,
+            shift: item.shift || 'Tự động EVN',
+            notes: item.notes || `Đồng bộ tự động từ AMISS (${item.timemeter || recordedAt.toISOString()})`,
+            recordedById: recorderId,
+            recordedByName: recorderName,
+          },
+        });
+        results.push({ action: 'created', id: created.id, pointCode: targetPoint.code, recordedAt, consumption });
+      }
+
+      // Cập nhật lastReadingValue cho điểm đo nếu mốc thời gian này là mới nhất
+      if (!targetPoint.lastReadingAt || recordedAt >= targetPoint.lastReadingAt) {
+        await this.prisma.utilityPoint.update({
+          where: { id: targetPoint.id },
+          data: {
+            lastReadingValue: readingVal,
+            lastReadingAt: recordedAt,
+          },
+        });
+      }
+    }
+
+    return {
+      success: true,
+      message: `Đã xử lý đồng bộ ${results.length} mốc chỉ số từ EVN.`,
+      syncedCount: results.length,
+      details: results,
+    };
   }
 
   // ==========================================

@@ -104,6 +104,11 @@ export class UtilitiesController {
     return this.utilitiesService.recordReading(body, req.user);
   }
 
+  @Post('readings/sync-evn')
+  async syncEvnReadings(@Body() body: any, @Req() req: any) {
+    return this.utilitiesService.syncEvnReadings(body, req.user);
+  }
+
   @Get('readings')
   async getReadings(
     @Query('pointId') pointId?: string,
