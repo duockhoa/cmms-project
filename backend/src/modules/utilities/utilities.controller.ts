@@ -51,6 +51,46 @@ export class UtilitiesController {
     return this.utilitiesService.updatePoint(id, body);
   }
 
+  @Put('points/batch-baselines')
+  async batchSetBaselines(
+    @Body() body: { items: Array<{ id: string; baselineValue: number; notes?: string }> },
+    @Req() req: any,
+  ) {
+    return this.utilitiesService.batchSetBaselines(body.items, req.user);
+  }
+
+  @Put('points/:id/baseline')
+  async setBaselineReading(
+    @Param('id') id: string,
+    @Body() body: { baselineValue: number; notes?: string },
+    @Req() req: any,
+  ) {
+    return this.utilitiesService.setBaselineReading(id, body, req.user);
+  }
+
+  @Get('period-baselines')
+  async getPeriodBaselines(
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+  ) {
+    return this.utilitiesService.getPeriodBaselines({
+      month: month ? parseInt(month, 10) : undefined,
+      year: year ? parseInt(year, 10) : undefined,
+    });
+  }
+
+  @Put('period-baselines')
+  async batchSetPeriodBaselines(
+    @Body() body: {
+      month: number;
+      year: number;
+      items: Array<{ pointId: string; baselineValue: number; currentValue?: number; notes?: string }>;
+    },
+    @Req() req: any,
+  ) {
+    return this.utilitiesService.batchSetPeriodBaselines(body, req.user);
+  }
+
   @Delete('points/:id')
   async deletePoint(@Param('id') id: string) {
     return this.utilitiesService.deletePoint(id);

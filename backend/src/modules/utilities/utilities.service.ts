@@ -152,6 +152,387 @@ export class UtilitiesService {
   }
 
   // ==========================================
+  // 1.1 THIẾT LẬP CHỈ SỐ ĐẦU KỲ (TRIỂN KHAI HỆ THỐNG)
+  // ==========================================
+  async setBaselineReading(
+    id: string,
+    data: { baselineValue: number; notes?: string },
+    actor: any,
+  ) {
+    const point = await this.prisma.utilityPoint.findUnique({
+      where: { id },
+      include: {
+        readings: {
+          orderBy: { recordedAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!point) {
+      throw new NotFoundException('Không tìm thấy điểm đo tiện ích.');
+    }
+
+    const val = Number(data.baselineValue);
+    if (isNaN(val) || val < 0) {
+      throw new BadRequestException('Chỉ số đầu kỳ phải là số dương hợp lệ (>= 0).');
+    }
+
+    // 1. Cập nhật chỉ số đầu kỳ trên điểm đo
+    const updatedPoint = await this.prisma.utilityPoint.update({
+      where: { id: point.id },
+      data: {
+        lastReadingValue: val,
+        lastReadingAt: new Date(),
+      },
+    });
+
+    // 2. Tạo hoặc đồng bộ bản ghi mốc đầu kỳ trong nhật ký UtilityReading
+    if (point.readings.length === 0) {
+      await this.prisma.utilityReading.create({
+        data: {
+          pointId: point.id,
+          readingValue: val,
+          previousValue: val,
+          consumption: 0,
+          notes: data.notes || 'Chỉ số đầu kỳ khởi tạo từ Cài đặt hệ thống',
+          recordedById: actor?.id || 'system',
+          recordedByName: actor?.name || actor?.email || 'Quản trị viên',
+        },
+      });
+    } else if (point.readings.length === 1 && point.readings[0].consumption === 0) {
+      await this.prisma.utilityReading.update({
+        where: { id: point.readings[0].id },
+        data: {
+          readingValue: val,
+          previousValue: val,
+          notes: data.notes || 'Chỉ số đầu kỳ điều chỉnh từ Cài đặt hệ thống',
+        },
+      });
+    } else {
+      // Đã có bản ghi đo thực tế, tạo bản ghi mốc hiệu chỉnh
+      await this.prisma.utilityReading.create({
+        data: {
+          pointId: point.id,
+          readingValue: val,
+          previousValue: val,
+          consumption: 0,
+          notes: data.notes || 'Hiệu chỉnh chỉ số mốc từ Cài đặt hệ thống',
+          recordedById: actor?.id || 'system',
+          recordedByName: actor?.name || actor?.email || 'Quản trị viên',
+        },
+      });
+    }
+
+    return updatedPoint;
+  }
+
+  async batchSetBaselines(
+    items: Array<{ id: string; baselineValue: number; notes?: string }>,
+    actor: any,
+  ) {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException('Danh sách cập nhật chỉ số đầu kỳ không hợp lệ.');
+    }
+    const results = [];
+    for (const item of items) {
+      if (item.id && item.baselineValue !== undefined && !isNaN(Number(item.baselineValue))) {
+        const res = await this.setBaselineReading(item.id, item, actor);
+        results.push(res);
+      }
+    }
+    return results;
+  }
+
+  // ==========================================
+  // 1.2 THIẾT LẬP CHỈ SỐ ĐẦU KỲ THEO CHU KỲ TÍNH TOÁN (ĐIỆN & NƯỚC)
+  // ==========================================
+  getPeriodCycleInfo(type: 'ELECTRICITY' | 'WATER', month: number, year: number) {
+    let startDate: Date;
+    let endDate: Date;
+    let cycleDescription: string;
+    let startDayLabel: string;
+
+    if (type === 'ELECTRICITY') {
+      // Kỳ điện: Từ ngày 01 đến ngày cuối cùng của tháng đó
+      startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      const lastDay = endDate.getDate();
+      cycleDescription = `Từ 01/${String(month).padStart(2, '0')}/${year} đến ${String(lastDay).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+      startDayLabel = `00:00 ngày 01/${String(month).padStart(2, '0')}/${year}`;
+    } else {
+      // Kỳ nước: Từ ngày 21 của tháng liền kề trước đó đến ngày 20 của tháng tiếp theo
+      startDate = new Date(year, month - 2, 21, 0, 0, 0, 0);
+      endDate = new Date(year, month - 1, 20, 23, 59, 59, 999);
+      const prevMonth = startDate.getMonth() + 1;
+      const prevYear = startDate.getFullYear();
+      cycleDescription = `Từ 21/${String(prevMonth).padStart(2, '0')}/${prevYear} đến 20/${String(month).padStart(2, '0')}/${year}`;
+      startDayLabel = `00:00 ngày 21/${String(prevMonth).padStart(2, '0')}/${prevYear}`;
+    }
+
+    return { startDate, endDate, cycleDescription, startDayLabel };
+  }
+
+  async getPeriodBaselines(query: { month?: number; year?: number }) {
+    const month = Number(query.month) || (new Date().getMonth() + 1);
+    const year = Number(query.year) || new Date().getFullYear();
+
+    const elecCycle = this.getPeriodCycleInfo('ELECTRICITY', month, year);
+    const waterCycle = this.getPeriodCycleInfo('WATER', month, year);
+
+    const points = await this.prisma.utilityPoint.findMany({
+      where: {
+        type: { in: ['ELECTRICITY', 'WATER'] },
+        isActive: true,
+      },
+      include: {
+        readings: {
+          orderBy: { recordedAt: 'asc' },
+        },
+      },
+      orderBy: [
+        { isSupplyMeter: 'desc' },
+        { type: 'asc' },
+        { code: 'asc' },
+      ],
+    });
+
+    const items = points.map((p) => {
+      const isElec = p.type === 'ELECTRICITY';
+      const cycle = isElec ? elecCycle : waterCycle;
+
+      // Tìm bản ghi trong khoảng chu kỳ
+      const periodReadings = p.readings.filter(
+        (r) => r.recordedAt >= cycle.startDate && r.recordedAt <= cycle.endDate,
+      );
+
+      // Tìm bản ghi mốc đầu kỳ (consumption = 0 hoặc bản ghi đầu tiên trong chu kỳ)
+      let baselineRecord = periodReadings.find(
+        (r) => r.consumption === 0 && (r.notes?.includes('đầu kỳ') || r.notes?.includes('mốc')),
+      );
+      if (!baselineRecord && periodReadings.length > 0) {
+        baselineRecord = periodReadings[0];
+      }
+
+      const baselineValue = baselineRecord
+        ? (baselineRecord.previousValue ?? baselineRecord.readingValue)
+        : (p.lastReadingValue ?? 0);
+
+      return {
+        pointId: p.id,
+        code: p.code,
+        name: p.name,
+        type: p.type,
+        location: p.location,
+        unit: p.unit,
+        multiplier: p.multiplier,
+        isSupplyMeter: p.isSupplyMeter,
+        cycleDescription: cycle.cycleDescription,
+        cycleStartDate: cycle.startDate,
+        cycleEndDate: cycle.endDate,
+        startDayLabel: cycle.startDayLabel,
+        baselineValue: baselineValue,
+        hasExistingBaseline: Boolean(baselineRecord),
+        lastReadingValue: p.lastReadingValue,
+        lastReadingAt: p.lastReadingAt,
+      };
+    });
+
+    return {
+      month,
+      year,
+      elecCycle,
+      waterCycle,
+      supplyMeters: items.filter((i) => i.isSupplyMeter),
+      allMeters: items,
+    };
+  }
+
+  async setPeriodBaseline(
+    data: {
+      pointId: string;
+      month: number;
+      year: number;
+      baselineValue: number;
+      currentValue?: number;
+      notes?: string;
+    },
+    actor: any,
+  ) {
+    const point = await this.prisma.utilityPoint.findUnique({
+      where: { id: data.pointId },
+    });
+    if (!point) {
+      throw new NotFoundException('Không tìm thấy điểm đo.');
+    }
+    const val = Number(data.baselineValue);
+    if (isNaN(val) || val < 0) {
+      throw new BadRequestException('Chỉ số đầu kỳ phải là số dương (>= 0).');
+    }
+
+    const month = Number(data.month);
+    const year = Number(data.year);
+    const cycle = this.getPeriodCycleInfo(point.type as any, month, year);
+
+    // 1. Kiểm tra / cập nhật bản ghi mốc đầu kỳ tại cycle.startDate
+    const existingBaseline = await this.prisma.utilityReading.findFirst({
+      where: {
+        pointId: point.id,
+        recordedAt: {
+          gte: cycle.startDate,
+          lte: new Date(cycle.startDate.getTime() + 60 * 60 * 1000),
+        },
+      },
+    });
+
+    if (existingBaseline) {
+      await this.prisma.utilityReading.update({
+        where: { id: existingBaseline.id },
+        data: {
+          readingValue: val,
+          previousValue: val,
+          consumption: 0,
+          notes: data.notes || `Chỉ số chốt đầu kỳ tính toán Tháng ${month}/${year} (${cycle.cycleDescription})`,
+        },
+      });
+    } else {
+      await this.prisma.utilityReading.create({
+        data: {
+          pointId: point.id,
+          recordedAt: cycle.startDate,
+          readingValue: val,
+          previousValue: val,
+          consumption: 0,
+          notes: data.notes || `Chỉ số chốt đầu kỳ tính toán Tháng ${month}/${year} (${cycle.cycleDescription})`,
+          recordedById: actor?.id || 'admin',
+          recordedByName: actor?.name || actor?.email || 'Quản trị viên',
+        },
+      });
+    }
+
+    // 2. Xử lý chỉ số đến ngày hiện tại (currentValue)
+    const currVal =
+      data.currentValue !== undefined && !isNaN(Number(data.currentValue))
+        ? Number(data.currentValue)
+        : point.lastReadingValue && point.lastReadingValue > val
+        ? point.lastReadingValue
+        : val;
+
+    if (currVal < val) {
+      throw new BadRequestException(
+        `Chỉ số hiện tại (${currVal}) không được nhỏ hơn chỉ số đầu kỳ (${val})!`,
+      );
+    }
+
+    if (currVal > val) {
+      const now = new Date();
+      const currentReadingTime = now > cycle.endDate ? cycle.endDate : now;
+      const diff = currVal - val;
+      const consumption = Number((diff * (point.multiplier || 1.0)).toFixed(2));
+
+      // Kiểm tra xem đã có bản ghi đọc số sau mốc đầu kỳ chưa
+      const existingCurrentReading = await this.prisma.utilityReading.findFirst({
+        where: {
+          pointId: point.id,
+          recordedAt: {
+            gt: new Date(cycle.startDate.getTime() + 60 * 60 * 1000),
+            lte: cycle.endDate,
+          },
+        },
+        orderBy: { recordedAt: 'desc' },
+      });
+
+      if (existingCurrentReading) {
+        await this.prisma.utilityReading.update({
+          where: { id: existingCurrentReading.id },
+          data: {
+            readingValue: currVal,
+            previousValue: val,
+            consumption: consumption,
+            notes: `Chỉ số cập nhật đến ngày hiện tại (Kỳ Tháng ${month}/${year})`,
+          },
+        });
+      } else {
+        await this.prisma.utilityReading.create({
+          data: {
+            pointId: point.id,
+            recordedAt: currentReadingTime,
+            readingValue: currVal,
+            previousValue: val,
+            consumption: consumption,
+            notes: `Chỉ số cập nhật đến ngày hiện tại (Kỳ Tháng ${month}/${year})`,
+            recordedById: actor?.id || 'admin',
+            recordedByName: actor?.name || actor?.email || 'Quản trị viên',
+          },
+        });
+      }
+
+      await this.prisma.utilityPoint.update({
+        where: { id: point.id },
+        data: {
+          lastReadingValue: currVal,
+          lastReadingAt: currentReadingTime,
+        },
+      });
+    } else {
+      await this.prisma.utilityPoint.update({
+        where: { id: point.id },
+        data: {
+          lastReadingValue: val,
+          lastReadingAt: cycle.startDate,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      pointId: point.id,
+      month,
+      year,
+      baselineValue: val,
+      currentValue: currVal,
+      cycleDescription: cycle.cycleDescription,
+      startDayLabel: cycle.startDayLabel,
+    };
+  }
+
+  async batchSetPeriodBaselines(
+    body: {
+      month: number;
+      year: number;
+      items: Array<{
+        pointId: string;
+        baselineValue: number;
+        currentValue?: number;
+        notes?: string;
+      }>;
+    },
+    actor: any,
+  ) {
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      throw new BadRequestException('Danh sách cập nhật không hợp lệ.');
+    }
+    const results = [];
+    for (const item of body.items) {
+      if (item.pointId && item.baselineValue !== undefined && !isNaN(Number(item.baselineValue))) {
+        const res = await this.setPeriodBaseline(
+          {
+            pointId: item.pointId,
+            month: body.month,
+            year: body.year,
+            baselineValue: item.baselineValue,
+            currentValue: item.currentValue,
+            notes: item.notes,
+          },
+          actor,
+        );
+        results.push(res);
+      }
+    }
+    return results;
+  }
+
+  // ==========================================
   // 2. GHI NHẬN CHỈ SỐ ĐIỆN / NƯỚC THEO CA
   // ==========================================
   async recordReading(
@@ -665,6 +1046,16 @@ export class UtilitiesService {
           offPeakVal = Math.max(0, (lastOffPeak - firstOffPeak) * p.multiplier);
         }
       }
+
+      // Nếu đồng hồ có chỉ số hiện tại (lastReadingValue) lớn hơn endValue đã ghi trong các lần chốt
+      if (p.lastReadingValue !== null && p.lastReadingValue !== undefined && p.lastReadingValue > endValue) {
+        endValue = p.lastReadingValue;
+      }
+
+      // Tính sản lượng thực tế từ mốc đầu kỳ đến chỉ số cuối/hiện tại
+      const diff = endValue - startValue;
+      const calculatedConsumption = diff > 0 ? Number((diff * (p.multiplier || 1.0)).toFixed(2)) : 0;
+      periodConsumption = Math.max(calculatedConsumption, periodConsumption);
 
       periodConsumption = Number(periodConsumption.toFixed(2));
       const isSupply = Boolean(p.isSupplyMeter || p.code.includes('MSB') || p.code.includes('MAIN') || p.code.includes('TONG'));

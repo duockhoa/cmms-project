@@ -3,7 +3,7 @@ import { api } from '../services/api';
 import { 
   Settings, Layers, MapPin, Cpu, Shield, Users, 
   ListChecks, UserCheck, Gauge, AlertTriangle, RefreshCw,
-  LucideIcon, Sliders, BookOpen, Activity
+  LucideIcon, Sliders, BookOpen, Activity, Zap
 } from 'lucide-react';
 
 import { CategoriesSettingsTab } from '../components/settings/CategoriesSettingsTab';
@@ -13,6 +13,7 @@ import { StandardTechnicalSpecsTab } from '../components/settings/StandardTechni
 import { StandardParametersTab } from '../components/settings/StandardParametersTab';
 import { ChecklistLibraryTab } from '../components/settings/ChecklistLibraryTab';
 import { SystemSettingsTab } from '../components/settings/SystemSettingsTab';
+import { UtilitySettingsTab } from '../components/settings/UtilitySettingsTab';
 import { RolesSettingsTab } from '../components/settings/RolesSettingsTab';
 import { UsersSettingsTab } from '../components/settings/UsersSettingsTab';
 import { TechniciansSettingsTab } from '../components/settings/TechniciansSettingsTab';
@@ -26,6 +27,7 @@ export type SettingsTabId =
   | 'standard-parameters'
   | 'equipment-parameters'
   | 'checklist-library'
+  | 'utility-settings'
   | 'system-settings'
   | 'users'
   | 'roles'
@@ -91,6 +93,12 @@ const SETTINGS_GROUPS: NavGroup[] = [
         label: 'Thư viện Checklist',
         description: 'Hạng mục kiểm tra mẫu định kỳ',
         icon: ListChecks,
+      },
+      {
+        id: 'utility-settings',
+        label: 'Chỉ số đầu kỳ Điện & Nước',
+        description: 'Khởi tạo mốc chỉ số tổng cấp & điểm đo',
+        icon: Zap,
       },
       {
         id: 'system-settings',
@@ -332,6 +340,7 @@ export const SettingsPage: React.FC = () => {
           {activeTab === 'standard-parameters' && <StandardParametersTab />}
           {activeTab === 'equipment-parameters' && <EquipmentParameterAssignTab />}
           {activeTab === 'checklist-library' && <ChecklistLibraryTab />}
+          {activeTab === 'utility-settings' && <UtilitySettingsTab />}
           {activeTab === 'system-settings' && <SystemSettingsTab />}
           {activeTab === 'users' && <UsersSettingsTab />}
           {activeTab === 'roles' && <RolesSettingsTab />}

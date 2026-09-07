@@ -479,6 +479,17 @@ export const api = {
   createUtilityPoint: (data: any) => request('/utilities/points', { method: 'POST', body: JSON.stringify(data) }),
   updateUtilityPoint: (id: string, data: any) => request(`/utilities/points/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUtilityPoint: (id: string) => request(`/utilities/points/${id}`, { method: 'DELETE' }),
+  setUtilityBaselineReading: (id: string, data: { baselineValue: number; notes?: string }) =>
+    request(`/utilities/points/${id}/baseline`, { method: 'PUT', body: JSON.stringify(data) }),
+  batchSetUtilityBaselines: (items: Array<{ id: string; baselineValue: number; notes?: string }>) =>
+    request('/utilities/points/batch-baselines', { method: 'PUT', body: JSON.stringify({ items }) }),
+  getUtilityPeriodBaselines: (params?: { month?: number; year?: number }) =>
+    request(`/utilities/period-baselines${toQueryString(params)}`),
+  setUtilityPeriodBaselines: (data: {
+    month: number;
+    year: number;
+    items: Array<{ pointId: string; baselineValue: number; currentValue?: number; notes?: string }>;
+  }) => request('/utilities/period-baselines', { method: 'PUT', body: JSON.stringify(data) }),
 
   recordUtilityReading: (data: {
     pointId?: string;
