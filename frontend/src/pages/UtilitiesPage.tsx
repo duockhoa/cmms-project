@@ -31,7 +31,7 @@ export const UtilitiesPage: React.FC = () => {
   const [cumulativeYear, setCumulativeYear] = useState<number>(new Date().getFullYear());
   const [cumulativeData, setCumulativeData] = useState<any | null>(null);
   const [cumulativeLoading, setCumulativeLoading] = useState(false);
-  const [cumulativeFilterRole, setCumulativeFilterRole] = useState<'ALL' | 'SUPPLY' | 'CONSUMPTION' | 'RECYCLED'>('ALL');
+  const [cumulativeFilterRole, setCumulativeFilterRole] = useState<'ALL' | 'SUPPLY' | 'CONSUMPTION' | 'RECYCLED' | 'EXCLUDED'>('ALL');
 
   // Bộ lọc
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -57,6 +57,7 @@ export const UtilitiesPage: React.FC = () => {
     description: '',
     isSupplyMeter: false,
     isRecycledWater: false,
+    isExcludedFromTotal: false,
   });
 
   // Modal Xem & In mã QR
@@ -149,7 +150,7 @@ export const UtilitiesPage: React.FC = () => {
       toast.error('Chưa có dữ liệu', 'Vui lòng chờ tải dữ liệu báo cáo xong.');
       return;
     }
-    const { summary, supplyMeters, consumptionMeters, recycledMeters, cycleDescription, type, month, year } = cumulativeData;
+    const { summary, supplyMeters, consumptionMeters, recycledMeters, excludedMeters, cycleDescription, type, month, year } = cumulativeData;
     const unit = summary?.unit || '';
 
     let csv = '\uFEFF'; // UTF-8 BOM
@@ -190,6 +191,15 @@ export const UtilitiesPage: React.FC = () => {
       });
     }
 
+    if (excludedMeters && excludedMeters.length > 0) {
+      csv += `\n`;
+      csv += `CHI TIẾT ĐỒNG HỒ ĐO ĐỐI CHỨNG (KHÔNG TÍNH VÀO TỔNG CẤP & TỔNG DÙNG);\n`;
+      csv += `STT;Mã;Tên đồng hồ;Vị trí;Số đầu kỳ;Số cuối kỳ;Hệ số;Sản lượng (${unit});Ghi chú\n`;
+      excludedMeters.forEach((m: any, i: number) => {
+        csv += `${i + 1};${m.code};${m.name};${m.location};${m.startValue};${m.endValue};${m.multiplier};${m.periodConsumption};Đối chứng / Không tính tổng\n`;
+      });
+    }
+
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -215,6 +225,7 @@ export const UtilitiesPage: React.FC = () => {
       description: '',
       isSupplyMeter: false,
       isRecycledWater: false,
+      isExcludedFromTotal: false,
     });
     setShowPointModal(true);
   };
@@ -233,6 +244,7 @@ export const UtilitiesPage: React.FC = () => {
       description: point.description || '',
       isSupplyMeter: Boolean(point.isSupplyMeter),
       isRecycledWater: Boolean(point.isRecycledWater),
+      isExcludedFromTotal: Boolean(point.isExcludedFromTotal),
     });
     setShowPointModal(true);
   };
@@ -1237,6 +1249,22 @@ export const UtilitiesPage: React.FC = () => {
                                 🔄 Tái sử dụng
                               </span>
                             )}
+                            {p.isExcludedFromTotal && (
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: '4px',
+                                  backgroundColor: '#fffbeb',
+                                  color: '#b45309',
+                                  border: '1px solid #fde68a',
+                                }}
+                                title="Đồng hồ đo đối chứng / trung gian - Không tính vào Tổng cấp và Không tính vào Tổng dùng"
+                              >
+                                ⚖️ Đối chứng (Không tính tổng)
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td style={{ fontSize: '12.5px', color: '#475569' }}>{p.location}</td>
@@ -1307,6 +1335,11 @@ export const UtilitiesPage: React.FC = () => {
                       {p.isRecycledWater && (
                         <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', backgroundColor: '#ccfbf1', color: '#0f766e', border: '1px solid #99f6e4' }}>
                           🔄 Tái SD
+                        </span>
+                      )}
+                      {p.isExcludedFromTotal && (
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', backgroundColor: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>
+                          ⚖️ Đối chứng
                         </span>
                       )}
                     </div>
@@ -1727,6 +1760,11 @@ export const UtilitiesPage: React.FC = () => {
                         { key: 'RECYCLED', label: `Nước Tái Sử Dụng (${cumulativeData?.recycledMeters?.length || 0})` },
                       ]
                     : []),
+                  ...(cumulativeData?.excludedMeters && cumulativeData.excludedMeters.length > 0
+                    ? [
+                        { key: 'EXCLUDED', label: `Đo Đối Chứng (${cumulativeData.excludedMeters.length})` },
+                      ]
+                    : []),
                 ].map((tab) => (
                   <button
                     key={tab.key}
@@ -1774,8 +1812,9 @@ export const UtilitiesPage: React.FC = () => {
                     cumulativeData.allMeters
                       .filter((m: any) => {
                         if (cumulativeFilterRole === 'SUPPLY') return m.isSupplyMeter;
-                        if (cumulativeFilterRole === 'CONSUMPTION') return !m.isSupplyMeter && !m.isRecycledWater;
+                        if (cumulativeFilterRole === 'CONSUMPTION') return !m.isSupplyMeter && !m.isRecycledWater && !m.isExcludedFromTotal;
                         if (cumulativeFilterRole === 'RECYCLED') return m.isRecycledWater;
+                        if (cumulativeFilterRole === 'EXCLUDED') return m.isExcludedFromTotal;
                         return true;
                       })
                       .map((m: any, idx: number) => (
@@ -1809,6 +1848,13 @@ export const UtilitiesPage: React.FC = () => {
                               }} title="Đồng hồ nước tái sử dụng - không cộng dồn vào tổng dùng để chống tính trùng">
                                 <RefreshCw size={12} /> NƯỚC TÁI SỬ DỤNG
                               </span>
+                            ) : m.isExcludedFromTotal ? (
+                              <span style={{
+                                padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700,
+                                backgroundColor: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                              }} title="Đồng hồ đo đối chứng / trung gian - Không tính vào Tổng cấp và Không tính vào Tổng dùng">
+                                <Ban size={12} /> ĐO ĐỐI CHỨNG (KHÔNG TÍNH TỔNG)
+                              </span>
                             ) : (
                               <span style={{
                                 padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 600,
@@ -1833,11 +1879,11 @@ export const UtilitiesPage: React.FC = () => {
                           <td style={{ textAlign: 'center', fontSize: '12px' }}>
                             x{m.multiplier}
                           </td>
-                          <td style={{ textAlign: 'right', fontSize: '13.5px', fontWeight: 800, color: m.isSupplyMeter ? '#1d4ed8' : m.isRecycledWater ? '#7c3aed' : '#047857' }}>
+                          <td style={{ textAlign: 'right', fontSize: '13.5px', fontWeight: 800, color: m.isSupplyMeter ? '#1d4ed8' : m.isRecycledWater ? '#7c3aed' : m.isExcludedFromTotal ? '#b45309' : '#047857' }}>
                             {m.periodConsumption.toLocaleString()} {m.unit}
                           </td>
                           <td style={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
-                            {m.sharePercent}%
+                            {m.isExcludedFromTotal ? <span style={{ color: '#94a3b8' }}>-</span> : `${m.sharePercent}%`}
                           </td>
                         </tr>
                       ))
@@ -1939,7 +1985,7 @@ export const UtilitiesPage: React.FC = () => {
                     setPointForm({
                       ...pointForm,
                       isSupplyMeter: checked,
-                      ...(checked ? { isRecycledWater: false } : {}),
+                      ...(checked ? { isRecycledWater: false, isExcludedFromTotal: false } : {}),
                     });
                   }}
                   style={{ width: '18px', height: '18px', cursor: 'pointer' }}
@@ -1960,7 +2006,7 @@ export const UtilitiesPage: React.FC = () => {
                       setPointForm({
                         ...pointForm,
                         isRecycledWater: checked,
-                        ...(checked ? { isSupplyMeter: false } : {}),
+                        ...(checked ? { isSupplyMeter: false, isExcludedFromTotal: false } : {}),
                       });
                     }}
                     style={{ width: '18px', height: '18px', cursor: 'pointer' }}
@@ -1970,6 +2016,26 @@ export const UtilitiesPage: React.FC = () => {
                   </label>
                 </div>
               )}
+
+              <div style={{ padding: '10px 14px', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input
+                  type="checkbox"
+                  id="isExcludedFromTotalCheckbox"
+                  checked={pointForm.isExcludedFromTotal}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setPointForm({
+                      ...pointForm,
+                      isExcludedFromTotal: checked,
+                      ...(checked ? { isSupplyMeter: false, isRecycledWater: false } : {}),
+                    });
+                  }}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <label htmlFor="isExcludedFromTotalCheckbox" style={{ fontSize: '13px', fontWeight: 600, color: '#92400e', cursor: 'pointer', margin: 0 }}>
+                  Đồng hồ đo đối chứng / trung gian nối tiếp (Không tính vào Tổng cấp & Không tính vào Tổng dùng)
+                </label>
+              </div>
 
               <div>
                 <label className="modal-label">Ghi chú mô tả</label>

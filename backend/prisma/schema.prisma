@@ -654,9 +654,10 @@ model UtilityPoint {
   lastReadingValue Float?                  @default(0)   // Lưu chỉ số gần nhất để tra cứu nhanh
   lastReadingAt    DateTime?
   description      String?
-  isSupplyMeter    Boolean                 @default(false) // Đồng hồ tổng cấp từ nhà cung cấp (Điện lực / Thủy cục)
-  isRecycledWater  Boolean                 @default(false) // Đồng hồ đo nước tái sử dụng (không cộng dồn vào tổng dùng để chống tính trùng)
-  isActive         Boolean                 @default(true)
+  isSupplyMeter       Boolean                 @default(false) // Đồng hồ tổng cấp từ nhà cung cấp (Điện lực / Thủy cục)
+  isRecycledWater     Boolean                 @default(false) // Đồng hồ đo nước tái sử dụng (không cộng dồn vào tổng dùng để chống tính trùng)
+  isExcludedFromTotal Boolean                 @default(false) // Đồng hồ đo đối chứng / trung gian nối tiếp (không tính vào tổng cấp và không tính vào tổng dùng)
+  isActive            Boolean                 @default(true)
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
 

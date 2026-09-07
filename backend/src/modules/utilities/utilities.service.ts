@@ -116,6 +116,7 @@ export class UtilitiesService {
         lastReadingValue: Number(data.lastReadingValue) || 0,
         isSupplyMeter: Boolean(data.isSupplyMeter),
         isRecycledWater: Boolean(data.isRecycledWater),
+        isExcludedFromTotal: Boolean(data.isExcludedFromTotal),
         description: data.description,
         isActive: data.isActive !== false,
       },
@@ -136,6 +137,7 @@ export class UtilitiesService {
     if (data.lastReadingValue !== undefined) updateData.lastReadingValue = Number(data.lastReadingValue);
     if (data.isSupplyMeter !== undefined) updateData.isSupplyMeter = Boolean(data.isSupplyMeter);
     if (data.isRecycledWater !== undefined) updateData.isRecycledWater = Boolean(data.isRecycledWater);
+    if (data.isExcludedFromTotal !== undefined) updateData.isExcludedFromTotal = Boolean(data.isExcludedFromTotal);
     if (data.description !== undefined) updateData.description = data.description;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
@@ -311,6 +313,7 @@ export class UtilitiesService {
       const cycle = isElec ? elecCycle : waterCycle;
       const isSupply = Boolean(p.isSupplyMeter);
       const isRecycled = Boolean(p.isRecycledWater);
+      const isExcluded = Boolean(p.isExcludedFromTotal);
 
       // Tìm bản ghi trong khoảng chu kỳ
       const periodReadings = p.readings.filter(
@@ -358,6 +361,7 @@ export class UtilitiesService {
         multiplier: p.multiplier,
         isSupplyMeter: isSupply,
         isRecycledWater: isRecycled,
+        isExcludedFromTotal: isExcluded,
         cycleDescription: cycle.cycleDescription,
         cycleStartDate: cycle.startDate,
         cycleEndDate: cycle.endDate,
@@ -374,9 +378,10 @@ export class UtilitiesService {
       year,
       elecCycle,
       waterCycle,
-      supplyMeters: items.filter((i) => i.isSupplyMeter),
-      consumptionMeters: items.filter((i) => !i.isSupplyMeter && !i.isRecycledWater),
-      recycledMeters: items.filter((i) => i.isRecycledWater),
+      supplyMeters: items.filter((i) => i.isSupplyMeter && !i.isExcludedFromTotal),
+      consumptionMeters: items.filter((i) => !i.isSupplyMeter && !i.isRecycledWater && !i.isExcludedFromTotal),
+      recycledMeters: items.filter((i) => i.isRecycledWater && !i.isExcludedFromTotal),
+      excludedMeters: items.filter((i) => i.isExcludedFromTotal),
       allMeters: items,
     };
   }
@@ -1206,6 +1211,9 @@ export class UtilitiesService {
     }
 
     readings.forEach((r) => {
+      // Bỏ qua đồng hồ đối chứng khỏi thống kê tổng dùng & tổng cấp
+      if (r.point.isExcludedFromTotal) return;
+
       const dateKey = r.recordedAt.toISOString().split('T')[0];
       const isToday = r.recordedAt >= todayStart;
       const isSupply = Boolean(r.point.isSupplyMeter);
@@ -1414,8 +1422,11 @@ export class UtilitiesService {
       // 4. Phân loại đồng hồ 100% dựa vào cấu hình CSDL của người dùng
       const isSupply = Boolean(p.isSupplyMeter);
       const isRecycled = Boolean(!isSupply && p.isRecycledWater);
+      const isExcluded = Boolean(p.isExcludedFromTotal);
 
-      if (isSupply) {
+      if (isExcluded) {
+        // Đồng hồ đối chứng / trung gian nối tiếp: KHÔNG tính vào tổng cấp và KHÔNG tính vào tổng dùng
+      } else if (isSupply) {
         totalSupply += periodConsumption;
       } else if (isRecycled) {
         totalRecycled += periodConsumption;
@@ -1448,6 +1459,7 @@ export class UtilitiesService {
         unit: p.unit,
         isSupplyMeter: isSupply,
         isRecycledWater: isRecycled,
+        isExcludedFromTotal: isExcluded,
         readingsCount: count,
         startValue: Number(startValue.toFixed(2)),
         endValue: Number(endValue.toFixed(2)),
@@ -1467,7 +1479,9 @@ export class UtilitiesService {
 
     const breakdownWithShare = metersBreakdown.map((m) => {
       let sharePercent = 0;
-      if (!m.isSupplyMeter && !m.isRecycledWater && totalConsumption > 0) {
+      if (m.isExcludedFromTotal) {
+        sharePercent = 0;
+      } else if (!m.isSupplyMeter && !m.isRecycledWater && totalConsumption > 0) {
         sharePercent = Number(((m.periodConsumption / totalConsumption) * 100).toFixed(2));
       } else if (m.isSupplyMeter && totalSupply > 0) {
         sharePercent = Number(((m.periodConsumption / totalSupply) * 100).toFixed(2));
@@ -1501,9 +1515,10 @@ export class UtilitiesService {
           offPeak: Number(totalOffPeak.toFixed(2)),
         } : null,
       },
-      supplyMeters: breakdownWithShare.filter((m) => m.isSupplyMeter),
-      consumptionMeters: breakdownWithShare.filter((m) => !m.isSupplyMeter && !m.isRecycledWater),
-      recycledMeters: breakdownWithShare.filter((m) => m.isRecycledWater),
+      supplyMeters: breakdownWithShare.filter((m) => m.isSupplyMeter && !m.isExcludedFromTotal),
+      consumptionMeters: breakdownWithShare.filter((m) => !m.isSupplyMeter && !m.isRecycledWater && !m.isExcludedFromTotal),
+      recycledMeters: breakdownWithShare.filter((m) => m.isRecycledWater && !m.isExcludedFromTotal),
+      excludedMeters: breakdownWithShare.filter((m) => m.isExcludedFromTotal),
       allMeters: breakdownWithShare,
     };
   }

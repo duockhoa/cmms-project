@@ -29,6 +29,8 @@ interface PeriodMeterItem {
   unit: string;
   multiplier: number;
   isSupplyMeter: boolean;
+  isRecycledWater?: boolean;
+  isExcludedFromTotal?: boolean;
   cycleDescription: string;
   cycleStartDate: string;
   cycleEndDate: string;
@@ -819,6 +821,24 @@ export const UtilitySettingsTab: React.FC = () => {
                             }}
                           >
                             ⭐ TỔNG CẤP
+                          </span>
+                        )}
+                        {meter.isExcludedFromTotal && (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              color: '#b45309',
+                              backgroundColor: '#fef3c7',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              marginTop: '2px',
+                              marginLeft: meter.isSupplyMeter ? '4px' : '0px',
+                            }}
+                            title="Đồng hồ đo đối chứng - Không tính vào Tổng cấp & Không tính vào Tổng dùng"
+                          >
+                            ⚖️ ĐO ĐỐI CHỨNG
                           </span>
                         )}
                       </td>
