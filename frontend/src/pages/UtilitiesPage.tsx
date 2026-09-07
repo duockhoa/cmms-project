@@ -8,7 +8,7 @@ import {
   Printer, Download, Search, CheckCircle2, 
   Clock, Settings, FileText, ArrowRight,
   Calendar, PieChart, AlertTriangle, Layers,
-  Ban, XCircle, ShieldAlert
+  Ban, XCircle, ShieldAlert, Activity
 } from 'lucide-react';
 
 export const UtilitiesPage: React.FC = () => {
@@ -1722,7 +1722,11 @@ export const UtilitiesPage: React.FC = () => {
                   { key: 'ALL', label: `Tất cả (${cumulativeData?.allMeters?.length || 0})` },
                   { key: 'SUPPLY', label: `Nguồn Tổng Cấp (${cumulativeData?.supplyMeters?.length || 0})` },
                   { key: 'CONSUMPTION', label: `Đo Tiêu Thụ (${cumulativeData?.consumptionMeters?.length || 0})` },
-                  ...(cumulativeType === 'WATER' ? [{ key: 'RECYCLED', label: `Nước Tái Sử Dụng (${cumulativeData?.recycledMeters?.length || 0})` }] : []),
+                  ...(cumulativeType === 'WATER'
+                    ? [
+                        { key: 'RECYCLED', label: `Nước Tái Sử Dụng (${cumulativeData?.recycledMeters?.length || 0})` },
+                      ]
+                    : []),
                 ].map((tab) => (
                   <button
                     key={tab.key}
@@ -1782,6 +1786,13 @@ export const UtilitiesPage: React.FC = () => {
                           </td>
                           <td>
                             <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>{m.name}</div>
+                            {m.tariffType === 'THREE_PHASE' && (
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                <span title="Bình thường (T1)">T1: <strong style={{ color: '#0f172a' }}>{m.normalConsumption?.toLocaleString()}</strong></span>
+                                <span title="Cao điểm (T2)" style={{ color: '#dc2626' }}>T2: <strong>{m.peakConsumption?.toLocaleString()}</strong></span>
+                                <span title="Thấp điểm (T3)" style={{ color: '#16a34a' }}>T3: <strong>{m.offPeakConsumption?.toLocaleString()}</strong></span>
+                              </div>
+                            )}
                           </td>
                           <td>
                             {m.isSupplyMeter ? (

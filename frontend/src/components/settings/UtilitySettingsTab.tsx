@@ -234,6 +234,25 @@ export const UtilitySettingsTab: React.FC = () => {
     }
   };
 
+  const handleAutoFillFromHistory = () => {
+    const newEdits = { ...editValues };
+    let filledCount = 0;
+    allMeters.forEach((m) => {
+      const currentVal = newEdits[m.pointId]?.value;
+      if (!currentVal || parseFloat(currentVal) === 0) {
+        const fillVal = m.baselineValue && m.baselineValue > 0 ? m.baselineValue : (m.lastReadingValue || 0);
+        newEdits[m.pointId] = {
+          ...newEdits[m.pointId],
+          value: String(fillVal),
+          currentValue: String(m.lastReadingValue || fillVal),
+        };
+        filledCount++;
+      }
+    });
+    setEditValues(newEdits);
+    toast.success('Đồng bộ mốc', `Đã điền chỉ số mốc gợi ý cho ${filledCount} đồng hồ từ dữ liệu ghi nhận.`);
+  };
+
   const filteredMeters = allMeters.filter((m) => {
     const matchSearch =
       !search ||
@@ -263,9 +282,8 @@ export const UtilitySettingsTab: React.FC = () => {
         }}
       >
         <div>
-          <h3 style={{ fontSize: '17px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
-            <Calendar size={22} style={{ color: '#2563eb' }} />
-            Chỉ số Đầu kỳ Tính toán Điện & Nước (Billing Cycle Baselines)
+          <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+            Chỉ Số Chốt Đầu Kỳ (Điện & Nước)
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginTop: '4px', margin: 0 }}>
             Khởi tạo mặt số ban đầu cho từng chu kỳ tính toán điện & nước theo đúng logic kỳ đối soát nhà máy.
@@ -282,6 +300,17 @@ export const UtilitySettingsTab: React.FC = () => {
           >
             <span>Xem Báo Cáo Kỳ {selectedMonth}/{selectedYear}</span>
             <ArrowUpRight size={15} />
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleAutoFillFromHistory}
+            disabled={loading || batchSaving}
+            title="Tự động điền mốc đầu kỳ cho các đồng hồ chưa có số chốt"
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: '#047857' }}
+          >
+            <Zap size={14} color="#059669" />
+            <span>Điền mốc từ lịch sử</span>
           </button>
           <button
             className="btn btn-secondary"

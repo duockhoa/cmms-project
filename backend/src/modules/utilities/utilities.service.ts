@@ -247,6 +247,14 @@ export class UtilitiesService {
   // ==========================================
   // 1.2 THIẾT LẬP CHỈ SỐ ĐẦU KỲ THEO CHU KỲ TÍNH TOÁN (ĐIỆN & NƯỚC)
   // ==========================================
+  isSupplyPoint(p: { isSupplyMeter?: boolean }): boolean {
+    return Boolean(p.isSupplyMeter);
+  }
+
+  isRecycledPoint(p: { isRecycledWater?: boolean }): boolean {
+    return Boolean(p.isRecycledWater);
+  }
+
   getPeriodCycleInfo(type: 'ELECTRICITY' | 'WATER', month: number, year: number) {
     let startDate: Date;
     let endDate: Date;
@@ -287,6 +295,7 @@ export class UtilitiesService {
       },
       include: {
         readings: {
+          where: { isVoided: false },
           orderBy: { recordedAt: 'asc' },
         },
       },
@@ -300,23 +309,44 @@ export class UtilitiesService {
     const items = points.map((p) => {
       const isElec = p.type === 'ELECTRICITY';
       const cycle = isElec ? elecCycle : waterCycle;
+      const isSupply = Boolean(p.isSupplyMeter);
+      const isRecycled = Boolean(p.isRecycledWater);
 
       // Tìm bản ghi trong khoảng chu kỳ
       const periodReadings = p.readings.filter(
         (r) => r.recordedAt >= cycle.startDate && r.recordedAt <= cycle.endDate,
       );
 
-      // Tìm bản ghi mốc đầu kỳ (consumption = 0 hoặc bản ghi đầu tiên trong chu kỳ)
+      // Tìm bản ghi mốc đầu kỳ (consumption = 0 hoặc bản ghi chốt tại cycle.startDate)
       let baselineRecord = periodReadings.find(
-        (r) => r.consumption === 0 && (r.notes?.includes('đầu kỳ') || r.notes?.includes('mốc')),
+        (r) =>
+          (r.consumption === 0 || r.recordedAt.getTime() === cycle.startDate.getTime()) &&
+          (r.notes?.includes('đầu kỳ') || r.notes?.includes('mốc') || r.notes?.includes('baseline')),
       );
-      if (!baselineRecord && periodReadings.length > 0) {
-        baselineRecord = periodReadings[0];
-      }
 
-      const baselineValue = baselineRecord
-        ? (baselineRecord.previousValue ?? baselineRecord.readingValue)
-        : (p.lastReadingValue ?? 0);
+      // Tìm bản ghi cuối cùng ngay trước chu kỳ
+      const lastReadingBefore = p.readings
+        .filter((r) => r.recordedAt < cycle.startDate)
+        .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0];
+
+      let baselineValue = 0;
+      let hasExistingBaseline = false;
+
+      if (baselineRecord) {
+        baselineValue = baselineRecord.previousValue ?? baselineRecord.readingValue;
+        hasExistingBaseline = true;
+      } else if (lastReadingBefore) {
+        baselineValue = lastReadingBefore.readingValue;
+        hasExistingBaseline = true;
+      } else if (periodReadings.length > 0) {
+        baselineValue =
+          periodReadings[0].previousValue && periodReadings[0].previousValue > 0
+            ? periodReadings[0].previousValue
+            : periodReadings[0].readingValue;
+        hasExistingBaseline = true;
+      } else {
+        baselineValue = p.lastReadingValue ?? 0;
+      }
 
       return {
         pointId: p.id,
@@ -326,13 +356,14 @@ export class UtilitiesService {
         location: p.location,
         unit: p.unit,
         multiplier: p.multiplier,
-        isSupplyMeter: p.isSupplyMeter,
+        isSupplyMeter: isSupply,
+        isRecycledWater: isRecycled,
         cycleDescription: cycle.cycleDescription,
         cycleStartDate: cycle.startDate,
         cycleEndDate: cycle.endDate,
         startDayLabel: cycle.startDayLabel,
-        baselineValue: baselineValue,
-        hasExistingBaseline: Boolean(baselineRecord),
+        baselineValue: Number(Number(baselineValue).toFixed(2)),
+        hasExistingBaseline,
         lastReadingValue: p.lastReadingValue,
         lastReadingAt: p.lastReadingAt,
       };
@@ -344,6 +375,8 @@ export class UtilitiesService {
       elecCycle,
       waterCycle,
       supplyMeters: items.filter((i) => i.isSupplyMeter),
+      consumptionMeters: items.filter((i) => !i.isSupplyMeter && !i.isRecycledWater),
+      recycledMeters: items.filter((i) => i.isRecycledWater),
       allMeters: items,
     };
   }
@@ -946,8 +979,10 @@ export class UtilitiesService {
     todayStart.setHours(0, 0, 0, 0);
 
     // 1. Lấy tất cả readings trong khoảng thời gian
+    // 1. Lấy tất cả readings trong khoảng thời gian (loại trừ bản ghi đã hủy)
     const readings = await this.prisma.utilityReading.findMany({
       where: {
+        isVoided: false,
         recordedAt: { gte: startDate },
       },
       include: {
@@ -960,6 +995,9 @@ export class UtilitiesService {
     const allPoints = await this.prisma.utilityPoint.findMany({
       where: { isActive: true },
     });
+
+    const hasElecSupplyMeters = allPoints.some(p => p.type === 'ELECTRICITY' && this.isSupplyPoint(p));
+    const hasWaterSupplyMeters = allPoints.some(p => p.type === 'WATER' && this.isSupplyPoint(p));
 
     let totalElectricityToday = 0;
     let totalWaterToday = 0;
@@ -979,18 +1017,28 @@ export class UtilitiesService {
     readings.forEach((r) => {
       const dateKey = r.recordedAt.toISOString().split('T')[0];
       const isToday = r.recordedAt >= todayStart;
+      const isSupply = Boolean(r.point.isSupplyMeter);
+      const isRecycled = Boolean(r.point.isRecycledWater);
 
       if (r.point.type === 'ELECTRICITY') {
-        totalElectricityPeriod += r.consumption;
-        if (isToday) totalElectricityToday += r.consumption;
-        if (dailyBreakdown[dateKey]) {
-          dailyBreakdown[dateKey].electricity += r.consumption;
+        const shouldCount = hasElecSupplyMeters ? isSupply : true;
+        if (shouldCount) {
+          totalElectricityPeriod += r.consumption;
+          if (isToday) totalElectricityToday += r.consumption;
+          if (dailyBreakdown[dateKey]) {
+            dailyBreakdown[dateKey].electricity += r.consumption;
+          }
         }
       } else if (r.point.type === 'WATER') {
-        totalWaterPeriod += r.consumption;
-        if (isToday) totalWaterToday += r.consumption;
-        if (dailyBreakdown[dateKey]) {
-          dailyBreakdown[dateKey].water += r.consumption;
+        if (!isRecycled) {
+          const shouldCount = hasWaterSupplyMeters ? isSupply : true;
+          if (shouldCount) {
+            totalWaterPeriod += r.consumption;
+            if (isToday) totalWaterToday += r.consumption;
+            if (dailyBreakdown[dateKey]) {
+              dailyBreakdown[dateKey].water += r.consumption;
+            }
+          }
         }
       }
     });
@@ -1045,26 +1093,10 @@ export class UtilitiesService {
     const month = Number(query.month) || (new Date().getMonth() + 1);
     const year = Number(query.year) || new Date().getFullYear();
 
-    let startDate: Date;
-    let endDate: Date;
-    let cycleDescription: string;
+    const cycle = this.getPeriodCycleInfo(type, month, year);
+    const { startDate, endDate, cycleDescription } = cycle;
 
-    if (type === 'ELECTRICITY') {
-      // Kỳ điện: Từ ngày 01 đến ngày cuối cùng của tháng đó
-      startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
-      endDate = new Date(year, month, 0, 23, 59, 59, 999);
-      const lastDay = endDate.getDate();
-      cycleDescription = `Từ 01/${String(month).padStart(2, '0')}/${year} đến ${String(lastDay).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-    } else {
-      // Kỳ nước: Từ ngày 21 của tháng liền kề trước đó đến ngày 20 của tháng tiếp theo
-      startDate = new Date(year, month - 2, 21, 0, 0, 0, 0);
-      endDate = new Date(year, month - 1, 20, 23, 59, 59, 999);
-      const prevMonth = startDate.getMonth() + 1;
-      const prevYear = startDate.getFullYear();
-      cycleDescription = `Từ 21/${String(prevMonth).padStart(2, '0')}/${prevYear} đến 20/${String(month).padStart(2, '0')}/${year}`;
-    }
-
-    // 1. Lấy tất cả các điểm đo thuộc loại tiện ích này
+    // 1. Lấy tất cả các điểm đo thuộc loại tiện ích này kèm readings đến hết endDate
     const points = await this.prisma.utilityPoint.findMany({
       where: {
         type: type as any,
@@ -1075,7 +1107,6 @@ export class UtilitiesService {
           where: {
             isVoided: false,
             recordedAt: {
-              gte: startDate,
               lte: endDate,
             },
           },
@@ -1095,64 +1126,124 @@ export class UtilitiesService {
     let totalPeak = 0;
     let totalOffPeak = 0;
 
-    const metersBreakdown = points.map((p) => {
-      const readings = p.readings;
-      const count = readings.length;
+    const hasThreePhaseSupply = points.some((pt) => pt.isSupplyMeter && pt.tariffType === 'THREE_PHASE');
+    const now = new Date();
+    const isCurrentOrFuturePeriod = endDate >= now;
 
-      let periodConsumption = 0;
-      let startValue = p.lastReadingValue || 0;
-      let endValue = p.lastReadingValue || 0;
+    const metersBreakdown = points.map((p) => {
+      const allReadings = p.readings;
+      const periodReadings = allReadings.filter((r) => r.recordedAt >= startDate && r.recordedAt <= endDate);
+      const count = periodReadings.length;
+
+      // Bản ghi trước chu kỳ
+      const priorReadings = allReadings.filter((r) => r.recordedAt < startDate);
+      const lastPriorReading = priorReadings.length > 0 ? priorReadings[priorReadings.length - 1] : null;
+
+      // Bản ghi chốt đầu kỳ có chủ đích
+      const explicitBaseline = periodReadings.find(
+        (r) =>
+          (r.consumption === 0 || r.recordedAt.getTime() === startDate.getTime()) &&
+          (r.notes?.includes('đầu kỳ') || r.notes?.includes('mốc') || r.notes?.includes('baseline')),
+      );
+
+      let startValue = 0;
+      let endValue = 0;
+
+      // 1. Xác định Số Đầu Kỳ (startValue)
+      if (explicitBaseline) {
+        startValue = explicitBaseline.previousValue ?? explicitBaseline.readingValue;
+      } else if (lastPriorReading) {
+        startValue = lastPriorReading.readingValue;
+      } else if (count > 0) {
+        if (periodReadings[0].previousValue && periodReadings[0].previousValue > 0) {
+          startValue = periodReadings[0].previousValue;
+        } else {
+          // Điểm đo mới đưa vào theo dõi: chỉ số của lần ghi đầu chính là mốc ban đầu
+          startValue = periodReadings[0].readingValue;
+        }
+      } else {
+        startValue = p.lastReadingValue || 0;
+      }
+
+      // 2. Xác định Số Cuối Kỳ (endValue)
+      if (count > 0) {
+        endValue = periodReadings[count - 1].readingValue;
+      } else if (lastPriorReading) {
+        endValue = lastPriorReading.readingValue;
+      } else {
+        endValue = p.lastReadingValue || startValue;
+      }
+
+      // Nếu đang xem kỳ hiện tại và chỉ số đồng hồ mới nhất lớn hơn
+      if (isCurrentOrFuturePeriod && p.lastReadingValue !== null && p.lastReadingValue !== undefined && p.lastReadingValue > endValue) {
+        endValue = p.lastReadingValue;
+      }
+
+      if (endValue < startValue) {
+        endValue = startValue;
+      }
+
+      // 3. Công thức tính sản lượng chuẩn xác: (endValue - startValue) * multiplier
+      const diff = endValue - startValue;
+      const periodConsumption = diff > 0 ? Number((diff * (p.multiplier || 1.0)).toFixed(2)) : 0;
+
+      // Điện 3 pha (Biểu giá T1 - Bình thường, T2 - Cao điểm, T3 - Thấp điểm)
       let normalVal = 0;
       let peakVal = 0;
       let offPeakVal = 0;
 
-      if (count > 0) {
-        startValue = readings[0].previousValue ?? readings[0].readingValue;
-        endValue = readings[count - 1].readingValue;
-        periodConsumption = readings.reduce((acc, r) => acc + (r.consumption || 0), 0);
+      if (p.tariffType === 'THREE_PHASE' && count > 0) {
+        let startNormal = 0;
+        let startPeak = 0;
+        let startOffPeak = 0;
 
-        if (p.tariffType === 'THREE_PHASE') {
-          const firstNormal = readings[0].normalValue || 0;
-          const lastNormal = readings[count - 1].normalValue || 0;
-          normalVal = Math.max(0, (lastNormal - firstNormal) * p.multiplier);
-
-          const firstPeak = readings[0].peakValue || 0;
-          const lastPeak = readings[count - 1].peakValue || 0;
-          peakVal = Math.max(0, (lastPeak - firstPeak) * p.multiplier);
-
-          const firstOffPeak = readings[0].offPeakValue || 0;
-          const lastOffPeak = readings[count - 1].offPeakValue || 0;
-          offPeakVal = Math.max(0, (lastOffPeak - firstOffPeak) * p.multiplier);
+        if (explicitBaseline) {
+          startNormal = explicitBaseline.normalValue ?? 0;
+          startPeak = explicitBaseline.peakValue ?? 0;
+          startOffPeak = explicitBaseline.offPeakValue ?? 0;
+        } else if (lastPriorReading) {
+          startNormal = lastPriorReading.normalValue ?? 0;
+          startPeak = lastPriorReading.peakValue ?? 0;
+          startOffPeak = lastPriorReading.offPeakValue ?? 0;
+        } else if (count > 0) {
+          startNormal = periodReadings[0].normalValue ?? 0;
+          startPeak = periodReadings[0].peakValue ?? 0;
+          startOffPeak = periodReadings[0].offPeakValue ?? 0;
         }
+
+        const endNormal = periodReadings[count - 1].normalValue ?? startNormal;
+        const endPeak = periodReadings[count - 1].peakValue ?? startPeak;
+        const endOffPeak = periodReadings[count - 1].offPeakValue ?? startOffPeak;
+
+        normalVal = Math.max(0, (endNormal - startNormal) * (p.multiplier || 1.0));
+        peakVal = Math.max(0, (endPeak - startPeak) * (p.multiplier || 1.0));
+        offPeakVal = Math.max(0, (endOffPeak - startOffPeak) * (p.multiplier || 1.0));
       }
 
-      // Nếu đồng hồ có chỉ số hiện tại (lastReadingValue) lớn hơn endValue đã ghi trong các lần chốt
-      if (p.lastReadingValue !== null && p.lastReadingValue !== undefined && p.lastReadingValue > endValue) {
-        endValue = p.lastReadingValue;
-      }
-
-      // Tính sản lượng thực tế từ mốc đầu kỳ đến chỉ số cuối/hiện tại
-      const diff = endValue - startValue;
-      const calculatedConsumption = diff > 0 ? Number((diff * (p.multiplier || 1.0)).toFixed(2)) : 0;
-      periodConsumption = Math.max(calculatedConsumption, periodConsumption);
-
-      periodConsumption = Number(periodConsumption.toFixed(2));
-      const isSupply = Boolean(p.isSupplyMeter || p.code.includes('MSB') || p.code.includes('MAIN') || p.code.includes('TONG'));
+      // 4. Phân loại đồng hồ 100% dựa vào cấu hình CSDL của người dùng
+      const isSupply = Boolean(p.isSupplyMeter);
       const isRecycled = Boolean(!isSupply && p.isRecycledWater);
 
       if (isSupply) {
         totalSupply += periodConsumption;
       } else if (isRecycled) {
-        // Nước tái sử dụng: TUYỆT ĐỐI KHÔNG cộng vào totalConsumption để tránh tính trùng 2 lần!
         totalRecycled += periodConsumption;
       } else {
         totalConsumption += periodConsumption;
       }
 
       if (p.tariffType === 'THREE_PHASE') {
-        totalNormal += normalVal;
-        totalPeak += peakVal;
-        totalOffPeak += offPeakVal;
+        if (hasThreePhaseSupply) {
+          if (isSupply) {
+            totalNormal += normalVal;
+            totalPeak += peakVal;
+            totalOffPeak += offPeakVal;
+          }
+        } else {
+          totalNormal += normalVal;
+          totalPeak += peakVal;
+          totalOffPeak += offPeakVal;
+        }
       }
 
       return {
@@ -1167,8 +1258,8 @@ export class UtilitiesService {
         isSupplyMeter: isSupply,
         isRecycledWater: isRecycled,
         readingsCount: count,
-        startValue,
-        endValue,
+        startValue: Number(startValue.toFixed(2)),
+        endValue: Number(endValue.toFixed(2)),
         periodConsumption,
         normalConsumption: Number(normalVal.toFixed(2)),
         peakConsumption: Number(peakVal.toFixed(2)),
