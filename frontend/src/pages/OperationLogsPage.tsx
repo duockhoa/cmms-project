@@ -3,7 +3,7 @@ import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { 
   Camera, X, Search, ChevronLeft, ChevronRight, 
-  MapPin, Sliders, RefreshCw, LayoutGrid
+  MapPin, RefreshCw, LayoutGrid
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
@@ -15,7 +15,6 @@ export const OperationLogsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
   const [selectedEqId, setSelectedEqId] = useState<string | null>(null);
-  const [showMobileEqDrawer, setShowMobileEqDrawer] = useState(false);
   
   // Left Sidebar State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -113,7 +112,9 @@ export const OperationLogsPage: React.FC = () => {
 
             if (matchedEq) {
               // Automatically open the operation log recording form for the scanned equipment
-              navigate(`/equipment/${matchedEq.id}/operation-log-form`);
+              navigate(`/equipment/${matchedEq.id}/operation-log-form`, {
+                state: { verifiedByQr: true, scannedAt: new Date().toISOString() },
+              });
             } else {
               alert(`Không tìm thấy thiết bị với mã QR: "${rawText}". Vui lòng kiểm tra lại tem QR trên máy.`);
             }
@@ -212,15 +213,7 @@ export const OperationLogsPage: React.FC = () => {
           flex-direction: column;
         }
 
-        /* Mobile Equipment Bar - Hidden on desktop */
-        .mobile-eq-bar {
-          display: none;
-        }
 
-        /* Mobile Equipment Drawer - Hidden on desktop */
-        .mobile-eq-drawer-overlay {
-          display: none;
-        }
 
         /* RESPONSIVE STYLES FOR TABLET & MOBILE (<= 768px) */
         @media (max-width: 768px) {
@@ -272,108 +265,7 @@ export const OperationLogsPage: React.FC = () => {
             border-radius: 8px;
           }
 
-          /* Show Mobile Equipment Bar */
-          .mobile-eq-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 12px;
-            background-color: var(--bg-secondary, #ffffff);
-            border: 1px solid var(--border-color, #e2e8f0);
-            border-radius: 8px;
-            gap: 10px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-          }
 
-          .mobile-eq-current {
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-            flex: 1;
-          }
-
-          .mobile-eq-code {
-            font-weight: 700;
-            font-size: 11px;
-            color: #2563eb;
-            background: rgba(37, 99, 235, 0.08);
-            padding: 2px 6px;
-            border-radius: 4px;
-            display: inline-block;
-            width: fit-content;
-          }
-
-          .mobile-eq-name {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--text-primary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            margin-top: 3px;
-          }
-
-          .mobile-eq-loc {
-            font-size: 11px;
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 3px;
-            margin-top: 2px;
-          }
-
-          .mobile-switch-eq-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 8px 12px;
-            background-color: #f1f5f9;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #1e293b;
-            cursor: pointer;
-            white-space: nowrap;
-            flex-shrink: 0;
-            transition: all 0.15s ease;
-          }
-
-          .mobile-switch-eq-btn:active {
-            background-color: #e2e8f0;
-            transform: scale(0.98);
-          }
-
-          /* Mobile Drawer Overlay */
-          .mobile-eq-drawer-overlay {
-            display: flex;
-            position: fixed;
-            inset: 0;
-            background-color: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(4px);
-            z-index: 1000;
-            align-items: flex-end;
-            justify-content: center;
-          }
-
-          .mobile-eq-drawer-content {
-            width: 100%;
-            max-height: 82vh;
-            background-color: #ffffff;
-            border-top-left-radius: 18px;
-            border-top-right-radius: 18px;
-            display: flex;
-            flex-direction: column;
-            padding: 16px;
-            gap: 12px;
-            box-shadow: 0 -10px 25px rgba(0, 0, 0, 0.2);
-            animation: drawerSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-          }
-
-          @keyframes drawerSlideUp {
-            from { transform: translateY(100%); }
-            to { transform: translateY(0); }
-          }
         }
       `}</style>
 
@@ -408,26 +300,7 @@ export const OperationLogsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Equipment Selector Bar (Visible only on mobile <= 768px) */}
-      <div className="mobile-eq-bar">
-        <div className="mobile-eq-current">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="mobile-eq-code">{selectedEquipment?.code || 'Chưa chọn'}</span>
-          </div>
-          <div className="mobile-eq-name">{selectedEquipment?.name || 'Vui lòng chọn thiết bị'}</div>
-          {selectedEquipment?.location && (
-            <div className="mobile-eq-loc"><MapPin size={11} /> {selectedEquipment.location}</div>
-          )}
-        </div>
-        <button
-          type="button"
-          className="mobile-switch-eq-btn"
-          onClick={() => setShowMobileEqDrawer(true)}
-        >
-          <Sliders size={13} />
-          <span>Đổi máy ({filteredEquipment.length})</span>
-        </button>
-      </div>
+
 
       {/* Main Workspace: Left Collapsible Sidebar (Desktop) + Right Full-Width Logbook */}
       <div className="op-logs-workspace">
@@ -598,105 +471,7 @@ export const OperationLogsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Equipment Bottom Sheet Drawer (Only visible when toggled on mobile) */}
-      {showMobileEqDrawer && (
-        <div className="mobile-eq-drawer-overlay" onClick={() => setShowMobileEqDrawer(false)}>
-          <div className="mobile-eq-drawer-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
-              <div style={{ fontWeight: 800, fontSize: '15px', color: 'var(--text-primary)' }}>
-                Chọn thiết bị ({filteredEquipment.length})
-              </div>
-              <button
-                onClick={() => setShowMobileEqDrawer(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
 
-            {/* Search and Location Filter inside Mobile Drawer */}
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Tìm mã hoặc tên máy..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ paddingLeft: '28px', height: '36px', fontSize: '13px' }}
-              />
-              <Search
-                size={14}
-                style={{
-                  position: 'absolute',
-                  left: '9px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'var(--text-muted)',
-                }}
-              />
-            </div>
-
-            <select
-              className="form-input"
-              value={selectedLocation}
-              onChange={(e) => setSelectedLocation(e.target.value)}
-              style={{ height: '36px', fontSize: '12.5px', padding: '4px 8px' }}
-            >
-              <option value="ALL">Tất cả phân xưởng</option>
-              {locations.map((loc) => (
-                <option key={loc.id} value={loc.name}>
-                  {loc.name}
-                </option>
-              ))}
-            </select>
-
-            {/* Scrollable list of equipment cards */}
-            <div style={{ overflowY: 'auto', maxHeight: '52vh', display: 'flex', flexDirection: 'column', gap: '6px', paddingRight: '2px' }}>
-              {filteredEquipment.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                  Không tìm thấy thiết bị phù hợp.
-                </div>
-              ) : (
-                filteredEquipment.map((eq) => {
-                  const isSelected = selectedEqId === eq.id;
-                  return (
-                    <div
-                      key={eq.id}
-                      onClick={() => {
-                        setSelectedEqId(eq.id);
-                        setShowMobileEqDrawer(false);
-                      }}
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: isSelected ? '1.5px solid #2563eb' : '1px solid #e2e8f0',
-                        backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 700, fontSize: '12.5px', color: isSelected ? '#2563eb' : '#0f172a' }}>
-                          {eq.code}
-                        </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{eq.category}</span>
-                      </div>
-                      <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#1e293b' }}>
-                        {eq.name}
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <MapPin size={11} /> {eq.location}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* QR Scanner Modal */}
       {showScanner && (
