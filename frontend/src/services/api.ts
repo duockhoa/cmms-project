@@ -551,6 +551,17 @@ export const api = {
     return request(`/utilities/reports/cumulative${toQueryString(params)}`);
   },
 
+  getUtilityTrendMatrix: (params?: {
+    type?: 'ELECTRICITY' | 'WATER';
+    viewMode?: 'DAILY' | 'MONTHLY' | 'YEARLY';
+    month?: number;
+    year?: number;
+    startYear?: number;
+    endYear?: number;
+  }) => {
+    return request(`/utilities/reports/trend-matrix${toQueryString(params)}`);
+  },
+
   // Master Catalog Cache Interface
   catalog: {
     getEquipment: () => catalogCache.fetchWithCache('equipment_all', () => request('/equipment')),

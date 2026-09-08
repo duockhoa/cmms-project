@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { 
-  Zap, Droplets, Cpu, QrCode, BarChart3, 
+  Zap, Droplets, Cpu, QrCode, BarChart3, BarChart2,
   RefreshCw, Plus, Edit2, Trash2, 
   Printer, Download, Search, CheckCircle2, 
   Clock, Settings, FileText, ArrowRight,
   Calendar, PieChart, AlertTriangle, Layers,
-  Ban, XCircle, ShieldAlert, Activity, Filter, X
+  Ban, XCircle, ShieldAlert, Activity, Filter, X,
+  TrendingUp, TrendingDown, CalendarDays, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { formatVN } from '../utils/formatters';
+import { UtilityTrendChart } from '../components/utilities/UtilityTrendChart';
 
 export const UtilitiesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,6 +35,31 @@ export const UtilitiesPage: React.FC = () => {
   const [cumulativeData, setCumulativeData] = useState<any | null>(null);
   const [cumulativeLoading, setCumulativeLoading] = useState(false);
   const [cumulativeFilter, setCumulativeFilter] = useState<string>('ALL');
+
+  // Báo cáo ma trận xu hướng theo thời gian (Ngày / Tháng / Năm)
+  const [trendViewMode, setTrendViewMode] = useState<'DAILY' | 'MONTHLY' | 'YEARLY'>('DAILY');
+  const [trendMonth, setTrendMonth] = useState<number>(new Date().getMonth() + 1);
+  const [trendYear, setTrendYear] = useState<number>(new Date().getFullYear());
+  const [trendStartYear, setTrendStartYear] = useState<number>(new Date().getFullYear() - 3);
+  const [trendEndYear, setTrendEndYear] = useState<number>(new Date().getFullYear());
+  const [trendFilter, setTrendFilter] = useState<string>('ALL');
+  const [trendData, setTrendData] = useState<any | null>(null);
+  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendDisplayType, setTrendDisplayType] = useState<'TABLE' | 'CHART'>('TABLE');
+  const trendTableContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollTrendTable = (offset: number) => {
+    if (trendTableContainerRef.current) {
+      trendTableContainerRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToPeriod = (ratio: number) => {
+    if (trendTableContainerRef.current) {
+      const maxScroll = trendTableContainerRef.current.scrollWidth - trendTableContainerRef.current.clientWidth;
+      trendTableContainerRef.current.scrollTo({ left: maxScroll * ratio, behavior: 'smooth' });
+    }
+  };
 
   // Bộ lọc
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -135,6 +162,27 @@ export const UtilitiesPage: React.FC = () => {
     }
   };
 
+  // Tải báo cáo ma trận xu hướng theo thời gian
+  const loadTrendMatrixReport = async () => {
+    setTrendLoading(true);
+    try {
+      const data = await api.getUtilityTrendMatrix({
+        type: cumulativeType,
+        viewMode: trendViewMode,
+        month: trendMonth,
+        year: trendYear,
+        startYear: trendStartYear,
+        endYear: trendEndYear,
+      });
+      setTrendData(data);
+    } catch (err: any) {
+      console.error('Lỗi khi tải báo cáo ma trận xu hướng:', err);
+      toast.error('Lỗi tải xu hướng', err?.message || 'Không thể tải dữ liệu ma trận xu hướng.');
+    } finally {
+      setTrendLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -144,6 +192,69 @@ export const UtilitiesPage: React.FC = () => {
       loadCumulativeReport();
     }
   }, [activeTab, cumulativeType, cumulativeMonth, cumulativeYear]);
+
+  useEffect(() => {
+    if (activeTab === 'cumulative') {
+      loadTrendMatrixReport();
+    }
+  }, [activeTab, cumulativeType, trendViewMode, trendMonth, trendYear, trendStartYear, trendEndYear]);
+
+  // Xuất file CSV báo cáo ma trận xu hướng
+  const handleExportTrendCSV = () => {
+    if (!trendData || !trendData.timeColumns || trendData.timeColumns.length === 0) {
+      toast.error('Chưa có dữ liệu', 'Không có dữ liệu ma trận để xuất file.');
+      return;
+    }
+    const unit = trendData.unit || (cumulativeType === 'ELECTRICITY' ? 'kWh' : 'm³');
+    const cols = trendData.timeColumns;
+    let csv = '\uFEFF';
+    csv += `BÁO CÁO TỔNG HỢP & XU HƯỚNG TIÊU THỤ ${trendData.type === 'ELECTRICITY' ? 'ĐIỆN NĂNG' : 'NƯỚC SẠCH'} THEO ${trendViewMode === 'DAILY' ? `NGÀY (THÁNG ${trendMonth}/${trendYear})` : trendViewMode === 'MONTHLY' ? `THÁNG (NĂM ${trendYear})` : `CÁC NĂM (${trendStartYear} - ${trendEndYear})`}\n`;
+    csv += `Ngày xuất:;${new Date().toLocaleString('vi-VN')}\n`;
+    csv += `Đơn vị tính:;${unit}\n\n`;
+
+    const headers = ['STT', 'Mã Điểm Đo', 'Tên Điểm Đo', 'Vị Trí', ...cols.map((c: any) => `"${c.label}"`), `Tổng Cộng (${unit})`, `Trung Bình (${unit})`];
+    csv += headers.join(';') + '\n';
+
+    if (trendData.summaryRows) {
+      const { totalSupply, totalConsumption, totalRecycled, delta } = trendData.summaryRows;
+      if (totalSupply) {
+        csv += `Σ;NGUỒN CẤP;1. TỔNG CẤP VÀO;Toàn nhà máy;${cols.map((c: any) => totalSupply.values?.[c.key] || 0).join(';')};${totalSupply.total};${totalSupply.average}\n`;
+      }
+      if (totalConsumption) {
+        csv += `Σ;TIÊU THỤ;2. TỔNG SỬ DỤNG NỘI BỘ;Các phân xưởng;${cols.map((c: any) => totalConsumption.values?.[c.key] || 0).join(';')};${totalConsumption.total};${totalConsumption.average}\n`;
+      }
+      if (totalRecycled && trendData.type === 'WATER' && totalRecycled.total > 0) {
+        csv += `Σ;TÁI SINH;3. NƯỚC TÁI SỬ DỤNG;Thu hồi RO/tái sinh;${cols.map((c: any) => totalRecycled.values?.[c.key] || 0).join(';')};${totalRecycled.total};${totalRecycled.average}\n`;
+      }
+      if (delta) {
+        csv += `Δ;HAO HỤT;4. CHÊNH LỆCH / HAO HỤT;Hệ thống phân phối;${cols.map((c: any) => delta.values?.[c.key] || 0).join(';')};${delta.total};${delta.average}\n`;
+      }
+      csv += '\n';
+    }
+
+    displayedTrendRows.forEach((r: any, idx: number) => {
+      const rowData = [
+        idx + 1,
+        `"${r.code}"`,
+        `"${r.name}"`,
+        `"${r.location}"`,
+        ...cols.map((c: any) => r.values?.[c.key] || 0),
+        r.total,
+        r.average,
+      ];
+      csv += rowData.join(';') + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Ma_tran_xu_huong_${trendData.type.toLowerCase()}_${trendViewMode.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Xuất file thành công', 'Đã tải xuống file CSV báo cáo ma trận xu hướng.');
+  };
 
   // Xuất file CSV báo cáo tích lũy
   const handleExportCumulativeCSV = () => {
@@ -404,6 +515,17 @@ export const UtilitiesPage: React.FC = () => {
         return list.filter((m: any) => m.id === cumulativeFilter || m.code === cumulativeFilter);
     }
   }, [cumulativeData, cumulativeFilter]);
+
+  // Danh sách dòng điểm đo ma trận xu hướng đã lọc
+  const displayedTrendRows = useMemo(() => {
+    const rows = trendData?.pointRows || [];
+    if (!trendFilter || trendFilter === 'ALL') return rows;
+    if (trendFilter === 'SUPPLY') return rows.filter((r: any) => r.isSupplyMeter);
+    if (trendFilter === 'CONSUMPTION') return rows.filter((r: any) => !r.isSupplyMeter && !r.isRecycledWater && !r.isExcludedFromTotal);
+    if (trendFilter === 'RECYCLED') return rows.filter((r: any) => r.isRecycledWater);
+    if (trendFilter === 'EXCLUDED') return rows.filter((r: any) => r.isExcludedFromTotal);
+    return rows.filter((r: any) => r.pointId === trendFilter || r.code === trendFilter);
+  }, [trendData, trendFilter]);
 
   // Xử lý xác nhận hủy kết quả sai
   const handleConfirmVoidReading = async (e: React.FormEvent) => {
@@ -1849,8 +1971,9 @@ export const UtilitiesPage: React.FC = () => {
                       cursor: 'pointer',
                       outline: 'none',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                      minWidth: '260px',
-                      maxWidth: '380px',
+                      minWidth: '180px',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box',
                     }}
                     title="Lọc theo phân loại hoặc chọn xem chi tiết từng điểm đo"
                   >
@@ -2008,6 +2131,479 @@ export const UtilitiesPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* 4. BẢNG TỔNG HỢP & XU HƯỚNG TIÊU THỤ THEO THỜI GIAN (MA TRẬN NGÀY / THÁNG / NĂM) */}
+          <div className="card util-section-card trend-matrix-card" style={{ marginTop: '24px' }}>
+            <div className="trend-card-header">
+              <div className="trend-title-box">
+                <h3 className="section-title">
+                  <BarChart3 size={18} color="#059669" />
+                  <span>BẢNG TỔNG HỢP & XU HƯỚNG TIÊU THỤ THEO THỜI GIAN</span>
+                </h3>
+                <p className="section-sub">
+                  Chi tiết sản lượng tiêu thụ của từng vị trí / điểm đo qua các ngày trong tháng, các tháng trong năm hoặc so sánh giữa các năm.
+                </p>
+              </div>
+
+              {/* Nút Chuyển Đổi Dạng Xem: Bảng Số Liệu <-> Biểu Đồ Trực Quan */}
+              <div className="trend-view-type-pills">
+                <button
+                  type="button"
+                  onClick={() => setTrendDisplayType('TABLE')}
+                  className={`view-type-btn ${trendDisplayType === 'TABLE' ? 'active' : ''}`}
+                  title="Xem dạng bảng ma trận số liệu chi tiết"
+                >
+                  <FileText size={13} />
+                  <span>Dạng Bảng Số</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrendDisplayType('CHART')}
+                  className={`view-type-btn ${trendDisplayType === 'CHART' ? 'active' : ''}`}
+                  title="Chuyển sang dạng biểu đồ đồ thị trực quan"
+                >
+                  <BarChart2 size={13} />
+                  <span>Dạng Biểu Đồ</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Thanh Công Cụ Điều Khiển & Bộ Lọc Tự Co Giãn Theo Màn Hình */}
+            <div className="trend-toolbar">
+              <div className="trend-toolbar-left">
+                {/* 1. Nút chuyển chế độ: Ngày / Tháng / Năm */}
+                <div className="trend-mode-pills">
+                  <button
+                    type="button"
+                    onClick={() => setTrendViewMode('DAILY')}
+                    className={`trend-mode-btn ${trendViewMode === 'DAILY' ? 'active' : ''}`}
+                  >
+                    <Calendar size={13} />
+                    <span>Theo Ngày</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTrendViewMode('MONTHLY')}
+                    className={`trend-mode-btn ${trendViewMode === 'MONTHLY' ? 'active' : ''}`}
+                  >
+                    <CalendarDays size={13} />
+                    <span>Theo Tháng</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTrendViewMode('YEARLY')}
+                    className={`trend-mode-btn ${trendViewMode === 'YEARLY' ? 'active' : ''}`}
+                  >
+                    <TrendingUp size={13} />
+                    <span>Theo Năm</span>
+                  </button>
+                </div>
+
+                {/* 2. Bộ chọn mốc thời gian */}
+                {trendViewMode === 'DAILY' && (
+                  <div className="trend-date-selectors">
+                    <select
+                      value={trendMonth}
+                      onChange={(e) => setTrendMonth(parseInt(e.target.value, 10))}
+                      className="filter-select trend-select"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <option key={m} value={m}>Tháng {String(m).padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={trendYear}
+                      onChange={(e) => setTrendYear(parseInt(e.target.value, 10))}
+                      className="filter-select trend-select"
+                    >
+                      {[2024, 2025, 2026, 2027].map((y) => (
+                        <option key={y} value={y}>Năm {y}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {trendViewMode === 'MONTHLY' && (
+                  <div className="trend-date-selectors">
+                    <select
+                      value={trendYear}
+                      onChange={(e) => setTrendYear(parseInt(e.target.value, 10))}
+                      className="filter-select trend-select"
+                    >
+                      {[2024, 2025, 2026, 2027].map((y) => (
+                        <option key={y} value={y}>Năm {y}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {trendViewMode === 'YEARLY' && (
+                  <div className="trend-date-selectors">
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>Từ:</span>
+                    <select
+                      value={trendStartYear}
+                      onChange={(e) => setTrendStartYear(parseInt(e.target.value, 10))}
+                      className="filter-select trend-select"
+                    >
+                      {[2021, 2022, 2023, 2024].map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>đến:</span>
+                    <select
+                      value={trendEndYear}
+                      onChange={(e) => setTrendEndYear(parseInt(e.target.value, 10))}
+                      className="filter-select trend-select"
+                    >
+                      {[2024, 2025, 2026, 2027].map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="trend-toolbar-right">
+                {/* 3. Bộ lọc điểm đo (Flat, không hard code) */}
+                <div className="trend-filter-box">
+                  <Filter size={13} className="trend-filter-icon" />
+                  <select
+                    value={trendFilter}
+                    onChange={(e) => setTrendFilter(e.target.value)}
+                    className="filter-select trend-filter-select"
+                    title="Lọc vị trí / điểm đo hiển thị"
+                  >
+                    <option value="ALL">Tất cả điểm đo ({trendData?.pointRows?.length || 0})</option>
+                    <option value="SUPPLY">Nguồn Tổng Cấp</option>
+                    <option value="CONSUMPTION">Đo Tiêu Thụ</option>
+                    {trendData?.pointRows?.some((r: any) => r.isRecycledWater) && (
+                      <option value="RECYCLED">Nước Tái Sử Dụng</option>
+                    )}
+                    {trendData?.pointRows?.some((r: any) => r.isExcludedFromTotal) && (
+                      <option value="EXCLUDED">Đo Đối Chứng</option>
+                    )}
+                    {(trendData?.pointRows || []).map((r: any) => (
+                      <option key={r.pointId} value={r.pointId}>
+                        {r.code} - {r.name}
+                      </option>
+                    ))}
+                  </select>
+                  {trendFilter !== 'ALL' && (
+                    <button
+                      type="button"
+                      onClick={() => setTrendFilter('ALL')}
+                      className="btn-trend-reset"
+                      title="Đặt lại bộ lọc"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {/* 4. Nút chuyển đổi nhanh dạng xem (Bảng Số <-> Biểu Đồ) */}
+                <button
+                  type="button"
+                  onClick={() => setTrendDisplayType(trendDisplayType === 'TABLE' ? 'CHART' : 'TABLE')}
+                  className={`btn-trend-toggle-view ${trendDisplayType === 'CHART' ? 'active-chart' : ''}`}
+                  title={trendDisplayType === 'TABLE' ? 'Chuyển sang xem dạng biểu đồ trực quan' : 'Chuyển lại xem dạng bảng số liệu'}
+                >
+                  {trendDisplayType === 'TABLE' ? (
+                    <>
+                      <BarChart2 size={13} />
+                      <span>Xem Biểu Đồ</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText size={13} />
+                      <span>Xem Bảng Số</span>
+                    </>
+                  )}
+                </button>
+
+                {/* 5. Nút xuất CSV cho ma trận */}
+                <button
+                  type="button"
+                  onClick={handleExportTrendCSV}
+                  className="btn-export-csv trend-export-btn"
+                  title="Tải xuống file CSV ma trận theo thời gian"
+                >
+                  <Download size={13} />
+                  <span>Xuất CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* HIỂN THỊ DẠNG BIỂU ĐỒ HOẶC DẠNG BẢNG MA TRẬN (CHUYỂN ĐỔI THEO NÚT BẤM) */}
+            {trendDisplayType === 'CHART' ? (
+              <UtilityTrendChart
+                trendData={trendData}
+                trendViewMode={trendViewMode}
+                trendFilter={trendFilter}
+                unit={cumulativeType === 'ELECTRICITY' ? 'kWh' : 'm³'}
+              />
+            ) : (
+              <>
+                {/* Thanh Hỗ Trợ Điều Hướng Nhanh & Trạng Thái Cuộn Ngang */}
+                <div className="trend-nav-strip">
+                  <div className="trend-nav-info">
+                    <Calendar size={13} color="#059669" />
+                    <span className="trend-nav-period-text">
+                      {trendViewMode === 'DAILY' ? `Kỳ Tháng ${trendMonth}/${trendYear} (${trendData?.timeColumns?.length || 0} ngày)` :
+                       trendViewMode === 'MONTHLY' ? `Năm ${trendYear} (12 tháng)` :
+                       `Giai đoạn ${trendStartYear} - ${trendEndYear} (${trendData?.timeColumns?.length || 0} năm)`}
+                    </span>
+                    <span className="trend-scroll-guide">
+                      • Cuộn chuột ngang hoặc nhấn nút để nhảy nhanh:
+                    </span>
+                  </div>
+
+                  <div className="trend-nav-actions">
+                    {trendViewMode === 'DAILY' && (
+                      <div className="trend-jump-group">
+                        <button type="button" onClick={() => scrollToPeriod(0)} className="btn-jump-pill" title="Xem từ ngày 01 đến 10">
+                          01-10
+                        </button>
+                        <button type="button" onClick={() => scrollToPeriod(0.5)} className="btn-jump-pill" title="Xem từ ngày 11 đến 20">
+                          11-20
+                        </button>
+                        <button type="button" onClick={() => scrollToPeriod(1)} className="btn-jump-pill" title="Xem các ngày cuối & Tổng">
+                          21-Cuối
+                        </button>
+                      </div>
+                    )}
+                    <div className="trend-arrows-group">
+                      <button type="button" onClick={() => scrollTrendTable(-300)} className="btn-arrow-pill" title="Cuộn sang trái">
+                        <ChevronLeft size={14} />
+                      </button>
+                      <button type="button" onClick={() => scrollTrendTable(300)} className="btn-arrow-pill" title="Cuộn sang phải">
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bảng Ma Trận Cuộn Ngang (Horizontal Scroll Container với Sticky Columns) */}
+                <div 
+                  ref={trendTableContainerRef}
+                  className="trend-matrix-table-container"
+                >
+                  <table className="custom-table trend-matrix-table">
+                    <thead>
+                      <tr>
+                        <th className="trend-th-sticky trend-col-stt">STT</th>
+                        <th className="trend-th-sticky trend-col-code">Mã Điểm Đo</th>
+                        <th className="trend-th-sticky trend-col-name">Tên Điểm Đo & Vị Trí</th>
+
+                        {/* Các cột mốc thời gian động */}
+                        {(trendData?.timeColumns || []).map((col: any) => (
+                          <th
+                            key={col.key}
+                            className={`trend-th-day ${col.subLabel === 'CN' ? 'sunday' : col.subLabel === 'T7' ? 'saturday' : ''}`}
+                            title={col.label}
+                          >
+                            <div>{col.shortLabel}</div>
+                            {col.subLabel && (
+                              <span className={`trend-day-sub ${col.subLabel === 'CN' ? 'sunday' : col.subLabel === 'T7' ? 'saturday' : ''}`}>
+                                {col.subLabel}
+                              </span>
+                            )}
+                          </th>
+                        ))}
+
+                        <th className="trend-th-total">
+                          Tổng Cộng ({trendData?.unit || (cumulativeType === 'ELECTRICITY' ? 'kWh' : 'm³')})
+                        </th>
+                        <th className="trend-th-avg">
+                          Trung Bình
+                        </th>
+                        <th className="trend-th-trend">
+                          Xu Hướng
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trendLoading ? (
+                        <tr>
+                          <td colSpan={(trendData?.timeColumns?.length || 0) + 6} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                            Đang tổng hợp dữ liệu ma trận theo {trendViewMode === 'DAILY' ? 'ngày' : trendViewMode === 'MONTHLY' ? 'tháng' : 'năm'}...
+                          </td>
+                        </tr>
+                      ) : !trendData?.timeColumns || trendData.timeColumns.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                            Không có dữ liệu trong khoảng thời gian đã chọn.
+                          </td>
+                        </tr>
+                      ) : (
+                        <>
+                          {/* 1. HÀNG TỔNG HỢP NGUỒN CẤP VÀO */}
+                          {trendData?.summaryRows?.totalSupply && (
+                            <tr className="trend-row-summary supply">
+                              <td className="trend-td-sticky trend-col-stt supply">Σ</td>
+                              <td className="trend-td-sticky trend-col-code supply">NGUỒN CẤP</td>
+                              <td className="trend-td-sticky trend-col-name supply">
+                                1. TỔNG CẤP VÀO
+                              </td>
+                              {(trendData.timeColumns || []).map((col: any) => {
+                                const val = trendData.summaryRows.totalSupply.values?.[col.key] || 0;
+                                return (
+                                  <td key={col.key} className="trend-td-val supply">
+                                    {val > 0 ? formatVN(val) : '-'}
+                                  </td>
+                                );
+                              })}
+                              <td className="trend-td-total supply">
+                                {formatVN(trendData.summaryRows.totalSupply.total)}
+                              </td>
+                              <td className="trend-td-avg supply">
+                                {formatVN(trendData.summaryRows.totalSupply.average)}
+                              </td>
+                              <td className="trend-td-trend supply">-</td>
+                            </tr>
+                          )}
+
+                          {/* 2. HÀNG TỔNG HỢP SỬ DỤNG NỘI BỘ */}
+                          {trendData?.summaryRows?.totalConsumption && (
+                            <tr className="trend-row-summary consumption">
+                              <td className="trend-td-sticky trend-col-stt consumption">Σ</td>
+                              <td className="trend-td-sticky trend-col-code consumption">TIÊU THỤ</td>
+                              <td className="trend-td-sticky trend-col-name consumption">
+                                2. TỔNG SỬ DỤNG NỘI BỘ
+                              </td>
+                              {(trendData.timeColumns || []).map((col: any) => {
+                                const val = trendData.summaryRows.totalConsumption.values?.[col.key] || 0;
+                                return (
+                                  <td key={col.key} className="trend-td-val consumption">
+                                    {val > 0 ? formatVN(val) : '-'}
+                                  </td>
+                                );
+                              })}
+                              <td className="trend-td-total consumption">
+                                {formatVN(trendData.summaryRows.totalConsumption.total)}
+                              </td>
+                              <td className="trend-td-avg consumption">
+                                {formatVN(trendData.summaryRows.totalConsumption.average)}
+                              </td>
+                              <td className="trend-td-trend consumption">-</td>
+                            </tr>
+                          )}
+
+                          {/* 3. HÀNG TÁI SỬ DỤNG NƯỚC (NẾU CÓ) */}
+                          {trendData?.summaryRows?.totalRecycled && (
+                            <tr className="trend-row-summary recycled">
+                              <td className="trend-td-sticky trend-col-stt recycled">Σ</td>
+                              <td className="trend-td-sticky trend-col-code recycled">TÁI SỬ DỤNG</td>
+                              <td className="trend-td-sticky trend-col-name recycled">
+                                NƯỚC TÁI SỬ DỤNG (TIẾT KIỆM)
+                              </td>
+                              {(trendData.timeColumns || []).map((col: any) => {
+                                const val = trendData.summaryRows.totalRecycled.values?.[col.key] || 0;
+                                return (
+                                  <td key={col.key} className="trend-td-val recycled">
+                                    {val > 0 ? formatVN(val) : '-'}
+                                  </td>
+                                );
+                              })}
+                              <td className="trend-td-total recycled">
+                                {formatVN(trendData.summaryRows.totalRecycled.total)}
+                              </td>
+                              <td className="trend-td-avg recycled">
+                                {formatVN(trendData.summaryRows.totalRecycled.average)}
+                              </td>
+                              <td className="trend-td-trend recycled">-</td>
+                            </tr>
+                          )}
+
+                          {/* 4. HÀNG CHÊNH LỆCH / HAO HỤT */}
+                          {trendData?.summaryRows?.delta && (
+                            <tr className="trend-row-summary delta">
+                              <td className="trend-td-sticky trend-col-stt delta">Δ</td>
+                              <td className="trend-td-sticky trend-col-code delta">CHÊNH LỆCH</td>
+                              <td className="trend-td-sticky trend-col-name delta">
+                                3. HAO HỤT / THẤT THOÁT
+                              </td>
+                              {(trendData.timeColumns || []).map((col: any) => {
+                                const val = trendData.summaryRows.delta.values?.[col.key] || 0;
+                                return (
+                                  <td key={col.key} className="trend-td-val delta">
+                                    {val !== 0 ? formatVN(val) : '-'}
+                                  </td>
+                                );
+                              })}
+                              <td className="trend-td-total delta">
+                                {formatVN(trendData.summaryRows.delta.total)}
+                              </td>
+                              <td className="trend-td-avg delta">
+                                {formatVN(trendData.summaryRows.delta.average)}
+                              </td>
+                              <td className="trend-td-trend delta">-</td>
+                            </tr>
+                          )}
+
+                          {/* 5. CÁC HÀNG CHI TIẾT TỪNG ĐIỂM ĐO */}
+                          {displayedTrendRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={(trendData?.timeColumns?.length || 0) + 6} style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
+                                Không có điểm đo nào khớp với bộ lọc đã chọn.
+                              </td>
+                            </tr>
+                          ) : (
+                            displayedTrendRows.map((r: any, idx: number) => (
+                              <tr key={r.pointId} className="trend-row-point">
+                                <td className="trend-td-sticky trend-col-stt point">
+                                  {idx + 1}
+                                </td>
+                                <td className="trend-td-sticky trend-col-code point">
+                                  <strong className="trend-point-code">{r.code}</strong>
+                                </td>
+                                <td className="trend-td-sticky trend-col-name point">
+                                  <div className="trend-point-name">{r.name}</div>
+                                  <div className="trend-point-loc">{r.location}</div>
+                                </td>
+
+                                {(trendData.timeColumns || []).map((col: any) => {
+                                  const val = r.values?.[col.key] || 0;
+                                  const isNonZero = val > 0;
+                                  return (
+                                    <td
+                                      key={col.key}
+                                      className={`trend-td-cell ${isNonZero ? (r.isSupplyMeter ? 'has-val-supply' : 'has-val-cons') : 'empty'}`}
+                                    >
+                                      {isNonZero ? formatVN(val) : '-'}
+                                    </td>
+                                  );
+                                })}
+
+                                <td className={`trend-td-total point ${r.isSupplyMeter ? 'supply' : r.isRecycledWater ? 'recycled' : r.isExcludedFromTotal ? 'excluded' : 'cons'}`}>
+                                  {formatVN(r.total)}
+                                </td>
+                                <td className="trend-td-avg point">
+                                  {formatVN(r.average)}
+                                </td>
+                                <td className="trend-td-trend point">
+                                  {r.trendPercent > 0 ? (
+                                    <span className="trend-badge up" title="Tăng so với mốc trước">
+                                      <TrendingUp size={11} /> +{r.trendPercent}%
+                                    </span>
+                                  ) : r.trendPercent < 0 ? (
+                                    <span className="trend-badge down" title="Giảm so với mốc trước">
+                                      <TrendingDown size={11} /> {r.trendPercent}%
+                                    </span>
+                                  ) : (
+                                    <span className="trend-badge flat">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -2598,6 +3194,18 @@ export const UtilitiesPage: React.FC = () => {
           border-radius: 12px;
           background-color: #ffffff;
           width: 100%;
+          min-width: 0;
+          max-width: 100%;
+          overflow: hidden;
+          box-sizing: border-box;
+        }
+
+        .table-responsive {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          display: block;
           box-sizing: border-box;
         }
 
@@ -3195,6 +3803,592 @@ export const UtilitiesPage: React.FC = () => {
           color: #64748b;
         }
 
+        /* TREND MATRIX STYLES */
+        .trend-matrix-card {
+          padding: 16px;
+          margin-top: 24px;
+        }
+
+        .trend-card-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 14px;
+        }
+
+        .trend-view-type-pills {
+          display: inline-flex;
+          border-radius: 8px;
+          padding: 3px;
+          background-color: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          gap: 2px;
+        }
+
+        .view-type-btn {
+          padding: 5px 12px;
+          border-radius: 6px;
+          border: none;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          background-color: transparent;
+          color: #64748b;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          transition: all 0.15s ease;
+          white-space: nowrap;
+        }
+
+        .view-type-btn:hover {
+          color: #0f172a;
+        }
+
+        .view-type-btn.active {
+          background-color: #ffffff;
+          color: #0f172a;
+          font-weight: 700;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .trend-title-box {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        /* Dedicated Responsive Toolbar */
+        .trend-toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+          background-color: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          padding: 10px 12px;
+          margin-bottom: 12px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        .trend-toolbar-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .trend-toolbar-right {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .trend-mode-pills {
+          display: inline-flex;
+          border-radius: 8px;
+          padding: 3px;
+          background-color: #e2e8f0;
+          gap: 2px;
+        }
+
+        .trend-mode-btn {
+          padding: 5px 12px;
+          border-radius: 6px;
+          border: none;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          background-color: transparent;
+          color: #475569;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          transition: all 0.15s ease;
+          white-space: nowrap;
+        }
+
+        .trend-mode-btn.active {
+          background-color: #ffffff;
+          color: #0f172a;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .trend-date-selectors {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .trend-select {
+          padding: 6px 12px;
+          font-size: 12.5px;
+          font-weight: 600;
+        }
+
+        .trend-filter-box {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .trend-filter-icon {
+          position: absolute;
+          left: 10px;
+          color: #64748b;
+          pointer-events: none;
+        }
+
+        .trend-filter-select {
+          padding: 6px 28px 6px 28px;
+          font-size: 12.5px;
+          font-weight: 600;
+          min-width: 180px;
+          max-width: 280px;
+        }
+
+        .btn-trend-reset {
+          position: absolute;
+          right: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          border: none;
+          background-color: #e2e8f0;
+          color: #475569;
+          cursor: pointer;
+        }
+
+        .btn-trend-reset:hover {
+          background-color: #cbd5e1;
+        }
+
+        .btn-trend-toggle-view {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: 8px;
+          font-size: 12.5px;
+          font-weight: 700;
+          cursor: pointer;
+          border: 1.5px solid #10b981;
+          background-color: #ecfdf5;
+          color: #065f46;
+          transition: all 0.15s ease;
+          white-space: nowrap;
+          height: 34px;
+          box-sizing: border-box;
+        }
+
+        .btn-trend-toggle-view:hover {
+          background-color: #d1fae5;
+          border-color: #059669;
+          transform: translateY(-1px);
+        }
+
+        .btn-trend-toggle-view.active-chart {
+          background-color: #059669;
+          color: #ffffff;
+          border-color: #047857;
+          box-shadow: 0 2px 4px rgba(5, 150, 105, 0.25);
+        }
+
+        .trend-export-btn {
+          padding: 6px 12px;
+          font-size: 12px;
+          height: 34px;
+          margin-left: 0;
+        }
+
+        /* Navigation Jump Strip */
+        .trend-nav-strip {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+          padding: 7px 12px;
+          background-color: #f0fdf4;
+          border: 1px solid #bbf7d0;
+          border-radius: 8px;
+          margin-bottom: 10px;
+          font-size: 12px;
+          box-sizing: border-box;
+          width: 100%;
+        }
+
+        .trend-nav-info {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          color: #166534;
+          font-weight: 600;
+        }
+
+        .trend-nav-period-text {
+          font-weight: 700;
+          color: #166534;
+        }
+
+        .trend-scroll-guide {
+          color: #64748b;
+          font-size: 11px;
+          font-weight: 400;
+        }
+
+        .trend-nav-actions {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .trend-jump-group {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .btn-jump-pill {
+          padding: 4px 8px;
+          border-radius: 5px;
+          border: 1px solid #cbd5e1;
+          background-color: #ffffff;
+          color: #0f172a;
+          font-size: 11.5px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+
+        .btn-jump-pill:hover {
+          background-color: #e2e8f0;
+        }
+
+        .trend-arrows-group {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .btn-arrow-pill {
+          width: 26px;
+          height: 26px;
+          border-radius: 5px;
+          border: 1px solid #cbd5e1;
+          background-color: #ffffff;
+          color: #334155;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .btn-arrow-pill:hover {
+          background-color: #e2e8f0;
+        }
+
+        /* Matrix Table Container & Scrolling */
+        .trend-matrix-table-container {
+          width: 100%;
+          max-width: 100%;
+          max-height: 580px;
+          overflow-x: auto;
+          overflow-y: auto;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          background-color: #ffffff;
+          position: relative;
+          -webkit-overflow-scrolling: touch;
+          box-sizing: border-box;
+        }
+
+        .trend-matrix-table-container::-webkit-scrollbar {
+          width: 8px;
+          height: 10px;
+        }
+
+        .trend-matrix-table-container::-webkit-scrollbar-track {
+          background: #f1f5f9;
+        }
+
+        .trend-matrix-table-container::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 5px;
+        }
+
+        .trend-matrix-table-container::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+
+        /* Table Structure & Sticky Setup */
+        .trend-matrix-table {
+          border-collapse: separate;
+          border-spacing: 0;
+          width: max-content;
+          min-width: 100%;
+        }
+
+        .trend-matrix-table th {
+          position: sticky;
+          top: 0;
+          z-index: 10;
+          background-color: #f8fafc;
+          border-bottom: 2px solid #cbd5e1;
+          white-space: nowrap;
+        }
+
+        .trend-matrix-table th.trend-th-sticky {
+          z-index: 25;
+          background-color: #f8fafc;
+        }
+
+        .trend-col-stt {
+          width: 44px;
+          min-width: 44px;
+          max-width: 44px;
+          left: 0;
+          text-align: center;
+        }
+
+        .trend-col-code {
+          width: 116px;
+          min-width: 116px;
+          max-width: 116px;
+          left: 44px;
+        }
+
+        .trend-col-name {
+          width: 200px;
+          min-width: 200px;
+          max-width: 240px;
+          left: 160px;
+          box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.08);
+        }
+
+        .trend-th-day {
+          text-align: right;
+          min-width: 65px;
+          font-size: 12px;
+          padding: 8px 6px;
+          background-color: #f8fafc;
+        }
+
+        .trend-th-day.sunday {
+          background-color: #fef2f2 !important;
+        }
+
+        .trend-th-day.saturday {
+          background-color: #eff6ff !important;
+        }
+
+        .trend-day-sub {
+          font-size: 10px;
+          font-weight: 500;
+          color: #64748b;
+          display: block;
+        }
+
+        .trend-day-sub.sunday {
+          color: #dc2626;
+        }
+
+        .trend-day-sub.saturday {
+          color: #2563eb;
+        }
+
+        .trend-th-total {
+          text-align: right;
+          min-width: 110px;
+          font-weight: 800;
+          background-color: #f1f5f9;
+        }
+
+        .trend-th-avg {
+          text-align: right;
+          min-width: 95px;
+          font-weight: 700;
+          background-color: #f8fafc;
+        }
+
+        .trend-th-trend {
+          text-align: center;
+          min-width: 85px;
+          font-size: 11.5px;
+          background-color: #f8fafc;
+        }
+
+        /* Sticky Row Cells */
+        .trend-td-sticky {
+          position: sticky;
+          z-index: 5;
+        }
+
+        .trend-td-sticky.point {
+          background-color: #ffffff;
+        }
+
+        .trend-td-sticky.supply {
+          background-color: #eff6ff;
+          color: #1d4ed8;
+          font-weight: 700;
+        }
+
+        .trend-td-sticky.consumption {
+          background-color: #f0fdf4;
+          color: #047857;
+          font-weight: 700;
+        }
+
+        .trend-td-sticky.recycled {
+          background-color: #f5f3ff;
+          color: #7c3aed;
+          font-weight: 700;
+        }
+
+        .trend-td-sticky.delta {
+          background-color: #fffbeb;
+          color: #b45309;
+          font-weight: 700;
+        }
+
+        /* Summary Rows */
+        .trend-row-summary.supply {
+          background-color: #eff6ff;
+          font-weight: 700;
+        }
+
+        .trend-row-summary.consumption {
+          background-color: #f0fdf4;
+          font-weight: 700;
+        }
+
+        .trend-row-summary.recycled {
+          background-color: #f5f3ff;
+          font-weight: 700;
+        }
+
+        .trend-row-summary.delta {
+          background-color: #fffbeb;
+          font-weight: 600;
+          border-bottom: 2px solid #cbd5e1;
+        }
+
+        .trend-td-val {
+          text-align: right;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .trend-td-val.supply { color: #1d4ed8; }
+        .trend-td-val.consumption { color: #047857; }
+        .trend-td-val.recycled { color: #7c3aed; }
+        .trend-td-val.delta { color: #b45309; }
+
+        .trend-td-total {
+          text-align: right;
+          font-weight: 800;
+        }
+
+        .trend-td-total.supply { color: #1d4ed8; background-color: #dbeafe; }
+        .trend-td-total.consumption { color: #047857; background-color: #dcfce7; }
+        .trend-td-total.recycled { color: #7c3aed; background-color: #ede9fe; }
+        .trend-td-total.delta { color: #b45309; background-color: #fef3c7; }
+
+        .trend-td-avg {
+          text-align: right;
+          font-size: 12.5px;
+        }
+
+        .trend-td-avg.supply { color: #1e40af; background-color: #eff6ff; }
+        .trend-td-avg.consumption { color: #065f46; background-color: #f0fdf4; }
+        .trend-td-avg.recycled { color: #6d28d9; background-color: #f5f3ff; }
+        .trend-td-avg.delta { color: #92400e; background-color: #fffbeb; }
+
+        .trend-td-trend {
+          text-align: center;
+        }
+
+        /* Point Row Styles */
+        .trend-row-point {
+          background-color: #ffffff;
+        }
+
+        .trend-point-code {
+          color: #2563eb;
+          font-size: 12.5px;
+        }
+
+        .trend-point-name {
+          font-weight: 600;
+          color: #0f172a;
+          font-size: 12.5px;
+        }
+
+        .trend-point-loc {
+          font-size: 11px;
+          color: #64748b;
+        }
+
+        .trend-td-cell {
+          text-align: right;
+          font-size: 12px;
+          font-family: monospace;
+        }
+
+        .trend-td-cell.has-val-supply {
+          background-color: #eff6ff;
+          color: #1d4ed8;
+          font-weight: 600;
+        }
+
+        .trend-td-cell.has-val-cons {
+          background-color: #f0fdf4;
+          color: #047857;
+          font-weight: 600;
+        }
+
+        .trend-td-cell.empty {
+          color: #94a3b8;
+        }
+
+        .trend-td-total.point {
+          font-size: 13px;
+        }
+
+        .trend-td-total.point.supply { color: #1d4ed8; }
+        .trend-td-total.point.cons { color: #047857; }
+        .trend-td-total.point.recycled { color: #7c3aed; }
+        .trend-td-total.point.excluded { color: #b45309; }
+
+        .trend-td-avg.point {
+          color: #475569;
+          font-weight: 600;
+        }
+
+        .trend-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          font-weight: 700;
+          font-size: 11.5px;
+        }
+
+        .trend-badge.up { color: #dc2626; }
+        .trend-badge.down { color: #16a34a; }
+        .trend-badge.flat { color: #94a3b8; }
+
         /* RESPONSIVE BREAKPOINTS */
 
         /* TABLET (<= 1024px) */
@@ -3203,6 +4397,17 @@ export const UtilitiesPage: React.FC = () => {
           .cumulative-kpi-grid,
           .cumulative-kpi-grid.five-cols {
             grid-template-columns: repeat(2, 1fr);
+          }
+
+          .trend-toolbar-left, .trend-toolbar-right {
+            width: 100%;
+            justify-content: space-between;
+          }
+
+          .trend-col-name {
+            width: 160px;
+            min-width: 160px;
+            max-width: 180px;
           }
         }
 
@@ -3265,6 +4470,121 @@ export const UtilitiesPage: React.FC = () => {
             width: 100%;
             justify-content: center;
             margin-left: 0;
+          }
+
+          .trend-card-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+
+          .trend-view-type-pills {
+            width: 100%;
+          }
+
+          .view-type-btn {
+            flex: 1;
+            justify-content: center;
+          }
+
+          /* Trend Matrix Mobile Adjustments */
+          .trend-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 8px 10px;
+          }
+
+          .trend-toolbar-left, .trend-toolbar-right {
+            flex-direction: column;
+            align-items: stretch;
+            width: 100%;
+          }
+
+          .trend-mode-pills {
+            width: 100%;
+          }
+
+          .trend-mode-btn {
+            flex: 1;
+            justify-content: center;
+          }
+
+          .trend-date-selectors {
+            display: flex;
+            width: 100%;
+          }
+
+          .trend-date-selectors select {
+            flex: 1;
+          }
+
+          .trend-filter-box {
+            width: 100%;
+          }
+
+          .trend-filter-select {
+            width: 100%;
+            min-width: 100% !important;
+            max-width: 100% !important;
+          }
+
+          .btn-trend-toggle-view {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .trend-export-btn {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .trend-nav-strip {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 6px;
+          }
+
+          .trend-nav-actions {
+            justify-content: space-between;
+          }
+
+          .trend-scroll-guide {
+            display: none;
+          }
+
+          /* Mobile Compact Sticky Columns */
+          .trend-col-stt {
+            width: 32px;
+            min-width: 32px;
+            max-width: 32px;
+            left: 0;
+            padding: 6px 2px;
+            font-size: 11px;
+          }
+
+          .trend-col-code {
+            width: 85px;
+            min-width: 85px;
+            max-width: 85px;
+            left: 32px;
+            padding: 6px 4px;
+            font-size: 11.5px;
+          }
+
+          .trend-col-name {
+            width: 120px;
+            min-width: 120px;
+            max-width: 130px;
+            left: 117px;
+            padding: 6px 4px;
+          }
+
+          .trend-point-name {
+            font-size: 11.5px;
+          }
+
+          .trend-point-loc {
+            display: none; /* Ẩn vị trí trên màn hình siêu nhỏ để tiết kiệm diện tích */
           }
 
           /* Chuyển hoàn toàn từ Table sang Card Feed */

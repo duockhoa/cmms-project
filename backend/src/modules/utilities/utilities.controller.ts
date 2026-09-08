@@ -191,4 +191,26 @@ export class UtilitiesController {
       year: year ? parseInt(year, 10) : undefined,
     });
   }
+
+  // ==========================================
+  // 6. BÁO CÁO MA TRẬN XU HƯỚNG THEO THỜI GIAN (NGÀY / THÁNG / NĂM)
+  // ==========================================
+  @Get('reports/trend-matrix')
+  async getTrendMatrixReport(
+    @Query('type') type?: 'ELECTRICITY' | 'WATER',
+    @Query('viewMode') viewMode?: 'DAILY' | 'MONTHLY' | 'YEARLY',
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+    @Query('startYear') startYear?: string,
+    @Query('endYear') endYear?: string,
+  ) {
+    return this.utilitiesService.getTrendMatrixReport({
+      type,
+      viewMode,
+      month: month ? parseInt(month, 10) : undefined,
+      year: year ? parseInt(year, 10) : undefined,
+      startYear: startYear ? parseInt(startYear, 10) : undefined,
+      endYear: endYear ? parseInt(endYear, 10) : undefined,
+    });
+  }
 }

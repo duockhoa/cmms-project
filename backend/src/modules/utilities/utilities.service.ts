@@ -1522,4 +1522,293 @@ export class UtilitiesService {
       allMeters: breakdownWithShare,
     };
   }
+
+  // ==========================================
+  // 6. BÁO CÁO MA TRẬN XU HƯỚNG THEO THỜI GIAN (NGÀY / THÁNG / NĂM)
+  // ==========================================
+  async getTrendMatrixReport(query: {
+    type?: 'ELECTRICITY' | 'WATER';
+    viewMode?: 'DAILY' | 'MONTHLY' | 'YEARLY';
+    month?: number;
+    year?: number;
+    startYear?: number;
+    endYear?: number;
+  }) {
+    const type = query.type || 'ELECTRICITY';
+    const viewMode = query.viewMode || 'DAILY';
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    const month = Number(query.month) || currentMonth;
+    const year = Number(query.year) || currentYear;
+    const startYear = Number(query.startYear) || (year - 3);
+    const endYear = Number(query.endYear) || year;
+
+    // 1. Tạo danh sách các cột thời gian (timeColumns)
+    interface TimeCol {
+      key: string;
+      label: string;
+      shortLabel: string;
+      subLabel?: string;
+      startDate: Date;
+      endDate: Date;
+    }
+    const timeColumns: TimeCol[] = [];
+
+    if (viewMode === 'DAILY') {
+      if (type === 'ELECTRICITY') {
+        // Ngày trong tháng (01 -> lastDay)
+        const lastDay = new Date(year, month, 0).getDate();
+        const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+        for (let d = 1; d <= lastDay; d++) {
+          const s = new Date(year, month - 1, d, 0, 0, 0, 0);
+          const e = new Date(year, month - 1, d, 23, 59, 59, 999);
+          const dayName = weekdays[s.getDay()];
+          const key = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          timeColumns.push({
+            key,
+            label: `${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')} (${dayName})`,
+            shortLabel: `${String(d).padStart(2, '0')}`,
+            subLabel: dayName,
+            startDate: s,
+            endDate: e,
+          });
+        }
+      } else {
+        // Nước: 21 tháng trước -> 20 tháng này
+        const cycle = this.getPeriodCycleInfo('WATER', month, year);
+        const curr = new Date(cycle.startDate);
+        const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+        while (curr <= cycle.endDate) {
+          const s = new Date(curr.getFullYear(), curr.getMonth(), curr.getDate(), 0, 0, 0, 0);
+          const e = new Date(curr.getFullYear(), curr.getMonth(), curr.getDate(), 23, 59, 59, 999);
+          const dayName = weekdays[s.getDay()];
+          const dNum = curr.getDate();
+          const mNum = curr.getMonth() + 1;
+          const key = `${curr.getFullYear()}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+          timeColumns.push({
+            key,
+            label: `${String(dNum).padStart(2, '0')}/${String(mNum).padStart(2, '0')} (${dayName})`,
+            shortLabel: `${String(dNum).padStart(2, '0')}`,
+            subLabel: dayName,
+            startDate: s,
+            endDate: e,
+          });
+          curr.setDate(curr.getDate() + 1);
+        }
+      }
+    } else if (viewMode === 'MONTHLY') {
+      // 12 tháng trong năm
+      for (let m = 1; m <= 12; m++) {
+        const cycle = this.getPeriodCycleInfo(type, m, year);
+        timeColumns.push({
+          key: `${year}-${String(m).padStart(2, '0')}`,
+          label: `Tháng ${m}/${year}`,
+          shortLabel: `T${m}`,
+          subLabel: `${year}`,
+          startDate: cycle.startDate,
+          endDate: cycle.endDate,
+        });
+      }
+    } else {
+      // THEO NĂM: từ startYear đến endYear
+      for (let y = startYear; y <= endYear; y++) {
+        const s = new Date(y, 0, 1, 0, 0, 0, 0);
+        const e = new Date(y, 11, 31, 23, 59, 59, 999);
+        timeColumns.push({
+          key: `${y}`,
+          label: `Năm ${y}`,
+          shortLabel: `${y}`,
+          startDate: s,
+          endDate: e,
+        });
+      }
+    }
+
+    if (timeColumns.length === 0) {
+      return {
+        type,
+        viewMode,
+        month,
+        year,
+        startYear,
+        endYear,
+        unit: type === 'ELECTRICITY' ? 'kWh' : 'm³',
+        timeColumns: [],
+        summaryRows: {
+          totalSupply: { label: '1. TỔNG CẤP VÀO', values: {}, total: 0, average: 0 },
+          totalConsumption: { label: '2. TỔNG TIÊU THỤ', values: {}, total: 0, average: 0 },
+          totalRecycled: { label: '3. NƯỚC TÁI SỬ DỤNG', values: {}, total: 0, average: 0 },
+          delta: { label: '4. CHÊNH LỆCH / HAO HỤT', values: {}, total: 0, average: 0 },
+        },
+        pointRows: [],
+      };
+    }
+
+    const minDate = timeColumns[0].startDate;
+    const maxDate = timeColumns[timeColumns.length - 1].endDate;
+
+    // 2. Lấy danh sách điểm đo thuộc loại tiện ích kèm readings trong khoảng bao phủ
+    const points = await this.prisma.utilityPoint.findMany({
+      where: {
+        type: type as any,
+        isActive: true,
+      },
+      include: {
+        readings: {
+          where: {
+            isVoided: false,
+            recordedAt: {
+              gte: minDate,
+              lte: maxDate,
+            },
+          },
+          orderBy: { recordedAt: 'asc' },
+        },
+      },
+      orderBy: [
+        { isSupplyMeter: 'desc' },
+        { code: 'asc' },
+      ],
+    });
+
+    // 3. Tính toán sản lượng cho từng điểm đo theo từng timeColumn
+    const pointRows = points.map((p) => {
+      const values: Record<string, number> = {};
+      let total = 0;
+      let nonZeroCount = 0;
+
+      timeColumns.forEach((col) => {
+        const inSlot = p.readings.filter(
+          (r) => r.recordedAt >= col.startDate && r.recordedAt <= col.endDate,
+        );
+        let cons = 0;
+        if (inSlot.length > 0) {
+          cons = inSlot.reduce((sum, r) => sum + (r.consumption || 0), 0);
+        }
+        cons = Number(cons.toFixed(2));
+        values[col.key] = cons;
+        total += cons;
+        if (cons > 0) nonZeroCount++;
+      });
+
+      total = Number(total.toFixed(2));
+      const average = nonZeroCount > 0 ? Number((total / nonZeroCount).toFixed(2)) : 0;
+
+      // Tính xu hướng: % thay đổi giữa 2 mốc thời gian gần nhất
+      let trendPercent = 0;
+      const colKeys = timeColumns.map((c) => c.key);
+      if (colKeys.length >= 2) {
+        const lastVal = values[colKeys[colKeys.length - 1]] || 0;
+        const prevVal = values[colKeys[colKeys.length - 2]] || 0;
+        if (prevVal > 0) {
+          trendPercent = Number((((lastVal - prevVal) / prevVal) * 100).toFixed(1));
+        }
+      }
+
+      return {
+        pointId: p.id,
+        code: p.code,
+        name: p.name,
+        location: p.location,
+        unit: p.unit,
+        multiplier: p.multiplier,
+        tariffType: p.tariffType,
+        isSupplyMeter: Boolean(p.isSupplyMeter),
+        isRecycledWater: Boolean(p.isRecycledWater),
+        isExcludedFromTotal: Boolean(p.isExcludedFromTotal),
+        values,
+        total,
+        average,
+        trendPercent,
+      };
+    });
+
+    // 4. Tính toán hàng tổng hợp (Summary Rows) cho từng cột thời gian
+    const totalSupplyValues: Record<string, number> = {};
+    const totalConsumptionValues: Record<string, number> = {};
+    const totalRecycledValues: Record<string, number> = {};
+    const deltaValues: Record<string, number> = {};
+
+    let sumSupplyAll = 0;
+    let sumConsAll = 0;
+    let sumRecycledAll = 0;
+
+    timeColumns.forEach((col) => {
+      let colSupply = 0;
+      let colCons = 0;
+      let colRecycled = 0;
+
+      pointRows.forEach((row) => {
+        const v = row.values[col.key] || 0;
+        if (row.isExcludedFromTotal) return;
+        if (row.isSupplyMeter) {
+          colSupply += v;
+        } else if (row.isRecycledWater) {
+          colRecycled += v;
+        } else {
+          colCons += v;
+        }
+      });
+
+      colSupply = Number(colSupply.toFixed(2));
+      colCons = Number(colCons.toFixed(2));
+      colRecycled = Number(colRecycled.toFixed(2));
+      const colDelta = Number((colSupply - colCons).toFixed(2));
+
+      totalSupplyValues[col.key] = colSupply;
+      totalConsumptionValues[col.key] = colCons;
+      totalRecycledValues[col.key] = colRecycled;
+      deltaValues[col.key] = colDelta;
+
+      sumSupplyAll += colSupply;
+      sumConsAll += colCons;
+      sumRecycledAll += colRecycled;
+    });
+
+    const colCount = timeColumns.length || 1;
+    const summaryRows = {
+      totalSupply: {
+        label: '1. TỔNG CẤP VÀO',
+        values: totalSupplyValues,
+        total: Number(sumSupplyAll.toFixed(2)),
+        average: Number((sumSupplyAll / colCount).toFixed(2)),
+      },
+      totalConsumption: {
+        label: '2. TỔNG SỬ DỤNG NỘI BỘ',
+        values: totalConsumptionValues,
+        total: Number(sumConsAll.toFixed(2)),
+        average: Number((sumConsAll / colCount).toFixed(2)),
+      },
+      totalRecycled: {
+        label: '3. NƯỚC TÁI SỬ DỤNG',
+        values: totalRecycledValues,
+        total: Number(sumRecycledAll.toFixed(2)),
+        average: Number((sumRecycledAll / colCount).toFixed(2)),
+      },
+      delta: {
+        label: '4. CHÊNH LỆCH / HAO HỤT',
+        values: deltaValues,
+        total: Number((sumSupplyAll - sumConsAll).toFixed(2)),
+        average: Number(((sumSupplyAll - sumConsAll) / colCount).toFixed(2)),
+      },
+    };
+
+    return {
+      type,
+      viewMode,
+      month,
+      year,
+      startYear,
+      endYear,
+      unit: type === 'ELECTRICITY' ? 'kWh' : 'm³',
+      timeColumns: timeColumns.map((c) => ({
+        key: c.key,
+        label: c.label,
+        shortLabel: c.shortLabel,
+        subLabel: c.subLabel,
+      })),
+      summaryRows,
+      pointRows,
+    };
+  }
 }
