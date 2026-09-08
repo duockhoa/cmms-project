@@ -8,8 +8,9 @@ import {
   Printer, Download, Search, CheckCircle2, 
   Clock, Settings, FileText, ArrowRight,
   Calendar, PieChart, AlertTriangle, Layers,
-  Ban, XCircle, ShieldAlert, Activity
+  Ban, XCircle, ShieldAlert, Activity, Filter, X
 } from 'lucide-react';
+import { formatVN } from '../utils/formatters';
 
 export const UtilitiesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -31,7 +32,7 @@ export const UtilitiesPage: React.FC = () => {
   const [cumulativeYear, setCumulativeYear] = useState<number>(new Date().getFullYear());
   const [cumulativeData, setCumulativeData] = useState<any | null>(null);
   const [cumulativeLoading, setCumulativeLoading] = useState(false);
-  const [cumulativeFilterRole, setCumulativeFilterRole] = useState<'ALL' | 'SUPPLY' | 'CONSUMPTION' | 'RECYCLED' | 'EXCLUDED'>('ALL');
+  const [cumulativeFilter, setCumulativeFilter] = useState<string>('ALL');
 
   // Bộ lọc
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -350,7 +351,24 @@ export const UtilitiesPage: React.FC = () => {
   // Danh sách ghi số đã lọc
   const filteredReadings = useMemo(() => {
     return readings.filter((r) => {
-      if (filterType !== 'ALL' && r.point?.type !== filterType) return false;
+      if (filterType !== 'ALL') {
+        if (filterType === 'ELECTRICITY') {
+          if (r.point?.type !== 'ELECTRICITY') return false;
+        } else if (filterType === 'WATER') {
+          if (r.point?.type !== 'WATER') return false;
+        } else if (filterType === 'SUPPLY') {
+          if (!r.point?.isSupplyMeter) return false;
+        } else if (filterType === 'CONSUMPTION') {
+          if (r.point?.isSupplyMeter || r.point?.isRecycledWater || r.point?.isExcludedFromTotal) return false;
+        } else if (filterType === 'RECYCLED') {
+          if (!r.point?.isRecycledWater) return false;
+        } else if (filterType === 'EXCLUDED') {
+          if (!r.point?.isExcludedFromTotal) return false;
+        } else {
+          // Lọc theo ID của từng điểm đo cụ thể
+          if (r.pointId !== filterType && r.point?.id !== filterType && r.point?.code !== filterType) return false;
+        }
+      }
       if (filterStatus === 'ACTIVE' && r.isVoided) return false;
       if (filterStatus === 'VOIDED' && !r.isVoided) return false;
       if (filterSearch.trim()) {
@@ -365,6 +383,27 @@ export const UtilitiesPage: React.FC = () => {
       return true;
     });
   }, [readings, filterType, filterStatus, filterSearch]);
+
+  // Danh sách đồng hồ trong kỳ đã lọc (tính toán động, không hardcode tiền tố hay chuỗi ghép)
+  const displayedCumulativeMeters = useMemo(() => {
+    const list = cumulativeData?.allMeters || [];
+    if (!cumulativeFilter || cumulativeFilter === 'ALL') {
+      return list;
+    }
+    switch (cumulativeFilter) {
+      case 'SUPPLY':
+        return list.filter((m: any) => m.isSupplyMeter);
+      case 'CONSUMPTION':
+        return list.filter((m: any) => !m.isSupplyMeter && !m.isRecycledWater && !m.isExcludedFromTotal);
+      case 'RECYCLED':
+        return list.filter((m: any) => m.isRecycledWater);
+      case 'EXCLUDED':
+        return list.filter((m: any) => m.isExcludedFromTotal);
+      default:
+        // Lọc trực tiếp theo ID của điểm đo được chọn
+        return list.filter((m: any) => m.id === cumulativeFilter || m.code === cumulativeFilter);
+    }
+  }, [cumulativeData, cumulativeFilter]);
 
   // Xử lý xác nhận hủy kết quả sai
   const handleConfirmVoidReading = async (e: React.FormEvent) => {
@@ -753,10 +792,25 @@ export const UtilitiesPage: React.FC = () => {
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
               className="filter-select"
+              style={{ minWidth: '240px' }}
+              title="Lọc theo phân loại hoặc chọn từng điểm đo"
             >
-              <option value="ALL">Tất cả tiện ích</option>
+              <option value="ALL">Tất cả điểm đo ({readings.length})</option>
               <option value="ELECTRICITY">Điện (kWh)</option>
               <option value="WATER">Nước (m³)</option>
+              <option value="SUPPLY">Nguồn Tổng Cấp</option>
+              <option value="CONSUMPTION">Đo Tiêu Thụ</option>
+              {points.some((p: any) => p.isRecycledWater) && (
+                <option value="RECYCLED">Nước Tái Sử Dụng</option>
+              )}
+              {points.some((p: any) => p.isExcludedFromTotal) && (
+                <option value="EXCLUDED">Đo Đối Chứng</option>
+              )}
+              {points.filter((p: any) => p.type === 'ELECTRICITY' || p.type === 'WATER').map((p: any) => (
+                <option key={p.id} value={p.id}>
+                  {p.code} - {p.name}
+                </option>
+              ))}
             </select>
 
             <select
@@ -769,6 +823,34 @@ export const UtilitiesPage: React.FC = () => {
               <option value="ALL">Tất cả (gồm đã hủy)</option>
               <option value="VOIDED">Chỉ bản ghi đã hủy</option>
             </select>
+
+            {(filterType !== 'ALL' || filterSearch || filterStatus !== 'ACTIVE') && (
+              <button
+                onClick={() => {
+                  setFilterType('ALL');
+                  setFilterSearch('');
+                  setFilterStatus('ACTIVE');
+                }}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                  backgroundColor: '#f8fafc',
+                  color: '#64748b',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s',
+                }}
+                title="Đặt lại bộ lọc"
+              >
+                <X size={13} />
+                <span>Đặt lại</span>
+              </button>
+            )}
 
             <button
               onClick={handleExportReadingsCSV}
@@ -1749,32 +1831,69 @@ export const UtilitiesPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Bộ lọc vai trò */}
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {[
-                  { key: 'ALL', label: `Tất cả (${cumulativeData?.allMeters?.length || 0})` },
-                  { key: 'SUPPLY', label: `Nguồn Tổng Cấp (${cumulativeData?.supplyMeters?.length || 0})` },
-                  { key: 'CONSUMPTION', label: `Đo Tiêu Thụ (${cumulativeData?.consumptionMeters?.length || 0})` },
-                  ...(cumulativeType === 'WATER'
-                    ? [
-                        { key: 'RECYCLED', label: `Nước Tái Sử Dụng (${cumulativeData?.recycledMeters?.length || 0})` },
-                      ]
-                    : []),
-                  ...(cumulativeData?.excludedMeters && cumulativeData.excludedMeters.length > 0
-                    ? [
-                        { key: 'EXCLUDED', label: `Đo Đối Chứng (${cumulativeData.excludedMeters.length})` },
-                      ]
-                    : []),
-                ].map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setCumulativeFilterRole(tab.key as any)}
-                    className={`filter-chip ${cumulativeFilterRole === tab.key ? 'active' : ''}`}
-                    style={{ fontSize: '12.5px', padding: '6px 12px' }}
+              {/* Bộ lọc gộp dạng Dropdown: Phân loại & Từng điểm đo */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <Filter size={14} style={{ position: 'absolute', left: '10px', color: '#64748b', pointerEvents: 'none' }} />
+                  <select
+                    value={cumulativeFilter}
+                    onChange={(e) => setCumulativeFilter(e.target.value)}
+                    style={{
+                      padding: '7px 28px 7px 30px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#0f172a',
+                      cursor: 'pointer',
+                      outline: 'none',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      minWidth: '260px',
+                      maxWidth: '380px',
+                    }}
+                    title="Lọc theo phân loại hoặc chọn xem chi tiết từng điểm đo"
                   >
-                    {tab.label}
+                    <option value="ALL">Tất cả đồng hồ ({cumulativeData?.allMeters?.length || 0})</option>
+                    <option value="SUPPLY">Nguồn Tổng Cấp ({cumulativeData?.supplyMeters?.length || 0})</option>
+                    <option value="CONSUMPTION">Đo Tiêu Thụ ({cumulativeData?.consumptionMeters?.length || 0})</option>
+                    {cumulativeType === 'WATER' && (
+                      <option value="RECYCLED">Nước Tái Sử Dụng ({cumulativeData?.recycledMeters?.length || 0})</option>
+                    )}
+                    {(cumulativeData?.excludedMeters?.length || 0) > 0 && (
+                      <option value="EXCLUDED">Đo Đối Chứng ({cumulativeData.excludedMeters.length})</option>
+                    )}
+                    {(cumulativeData?.allMeters || []).map((m: any) => (
+                      <option key={m.id} value={m.id}>
+                        {m.code} - {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {cumulativeFilter !== 'ALL' && (
+                  <button
+                    onClick={() => setCumulativeFilter('ALL')}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #e2e8f0',
+                      backgroundColor: '#f8fafc',
+                      color: '#64748b',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.15s',
+                    }}
+                    title="Đặt lại về Tất cả đồng hồ"
+                  >
+                    <X size={13} />
+                    <span>Đặt lại</span>
                   </button>
-                ))}
+                )}
               </div>
             </div>
 
@@ -1808,85 +1927,83 @@ export const UtilitiesPage: React.FC = () => {
                         Chưa có điểm đo nào cho loại tiện ích này.
                       </td>
                     </tr>
+                  ) : displayedCumulativeMeters.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8', fontSize: '13px' }}>
+                        Không có đồng hồ nào khớp với bộ lọc đã chọn.
+                      </td>
+                    </tr>
                   ) : (
-                    cumulativeData.allMeters
-                      .filter((m: any) => {
-                        if (cumulativeFilterRole === 'SUPPLY') return m.isSupplyMeter;
-                        if (cumulativeFilterRole === 'CONSUMPTION') return !m.isSupplyMeter && !m.isRecycledWater && !m.isExcludedFromTotal;
-                        if (cumulativeFilterRole === 'RECYCLED') return m.isRecycledWater;
-                        if (cumulativeFilterRole === 'EXCLUDED') return m.isExcludedFromTotal;
-                        return true;
-                      })
-                      .map((m: any, idx: number) => (
-                        <tr key={m.id}>
-                          <td style={{ textAlign: 'center', color: '#64748b', fontSize: '12px' }}>{idx + 1}</td>
-                          <td>
-                            <strong style={{ color: '#2563eb', fontSize: '13px' }}>{m.code}</strong>
-                          </td>
-                          <td>
-                            <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>{m.name}</div>
-                            {m.tariffType === 'THREE_PHASE' && (
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                <span title="Bình thường (T1)">T1: <strong style={{ color: '#0f172a' }}>{m.normalConsumption?.toLocaleString()}</strong></span>
-                                <span title="Cao điểm (T2)" style={{ color: '#dc2626' }}>T2: <strong>{m.peakConsumption?.toLocaleString()}</strong></span>
-                                <span title="Thấp điểm (T3)" style={{ color: '#16a34a' }}>T3: <strong>{m.offPeakConsumption?.toLocaleString()}</strong></span>
-                              </div>
-                            )}
-                          </td>
-                          <td>
-                            {m.isSupplyMeter ? (
-                              <span style={{
-                                padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700,
-                                backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                              }}>
-                                <Layers size={12} /> NGUỒN TỔNG CẤP
-                              </span>
-                            ) : m.isRecycledWater ? (
-                              <span style={{
-                                padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700,
-                                backgroundColor: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                              }} title="Đồng hồ nước tái sử dụng - không cộng dồn vào tổng dùng để chống tính trùng">
-                                <RefreshCw size={12} /> NƯỚC TÁI SỬ DỤNG
-                              </span>
-                            ) : m.isExcludedFromTotal ? (
-                              <span style={{
-                                padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700,
-                                backgroundColor: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                              }} title="Đồng hồ đo đối chứng / trung gian - Không tính vào Tổng cấp và Không tính vào Tổng dùng">
-                                <Ban size={12} /> ĐO ĐỐI CHỨNG (KHÔNG TÍNH TỔNG)
-                              </span>
-                            ) : (
-                              <span style={{
-                                padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 600,
-                                backgroundColor: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                              }}>
-                                <CheckCircle2 size={12} /> TIÊU THỤ NỘI BỘ
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ fontSize: '12.5px', color: '#475569' }}>{m.location}</td>
-                          <td style={{ textAlign: 'center', fontSize: '12px' }}>
-                            <span style={{ padding: '2px 8px', borderRadius: '10px', backgroundColor: '#f1f5f9', color: '#334155' }}>
-                              {m.readingsCount} lần
+                    displayedCumulativeMeters.map((m: any, idx: number) => (
+                      <tr key={m.id}>
+                        <td style={{ textAlign: 'center', color: '#64748b', fontSize: '12px' }}>{idx + 1}</td>
+                        <td>
+                          <strong style={{ color: '#2563eb', fontSize: '13px' }}>{m.code}</strong>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>{m.name}</div>
+                          {m.tariffType === 'THREE_PHASE' && (
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              <span title="Bình thường (T1)">T1: <strong style={{ color: '#0f172a' }}>{formatVN(m.normalConsumption)}</strong></span>
+                              <span title="Cao điểm (T2)" style={{ color: '#dc2626' }}>T2: <strong>{formatVN(m.peakConsumption)}</strong></span>
+                              <span title="Thấp điểm (T3)" style={{ color: '#16a34a' }}>T3: <strong>{formatVN(m.offPeakConsumption)}</strong></span>
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          {m.isSupplyMeter ? (
+                            <span style={{
+                              padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700,
+                              backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                            }}>
+                              <Layers size={12} /> NGUỒN TỔNG CẤP
                             </span>
-                          </td>
-                          <td style={{ textAlign: 'right', fontSize: '12.5px', color: '#64748b' }}>
-                            {m.startValue.toLocaleString()}
-                          </td>
-                          <td style={{ textAlign: 'right', fontSize: '12.5px', color: '#0f172a', fontWeight: 600 }}>
-                            {m.endValue.toLocaleString()}
-                          </td>
-                          <td style={{ textAlign: 'center', fontSize: '12px' }}>
-                            x{m.multiplier}
-                          </td>
-                          <td style={{ textAlign: 'right', fontSize: '13.5px', fontWeight: 800, color: m.isSupplyMeter ? '#1d4ed8' : m.isRecycledWater ? '#7c3aed' : m.isExcludedFromTotal ? '#b45309' : '#047857' }}>
-                            {m.periodConsumption.toLocaleString()} {m.unit}
-                          </td>
-                          <td style={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
-                            {m.isExcludedFromTotal ? <span style={{ color: '#94a3b8' }}>-</span> : `${m.sharePercent}%`}
-                          </td>
-                        </tr>
-                      ))
+                          ) : m.isRecycledWater ? (
+                            <span style={{
+                              padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700,
+                              backgroundColor: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                            }} title="Đồng hồ nước tái sử dụng - không cộng dồn vào tổng dùng để chống tính trùng">
+                              <RefreshCw size={12} /> NƯỚC TÁI SỬ DỤNG
+                            </span>
+                          ) : m.isExcludedFromTotal ? (
+                            <span style={{
+                              padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700,
+                              backgroundColor: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                            }} title="Đồng hồ đo đối chứng / trung gian - Không tính vào Tổng cấp và Không tính vào Tổng dùng">
+                              <Ban size={12} /> ĐO ĐỐI CHỨNG (KHÔNG TÍNH TỔNG)
+                            </span>
+                          ) : (
+                            <span style={{
+                              padding: '4px 8px', borderRadius: '4px', fontSize: '11.5px', fontWeight: 600,
+                              backgroundColor: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                            }}>
+                              <CheckCircle2 size={12} /> TIÊU THỤ NỘI BỘ
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '12.5px', color: '#475569' }}>{m.location}</td>
+                        <td style={{ textAlign: 'center', fontSize: '12px' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: '10px', backgroundColor: '#f1f5f9', color: '#334155' }}>
+                            {m.readingsCount} lần
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontSize: '12.5px', color: '#64748b' }}>
+                          {m.startValue !== null && m.startValue !== undefined ? formatVN(m.startValue) : '-'}
+                        </td>
+                        <td style={{ textAlign: 'right', fontSize: '12.5px', color: '#0f172a', fontWeight: 600 }}>
+                          {m.endValue !== null && m.endValue !== undefined ? formatVN(m.endValue) : '-'}
+                        </td>
+                        <td style={{ textAlign: 'center', fontSize: '12px' }}>
+                          x{m.multiplier}
+                        </td>
+                        <td style={{ textAlign: 'right', fontSize: '13.5px', fontWeight: 800, color: m.isSupplyMeter ? '#1d4ed8' : m.isRecycledWater ? '#7c3aed' : m.isExcludedFromTotal ? '#b45309' : '#047857' }}>
+                          {formatVN(m.periodConsumption)} {m.unit}
+                        </td>
+                        <td style={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
+                          {m.isExcludedFromTotal ? <span style={{ color: '#94a3b8' }}>-</span> : `${m.sharePercent}%`}
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
