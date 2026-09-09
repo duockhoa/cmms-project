@@ -991,13 +991,31 @@ export class UtilitiesService {
       }
     }
 
-    // Mặc định loại bỏ dữ liệu ghi tự động của EVN Bot khỏi sổ ghi điện nước
-    if (!query.includeEvn) {
-      where.NOT = [
-        { recordedByName: { contains: 'EVN' } },
-        { shift: { contains: 'EVN' } },
-        { recordedById: 'system-evn-bot' },
-        { notes: { contains: 'AMISS' } },
+    // Mặc định loại bỏ dữ liệu ghi tự động của EVN Bot khỏi sổ ghi chung
+    // Nhưng nếu người dùng chọn lọc theo 1 điểm đo cụ thể (query.pointId) hoặc includeEvn: true thì load toàn bộ ra
+    const shouldExcludeEvn = !query.includeEvn && !query.pointId;
+    if (shouldExcludeEvn) {
+      where.AND = [
+        ...(where.AND || []),
+        { recordedById: { not: 'system-evn-bot' } },
+        {
+          OR: [
+            { shift: null },
+            { NOT: { shift: { contains: 'EVN' } } },
+          ],
+        },
+        {
+          OR: [
+            { recordedByName: null },
+            { NOT: { recordedByName: { contains: 'EVN' } } },
+          ],
+        },
+        {
+          OR: [
+            { notes: null },
+            { NOT: { notes: { contains: 'AMISS' } } },
+          ],
+        },
       ];
     }
 

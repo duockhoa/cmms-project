@@ -125,7 +125,7 @@ export const UtilitiesPage: React.FC = () => {
     try {
       const [pointsRes, readingsRes, logsRes, analyticsRes] = await Promise.all([
         api.getUtilityPoints(),
-        api.getUtilityReadings({ limit: 100 }),
+        api.getUtilityReadings({ limit: 500, includeEvn: true }),
         api.getUtilityStatusLogs({ limit: 100 }),
         api.getUtilityAnalytics({ days: 7 }),
       ]);
@@ -195,6 +195,39 @@ export const UtilitiesPage: React.FC = () => {
       loadCumulativeReport();
     }
   }, [activeTab, cumulativeType, cumulativeMonth, cumulativeYear]);
+
+  useEffect(() => {
+    if (activeTab === 'readings') {
+      api.getUtilityReadings({ limit: 500, includeEvn: true }).then((res: any) => {
+        const list = Array.isArray(res) ? res : (res?.items || []);
+        setReadings(list);
+      }).catch(console.error);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    const isSpecificPointFilter = Boolean(
+      filterType &&
+      filterType !== 'ALL' &&
+      filterType !== 'ELECTRICITY' &&
+      filterType !== 'WATER' &&
+      filterType !== 'SUPPLY' &&
+      filterType !== 'CONSUMPTION' &&
+      filterType !== 'RECYCLED' &&
+      filterType !== 'EXCLUDED'
+    );
+    if (activeTab === 'readings' && isSpecificPointFilter) {
+      api.getUtilityReadings({ pointId: filterType, limit: 500, includeEvn: true }).then((res: any) => {
+        const list = Array.isArray(res) ? res : (res?.items || []);
+        if (list.length > 0) {
+          setReadings((prev) => {
+            const existingIds = new Set(list.map((x: any) => x.id));
+            return [...list, ...prev.filter((x: any) => !existingIds.has(x.id))];
+          });
+        }
+      }).catch(console.error);
+    }
+  }, [activeTab, filterType]);
 
   useEffect(() => {
     if (activeTab === 'cumulative') {
@@ -462,16 +495,30 @@ export const UtilitiesPage: React.FC = () => {
     toast.success('Xuất file thành công', 'Đã tải xuống file CSV danh sách ghi chỉ số.');
   };
 
-  // Danh sách ghi số đã lọc (loại trừ các bản ghi tự động của EVN Bot)
+  // Danh sách ghi số đã lọc (mặc định ẩn EVN Bot khi xem chung, nhưng hiển thị đầy đủ khi chọn lọc theo điểm đo cụ thể)
   const filteredReadings = useMemo(() => {
+    const isSpecificPointFilter = Boolean(
+      filterType &&
+      filterType !== 'ALL' &&
+      filterType !== 'ELECTRICITY' &&
+      filterType !== 'WATER' &&
+      filterType !== 'SUPPLY' &&
+      filterType !== 'CONSUMPTION' &&
+      filterType !== 'RECYCLED' &&
+      filterType !== 'EXCLUDED'
+    );
+
     return readings.filter((r) => {
-      // 1. Loại bỏ dữ liệu ghi tự động của EVN Bot khỏi giao diện Sổ Ghi Điện Nước
-      const isEvnBot =
-        r.recordedByName?.toLowerCase().includes('evn') ||
-        r.recordedById === 'system-evn-bot' ||
-        r.shift?.toLowerCase().includes('evn') ||
-        r.notes?.toLowerCase().includes('amiss');
-      if (isEvnBot) return false;
+      // 1. Mặc định ẩn dữ liệu ghi tự động của EVN Bot khỏi sổ ghi chung.
+      // Nhưng nếu người dùng chọn lọc theo 1 điểm đo cụ thể (chọn đồng hồ tổng EVN) thì hiển thị đầy đủ toàn bộ ra
+      if (!isSpecificPointFilter) {
+        const isEvnBot =
+          r.recordedByName?.toLowerCase().includes('evn') ||
+          r.recordedById === 'system-evn-bot' ||
+          r.shift?.toLowerCase().includes('evn') ||
+          r.notes?.toLowerCase().includes('amiss');
+        if (isEvnBot) return false;
+      }
 
       if (filterType !== 'ALL') {
         if (filterType === 'ELECTRICITY') {
@@ -1046,6 +1093,38 @@ export const UtilitiesPage: React.FC = () => {
                 <span>Đặt lại</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const res = await api.getUtilityReadings({ limit: 500, includeEvn: true });
+                  const list = Array.isArray(res) ? res : (res?.items || []);
+                  setReadings(list);
+                  toast.success('Đã làm mới', 'Đã tải lại danh sách bản ghi mới nhất.');
+                } catch (e: any) {
+                  toast.error('Lỗi', 'Không thể tải lại danh sách bản ghi.');
+                }
+              }}
+              style={{
+                padding: '7px 12px',
+                borderRadius: '6px',
+                border: '1px solid #e2e8f0',
+                backgroundColor: '#ffffff',
+                color: '#475569',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.15s',
+              }}
+              title="Tải lại danh sách bản ghi mới nhất từ máy chủ"
+            >
+              <RefreshCw size={13} />
+              <span>Làm mới</span>
+            </button>
 
             <button
               onClick={handleExportReadingsCSV}

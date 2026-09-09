@@ -129,7 +129,7 @@ export class UtilitiesController {
       startDate,
       endDate,
       page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 50,
+      limit: limit ? parseInt(limit, 10) : 500,
       includeEvn: includeEvn === 'true',
     } as any);
   }
