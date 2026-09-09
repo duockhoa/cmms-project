@@ -7,7 +7,7 @@ import { formatVN } from '../../utils/formatters';
 
 export interface UtilityTrendChartProps {
   trendData: any;
-  trendViewMode: 'DAILY' | 'MONTHLY' | 'YEARLY';
+  trendViewMode: 'HOURLY' | 'DAILY' | 'MONTHLY' | 'YEARLY';
   trendFilter: string;
   unit?: string;
 }
@@ -48,13 +48,17 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   const pointRows = trendData?.pointRows || [];
   const activeUnit = trendData?.unit || unit;
 
-  // Gán bảng màu riêng biệt cố định cho từng điểm đo
+  // Gán bảng màu riêng biệt cố định cho từng điểm đo (lọc riêng phụ tải tiêu thụ để trục Y Biểu đồ 2 độc lập hoàn toàn với biểu đồ Tổng cấp)
   const pointsWithColors = useMemo(() => {
-    return (pointRows || []).map((p: any, idx: number) => ({
+    const list = (pointRows || []).filter((p: any) => {
+      if (trendFilter === 'SUPPLY') return Boolean(p.isSupplyMeter);
+      return !p.isSupplyMeter;
+    });
+    return list.map((p: any, idx: number) => ({
       ...p,
       color: POINT_PALETTE[idx % POINT_PALETTE.length],
     }));
-  }, [pointRows]);
+  }, [pointRows, trendFilter]);
 
   // Kiểm tra điểm đo có đang được bật hiển thị đường trên biểu đồ hay không
   const isPointVisible = (pointId: string) => {
@@ -128,17 +132,79 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
     });
   }, [timeColumns, summaryRows, pointRows, trendFilter]);
 
-  // Tính toán Max Value cho trục Y
-  const maxVal = useMemo(() => {
+  // Cấu hình kích thước SVG
+  const svgWidth = 1040;
+  const svgHeight = 320;
+  const paddingLeft = 65;
+  const paddingRight = 65;
+  const paddingTop = 26;
+  const paddingBottom = 42;
+
+  const chartW = svgWidth - paddingLeft - paddingRight;
+  const chartH = svgHeight - paddingTop - paddingBottom;
+  const n = seriesData.length;
+
+  // Helper tính thang đo chuẩn hóa (Nice Numbers Scale) với các mốc chia tròn đều, chuẩn xác
+  const calcNiceScale = (rawValMax: number) => {
+    if (rawValMax <= 0) {
+      const defaultMax = 100;
+      const ticks = [0, 25, 50, 75, 100].map(val => ({
+        val,
+        y: paddingTop + chartH - (val / defaultMax) * chartH,
+      }));
+      return { maxVal: defaultMax, yTicks: ticks };
+    }
+
+    // Đệm 6% để đỉnh cao nhất không chạm sát mép trên
+    const paddedMax = rawValMax * 1.06;
+    const targetIntervals = 5;
+    const roughStep = paddedMax / targetIntervals;
+
+    const exponent = Math.floor(Math.log10(roughStep));
+    const magnitude = Math.pow(10, exponent);
+    const fraction = roughStep / magnitude;
+
+    let niceFraction = 1;
+    if (fraction <= 1) niceFraction = 1;
+    else if (fraction <= 2) niceFraction = 2;
+    else if (fraction <= 2.5) niceFraction = 2.5;
+    else if (fraction <= 5) niceFraction = 5;
+    else niceFraction = 10;
+
+    const step = niceFraction * magnitude;
+    const niceMax = Math.ceil(paddedMax / step) * step;
+
+    const ticks: { val: number; y: number }[] = [];
+    for (let v = 0; v <= niceMax + step * 0.001; v += step) {
+      const roundedVal = Number(v.toFixed(4));
+      ticks.push({
+        val: roundedVal,
+        y: paddingTop + chartH - (roundedVal / niceMax) * chartH,
+      });
+    }
+
+    return { maxVal: niceMax, yTicks: ticks };
+  };
+
+  // 1. Thang đo cực đại riêng cho Biểu Đồ 1 (Tổng hợp Nguồn Cấp & Dùng Toàn Nhà Máy)
+  const summaryRawMax = useMemo(() => {
     let max = 0;
     seriesData.forEach((d: any) => {
       if (showSupply && d.supply > max) max = d.supply;
       if (showConsumption && d.consumption > max) max = d.consumption;
       if (showDelta && Math.abs(d.delta) > max) max = Math.abs(d.delta);
       if (showRecycled && d.recycled > max) max = d.recycled;
-      if (d.selectedPointVal > max) max = d.selectedPointVal;
     });
-    // Bao quát giá trị của các điểm đo cụ thể đang hiển thị
+    return max;
+  }, [seriesData, showSupply, showConsumption, showDelta, showRecycled]);
+
+  const { maxVal: summaryMaxVal, yTicks: summaryYTicks } = useMemo(() => {
+    return calcNiceScale(summaryRawMax);
+  }, [summaryRawMax, paddingTop, chartH]);
+
+  // 2. Thang đo cực đại riêng cho Biểu Đồ 2 (Từng vị trí / Phân xưởng con)
+  const pointRawMax = useMemo(() => {
+    let max = 0;
     pointsWithColors.forEach((p: any) => {
       if (isPointVisible(p.pointId)) {
         timeColumns.forEach((col: any) => {
@@ -147,12 +213,12 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
         });
       }
     });
-    if (max <= 0) return 100;
-    // Làm tròn lên mốc đẹp (nice number)
-    const factor = Math.pow(10, Math.floor(Math.log10(max)));
-    const ceilUnits = Math.ceil(max / factor);
-    return Math.max(10, ceilUnits * factor * 1.1); // +10% đệm trên
-  }, [seriesData, showSupply, showConsumption, showDelta, showRecycled, pointsWithColors, showPointLines, pointVisibility, trendFilter, timeColumns]);
+    return max;
+  }, [pointsWithColors, pointVisibility, timeColumns]);
+
+  const { maxVal: pointMaxVal, yTicks: pointYTicks } = useMemo(() => {
+    return calcNiceScale(pointRawMax);
+  }, [pointRawMax, paddingTop, chartH]);
 
   // Tìm đỉnh cao nhất & thấp nhất trong kỳ
   const peakStats = useMemo(() => {
@@ -205,32 +271,27 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
     );
   }
 
-  // Cấu hình kích thước SVG
-  const svgWidth = 960;
-  const svgHeight = 300;
-  const paddingLeft = 65;
-  const paddingRight = 25;
-  const paddingTop = 20;
-  const paddingBottom = 42;
-
-  const chartW = svgWidth - paddingLeft - paddingRight;
-  const chartH = svgHeight - paddingTop - paddingBottom;
-  const n = seriesData.length;
-
-  // Helper tọa độ X & Y
+  // Helper tọa độ X
   const getX = (idx: number) => {
     if (n <= 1) return paddingLeft + chartW / 2;
     return paddingLeft + (idx / (n - 1)) * chartW;
   };
 
-  const getY = (val: number) => {
-    return paddingTop + chartH - (Math.max(0, val) / maxVal) * chartH;
+  // Tọa độ Y cho Biểu đồ 1 (Tổng)
+  const getSummaryY = (val: number) => {
+    return paddingTop + chartH - (Math.max(0, val) / summaryMaxVal) * chartH;
   };
 
-  // Tạo đường dẫn cong Bezier mượt mà cho SVG
-  const createSmoothPath = (values: number[]) => {
+  // Tọa độ Y cho Biểu đồ 2 (Chi tiết điểm đo)
+  const getPointY = (val: number) => {
+    return paddingTop + chartH - (Math.max(0, val) / pointMaxVal) * chartH;
+  };
+
+  // Tạo đường cong Bezier mượt mà theo hàm lấy Y tương ứng
+  const createSmoothPath = (values: number[], getYFn: (val: number) => number) => {
     if (values.length === 0) return '';
-    const points = values.map((val, idx) => ({ x: getX(idx), y: getY(val) }));
+    const bottomY = paddingTop + chartH;
+    const points = values.map((val, idx) => ({ x: getX(idx), y: Math.min(bottomY, getYFn(val)) }));
     if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
 
     let d = `M ${points[0].x},${points[0].y}`;
@@ -241,9 +302,18 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
       const p3 = points[i + 2 >= points.length ? points.length - 1 : i + 2];
 
       const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      let cp1y = p1.y + (p2.y - p0.y) / 6;
       const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      let cp2y = p2.y - (p3.y - p1.y) / 6;
+
+      // Giữ đường cong nằm trên hoặc đúng mốc 0, không bị võng xuống dưới trục hoành
+      if (p1.y >= bottomY && p2.y >= bottomY) {
+        cp1y = bottomY;
+        cp2y = bottomY;
+      } else {
+        cp1y = Math.min(bottomY, cp1y);
+        cp2y = Math.min(bottomY, cp2y);
+      }
 
       d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
     }
@@ -251,8 +321,8 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   };
 
   // Tạo vùng phủ Gradient (Area)
-  const createAreaPath = (values: number[]) => {
-    const lineD = createSmoothPath(values);
+  const createAreaPath = (values: number[], getYFn: (val: number) => number) => {
+    const lineD = createSmoothPath(values, getYFn);
     if (!lineD) return '';
     const lastX = getX(values.length - 1);
     const firstX = getX(0);
@@ -260,29 +330,42 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
     return `${lineD} L ${lastX},${bottomY} L ${firstX},${bottomY} Z`;
   };
 
-  // 5 Mốc lưới trục Y
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((pct) => ({
-    val: maxVal * pct,
-    y: paddingTop + chartH - pct * chartH,
-  }));
+  // Định dạng nhãn trục Y
+  const formatTickLabel = (val: number, maxV: number) => {
+    if (val === 0) return '0';
+    if (maxV >= 10000) {
+      if (val % 1000 === 0) {
+        return `${val / 1000}k`;
+      }
+      return `${(val / 1000).toFixed(1)}k`;
+    }
+    return formatVN(val);
+  };
 
-  const hoveredData = hoverIndex !== null && hoverIndex >= 0 && hoverIndex < seriesData.length 
-    ? seriesData[hoverIndex] 
+  const [summaryHoverIndex, setSummaryHoverIndex] = useState<number | null>(null);
+  const [pointHoverIndex, setPointHoverIndex] = useState<number | null>(null);
+
+  const summaryHoveredData = summaryHoverIndex !== null && summaryHoverIndex >= 0 && summaryHoverIndex < seriesData.length 
+    ? seriesData[summaryHoverIndex] 
+    : null;
+
+  const pointHoveredData = pointHoverIndex !== null && pointHoverIndex >= 0 && pointHoverIndex < seriesData.length 
+    ? seriesData[pointHoverIndex] 
     : null;
 
   return (
     <div className="utility-trend-chart-root">
-      {/* 1. Header & Bộ chuyển chế độ biểu đồ con */}
+      {/* 1. Thanh Chuyển Đổi Dạng Biểu Đồ Con (Tab Bar) */}
       <div className="chart-header-bar">
         <div className="chart-submode-pills">
           <button
             type="button"
             onClick={() => setChartSubMode('LINE')}
             className={`submode-btn ${chartSubMode === 'LINE' ? 'active' : ''}`}
-            title="Biểu đồ đường & miền diễn biến theo thời gian"
+            title="Biểu đồ đường diễn biến theo thời gian"
           >
             <LineChart size={13} />
-            <span>Đường & Miền</span>
+            <span>Đường Diễn Biến</span>
           </button>
           <button
             type="button"
@@ -303,518 +386,492 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
             <span>Cơ Cấu Tỷ Trọng</span>
           </button>
         </div>
-
-        {/* Legend bật/tắt chuỗi dữ liệu */}
-        {chartSubMode !== 'DONUT' && (
-          <div className="chart-legend-row">
-            <button
-              type="button"
-              onClick={() => setShowSupply(!showSupply)}
-              className={`legend-pill supply ${showSupply ? 'active' : 'inactive'}`}
-            >
-              <span className="legend-dot supply" />
-              <span>Nguồn Cấp Vào</span>
-              {showSupply ? <Eye size={11} /> : <EyeOff size={11} />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowConsumption(!showConsumption)}
-              className={`legend-pill consumption ${showConsumption ? 'active' : 'inactive'}`}
-            >
-              <span className="legend-dot consumption" />
-              <span>Tiêu Thụ Nội Bộ</span>
-              {showConsumption ? <Eye size={11} /> : <EyeOff size={11} />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowDelta(!showDelta)}
-              className={`legend-pill delta ${showDelta ? 'active' : 'inactive'}`}
-            >
-              <span className="legend-dot delta" />
-              <span>Hao Hụt / Chênh Lệch</span>
-              {showDelta ? <Eye size={11} /> : <EyeOff size={11} />}
-            </button>
-
-            {summaryRows?.totalRecycled && (
-              <button
-                type="button"
-                onClick={() => setShowRecycled(!showRecycled)}
-                className={`legend-pill recycled ${showRecycled ? 'active' : 'inactive'}`}
-              >
-                <span className="legend-dot recycled" />
-                <span>Nước Tái Sử Dụng</span>
-                {showRecycled ? <Eye size={11} /> : <EyeOff size={11} />}
-              </button>
-            )}
-
-            {pointsWithColors.length > 0 && (
-              <button
-                type="button"
-                onClick={() => toggleAllPoints(!showPointLines)}
-                className={`legend-pill point-master ${showPointLines ? 'active' : 'inactive'}`}
-                title="Bật/tắt hiển thị toàn bộ đường các điểm đo chi tiết"
-              >
-                <span className="legend-dot point-master" />
-                <span>Điểm Đo Chi Tiết ({pointsWithColors.filter((p: any) => isPointVisible(p.pointId)).length})</span>
-                {showPointLines ? <Eye size={11} /> : <EyeOff size={11} />}
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* 1.1 Thanh chọn nhanh bật/tắt từng đường điểm đo chi tiết */}
-      {chartSubMode === 'LINE' && showPointLines && pointsWithColors.length > 0 && (
-        <div className="chart-points-pills-bar">
-          <div className="points-pills-label">
-            <span>Đường điểm đo ({pointsWithColors.filter((p: any) => isPointVisible(p.pointId)).length}/{pointsWithColors.length}):</span>
-            <div className="points-quick-actions">
-              <button type="button" onClick={() => toggleAllPoints(true)} className="btn-point-action">Hiện hết</button>
-              <span className="action-sep">•</span>
-              <button type="button" onClick={() => toggleAllPoints(false)} className="btn-point-action">Ẩn hết</button>
-            </div>
-          </div>
-          <div className="points-pills-list">
-            {pointsWithColors.map((p: any) => {
-              const visible = isPointVisible(p.pointId);
-              const isHovered = hoveredPointId === p.pointId;
-              return (
+      {/* CHẾ ĐỘ 1: BIỂU ĐỒ ĐƯỜNG 2 BÊN SONG SONG CẠNH NHAU TRÊN 1 KHUNG */}
+      {chartSubMode === 'LINE' && (
+        <div className="dual-charts-grid">
+          {/* ========================================================= */}
+          {/* CỘT TRÁI: TỔNG HỢP NGUỒN CẤP & TIÊU THỤ TOÀN NHÀ MÁY     */}
+          {/* ========================================================= */}
+          <div className="sub-chart-box">
+            <div className="sub-chart-header">
+              <div className="sub-chart-title-group">
+                <h4 className="sub-chart-title">Tổng Hợp Nguồn Cấp & Tiêu Thụ Toàn Nhà Máy</h4>
+              </div>
+
+              {/* Legend cho Tổng hợp */}
+              <div className="chart-legend-row">
                 <button
-                  key={p.pointId}
                   type="button"
-                  onClick={() => togglePointVisibility(p.pointId)}
-                  onMouseEnter={() => setHoveredPointId(p.pointId)}
-                  onMouseLeave={() => setHoveredPointId(null)}
-                  className={`point-chip-btn ${visible ? 'active' : 'inactive'} ${isHovered ? 'hovered' : ''}`}
-                  style={{
-                    borderColor: visible ? p.color : '#e2e8f0',
-                    backgroundColor: visible ? `${p.color}15` : '#f8fafc',
-                    color: visible ? '#0f172a' : '#94a3b8',
-                  }}
-                  title={`${p.name} - ${p.location} (Tổng: ${formatVN(p.total)} ${activeUnit}) - Bấm để bật/tắt`}
+                  onClick={() => setShowSupply(!showSupply)}
+                  className={`legend-pill supply ${showSupply ? 'active' : 'inactive'}`}
                 >
-                  <span className="point-chip-dot" style={{ backgroundColor: visible ? p.color : '#cbd5e1' }} />
-                  <span className="point-chip-code">{p.code}</span>
-                  {p.total > 0 && (
-                    <span className="point-chip-val" style={{ color: visible ? p.color : '#94a3b8' }}>
-                      {p.total >= 1000 ? `${(p.total / 1000).toFixed(1)}k` : formatVN(p.total)}
-                    </span>
-                  )}
+                  <span className="legend-dot supply" />
+                  <span>Cấp Vào</span>
+                  {showSupply ? <Eye size={11} /> : <EyeOff size={11} />}
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
-      {/* 2. Highlight Thống Kê Đỉnh Tiêu Thụ */}
-      {peakStats && chartSubMode !== 'DONUT' && (
-        <div className="chart-quick-metrics">
-          <div className="metric-chip">
-            <span className="chip-label">Đỉnh Cấp:</span>
-            <strong className="chip-val supply">
-              {formatVN(peakStats.peakSupply.val)} {activeUnit}
-            </strong>
-            <span className="chip-date">({peakStats.peakSupply.label})</span>
-          </div>
+                <button
+                  type="button"
+                  onClick={() => setShowConsumption(!showConsumption)}
+                  className={`legend-pill consumption ${showConsumption ? 'active' : 'inactive'}`}
+                >
+                  <span className="legend-dot consumption" />
+                  <span>Dùng Nội Bộ</span>
+                  {showConsumption ? <Eye size={11} /> : <EyeOff size={11} />}
+                </button>
 
-          <div className="metric-chip">
-            <span className="chip-label">Đỉnh Dùng:</span>
-            <strong className="chip-val cons">
-              {formatVN(peakStats.peakConsumption.val)} {activeUnit}
-            </strong>
-            <span className="chip-date">({peakStats.peakConsumption.label})</span>
-          </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDelta(!showDelta)}
+                  className={`legend-pill delta ${showDelta ? 'active' : 'inactive'}`}
+                >
+                  <span className="legend-dot delta" />
+                  <span>Hao Hụt</span>
+                  {showDelta ? <Eye size={11} /> : <EyeOff size={11} />}
+                </button>
+              </div>
+            </div>
 
-          <div className="metric-chip">
-            <span className="chip-label">Trung Bình Kỳ:</span>
-            <strong className="chip-val avg">
-              {formatVN(summaryRows?.totalConsumption?.average || 0)} {activeUnit}/mốc
-            </strong>
-          </div>
-        </div>
-      )}
+            {/* Khung SVG Biểu Đồ Tổng Hợp */}
+            <div className="svg-chart-container">
+              <svg
+                viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                className="interactive-svg-chart"
+                onMouseLeave={() => setSummaryHoverIndex(null)}
+              >
+                <defs>
+                  <linearGradient id="sideSupplyGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#2563eb" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
+                  </linearGradient>
+                  <linearGradient id="sideConsGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
 
-      {/* 3. Khung Vẽ SVG Biểu Đồ (LINE & BAR) */}
-      {(chartSubMode === 'LINE' || chartSubMode === 'BAR') && (
-        <div className="svg-chart-container">
-          <svg
-            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-            className="interactive-svg-chart"
-            onMouseLeave={() => setHoverIndex(null)}
-          >
-            <defs>
-              {/* Gradients */}
-              <linearGradient id="supplyGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#2563eb" stopOpacity="0.28" />
-                <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
-              </linearGradient>
+                {/* Lưới ngang trục Y Biểu đồ 1 */}
+                {summaryYTicks.map((tick, i) => (
+                  <g key={`side-sum-tick-${i}`}>
+                    <line
+                      x1={paddingLeft}
+                      y1={tick.y}
+                      x2={svgWidth - paddingRight}
+                      y2={tick.y}
+                      stroke="#e2e8f0"
+                      strokeDasharray={tick.val === 0 ? '0' : '4 4'}
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={paddingLeft - 8}
+                      y={tick.y + 4}
+                      textAnchor="end"
+                      fontSize="11"
+                      fill="#94a3b8"
+                      fontWeight="600"
+                    >
+                      {formatTickLabel(tick.val, summaryMaxVal)}
+                    </text>
+                  </g>
+                ))}
 
-              <linearGradient id="consGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity="0.32" />
-                <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-              </linearGradient>
-
-              <linearGradient id="deltaGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.25" />
-                <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" />
-              </linearGradient>
-            </defs>
-
-            {/* Lưới ngang (Grid lines) & Nhãn trục Y */}
-            {yTicks.map((tick, i) => (
-              <g key={i}>
+                {/* Trục X Đường đáy */}
                 <line
                   x1={paddingLeft}
-                  y1={tick.y}
+                  y1={paddingTop + chartH}
                   x2={svgWidth - paddingRight}
-                  y2={tick.y}
-                  stroke="#e2e8f0"
-                  strokeDasharray={i === 0 ? '0' : '4 4'}
-                  strokeWidth="1"
+                  y2={paddingTop + chartH}
+                  stroke="#cbd5e1"
+                  strokeWidth="1.5"
                 />
-                <text
-                  x={paddingLeft - 8}
-                  y={tick.y + 4}
-                  textAnchor="end"
-                  fontSize="11"
-                  fill="#94a3b8"
-                  fontWeight="600"
-                >
-                  {tick.val >= 1000 ? `${Math.round(tick.val / 1000)}k` : formatVN(tick.val)}
-                </text>
-              </g>
-            ))}
 
-            {/* Trục X Đường đáy */}
-            <line
-              x1={paddingLeft}
-              y1={paddingTop + chartH}
-              x2={svgWidth - paddingRight}
-              y2={paddingTop + chartH}
-              stroke="#cbd5e1"
-              strokeWidth="1.5"
-            />
-
-            {/* CHẾ ĐỘ 1: ĐƯỜNG & MIỀN (LINE & AREA) */}
-            {chartSubMode === 'LINE' && (
-              <>
-                {/* Vùng Area đổ màu gradient */}
+                {/* Vùng Area Gradient Biểu đồ 1 */}
                 {showSupply && (
                   <path
-                    d={createAreaPath(seriesData.map((d: any) => d.supply))}
-                    fill="url(#supplyGradient)"
+                    d={createAreaPath(seriesData.map((d: any) => d.supply), getSummaryY)}
+                    fill="url(#sideSupplyGrad)"
                   />
                 )}
                 {showConsumption && (
                   <path
-                    d={createAreaPath(seriesData.map((d: any) => d.consumption))}
-                    fill="url(#consGradient)"
+                    d={createAreaPath(seriesData.map((d: any) => d.consumption), getSummaryY)}
+                    fill="url(#sideConsGrad)"
                   />
                 )}
 
-                {/* Đường cong Line */}
+                {/* Đường Nguồn Cấp Vào */}
                 {showSupply && (
                   <path
-                    d={createSmoothPath(seriesData.map((d: any) => d.supply))}
+                    d={createSmoothPath(seriesData.map((d: any) => d.supply), getSummaryY)}
                     fill="none"
                     stroke="#2563eb"
                     strokeWidth="2.5"
                     strokeLinecap="round"
+                    strokeLinejoin="round"
                   />
                 )}
 
+                {/* Đường Tiêu Thụ Nội Bộ */}
                 {showConsumption && (
                   <path
-                    d={createSmoothPath(seriesData.map((d: any) => d.consumption))}
+                    d={createSmoothPath(seriesData.map((d: any) => d.consumption), getSummaryY)}
                     fill="none"
                     stroke="#10b981"
                     strokeWidth="2.5"
                     strokeLinecap="round"
+                    strokeLinejoin="round"
                   />
                 )}
 
+                {/* Đường Hao Hụt / Chênh Lệch */}
                 {showDelta && (
                   <path
-                    d={createSmoothPath(seriesData.map((d: any) => d.delta))}
+                    d={createSmoothPath(seriesData.map((d: any) => d.delta), getSummaryY)}
                     fill="none"
                     stroke="#f59e0b"
                     strokeWidth="1.8"
-                    strokeDasharray="4 3"
+                    strokeDasharray="4 4"
                     strokeLinecap="round"
                   />
                 )}
 
-                {/* Các đường biểu diễn từng điểm đo chi tiết */}
-                {showPointLines && pointsWithColors.map((p: any) => {
-                  if (!isPointVisible(p.pointId)) return null;
-                  const pointVals = timeColumns.map((c: any) => p.values?.[c.key] || 0);
-                  const isHoveredPoint = hoveredPointId === p.pointId;
-                  const isDimmed = hoveredPointId !== null && !isHoveredPoint;
-
-                  return (
-                    <g key={`point-path-group-${p.pointId}`} className="chart-point-path-group">
-                      <path
-                        d={createSmoothPath(pointVals)}
-                        fill="none"
-                        stroke={p.color}
-                        strokeWidth={isHoveredPoint ? 3.5 : 2}
-                        strokeDasharray={p.isSupplyMeter ? '5 3' : undefined}
-                        strokeLinecap="round"
-                        opacity={isDimmed ? 0.2 : 0.9}
-                        style={{ transition: 'all 0.2s ease' }}
+                {/* Hover line & marker */}
+                {summaryHoverIndex !== null && (
+                  <g>
+                    <line
+                      x1={getX(summaryHoverIndex)}
+                      y1={paddingTop}
+                      x2={getX(summaryHoverIndex)}
+                      y2={paddingTop + chartH}
+                      stroke="#94a3b8"
+                      strokeDasharray="3 3"
+                      strokeWidth="1.2"
+                    />
+                    {showSupply && (
+                      <circle
+                        cx={getX(summaryHoverIndex)}
+                        cy={getSummaryY(seriesData[summaryHoverIndex].supply)}
+                        r="4.5"
+                        fill="#2563eb"
+                        stroke="#ffffff"
+                        strokeWidth="2"
                       />
-                      {pointVals.map((v: number, i: number) => {
-                        if (v <= 0) return null;
-                        const cx = getX(i);
-                        const cy = getY(v);
-                        const isColHovered = hoverIndex === i;
+                    )}
+                    {showConsumption && (
+                      <circle
+                        cx={getX(summaryHoverIndex)}
+                        cy={getSummaryY(seriesData[summaryHoverIndex].consumption)}
+                        r="4.5"
+                        fill="#10b981"
+                        stroke="#ffffff"
+                        strokeWidth="2"
+                      />
+                    )}
+                  </g>
+                )}
 
+                {/* Các mốc thời gian trục X */}
+                {seriesData.map((d: any, idx: number) => {
+                  const x = getX(idx);
+                  const showDate = n <= 14 || idx % Math.ceil(n / 12) === 0 || idx === n - 1;
+                  return (
+                    <g key={`side-col1-${d.key}`}>
+                      {showDate && (
+                        <>
+                          <line x1={x} y1={paddingTop + chartH} x2={x} y2={paddingTop + chartH + 5} stroke="#cbd5e1" strokeWidth="1" />
+                          <text x={x} y={paddingTop + chartH + 18} textAnchor="middle" fontSize="10" fill="#64748b" fontWeight="600">
+                            {d.shortLabel}
+                          </text>
+                        </>
+                      )}
+                      <rect
+                        x={x - (chartW / (n || 1)) / 2}
+                        y={paddingTop}
+                        width={chartW / (n || 1)}
+                        height={chartH + 35}
+                        fill="transparent"
+                        cursor="pointer"
+                        onMouseEnter={() => setSummaryHoverIndex(idx)}
+                      />
+                    </g>
+                  );
+                })}
+              </svg>
+
+              {summaryHoveredData && summaryHoverIndex !== null && (
+                <div
+                  className="chart-tooltip-floating"
+                  style={{
+                    left: `${(getX(summaryHoverIndex) / svgWidth) * 100}%`,
+                    top: '10px',
+                    transform: getX(summaryHoverIndex) > svgWidth * 0.6 ? 'translateX(-95%)' : 'translateX(5%)',
+                  }}
+                >
+                  <div className="tooltip-title">
+                    <Calendar size={12} />
+                    <span>{summaryHoveredData.label}</span>
+                  </div>
+                  <div className="tooltip-body">
+                    {showSupply && (
+                      <div className="tooltip-row">
+                        <div className="tooltip-point-left"><span className="tooltip-legend-dot supply" /><span className="tooltip-label">Cấp vào:</span></div>
+                        <span className="tooltip-val supply">{formatVN(summaryHoveredData.supply)} {activeUnit}</span>
+                      </div>
+                    )}
+                    {showConsumption && (
+                      <div className="tooltip-row">
+                        <div className="tooltip-point-left"><span className="tooltip-legend-dot consumption" /><span className="tooltip-label">Tiêu thụ:</span></div>
+                        <span className="tooltip-val consumption">{formatVN(summaryHoveredData.consumption)} {activeUnit}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ========================================================= */}
+          {/* CỘT PHẢI: DIỄN BIẾN TIÊU THỤ TỪNG VỊ TRÍ / PHÂN XƯỞNG CON */}
+          {/* ========================================================= */}
+          {pointsWithColors.length > 0 && (
+            <div className="sub-chart-box points-box">
+              <div className="sub-chart-header">
+                <div className="sub-chart-title-group">
+                  <h4 className="sub-chart-title">Diễn Biến Tiêu Thụ Từng Điểm Đo</h4>
+                </div>
+
+                {/* Danh sách badge chip bật/tắt từng điểm đo */}
+                <div className="chart-legend-row">
+                  {pointsWithColors.map((p: any) => {
+                    const visible = isPointVisible(p.pointId);
+                    const isHovered = hoveredPointId === p.pointId;
+                    return (
+                      <button
+                        key={`chip-side-${p.pointId}`}
+                        type="button"
+                        onClick={() => togglePointVisibility(p.pointId)}
+                        onMouseEnter={() => setHoveredPointId(p.pointId)}
+                        onMouseLeave={() => setHoveredPointId(null)}
+                        className={`point-chip-btn ${visible ? 'active' : 'inactive'} ${isHovered ? 'hovered' : ''}`}
+                        style={{
+                          borderColor: visible ? p.color : '#e2e8f0',
+                          backgroundColor: visible ? `${p.color}15` : '#f8fafc',
+                          color: visible ? '#0f172a' : '#94a3b8',
+                        }}
+                        title={`${p.name} - ${p.location}`}
+                      >
+                        <span className="point-chip-dot" style={{ backgroundColor: visible ? p.color : '#cbd5e1' }} />
+                        <span className="point-chip-code">{p.code}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Khung SVG Biểu Đồ Điểm Đo Con */}
+              <div className="svg-chart-container">
+                <svg
+                  viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                  className="interactive-svg-chart"
+                  onMouseLeave={() => setPointHoverIndex(null)}
+                >
+                  {/* Lưới ngang trục Y Biểu đồ 2 */}
+                  {pointYTicks.map((tick, i) => (
+                    <g key={`pt-tick-side-${i}`}>
+                      <line
+                        x1={paddingLeft}
+                        y1={tick.y}
+                        x2={svgWidth - paddingRight}
+                        y2={tick.y}
+                        stroke="#e2e8f0"
+                        strokeDasharray={tick.val === 0 ? '0' : '4 4'}
+                        strokeWidth="1"
+                      />
+                      <text
+                        x={paddingLeft - 8}
+                        y={tick.y + 4}
+                        textAnchor="end"
+                        fontSize="11"
+                        fill="#94a3b8"
+                        fontWeight="600"
+                      >
+                        {formatTickLabel(tick.val, pointMaxVal)}
+                      </text>
+                    </g>
+                  ))}
+
+                  {/* Trục X Đường đáy */}
+                  <line
+                    x1={paddingLeft}
+                    y1={paddingTop + chartH}
+                    x2={svgWidth - paddingRight}
+                    y2={paddingTop + chartH}
+                    stroke="#cbd5e1"
+                    strokeWidth="1.5"
+                  />
+
+                  {/* Đường cong Line từng điểm đo */}
+                  {pointsWithColors.map((p: any) => {
+                    if (!isPointVisible(p.pointId)) return null;
+                    const pointVals = timeColumns.map((c: any) => p.values?.[c.key] || 0);
+                    const isHoveredPoint = hoveredPointId === p.pointId;
+                    const isDimmed = hoveredPointId !== null && !isHoveredPoint;
+
+                    return (
+                      <g key={`pt-line-side-${p.pointId}`} opacity={isDimmed ? 0.2 : 1}>
+                        <path
+                          d={createSmoothPath(pointVals, getPointY)}
+                          fill="none"
+                          stroke={p.color}
+                          strokeWidth={isHoveredPoint ? 3 : 1.8}
+                          strokeDasharray={p.isExcludedFromTotal ? '3 3' : undefined}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </g>
+                    );
+                  })}
+
+                  {/* Hover line & marker */}
+                  {pointHoverIndex !== null && (
+                    <g>
+                      <line
+                        x1={getX(pointHoverIndex)}
+                        y1={paddingTop}
+                        x2={getX(pointHoverIndex)}
+                        y2={paddingTop + chartH}
+                        stroke="#94a3b8"
+                        strokeDasharray="3 3"
+                        strokeWidth="1.2"
+                      />
+                      {pointsWithColors.map((p: any) => {
+                        if (!isPointVisible(p.pointId)) return null;
+                        const val = p.values?.[seriesData[pointHoverIndex].key] || 0;
+                        if (val <= 0) return null;
                         return (
                           <circle
-                            key={`dot-${p.pointId}-${i}`}
-                            cx={cx}
-                            cy={cy}
-                            r={isHoveredPoint || isColHovered ? 4.5 : 2.5}
-                            fill="#ffffff"
-                            stroke={p.color}
-                            strokeWidth={isHoveredPoint ? 2.5 : 1.6}
-                            opacity={isDimmed ? 0.25 : 0.95}
+                            key={`side-pt-dot-${p.pointId}`}
+                            cx={getX(pointHoverIndex)}
+                            cy={getPointY(val)}
+                            r="3.5"
+                            fill={p.color}
+                            stroke="#ffffff"
+                            strokeWidth="1.5"
                           />
                         );
                       })}
                     </g>
-                  );
-                })}
-
-                {/* Điểm nút dữ liệu tròn */}
-                {seriesData.map((d: any, i: number) => {
-                  const cx = getX(i);
-                  const isHovered = hoverIndex === i;
-                  return (
-                    <g key={d.key}>
-                      {showSupply && d.supply > 0 && (
-                        <circle
-                          cx={cx}
-                          cy={getY(d.supply)}
-                          r={isHovered ? 5.5 : 3.5}
-                          fill="#ffffff"
-                          stroke="#2563eb"
-                          strokeWidth="2"
-                        />
-                      )}
-                      {showConsumption && d.consumption > 0 && (
-                        <circle
-                          cx={cx}
-                          cy={getY(d.consumption)}
-                          r={isHovered ? 5.5 : 3.5}
-                          fill="#ffffff"
-                          stroke="#10b981"
-                          strokeWidth="2"
-                        />
-                      )}
-                    </g>
-                  );
-                })}
-              </>
-            )}
-
-            {/* CHẾ ĐỘ 2: CỘT SO SÁNH (GROUPED BAR CHART) */}
-            {chartSubMode === 'BAR' && (
-              <>
-                {seriesData.map((d: any, i: number) => {
-                  const centerX = getX(i);
-                  const totalBarGroupW = Math.min(26, (chartW / n) * 0.7);
-                  const singleBarW = totalBarGroupW / 2;
-
-                  const supplyH = (d.supply / maxVal) * chartH;
-                  const consH = (d.consumption / maxVal) * chartH;
-                  const isHovered = hoverIndex === i;
-
-                  return (
-                    <g key={d.key} opacity={hoverIndex !== null && !isHovered ? 0.45 : 1}>
-                      {/* Cột Cấp Vào */}
-                      {showSupply && (
-                        <rect
-                          x={centerX - totalBarGroupW / 2}
-                          y={paddingTop + chartH - supplyH}
-                          width={Math.max(2, singleBarW - 1)}
-                          height={Math.max(0, supplyH)}
-                          fill="#3b82f6"
-                          rx="2"
-                        />
-                      )}
-                      {/* Cột Tiêu Thụ */}
-                      {showConsumption && (
-                        <rect
-                          x={centerX - totalBarGroupW / 2 + singleBarW}
-                          y={paddingTop + chartH - consH}
-                          width={Math.max(2, singleBarW - 1)}
-                          height={Math.max(0, consH)}
-                          fill="#10b981"
-                          rx="2"
-                        />
-                      )}
-                    </g>
-                  );
-                })}
-              </>
-            )}
-
-            {/* Trục X: Nhãn mốc thời gian */}
-            {seriesData.map((d: any, i: number) => {
-              const x = getX(i);
-              const isWeekend = d.subLabel === 'CN' || d.subLabel === 'T7';
-              const showText = n <= 15 || i % Math.ceil(n / 20) === 0 || i === n - 1 || hoverIndex === i;
-
-              return (
-                <g key={d.key}>
-                  {showText && (
-                    <text
-                      x={x}
-                      y={paddingTop + chartH + 15}
-                      textAnchor="middle"
-                      fontSize={hoverIndex === i ? '11.5' : '10'}
-                      fill={d.subLabel === 'CN' ? '#dc2626' : d.subLabel === 'T7' ? '#2563eb' : hoverIndex === i ? '#0f172a' : '#64748b'}
-                      fontWeight={hoverIndex === i || isWeekend ? '700' : '500'}
-                    >
-                      {d.shortLabel}
-                    </text>
                   )}
-                  {d.subLabel && showText && trendViewMode === 'DAILY' && (
-                    <text
-                      x={x}
-                      y={paddingTop + chartH + 26}
-                      textAnchor="middle"
-                      fontSize="8.5"
-                      fill={d.subLabel === 'CN' ? '#dc2626' : d.subLabel === 'T7' ? '#2563eb' : '#94a3b8'}
-                      fontWeight="600"
-                    >
-                      {d.subLabel}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
 
-            {/* Vạch chỉ hướng chuột dọc (Crosshair Hover) */}
-            {hoverIndex !== null && hoveredData && (
-              <g pointerEvents="none">
-                <line
-                  x1={getX(hoverIndex)}
-                  y1={paddingTop}
-                  x2={getX(hoverIndex)}
-                  y2={paddingTop + chartH}
-                  stroke="#94a3b8"
-                  strokeDasharray="3 3"
-                  strokeWidth="1.2"
-                />
-              </g>
-            )}
+                  {/* Các mốc thời gian trục X */}
+                  {seriesData.map((d: any, idx: number) => {
+                    const x = getX(idx);
+                    const showDate = n <= 14 || idx % Math.ceil(n / 12) === 0 || idx === n - 1;
+                    return (
+                      <g key={`side-col2-${d.key}`}>
+                        {showDate && (
+                          <>
+                            <line x1={x} y1={paddingTop + chartH} x2={x} y2={paddingTop + chartH + 5} stroke="#cbd5e1" strokeWidth="1" />
+                            <text x={x} y={paddingTop + chartH + 18} textAnchor="middle" fontSize="10" fill="#64748b" fontWeight="600">
+                              {d.shortLabel}
+                            </text>
+                          </>
+                        )}
+                        <rect
+                          x={x - (chartW / (n || 1)) / 2}
+                          y={paddingTop}
+                          width={chartW / (n || 1)}
+                          height={chartH + 35}
+                          fill="transparent"
+                          cursor="pointer"
+                          onMouseEnter={() => setPointHoverIndex(idx)}
+                        />
+                      </g>
+                    );
+                  })}
+                </svg>
 
-            {/* Vùng cảm ứng chuột vô hình (Transparent Hitboxes) */}
-            {seriesData.map((d: any, i: number) => {
-              const colW = chartW / n;
-              const x = getX(i) - colW / 2;
-              return (
-                <rect
-                  key={d.key}
-                  x={x}
-                  y={paddingTop}
-                  width={colW}
-                  height={chartH + paddingBottom}
-                  fill="transparent"
-                  style={{ cursor: 'crosshair' }}
-                  onMouseEnter={() => setHoverIndex(i)}
-                  onTouchStart={() => setHoverIndex(i)}
-                />
-              );
-            })}
-          </svg>
-
-          {/* Floating Tooltip khi Hover */}
-          {hoverIndex !== null && hoveredData && (
-            <div
-              className="chart-tooltip-floating"
-              style={{
-                left: `${Math.min(82, Math.max(18, (getX(hoverIndex) / svgWidth) * 100))}%`,
-                top: '10px',
-              }}
-            >
-              <div className="tooltip-title">
-                <Calendar size={12} color="#059669" />
-                <span>{hoveredData.label}</span>
-                {hoveredData.subLabel && <span className="tooltip-day-tag">{hoveredData.subLabel}</span>}
-              </div>
-
-              <div className="tooltip-body">
-                {showSupply && (
-                  <div className="tooltip-row">
-                    <span className="tooltip-legend-dot supply" />
-                    <span className="tooltip-label">Nguồn cấp vào:</span>
-                    <strong className="tooltip-val supply">{formatVN(hoveredData.supply)} {activeUnit}</strong>
-                  </div>
-                )}
-                {showConsumption && (
-                  <div className="tooltip-row">
-                    <span className="tooltip-legend-dot consumption" />
-                    <span className="tooltip-label">Tiêu thụ nội bộ:</span>
-                    <strong className="tooltip-val consumption">{formatVN(hoveredData.consumption)} {activeUnit}</strong>
-                  </div>
-                )}
-                {showDelta && (
-                  <div className="tooltip-row">
-                    <span className="tooltip-legend-dot delta" />
-                    <span className="tooltip-label">Chênh lệch / Hao hụt:</span>
-                    <strong className="tooltip-val delta">{formatVN(hoveredData.delta)} {activeUnit}</strong>
-                  </div>
-                )}
-                {showRecycled && hoveredData.recycled > 0 && (
-                  <div className="tooltip-row">
-                    <span className="tooltip-legend-dot recycled" />
-                    <span className="tooltip-label">Nước tái sử dụng:</span>
-                    <strong className="tooltip-val recycled">{formatVN(hoveredData.recycled)} m³</strong>
-                  </div>
-                )}
-
-                {/* Chi tiết từng điểm đo có sản lượng trong mốc này */}
-                {(() => {
-                  const pointsOnThisDay = pointsWithColors
-                    .map((p: any) => ({
-                      ...p,
-                      val: p.values?.[hoveredData.key] || 0,
-                    }))
-                    .filter((p: any) => p.val > 0)
-                    .sort((a: any, b: any) => b.val - a.val);
-
-                  if (pointsOnThisDay.length === 0) return null;
-
-                  return (
-                    <div className="tooltip-points-section">
-                      <div className="tooltip-points-title">Điểm đo chi tiết ({pointsOnThisDay.length}):</div>
-                      <div className="tooltip-points-scroll">
-                        {pointsOnThisDay.map((p: any) => (
-                          <div key={p.pointId} className="tooltip-point-item">
-                            <div className="tooltip-point-left">
-                              <span className="tooltip-point-dot" style={{ backgroundColor: p.color }} />
-                              <span className="tooltip-point-name" title={`${p.code} - ${p.name}`}>
-                                {p.code}{p.isSupplyMeter ? ' (Tổng)' : ''}
+                {pointHoveredData && pointHoverIndex !== null && (
+                  <div
+                    className="chart-tooltip-floating"
+                    style={{
+                      left: `${(getX(pointHoverIndex) / svgWidth) * 100}%`,
+                      top: '10px',
+                      transform: getX(pointHoverIndex) > svgWidth * 0.6 ? 'translateX(-95%)' : 'translateX(5%)',
+                    }}
+                  >
+                    <div className="tooltip-title">
+                      <Calendar size={12} />
+                      <span>{pointHoveredData.label}</span>
+                    </div>
+                    <div className="tooltip-body">
+                      {pointsWithColors
+                        .filter((p: any) => isPointVisible(p.pointId) && (p.values?.[pointHoveredData.key] || 0) > 0)
+                        .map((p: any) => {
+                          const val = p.values?.[pointHoveredData.key] || 0;
+                          return (
+                            <div key={`side-tip-pt-${p.pointId}`} className="tooltip-point-item">
+                              <div className="tooltip-point-left">
+                                <span className="tooltip-point-dot" style={{ backgroundColor: p.color }} />
+                                <span className="tooltip-point-name" title={p.name}>{p.code}</span>
+                              </div>
+                              <span className="tooltip-point-num" style={{ color: p.color }}>
+                                {formatVN(val)} {activeUnit}
                               </span>
                             </div>
-                            <strong className="tooltip-point-num" style={{ color: p.color }}>
-                              {formatVN(p.val)} {activeUnit}
-                            </strong>
-                          </div>
-                        ))}
-                      </div>
+                          );
+                        })}
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* CHẾ ĐỘ 2: CỘT SO SÁNH (GROUPED BAR CHART) */}
+      {chartSubMode === 'BAR' && (
+        <div className="sub-chart-box">
+          <div className="sub-chart-header">
+            <div className="sub-chart-title-group">
+              <h4 className="sub-chart-title">So Sánh Nguồn Cấp Vào & Tiêu Thụ Toàn Nhà Máy</h4>
+              <span className="sub-chart-subtitle">(Biểu đồ cột so sánh theo từng mốc thời gian)</span>
+            </div>
+            <div className="chart-legend-row">
+              <span className="legend-pill supply active"><span className="legend-dot supply" />Cấp Vào</span>
+              <span className="legend-pill consumption active"><span className="legend-dot consumption" />Dùng Nội Bộ</span>
+            </div>
+          </div>
+          <div className="svg-chart-container">
+            <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="interactive-svg-chart">
+              {summaryYTicks.map((tick, i) => (
+                <g key={`bar-tick-${i}`}>
+                  <line x1={paddingLeft} y1={tick.y} x2={svgWidth - paddingRight} y2={tick.y} stroke="#e2e8f0" strokeDasharray={tick.val === 0 ? '0' : '4 4'} strokeWidth="1" />
+                  <text x={paddingLeft - 8} y={tick.y + 4} textAnchor="end" fontSize="11" fill="#94a3b8" fontWeight="600">
+                    {formatTickLabel(tick.val, summaryMaxVal)}
+                  </text>
+                </g>
+              ))}
+              <line x1={paddingLeft} y1={paddingTop + chartH} x2={svgWidth - paddingRight} y2={paddingTop + chartH} stroke="#cbd5e1" strokeWidth="1.5" />
+              {seriesData.map((d: any, i: number) => {
+                const centerX = getX(i);
+                const totalBarGroupW = Math.min(26, (chartW / n) * 0.7);
+                const singleBarW = totalBarGroupW / 2;
+                const supplyH = (d.supply / summaryMaxVal) * chartH;
+                const consH = (d.consumption / summaryMaxVal) * chartH;
+                return (
+                  <g key={`bar-grp-${d.key}`}>
+                    <rect x={centerX - totalBarGroupW / 2} y={paddingTop + chartH - supplyH} width={Math.max(2, singleBarW - 1)} height={Math.max(0, supplyH)} fill="#3b82f6" rx="2" />
+                    <rect x={centerX - totalBarGroupW / 2 + singleBarW} y={paddingTop + chartH - consH} width={Math.max(2, singleBarW - 1)} height={Math.max(0, consH)} fill="#10b981" rx="2" />
+                    <text x={centerX} y={paddingTop + chartH + 15} textAnchor="middle" fontSize="10" fill="#64748b" fontWeight="600">{d.shortLabel}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
         </div>
       )}
 
@@ -1208,7 +1265,64 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
           width: 100%;
           height: auto;
           display: block;
-          max-height: 320px;
+        }
+
+        .sub-chart-box {
+          background-color: #ffffff;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          padding: 12px 14px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .sub-chart-header {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          min-height: 66px;
+          margin-bottom: 8px;
+        }
+
+        .sub-chart-title-group {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .sub-chart-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 0;
+          line-height: 1.3;
+        }
+
+        .dual-charts-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+          width: 100%;
+        }
+
+        @media (max-width: 1150px) {
+          .dual-charts-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        .tooltip-axis-title {
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+          margin-bottom: 4px;
+        }
+        .tooltip-axis-title.summary {
+          color: #1d4ed8;
+        }
+        .tooltip-axis-title.points {
+          color: #7c3aed;
         }
 
         .chart-tooltip-floating {

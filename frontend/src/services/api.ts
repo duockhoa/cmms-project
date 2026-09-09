@@ -554,7 +554,8 @@ export const api = {
 
   getUtilityTrendMatrix: (params?: {
     type?: 'ELECTRICITY' | 'WATER';
-    viewMode?: 'DAILY' | 'MONTHLY' | 'YEARLY';
+    viewMode?: 'HOURLY' | 'DAILY' | 'MONTHLY' | 'YEARLY';
+    day?: number;
     month?: number;
     year?: number;
     startYear?: number;

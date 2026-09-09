@@ -37,8 +37,9 @@ export const UtilitiesPage: React.FC = () => {
   const [cumulativeLoading, setCumulativeLoading] = useState(false);
   const [cumulativeFilter, setCumulativeFilter] = useState<string>('ALL');
 
-  // Báo cáo ma trận xu hướng theo thời gian (Ngày / Tháng / Năm)
-  const [trendViewMode, setTrendViewMode] = useState<'DAILY' | 'MONTHLY' | 'YEARLY'>('DAILY');
+  // Báo cáo ma trận xu hướng theo thời gian (Giờ / Ngày / Tháng / Năm)
+  const [trendViewMode, setTrendViewMode] = useState<'HOURLY' | 'DAILY' | 'MONTHLY' | 'YEARLY'>('DAILY');
+  const [trendDay, setTrendDay] = useState<number>(new Date().getDate());
   const [trendMonth, setTrendMonth] = useState<number>(new Date().getMonth() + 1);
   const [trendYear, setTrendYear] = useState<number>(new Date().getFullYear());
   const [trendStartYear, setTrendStartYear] = useState<number>(new Date().getFullYear() - 3);
@@ -170,6 +171,7 @@ export const UtilitiesPage: React.FC = () => {
       const data = await api.getUtilityTrendMatrix({
         type: cumulativeType,
         viewMode: trendViewMode,
+        day: trendDay,
         month: trendMonth,
         year: trendYear,
         startYear: trendStartYear,
@@ -198,7 +200,7 @@ export const UtilitiesPage: React.FC = () => {
     if (activeTab === 'cumulative') {
       loadTrendMatrixReport();
     }
-  }, [activeTab, cumulativeType, trendViewMode, trendMonth, trendYear, trendStartYear, trendEndYear]);
+  }, [activeTab, cumulativeType, trendViewMode, trendDay, trendMonth, trendYear, trendStartYear, trendEndYear]);
 
   // Xuất file CSV báo cáo ma trận xu hướng
   const handleExportTrendCSV = () => {
@@ -209,7 +211,7 @@ export const UtilitiesPage: React.FC = () => {
     const unit = trendData.unit || (cumulativeType === 'ELECTRICITY' ? 'kWh' : 'm³');
     const cols = trendData.timeColumns;
     let csv = '\uFEFF';
-    csv += `BÁO CÁO TỔNG HỢP & XU HƯỚNG TIÊU THỤ ${trendData.type === 'ELECTRICITY' ? 'ĐIỆN NĂNG' : 'NƯỚC SẠCH'} THEO ${trendViewMode === 'DAILY' ? `NGÀY (THÁNG ${trendMonth}/${trendYear})` : trendViewMode === 'MONTHLY' ? `THÁNG (NĂM ${trendYear})` : `CÁC NĂM (${trendStartYear} - ${trendEndYear})`}\n`;
+    csv += `BÁO CÁO TỔNG HỢP & XU HƯỚNG TIÊU THỤ ${trendData.type === 'ELECTRICITY' ? 'ĐIỆN NĂNG' : 'NƯỚC SẠCH'} THEO ${trendViewMode === 'HOURLY' ? `GIỜ (NGÀY ${trendDay}/${trendMonth}/${trendYear})` : trendViewMode === 'DAILY' ? `NGÀY (THÁNG ${trendMonth}/${trendYear})` : trendViewMode === 'MONTHLY' ? `THÁNG (NĂM ${trendYear})` : `CÁC NĂM (${trendStartYear} - ${trendEndYear})`}\n`;
     csv += `Ngày xuất:;${new Date().toLocaleString('vi-VN')}\n`;
     csv += `Đơn vị tính:;${unit}\n\n`;
 
@@ -2243,8 +2245,17 @@ export const UtilitiesPage: React.FC = () => {
             {/* Thanh Công Cụ Điều Khiển & Bộ Lọc Tự Co Giãn Theo Màn Hình */}
             <div className="trend-toolbar">
               <div className="trend-toolbar-left">
-                {/* 1. Nút chuyển chế độ: Ngày / Tháng / Năm */}
+                {/* 1. Nút chuyển chế độ: Giờ / Ngày / Tháng / Năm */}
                 <div className="trend-mode-pills">
+                  <button
+                    type="button"
+                    onClick={() => setTrendViewMode('HOURLY')}
+                    className={`trend-mode-btn ${trendViewMode === 'HOURLY' ? 'active' : ''}`}
+                    title="Xem chi tiết từng giờ trong ngày"
+                  >
+                    <Clock size={13} />
+                    <span>Theo Giờ</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setTrendViewMode('DAILY')}
@@ -2272,6 +2283,41 @@ export const UtilitiesPage: React.FC = () => {
                 </div>
 
                 {/* 2. Bộ chọn mốc thời gian */}
+                {trendViewMode === 'HOURLY' && (
+                  <div className="trend-date-selectors">
+                    <select
+                      value={trendDay}
+                      onChange={(e) => setTrendDay(parseInt(e.target.value, 10))}
+                      className="filter-select trend-select"
+                      title="Chọn ngày"
+                    >
+                      {Array.from({ length: new Date(trendYear, trendMonth, 0).getDate() }, (_, i) => i + 1).map((d) => (
+                        <option key={d} value={d}>Ngày {String(d).padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={trendMonth}
+                      onChange={(e) => setTrendMonth(parseInt(e.target.value, 10))}
+                      className="filter-select trend-select"
+                      title="Chọn tháng"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <option key={m} value={m}>Tháng {String(m).padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={trendYear}
+                      onChange={(e) => setTrendYear(parseInt(e.target.value, 10))}
+                      className="filter-select trend-select"
+                      title="Chọn năm"
+                    >
+                      {[2024, 2025, 2026, 2027].map((y) => (
+                        <option key={y} value={y}>Năm {y}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {trendViewMode === 'DAILY' && (
                   <div className="trend-date-selectors">
                     <select
@@ -2401,7 +2447,8 @@ export const UtilitiesPage: React.FC = () => {
                   <div className="trend-nav-info">
                     <Calendar size={13} color="#059669" />
                     <span className="trend-nav-period-text">
-                      {trendViewMode === 'DAILY' ? `Kỳ Tháng ${trendMonth}/${trendYear} (${trendData?.timeColumns?.length || 0} ngày)` :
+                      {trendViewMode === 'HOURLY' ? `Ngày ${String(trendDay).padStart(2, '0')}/${String(trendMonth).padStart(2, '0')}/${trendYear} (24 giờ)` :
+                       trendViewMode === 'DAILY' ? `Kỳ Tháng ${trendMonth}/${trendYear} (${trendData?.timeColumns?.length || 0} ngày)` :
                        trendViewMode === 'MONTHLY' ? `Năm ${trendYear} (12 tháng)` :
                        `Giai đoạn ${trendStartYear} - ${trendEndYear} (${trendData?.timeColumns?.length || 0} năm)`}
                     </span>
@@ -2411,6 +2458,19 @@ export const UtilitiesPage: React.FC = () => {
                   </div>
 
                   <div className="trend-nav-actions">
+                    {trendViewMode === 'HOURLY' && (
+                      <div className="trend-jump-group">
+                        <button type="button" onClick={() => scrollToPeriod(0)} className="btn-jump-pill" title="Xem từ 00h đến 07h">
+                          00h-07h
+                        </button>
+                        <button type="button" onClick={() => scrollToPeriod(0.5)} className="btn-jump-pill" title="Xem từ 08h đến 15h">
+                          08h-15h
+                        </button>
+                        <button type="button" onClick={() => scrollToPeriod(1)} className="btn-jump-pill" title="Xem từ 16h đến 23h & Tổng">
+                          16h-23h
+                        </button>
+                      </div>
+                    )}
                     {trendViewMode === 'DAILY' && (
                       <div className="trend-jump-group">
                         <button type="button" onClick={() => scrollToPeriod(0)} className="btn-jump-pill" title="Xem từ ngày 01 đến 10">
@@ -2478,7 +2538,7 @@ export const UtilitiesPage: React.FC = () => {
                       {trendLoading ? (
                         <tr>
                           <td colSpan={(trendData?.timeColumns?.length || 0) + 6} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                            Đang tổng hợp dữ liệu ma trận theo {trendViewMode === 'DAILY' ? 'ngày' : trendViewMode === 'MONTHLY' ? 'tháng' : 'năm'}...
+                            Đang tổng hợp dữ liệu ma trận theo {trendViewMode === 'HOURLY' ? 'giờ' : trendViewMode === 'DAILY' ? 'ngày' : trendViewMode === 'MONTHLY' ? 'tháng' : 'năm'}...
                           </td>
                         </tr>
                       ) : !trendData?.timeColumns || trendData.timeColumns.length === 0 ? (

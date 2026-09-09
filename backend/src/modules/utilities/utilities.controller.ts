@@ -200,7 +200,8 @@ export class UtilitiesController {
   @Get('reports/trend-matrix')
   async getTrendMatrixReport(
     @Query('type') type?: 'ELECTRICITY' | 'WATER',
-    @Query('viewMode') viewMode?: 'DAILY' | 'MONTHLY' | 'YEARLY',
+    @Query('viewMode') viewMode?: 'HOURLY' | 'DAILY' | 'MONTHLY' | 'YEARLY',
+    @Query('day') day?: string,
     @Query('month') month?: string,
     @Query('year') year?: string,
     @Query('startYear') startYear?: string,
@@ -209,6 +210,7 @@ export class UtilitiesController {
     return this.utilitiesService.getTrendMatrixReport({
       type,
       viewMode,
+      day: day ? parseInt(day, 10) : undefined,
       month: month ? parseInt(month, 10) : undefined,
       year: year ? parseInt(year, 10) : undefined,
       startYear: startYear ? parseInt(startYear, 10) : undefined,

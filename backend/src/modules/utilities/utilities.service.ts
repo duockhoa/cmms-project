@@ -1683,7 +1683,8 @@ export class UtilitiesService {
   // ==========================================
   async getTrendMatrixReport(query: {
     type?: 'ELECTRICITY' | 'WATER';
-    viewMode?: 'DAILY' | 'MONTHLY' | 'YEARLY';
+    viewMode?: 'HOURLY' | 'DAILY' | 'MONTHLY' | 'YEARLY';
+    day?: number;
     month?: number;
     year?: number;
     startYear?: number;
@@ -1693,6 +1694,8 @@ export class UtilitiesService {
     const viewMode = query.viewMode || 'DAILY';
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth() + 1;
+    const currentDay = new Date().getDate();
+    const day = Number(query.day) || currentDay;
     const month = Number(query.month) || currentMonth;
     const year = Number(query.year) || currentYear;
     const startYear = Number(query.startYear) || (year - 3);
@@ -1711,7 +1714,24 @@ export class UtilitiesService {
 
     const cutoffHour = Number(process.env.UTILITY_SHIFT_CUTOFF_HOUR) || 22;
 
-    if (viewMode === 'DAILY') {
+    if (viewMode === 'HOURLY') {
+      // 24 giờ trong ngày (00h -> 23h) của ngày day/month/year được chọn
+      for (let h = 0; h < 24; h++) {
+        const s = new Date(year, month - 1, day, h, 0, 0, 0);
+        const e = new Date(year, month - 1, day, h + 1, 0, 0, 0);
+        const hStr = `${String(h).padStart(2, '0')}h`;
+        const nextHStr = `${String((h + 1) % 24).padStart(2, '0')}h`;
+        const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}_${String(h).padStart(2, '0')}`;
+        timeColumns.push({
+          key,
+          label: `${hStr} - ${nextHStr} (${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')})`,
+          shortLabel: `${hStr}`,
+          subLabel: `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}`,
+          startDate: s,
+          endDate: e,
+        });
+      }
+    } else if (viewMode === 'DAILY') {
       if (type === 'ELECTRICITY') {
         // Ngày trong tháng (01 -> lastDay) theo ca vận hành (22:00 hôm trước -> 22:00 hôm nay)
         const lastDay = new Date(year, month, 0).getDate();
@@ -1788,6 +1808,7 @@ export class UtilitiesService {
       return {
         type,
         viewMode,
+        day,
         month,
         year,
         startYear,
@@ -1839,7 +1860,7 @@ export class UtilitiesService {
 
       timeColumns.forEach((col) => {
         const inSlot = p.readings.filter(
-          (r) => r.recordedAt >= col.startDate && (viewMode === 'DAILY' ? r.recordedAt < col.endDate : r.recordedAt <= col.endDate),
+          (r) => r.recordedAt >= col.startDate && (viewMode === 'DAILY' || viewMode === 'HOURLY' ? r.recordedAt < col.endDate : r.recordedAt <= col.endDate),
         );
         let cons = 0;
         if (inSlot.length > 0) {
@@ -1956,6 +1977,7 @@ export class UtilitiesService {
     return {
       type,
       viewMode,
+      day,
       month,
       year,
       startYear,
