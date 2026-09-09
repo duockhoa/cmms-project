@@ -9,7 +9,8 @@ import {
   Clock, Settings, FileText, ArrowRight,
   Calendar, PieChart, AlertTriangle, Layers,
   Ban, XCircle, ShieldAlert, Activity, Filter, X,
-  TrendingUp, TrendingDown, CalendarDays, ChevronLeft, ChevronRight
+  TrendingUp, TrendingDown, CalendarDays, ChevronLeft, ChevronRight,
+  Play, Square
 } from 'lucide-react';
 import { formatVN } from '../utils/formatters';
 import { UtilityTrendChart } from '../components/utilities/UtilityTrendChart';
@@ -627,46 +628,112 @@ export const UtilitiesPage: React.FC = () => {
       {/* TAB 1: TỔNG QUAN & GIÁM SÁT */}
       {activeTab === 'overview' && (
         <div className="util-tab-content">
-          {/* 4 Thẻ KPI Cards */}
+          {/* 6 Thẻ KPI Cards Thu Gọn (Điện Cấp, Điện Dùng, Nước Cấp, Nước Dùng, Phụ Trợ, Điểm Đo) */}
           <div className="util-kpi-grid">
-            {/* Card 1: Điện hôm nay */}
-            <div className="card util-kpi-card kpi-elec">
+            {/* Card 1: Điện cấp hôm nay */}
+            <div className="card util-kpi-card kpi-elec-supply" title="Tổng sản lượng điện nguồn cấp vào nhà máy (Chu kỳ chốt ca: 22h hôm trước - 22h hôm nay)">
               <div className="kpi-top">
-                <span className="kpi-label">ĐIỆN HÔM NAY</span>
+                <span className="kpi-label">
+                  ĐIỆN CẤP HÔM NAY
+                  {analytics?.summary?.electricitySupplyMeters?.length > 1 && (
+                    <span className="kpi-count-tag">{analytics.summary.electricitySupplyMeters.length} ĐH</span>
+                  )}
+                </span>
                 <div className="kpi-icon-box" style={{ backgroundColor: '#fef9c3', color: '#854d0e' }}>
-                  <Zap size={16} />
+                  <Zap size={13} />
                 </div>
               </div>
               <div className="kpi-val">
-                {analytics?.summary?.electricityToday?.toLocaleString() || 0} <span className="kpi-unit">kWh</span>
+                {analytics?.summary?.electricitySupplyToday?.toLocaleString() || 0} <span className="kpi-unit">kWh</span>
               </div>
-              <div className="kpi-sub">
-                7 ngày: <strong>{analytics?.summary?.electricityPeriod?.toLocaleString() || 0} kWh</strong>
-              </div>
+              {analytics?.summary?.electricitySupplyMeters && analytics.summary.electricitySupplyMeters.length > 1 ? (
+                <div className="kpi-meter-list">
+                  {analytics.summary.electricitySupplyMeters.map((m: any) => (
+                    <div key={m.id} className="kpi-meter-row" title={`${m.code} - ${m.name}: Hôm nay: ${m.today?.toLocaleString()} kWh | 7 ngày: ${m.period?.toLocaleString()} kWh`}>
+                      <span className="kpi-meter-code">{m.code}:</span>
+                      <span className="kpi-meter-val">{m.today?.toLocaleString() || 0}</span>
+                      <span className="kpi-meter-sub">({m.period?.toLocaleString() || 0})</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="kpi-sub">
+                  7 ngày: <strong>{analytics?.summary?.electricitySupplyPeriod?.toLocaleString() || 0} kWh</strong>
+                </div>
+              )}
             </div>
 
-            {/* Card 2: Nước hôm nay */}
-            <div className="card util-kpi-card kpi-water">
+            {/* Card 2: Đã dùng điện hôm nay */}
+            <div className="card util-kpi-card kpi-elec-cons" title="Tổng điện năng tiêu thụ thực tế tại các phân xưởng & phụ tải (Chu kỳ chốt ca: 22h hôm trước - 22h hôm nay)">
               <div className="kpi-top">
-                <span className="kpi-label">NƯỚC HÔM NAY</span>
-                <div className="kpi-icon-box" style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}>
-                  <Droplets size={16} />
+                <span className="kpi-label">ĐÃ DÙNG ĐIỆN</span>
+                <div className="kpi-icon-box" style={{ backgroundColor: '#ffedd5', color: '#c2410c' }}>
+                  <Activity size={13} />
                 </div>
               </div>
-              <div className="kpi-val">
-                {analytics?.summary?.waterToday?.toLocaleString() || 0} <span className="kpi-unit">m³</span>
+              <div className="kpi-val" style={{ color: '#c2410c' }}>
+                {analytics?.summary?.electricityConsumptionToday?.toLocaleString() || 0} <span className="kpi-unit">kWh</span>
               </div>
               <div className="kpi-sub">
-                7 ngày: <strong>{analytics?.summary?.waterPeriod?.toLocaleString() || 0} m³</strong>
+                7 ngày: <strong>{analytics?.summary?.electricityConsumptionPeriod?.toLocaleString() || 0} kWh</strong>
               </div>
             </div>
 
-            {/* Card 3: Hệ thống đang vận hành */}
-            <div className="card util-kpi-card kpi-aux">
+            {/* Card 3: Nước cấp hôm nay */}
+            <div className="card util-kpi-card kpi-water-supply" title="Tổng lượng nước nguồn cấp vào nhà máy (Chu kỳ chốt ca: 22h hôm trước - 22h hôm nay)">
+              <div className="kpi-top">
+                <span className="kpi-label">
+                  NƯỚC CẤP HÔM NAY
+                  {analytics?.summary?.waterSupplyMeters?.length > 1 && (
+                    <span className="kpi-count-tag">{analytics.summary.waterSupplyMeters.length} ĐH</span>
+                  )}
+                </span>
+                <div className="kpi-icon-box" style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}>
+                  <Droplets size={13} />
+                </div>
+              </div>
+              <div className="kpi-val">
+                {analytics?.summary?.waterSupplyToday?.toLocaleString() || 0} <span className="kpi-unit">m³</span>
+              </div>
+              {analytics?.summary?.waterSupplyMeters && analytics.summary.waterSupplyMeters.length > 1 ? (
+                <div className="kpi-meter-list">
+                  {analytics.summary.waterSupplyMeters.map((m: any) => (
+                    <div key={m.id} className="kpi-meter-row" title={`${m.code} - ${m.name}: Hôm nay: ${m.today?.toLocaleString()} m³ | 7 ngày: ${m.period?.toLocaleString()} m³`}>
+                      <span className="kpi-meter-code">{m.code}:</span>
+                      <span className="kpi-meter-val">{m.today?.toLocaleString() || 0}</span>
+                      <span className="kpi-meter-sub">({m.period?.toLocaleString() || 0})</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="kpi-sub">
+                  7 ngày: <strong>{analytics?.summary?.waterSupplyPeriod?.toLocaleString() || 0} m³</strong>
+                </div>
+              )}
+            </div>
+
+            {/* Card 4: Đã dùng nước hôm nay */}
+            <div className="card util-kpi-card kpi-water-cons" title="Tổng lượng nước tiêu thụ tại các phân xưởng & dây chuyền nội bộ (Chu kỳ chốt ca: 22h hôm trước - 22h hôm nay)">
+              <div className="kpi-top">
+                <span className="kpi-label">ĐÃ DÙNG NƯỚC</span>
+                <div className="kpi-icon-box" style={{ backgroundColor: '#ecfeff', color: '#0e7490' }}>
+                  <Droplets size={13} />
+                </div>
+              </div>
+              <div className="kpi-val" style={{ color: '#0e7490' }}>
+                {analytics?.summary?.waterConsumptionToday?.toLocaleString() || 0} <span className="kpi-unit">m³</span>
+              </div>
+              <div className="kpi-sub">
+                7 ngày: <strong>{analytics?.summary?.waterConsumptionPeriod?.toLocaleString() || 0} m³</strong>
+              </div>
+            </div>
+
+            {/* Card 5: Hệ thống đang vận hành */}
+            <div className="card util-kpi-card kpi-aux" title="Số lượng máy và hệ thống phụ trợ đang chạy">
               <div className="kpi-top">
                 <span className="kpi-label">HỆ THỐNG CHẠY</span>
                 <div className="kpi-icon-box" style={{ backgroundColor: '#f0fdf4', color: '#16a34a' }}>
-                  <Cpu size={16} />
+                  <Cpu size={13} />
                 </div>
               </div>
               <div className="kpi-val" style={{ color: '#16a34a' }}>
@@ -677,12 +744,12 @@ export const UtilitiesPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Card 4: Tổng điểm đo */}
-            <div className="card util-kpi-card kpi-points">
+            {/* Card 6: Tổng điểm đo */}
+            <div className="card util-kpi-card kpi-points" title="Tổng số đồng hồ đo điện, nước và thiết bị phụ trợ">
               <div className="kpi-top">
                 <span className="kpi-label">TỔNG ĐIỂM ĐO</span>
                 <div className="kpi-icon-box" style={{ backgroundColor: '#f3e8ff', color: '#6b21a8' }}>
-                  <QrCode size={16} />
+                  <QrCode size={13} />
                 </div>
               </div>
               <div className="kpi-val">
@@ -729,10 +796,16 @@ export const UtilitiesPage: React.FC = () => {
                   <div
                     key={sys.id}
                     className="aux-card"
-                    style={{ borderTop: `4px solid ${statusColor}` }}
+                    style={{ borderTop: `3px solid ${statusColor}` }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <span className="aux-code">{sys.code}</span>
+                    {/* Dòng 1: Mã thiết bị, vị trí và Huy hiệu trạng thái */}
+                    <div className="aux-card-top">
+                      <div className="aux-card-header-left">
+                        <span className="aux-code">{sys.code}</span>
+                        {sys.location && (
+                          <span className="aux-loc" title={sys.location}>• {sys.location}</span>
+                        )}
+                      </div>
                       <span
                         className="aux-status-badge"
                         style={{ backgroundColor: statusBg, color: statusColor, borderColor: statusColor }}
@@ -742,51 +815,41 @@ export const UtilitiesPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <h4 className="aux-name">{sys.name}</h4>
-                    <p className="aux-loc">{sys.location}</p>
-
-                    <div className="aux-hour-box">
-                      <div>
-                        <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Đồng hồ giờ chạy (Hour meter):</span>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
-                          <span className="aux-hour-val">
-                            {liveHour.total.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} Giờ
+                    {/* Dòng 2: Tên thiết bị và Đồng hồ giờ chạy thu gọn */}
+                    <div className="aux-card-mid">
+                      <h4 className="aux-name" title={sys.name}>{sys.name}</h4>
+                      <div className="aux-hour-inline">
+                        <Clock size={12} color={liveHour.isRunning ? '#16a34a' : '#94a3b8'} style={{ flexShrink: 0 }} />
+                        <span className="aux-hour-val">
+                          {liveHour.total.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h
+                        </span>
+                        {liveHour.isRunning && (
+                          <span className="aux-hour-delta" title="Giờ chạy lũy kế ca này">
+                            (+{liveHour.sessionDelta.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h)
                           </span>
-                          {liveHour.isRunning && (
-                            <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700, backgroundColor: '#dcfce7', padding: '1px 6px', borderRadius: '4px' }}>
-                              (+{liveHour.sessionDelta.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h ca này)
-                            </span>
-                          )}
-                        </div>
+                        )}
                       </div>
-                      <Clock size={16} color={liveHour.isRunning ? '#16a34a' : '#94a3b8'} />
                     </div>
 
-                    {/* Nút thao tác nhanh trạng thái */}
+                    {/* Dòng 3: Nút Bật/Tắt nhanh */}
                     <div className="aux-action-row">
                       {sys.currentStatus !== 'RUNNING' ? (
                         <button
                           onClick={() => handleQuickToggleStatus(sys, 'RUNNING')}
                           className="quick-btn start"
+                          title="Bật máy"
                         >
-                          ▶ BẬT MÁY
+                          <Play size={10} fill="currentColor" /> BẬT MÁY
                         </button>
                       ) : (
                         <button
                           onClick={() => handleQuickToggleStatus(sys, 'OFF')}
                           className="quick-btn stop"
+                          title="Tắt máy"
                         >
-                          ⏹ TẮT MÁY
+                          <Square size={9} fill="currentColor" /> TẮT MÁY
                         </button>
                       )}
-
-                      <button
-                        onClick={() => setPrintPoint(sys)}
-                        className="quick-btn qr"
-                        title="Xem tem QR"
-                      >
-                        <QrCode size={14} /> Tem QR
-                      </button>
                     </div>
                   </div>
                 );
@@ -2309,25 +2372,6 @@ export const UtilitiesPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* 4. Nút chuyển đổi nhanh dạng xem (Bảng Số <-> Biểu Đồ) */}
-                <button
-                  type="button"
-                  onClick={() => setTrendDisplayType(trendDisplayType === 'TABLE' ? 'CHART' : 'TABLE')}
-                  className={`btn-trend-toggle-view ${trendDisplayType === 'CHART' ? 'active-chart' : ''}`}
-                  title={trendDisplayType === 'TABLE' ? 'Chuyển sang xem dạng biểu đồ trực quan' : 'Chuyển lại xem dạng bảng số liệu'}
-                >
-                  {trendDisplayType === 'TABLE' ? (
-                    <>
-                      <BarChart2 size={13} />
-                      <span>Xem Biểu Đồ</span>
-                    </>
-                  ) : (
-                    <>
-                      <FileText size={13} />
-                      <span>Xem Bảng Số</span>
-                    </>
-                  )}
-                </button>
 
                 {/* 5. Nút xuất CSV cho ma trận */}
                 <button
@@ -3072,25 +3116,140 @@ export const UtilitiesPage: React.FC = () => {
           box-sizing: border-box;
         }
 
-        /* KPI Grid */
+        /* KPI Grid (Compact 6-Card Overview) */
         .util-kpi-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 12px;
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+          gap: 10px;
           width: 100%;
           box-sizing: border-box;
         }
 
         .util-kpi-card {
-          padding: 14px 16px;
-          border-radius: 10px;
+          padding: 9px 11px;
+          border-radius: 8px;
           background-color: #ffffff;
           box-sizing: border-box;
+          min-width: 0;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
-        .kpi-elec { border-left: 4px solid #eab308; }
-        .kpi-water { border-left: 4px solid #0ea5e9; }
-        .kpi-aux { border-left: 4px solid #16a34a; }
-        .kpi-points { border-left: 4px solid #8b5cf6; }
+
+        .util-kpi-card:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+        }
+
+        .kpi-elec-supply  { border-left: 3.5px solid #eab308; }
+        .kpi-elec-cons    { border-left: 3.5px solid #f97316; }
+        .kpi-water-supply { border-left: 3.5px solid #0ea5e9; }
+        .kpi-water-cons   { border-left: 3.5px solid #06b6d4; }
+        .kpi-aux          { border-left: 3.5px solid #16a34a; }
+        .kpi-points       { border-left: 3.5px solid #8b5cf6; }
+
+        .util-kpi-card .kpi-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 4px;
+        }
+
+        .util-kpi-card .kpi-label {
+          font-size: 10px;
+          font-weight: 700;
+          color: #64748b;
+          letter-spacing: 0.2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .util-kpi-card .kpi-icon-box {
+          width: 22px;
+          height: 22px;
+          padding: 0;
+          border-radius: 5px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .util-kpi-card .kpi-val {
+          font-size: 16.5px;
+          font-weight: 800;
+          color: #0f172a;
+          line-height: 1.2;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .util-kpi-card .kpi-unit {
+          font-size: 10.5px;
+          font-weight: 600;
+          color: #64748b;
+        }
+
+        .util-kpi-card .kpi-sub {
+          font-size: 10px;
+          color: #64748b;
+          margin-top: 2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .kpi-count-tag {
+          font-size: 9px;
+          font-weight: 700;
+          padding: 1px 4px;
+          border-radius: 4px;
+          background-color: #f1f5f9;
+          color: #475569;
+          border: 1px solid #cbd5e1;
+          margin-left: 4px;
+          vertical-align: middle;
+        }
+
+        .kpi-meter-list {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5px;
+          margin-top: 3px;
+          padding-top: 3px;
+          border-top: 1px dashed #e2e8f0;
+        }
+
+        .kpi-meter-row {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          font-size: 9.5px;
+          line-height: 1.25;
+          color: #475569;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .kpi-meter-code {
+          font-weight: 700;
+          color: #1e293b;
+          white-space: nowrap;
+        }
+
+        .kpi-meter-val {
+          font-weight: 800;
+          color: #0f172a;
+          white-space: nowrap;
+        }
+
+        .kpi-meter-sub {
+          font-size: 8.5px;
+          color: #64748b;
+          white-space: nowrap;
+        }
 
         /* Cumulative Periodic Report KPI Grid */
         .cumulative-kpi-grid {
@@ -3257,113 +3416,167 @@ export const UtilitiesPage: React.FC = () => {
           white-space: nowrap;
         }
 
-        /* Aux Matrix */
+        /* Aux Matrix (Compact High-Density Grid) */
         .aux-matrix-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-          gap: 12px;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 9px;
           width: 100%;
           box-sizing: border-box;
         }
 
         .aux-card {
           border: 1px solid #e2e8f0;
-          border-radius: 10px;
-          padding: 14px;
+          border-radius: 8px;
+          padding: 8px 10px;
           background-color: #ffffff;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
           box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          min-height: 96px;
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .aux-card:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 3px 8px rgba(0,0,0,0.06);
+        }
+
+        .aux-card-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 6px;
+          margin-bottom: 4px;
+        }
+
+        .aux-card-header-left {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          min-width: 0;
+          overflow: hidden;
         }
 
         .aux-code {
-          font-size: 11.5px;
-          font-weight: 700;
+          font-size: 11px;
+          font-weight: 800;
+          color: #0f172a;
+          white-space: nowrap;
+        }
+
+        .aux-loc {
+          font-size: 10.5px;
           color: #64748b;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .aux-status-badge {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-          padding: 2px 7px;
+          gap: 3.5px;
+          padding: 1.5px 6px;
           border-radius: 999px;
-          font-size: 10.5px;
+          font-size: 9.5px;
           font-weight: 800;
           border: 1px solid;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .status-dot {
-          width: 6px;
-          height: 6px;
+          width: 5px;
+          height: 5px;
           border-radius: 50%;
         }
 
+        .aux-card-mid {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          margin-bottom: 6px;
+        }
+
         .aux-name {
-          font-size: 13.5px;
+          font-size: 12.5px;
           font-weight: 700;
-          margin: 0 0 2px 0;
+          margin: 0;
           color: #0f172a;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.3;
         }
 
-        .aux-loc {
-          font-size: 11.5px;
-          color: #64748b;
-          margin: 0 0 10px 0;
-        }
-
-        .aux-hour-box {
+        .aux-hour-inline {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          padding: 8px 10px;
+          gap: 4px;
           background-color: #f8fafc;
-          border-radius: 6px;
-          border: 1px solid #e2e8f0;
-          margin-bottom: 10px;
+          border: 1px solid #f1f5f9;
+          border-radius: 4px;
+          padding: 2.5px 5px;
+          margin-top: 2px;
         }
 
         .aux-hour-val {
-          font-size: 14px;
+          font-size: 11.5px;
           font-weight: 800;
           color: #0f172a;
+          white-space: nowrap;
+        }
+
+        .aux-hour-delta {
+          font-size: 9.5px;
+          color: #15803d;
+          font-weight: 700;
+          background-color: #dcfce7;
+          padding: 0 3.5px;
+          border-radius: 3px;
+          white-space: nowrap;
         }
 
         .aux-action-row {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 5px;
         }
 
         .quick-btn {
-          flex: 1;
-          padding: 7px;
-          border-radius: 6px;
-          font-size: 11.5px;
+          width: 100%;
+          height: 24px;
+          padding: 0 8px;
+          border-radius: 5px;
+          font-size: 10.5px;
           font-weight: 700;
           cursor: pointer;
           border: none;
-          text-align: center;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
           touch-action: manipulation;
+          transition: background-color 0.15s ease;
         }
 
         .quick-btn.start {
           background-color: #16a34a;
           color: #ffffff;
         }
-
-        .quick-btn.stop {
-          background-color: #64748b;
-          color: #ffffff;
+        .quick-btn.start:hover {
+          background-color: #15803d;
         }
 
-        .quick-btn.qr {
-          flex: 0 0 auto;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          background-color: #f1f5f9;
-          color: #0f172a;
-          border: 1px solid #cbd5e1;
+        .quick-btn.stop {
+          background-color: #475569;
+          color: #ffffff;
+        }
+        .quick-btn.stop:hover {
+          background-color: #334155;
         }
 
         /* Filter Bar */
@@ -4401,7 +4614,10 @@ export const UtilitiesPage: React.FC = () => {
 
         /* TABLET (<= 1024px) */
         @media (max-width: 1024px) {
-          .util-kpi-grid,
+          .util-kpi-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+          }
           .cumulative-kpi-grid,
           .cumulative-kpi-grid.five-cols {
             grid-template-columns: repeat(2, 1fr);
@@ -4605,7 +4821,8 @@ export const UtilitiesPage: React.FC = () => {
           }
 
           .aux-matrix-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
           }
 
           .btn-add-point {
@@ -4629,20 +4846,25 @@ export const UtilitiesPage: React.FC = () => {
             gap: 8px;
           }
 
+          .aux-matrix-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+          }
+
           .util-kpi-card {
-            padding: 10px 12px;
+            padding: 8px 9px;
           }
 
           .kpi-val {
-            font-size: 18px;
+            font-size: 15px;
           }
 
           .kpi-unit {
-            font-size: 11px;
+            font-size: 10px;
           }
 
           .kpi-sub {
-            font-size: 10px;
+            font-size: 9.5px;
           }
 
           .util-section-card {

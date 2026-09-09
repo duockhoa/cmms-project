@@ -12,6 +12,21 @@ export interface UtilityTrendChartProps {
   unit?: string;
 }
 
+const POINT_PALETTE = [
+  '#8b5cf6', // Tím hoa cà
+  '#06b6d4', // Lam ngọc
+  '#f97316', // Cam rực
+  '#ec4899', // Hồng đậm
+  '#14b8a6', // Xanh ngọc
+  '#6366f1', // Chàm
+  '#e11d48', // Đỏ hồng
+  '#84cc16', // Xanh chanh
+  '#0ea5e9', // Xanh da trời
+  '#d97706', // Vàng hổ phách
+  '#a855f7', // Tím phong lan
+  '#059669', // Xanh lục
+];
+
 export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   trendData,
   trendViewMode,
@@ -23,12 +38,64 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   const [showConsumption, setShowConsumption] = useState(true);
   const [showDelta, setShowDelta] = useState(true);
   const [showRecycled, setShowRecycled] = useState(true);
+  const [showPointLines, setShowPointLines] = useState(true);
+  const [pointVisibility, setPointVisibility] = useState<Record<string, boolean>>({});
+  const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const timeColumns = trendData?.timeColumns || [];
   const summaryRows = trendData?.summaryRows || {};
   const pointRows = trendData?.pointRows || [];
   const activeUnit = trendData?.unit || unit;
+
+  // Gán bảng màu riêng biệt cố định cho từng điểm đo
+  const pointsWithColors = useMemo(() => {
+    return (pointRows || []).map((p: any, idx: number) => ({
+      ...p,
+      color: POINT_PALETTE[idx % POINT_PALETTE.length],
+    }));
+  }, [pointRows]);
+
+  // Kiểm tra điểm đo có đang được bật hiển thị đường trên biểu đồ hay không
+  const isPointVisible = (pointId: string) => {
+    if (!showPointLines) return false;
+    if (trendFilter !== 'ALL') {
+      if (trendFilter === 'SUPPLY') {
+        const p = pointRows.find((x: any) => x.pointId === pointId);
+        return Boolean(p?.isSupplyMeter);
+      }
+      if (trendFilter === 'CONSUMPTION') {
+        const p = pointRows.find((x: any) => x.pointId === pointId);
+        return !p?.isSupplyMeter && !p?.isRecycledWater && !p?.isExcludedFromTotal;
+      }
+      if (trendFilter === 'RECYCLED') {
+        const p = pointRows.find((x: any) => x.pointId === pointId);
+        return Boolean(p?.isRecycledWater);
+      }
+      if (trendFilter === 'EXCLUDED') {
+        const p = pointRows.find((x: any) => x.pointId === pointId);
+        return Boolean(p?.isExcludedFromTotal);
+      }
+      return pointId === trendFilter;
+    }
+    return pointVisibility[pointId] !== false;
+  };
+
+  const togglePointVisibility = (pointId: string) => {
+    setPointVisibility(prev => ({
+      ...prev,
+      [pointId]: prev[pointId] === false ? true : false,
+    }));
+  };
+
+  const toggleAllPoints = (visible: boolean) => {
+    const updated: Record<string, boolean> = {};
+    pointRows.forEach((p: any) => {
+      updated[p.pointId] = visible;
+    });
+    setPointVisibility(updated);
+    setShowPointLines(visible);
+  };
 
   // Trích xuất mảng dữ liệu theo từng chuỗi thời gian
   const seriesData = useMemo(() => {
@@ -71,12 +138,21 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
       if (showRecycled && d.recycled > max) max = d.recycled;
       if (d.selectedPointVal > max) max = d.selectedPointVal;
     });
+    // Bao quát giá trị của các điểm đo cụ thể đang hiển thị
+    pointsWithColors.forEach((p: any) => {
+      if (isPointVisible(p.pointId)) {
+        timeColumns.forEach((col: any) => {
+          const v = p.values?.[col.key] || 0;
+          if (v > max) max = v;
+        });
+      }
+    });
     if (max <= 0) return 100;
     // Làm tròn lên mốc đẹp (nice number)
     const factor = Math.pow(10, Math.floor(Math.log10(max)));
     const ceilUnits = Math.ceil(max / factor);
     return Math.max(10, ceilUnits * factor * 1.1); // +10% đệm trên
-  }, [seriesData, showSupply, showConsumption, showDelta, showRecycled]);
+  }, [seriesData, showSupply, showConsumption, showDelta, showRecycled, pointsWithColors, showPointLines, pointVisibility, trendFilter, timeColumns]);
 
   // Tìm đỉnh cao nhất & thấp nhất trong kỳ
   const peakStats = useMemo(() => {
@@ -272,9 +348,66 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
                 {showRecycled ? <Eye size={11} /> : <EyeOff size={11} />}
               </button>
             )}
+
+            {pointsWithColors.length > 0 && (
+              <button
+                type="button"
+                onClick={() => toggleAllPoints(!showPointLines)}
+                className={`legend-pill point-master ${showPointLines ? 'active' : 'inactive'}`}
+                title="Bật/tắt hiển thị toàn bộ đường các điểm đo chi tiết"
+              >
+                <span className="legend-dot point-master" />
+                <span>Điểm Đo Chi Tiết ({pointsWithColors.filter((p: any) => isPointVisible(p.pointId)).length})</span>
+                {showPointLines ? <Eye size={11} /> : <EyeOff size={11} />}
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* 1.1 Thanh chọn nhanh bật/tắt từng đường điểm đo chi tiết */}
+      {chartSubMode === 'LINE' && showPointLines && pointsWithColors.length > 0 && (
+        <div className="chart-points-pills-bar">
+          <div className="points-pills-label">
+            <span>Đường điểm đo ({pointsWithColors.filter((p: any) => isPointVisible(p.pointId)).length}/{pointsWithColors.length}):</span>
+            <div className="points-quick-actions">
+              <button type="button" onClick={() => toggleAllPoints(true)} className="btn-point-action">Hiện hết</button>
+              <span className="action-sep">•</span>
+              <button type="button" onClick={() => toggleAllPoints(false)} className="btn-point-action">Ẩn hết</button>
+            </div>
+          </div>
+          <div className="points-pills-list">
+            {pointsWithColors.map((p: any) => {
+              const visible = isPointVisible(p.pointId);
+              const isHovered = hoveredPointId === p.pointId;
+              return (
+                <button
+                  key={p.pointId}
+                  type="button"
+                  onClick={() => togglePointVisibility(p.pointId)}
+                  onMouseEnter={() => setHoveredPointId(p.pointId)}
+                  onMouseLeave={() => setHoveredPointId(null)}
+                  className={`point-chip-btn ${visible ? 'active' : 'inactive'} ${isHovered ? 'hovered' : ''}`}
+                  style={{
+                    borderColor: visible ? p.color : '#e2e8f0',
+                    backgroundColor: visible ? `${p.color}15` : '#f8fafc',
+                    color: visible ? '#0f172a' : '#94a3b8',
+                  }}
+                  title={`${p.name} - ${p.location} (Tổng: ${formatVN(p.total)} ${activeUnit}) - Bấm để bật/tắt`}
+                >
+                  <span className="point-chip-dot" style={{ backgroundColor: visible ? p.color : '#cbd5e1' }} />
+                  <span className="point-chip-code">{p.code}</span>
+                  {p.total > 0 && (
+                    <span className="point-chip-val" style={{ color: visible ? p.color : '#94a3b8' }}>
+                      {p.total >= 1000 ? `${(p.total / 1000).toFixed(1)}k` : formatVN(p.total)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 2. Highlight Thống Kê Đỉnh Tiêu Thụ */}
       {peakStats && chartSubMode !== 'DONUT' && (
@@ -413,6 +546,48 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
                     strokeLinecap="round"
                   />
                 )}
+
+                {/* Các đường biểu diễn từng điểm đo chi tiết */}
+                {showPointLines && pointsWithColors.map((p: any) => {
+                  if (!isPointVisible(p.pointId)) return null;
+                  const pointVals = timeColumns.map((c: any) => p.values?.[c.key] || 0);
+                  const isHoveredPoint = hoveredPointId === p.pointId;
+                  const isDimmed = hoveredPointId !== null && !isHoveredPoint;
+
+                  return (
+                    <g key={`point-path-group-${p.pointId}`} className="chart-point-path-group">
+                      <path
+                        d={createSmoothPath(pointVals)}
+                        fill="none"
+                        stroke={p.color}
+                        strokeWidth={isHoveredPoint ? 3.5 : 2}
+                        strokeDasharray={p.isSupplyMeter ? '5 3' : undefined}
+                        strokeLinecap="round"
+                        opacity={isDimmed ? 0.2 : 0.9}
+                        style={{ transition: 'all 0.2s ease' }}
+                      />
+                      {pointVals.map((v: number, i: number) => {
+                        if (v <= 0) return null;
+                        const cx = getX(i);
+                        const cy = getY(v);
+                        const isColHovered = hoverIndex === i;
+
+                        return (
+                          <circle
+                            key={`dot-${p.pointId}-${i}`}
+                            cx={cx}
+                            cy={cy}
+                            r={isHoveredPoint || isColHovered ? 4.5 : 2.5}
+                            fill="#ffffff"
+                            stroke={p.color}
+                            strokeWidth={isHoveredPoint ? 2.5 : 1.6}
+                            opacity={isDimmed ? 0.25 : 0.95}
+                          />
+                        );
+                      })}
+                    </g>
+                  );
+                })}
 
                 {/* Điểm nút dữ liệu tròn */}
                 {seriesData.map((d: any, i: number) => {
@@ -603,6 +778,40 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
                     <strong className="tooltip-val recycled">{formatVN(hoveredData.recycled)} m³</strong>
                   </div>
                 )}
+
+                {/* Chi tiết từng điểm đo có sản lượng trong mốc này */}
+                {(() => {
+                  const pointsOnThisDay = pointsWithColors
+                    .map((p: any) => ({
+                      ...p,
+                      val: p.values?.[hoveredData.key] || 0,
+                    }))
+                    .filter((p: any) => p.val > 0)
+                    .sort((a: any, b: any) => b.val - a.val);
+
+                  if (pointsOnThisDay.length === 0) return null;
+
+                  return (
+                    <div className="tooltip-points-section">
+                      <div className="tooltip-points-title">Điểm đo chi tiết ({pointsOnThisDay.length}):</div>
+                      <div className="tooltip-points-scroll">
+                        {pointsOnThisDay.map((p: any) => (
+                          <div key={p.pointId} className="tooltip-point-item">
+                            <div className="tooltip-point-left">
+                              <span className="tooltip-point-dot" style={{ backgroundColor: p.color }} />
+                              <span className="tooltip-point-name" title={`${p.code} - ${p.name}`}>
+                                {p.code}{p.isSupplyMeter ? ' (Tổng)' : ''}
+                              </span>
+                            </div>
+                            <strong className="tooltip-point-num" style={{ color: p.color }}>
+                              {formatVN(p.val)} {activeUnit}
+                            </strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -775,6 +984,167 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
         .legend-pill.recycled {
           border-color: #ddd6fe;
           color: #7c3aed;
+        }
+        .legend-pill.point-master {
+          border-color: #c7d2fe;
+          color: #4338ca;
+          background-color: #eef2ff;
+        }
+        .legend-dot.point-master {
+          background-color: #6366f1;
+        }
+
+        .chart-points-pills-bar {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 8px 12px;
+          background-color: #f8fafc;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          margin-bottom: 12px;
+        }
+
+        .points-pills-label {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 11px;
+          font-weight: 700;
+          color: #475569;
+        }
+
+        .points-quick-actions {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .btn-point-action {
+          border: none;
+          background: none;
+          color: #059669;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          padding: 0;
+          transition: color 0.15s ease;
+        }
+
+        .btn-point-action:hover {
+          color: #047857;
+          text-decoration: underline;
+        }
+
+        .action-sep {
+          color: #cbd5e1;
+          font-size: 10px;
+        }
+
+        .points-pills-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        .point-chip-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 3px 8px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          border: 1px solid;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .point-chip-btn.hovered {
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+          transform: translateY(-1px);
+        }
+
+        .point-chip-btn.inactive {
+          opacity: 0.45;
+          text-decoration: line-through;
+          background-color: #f1f5f9 !important;
+          border-color: #cbd5e1 !important;
+          color: #94a3b8 !important;
+        }
+
+        .point-chip-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .point-chip-code {
+          font-weight: 700;
+        }
+
+        .point-chip-val {
+          font-weight: 700;
+          font-size: 10px;
+          padding-left: 2px;
+        }
+
+        .tooltip-points-section {
+          margin-top: 6px;
+          padding-top: 6px;
+          border-top: 1px dashed #e2e8f0;
+        }
+
+        .tooltip-points-title {
+          font-size: 10.5px;
+          font-weight: 700;
+          color: #475569;
+          margin-bottom: 4px;
+        }
+
+        .tooltip-points-scroll {
+          max-height: 160px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+
+        .tooltip-point-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          font-size: 10.5px;
+        }
+
+        .tooltip-point-left {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          min-width: 0;
+        }
+
+        .tooltip-point-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .tooltip-point-name {
+          color: #334155;
+          font-weight: 600;
+          max-width: 140px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .tooltip-point-num {
+          font-weight: 700;
+          flex-shrink: 0;
         }
 
         .legend-pill.inactive {

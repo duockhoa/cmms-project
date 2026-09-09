@@ -258,26 +258,27 @@ export class UtilitiesService {
   }
 
   getPeriodCycleInfo(type: 'ELECTRICITY' | 'WATER', month: number, year: number) {
+    const cutoffHour = Number(process.env.UTILITY_SHIFT_CUTOFF_HOUR) || 22;
     let startDate: Date;
     let endDate: Date;
     let cycleDescription: string;
     let startDayLabel: string;
 
     if (type === 'ELECTRICITY') {
-      // Kỳ điện: Từ ngày 01 đến ngày cuối cùng của tháng đó
-      startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
-      endDate = new Date(year, month, 0, 23, 59, 59, 999);
-      const lastDay = endDate.getDate();
-      cycleDescription = `Từ 01/${String(month).padStart(2, '0')}/${year} đến ${String(lastDay).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-      startDayLabel = `00:00 ngày 01/${String(month).padStart(2, '0')}/${year}`;
+      // Kỳ điện: Từ 22h ngày cuối tháng trước đến 22h ngày cuối cùng của tháng đó
+      startDate = new Date(year, month - 1, 0, cutoffHour, 0, 0, 0);
+      endDate = new Date(year, month, 0, cutoffHour, 0, 0, 0);
+      const lastDay = new Date(year, month, 0).getDate();
+      cycleDescription = `Từ 01/${String(month).padStart(2, '0')}/${year} đến ${String(lastDay).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year} (Chốt ca 22:00)`;
+      startDayLabel = `22:00 ngày cuối tháng trước đến 22:00 ngày ${String(lastDay).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
     } else {
-      // Kỳ nước: Từ ngày 21 của tháng liền kề trước đó đến ngày 20 của tháng tiếp theo
-      startDate = new Date(year, month - 2, 21, 0, 0, 0, 0);
-      endDate = new Date(year, month - 1, 20, 23, 59, 59, 999);
+      // Kỳ nước: Từ 22h ngày 20 của tháng liền kề trước đó đến 22h ngày 20 của tháng tiếp theo
+      startDate = new Date(year, month - 2, 20, cutoffHour, 0, 0, 0);
+      endDate = new Date(year, month - 1, 20, cutoffHour, 0, 0, 0);
       const prevMonth = startDate.getMonth() + 1;
       const prevYear = startDate.getFullYear();
-      cycleDescription = `Từ 21/${String(prevMonth).padStart(2, '0')}/${prevYear} đến 20/${String(month).padStart(2, '0')}/${year}`;
-      startDayLabel = `00:00 ngày 21/${String(prevMonth).padStart(2, '0')}/${prevYear}`;
+      cycleDescription = `Từ 21/${String(prevMonth).padStart(2, '0')}/${prevYear} đến 20/${String(month).padStart(2, '0')}/${year} (Chốt ca 22:00)`;
+      startDayLabel = `22:00 ngày 20/${String(prevMonth).padStart(2, '0')}/${prevYear} đến 22:00 ngày 20/${String(month).padStart(2, '0')}/${year}`;
     }
 
     return { startDate, endDate, cycleDescription, startDayLabel };
@@ -1176,21 +1177,52 @@ export class UtilitiesService {
   // ==========================================
   // 4. BÁO CÁO & PHÂN TÍCH TIÊU THỤ NĂNG LƯỢNG
   // ==========================================
+  /**
+   * Chuyển đổi một mốc thời gian sang mã ngày vận hành (YYYY-MM-DD).
+   * Chu kỳ ca nhà máy: 22h đêm hôm trước đến 22h đêm hôm sau (mặc định 22:00, có thể cấu hình qua env).
+   * Do đó nếu giờ ghi nhận >= cutoffHour, bản ghi thuộc về ngày vận hành tiếp theo.
+   */
+  getOperationalDateKey(date: Date, cutoffHour: number = Number(process.env.UTILITY_SHIFT_CUTOFF_HOUR) || 22): string {
+    const d = new Date(date);
+    if (d.getHours() >= cutoffHour) {
+      d.setDate(d.getDate() + 1);
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   async getAnalytics(query: { days?: number }) {
     const days = Number(query.days) || 7;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    startDate.setHours(0, 0, 0, 0);
+    const cutoffHour = Number(process.env.UTILITY_SHIFT_CUTOFF_HOUR) || 22;
+    const now = new Date();
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    // Chu kỳ chốt ca vận hành nhà máy: 22h đêm hôm trước đến 22h đêm hôm sau
+    const currentHour = now.getHours();
+    const todayCutoff = new Date(now);
+    if (currentHour < cutoffHour) {
+      // Trước giờ chốt ca: Chu kỳ 'Hôm nay' bắt đầu từ cutoff hôm qua đến cutoff hôm nay
+      todayCutoff.setHours(cutoffHour, 0, 0, 0);
+    } else {
+      // Từ giờ chốt ca trở đi: Chu kỳ 'Hôm nay' bắt đầu từ cutoff hôm nay đến cutoff ngày mai
+      todayCutoff.setDate(todayCutoff.getDate() + 1);
+      todayCutoff.setHours(cutoffHour, 0, 0, 0);
+    }
 
-    // 1. Lấy tất cả readings trong khoảng thời gian
-    // 1. Lấy tất cả readings trong khoảng thời gian (loại trừ bản ghi đã hủy)
+    const todayOpEnd = new Date(todayCutoff);
+    const todayOpStart = new Date(todayCutoff);
+    todayOpStart.setDate(todayOpStart.getDate() - 1);
+
+    // Mốc bắt đầu của toàn bộ kỳ phân tích (từ 22h của ngày cách đây `days` ngày)
+    const startDate = new Date(todayOpStart);
+    startDate.setDate(startDate.getDate() - (days - 1));
+
+    // 1. Lấy tất cả readings trong khoảng thời gian chu kỳ (loại trừ bản ghi đã hủy)
     const readings = await this.prisma.utilityReading.findMany({
       where: {
         isVoided: false,
-        recordedAt: { gte: startDate },
+        recordedAt: { gte: startDate, lt: todayOpEnd },
       },
       include: {
         point: true,
@@ -1206,52 +1238,132 @@ export class UtilitiesService {
     const hasElecSupplyMeters = allPoints.some(p => p.type === 'ELECTRICITY' && this.isSupplyPoint(p));
     const hasWaterSupplyMeters = allPoints.some(p => p.type === 'WATER' && this.isSupplyPoint(p));
 
-    let totalElectricityToday = 0;
-    let totalWaterToday = 0;
-    let totalElectricityPeriod = 0;
-    let totalWaterPeriod = 0;
+    // Danh sách chi tiết các đồng hồ nguồn tổng cấp (hiển thị từng đồng hồ, không bỏ qua cái nào)
+    const electricitySupplyMetersMap = new Map<string, {
+      id: string;
+      code: string;
+      name: string;
+      location: string;
+      unit: string;
+      today: number;
+      period: number;
+    }>();
+
+    const waterSupplyMetersMap = new Map<string, {
+      id: string;
+      code: string;
+      name: string;
+      location: string;
+      unit: string;
+      today: number;
+      period: number;
+    }>();
+
+    allPoints.forEach((p) => {
+      if (this.isSupplyPoint(p)) {
+        const item = {
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          location: p.location,
+          unit: p.unit,
+          today: 0,
+          period: 0,
+        };
+        if (p.type === 'ELECTRICITY') {
+          electricitySupplyMetersMap.set(p.id, item);
+        } else if (p.type === 'WATER') {
+          waterSupplyMetersMap.set(p.id, item);
+        }
+      }
+    });
+
+    let totalElectricitySupplyToday = 0;
+    let totalElectricityConsumptionToday = 0;
+    let totalWaterSupplyToday = 0;
+    let totalWaterConsumptionToday = 0;
+
+    let totalElectricitySupplyPeriod = 0;
+    let totalElectricityConsumptionPeriod = 0;
+    let totalWaterSupplyPeriod = 0;
+    let totalWaterConsumptionPeriod = 0;
 
     const dailyBreakdown: Record<string, { date: string; electricity: number; water: number }> = {};
 
-    // Khởi tạo các ngày
-    for (let i = 0; i <= days; i++) {
+    // Khởi tạo các ngày vận hành trong kỳ phân tích
+    for (let i = 0; i < days; i++) {
       const d = new Date(startDate);
       d.setDate(d.getDate() + i);
-      const key = d.toISOString().split('T')[0];
+      const key = this.getOperationalDateKey(d);
       dailyBreakdown[key] = { date: key, electricity: 0, water: 0 };
     }
 
     readings.forEach((r) => {
-      // Bỏ qua đồng hồ đối chứng khỏi thống kê tổng dùng & tổng cấp
-      if (r.point.isExcludedFromTotal) return;
+      // Chỉ bỏ qua điểm đo đã ngưng hoạt động
+      if (!r.point.isActive) return;
 
-      const dateKey = r.recordedAt.toISOString().split('T')[0];
-      const isToday = r.recordedAt >= todayStart;
+      const dateKey = this.getOperationalDateKey(r.recordedAt);
+      const isToday = r.recordedAt >= todayOpStart && r.recordedAt < todayOpEnd;
       const isSupply = Boolean(r.point.isSupplyMeter);
       const isRecycled = Boolean(r.point.isRecycledWater);
+      const isExcluded = Boolean(r.point.isExcludedFromTotal);
 
       if (r.point.type === 'ELECTRICITY') {
-        const shouldCount = hasElecSupplyMeters ? isSupply : true;
-        if (shouldCount) {
-          totalElectricityPeriod += r.consumption;
-          if (isToday) totalElectricityToday += r.consumption;
-          if (dailyBreakdown[dateKey]) {
-            dailyBreakdown[dateKey].electricity += r.consumption;
+        if (isSupply) {
+          // 1. Nguồn Tổng Cấp Điện (ghi nhận đầy đủ tất cả các đồng hồ tổng)
+          totalElectricitySupplyPeriod += r.consumption;
+          if (isToday) totalElectricitySupplyToday += r.consumption;
+
+          const m = electricitySupplyMetersMap.get(r.point.id);
+          if (m) {
+            m.period += r.consumption;
+            if (isToday) m.today += r.consumption;
           }
+        } else if (!isExcluded) {
+          // 2. Tiêu Thụ Điện Nội Bộ (Các Phân Xưởng)
+          totalElectricityConsumptionPeriod += r.consumption;
+          if (isToday) totalElectricityConsumptionToday += r.consumption;
+        }
+
+        const shouldCount = hasElecSupplyMeters ? isSupply : !isExcluded;
+        if (shouldCount && dailyBreakdown[dateKey]) {
+          dailyBreakdown[dateKey].electricity += r.consumption;
         }
       } else if (r.point.type === 'WATER') {
-        if (!isRecycled) {
+        if (isSupply) {
+          // 3. Nguồn Tổng Cấp Nước (ghi nhận đầy đủ tất cả các đồng hồ tổng)
+          totalWaterSupplyPeriod += r.consumption;
+          if (isToday) totalWaterSupplyToday += r.consumption;
+
+          const m = waterSupplyMetersMap.get(r.point.id);
+          if (m) {
+            m.period += r.consumption;
+            if (isToday) m.today += r.consumption;
+          }
+        } else if (!isRecycled && !isExcluded) {
+          // 4. Tiêu Thụ Nước Nội Bộ (Các Phân Xưởng, không tính nước tái sinh & đối chứng)
+          totalWaterConsumptionPeriod += r.consumption;
+          if (isToday) totalWaterConsumptionToday += r.consumption;
+        }
+
+        if (!isRecycled && !isExcluded) {
           const shouldCount = hasWaterSupplyMeters ? isSupply : true;
-          if (shouldCount) {
-            totalWaterPeriod += r.consumption;
-            if (isToday) totalWaterToday += r.consumption;
-            if (dailyBreakdown[dateKey]) {
-              dailyBreakdown[dateKey].water += r.consumption;
-            }
+          if (shouldCount && dailyBreakdown[dateKey]) {
+            dailyBreakdown[dateKey].water += r.consumption;
           }
         }
       }
     });
+
+    // Fallback: nếu hệ thống chưa khai báo đồng hồ tổng riêng biệt, lấy theo tiêu thụ
+    if (!hasElecSupplyMeters) {
+      totalElectricitySupplyToday = totalElectricityConsumptionToday;
+      totalElectricitySupplyPeriod = totalElectricityConsumptionPeriod;
+    }
+    if (!hasWaterSupplyMeters) {
+      totalWaterSupplyToday = totalWaterConsumptionToday;
+      totalWaterSupplyPeriod = totalWaterConsumptionPeriod;
+    }
 
     // 3. Thống kê trạng thái hệ thống phụ trợ
     const auxSystems = allPoints.filter((p) => p.type === 'SYSTEM_AUX');
@@ -1266,10 +1378,42 @@ export class UtilitiesService {
 
     return {
       summary: {
-        electricityToday: Math.round(totalElectricityToday * 100) / 100,
-        waterToday: Math.round(totalWaterToday * 100) / 100,
-        electricityPeriod: Math.round(totalElectricityPeriod * 100) / 100,
-        waterPeriod: Math.round(totalWaterPeriod * 100) / 100,
+        // Chu kỳ chốt ca vận hành
+        shiftCutoffHour: cutoffHour,
+        operationalCycle: `${cutoffHour}:00 hôm trước đến ${cutoffHour}:00 hôm nay`,
+        operationalTodayStart: todayOpStart.toISOString(),
+        operationalTodayEnd: todayOpEnd.toISOString(),
+
+        // Nguồn Tổng Cấp Điện
+        electricitySupplyToday: Math.round(totalElectricitySupplyToday * 100) / 100,
+        electricitySupplyPeriod: Math.round(totalElectricitySupplyPeriod * 100) / 100,
+        electricitySupplyMeters: Array.from(electricitySupplyMetersMap.values()).map(m => ({
+          ...m,
+          today: Math.round(m.today * 100) / 100,
+          period: Math.round(m.period * 100) / 100,
+        })),
+
+        // Đã Sử Dụng Điện (Nội Bộ Xưởng)
+        electricityConsumptionToday: Math.round(totalElectricityConsumptionToday * 100) / 100,
+        electricityConsumptionPeriod: Math.round(totalElectricityConsumptionPeriod * 100) / 100,
+
+        // Nguồn Tổng Cấp Nước
+        waterSupplyToday: Math.round(totalWaterSupplyToday * 100) / 100,
+        waterSupplyPeriod: Math.round(totalWaterSupplyPeriod * 100) / 100,
+        waterSupplyMeters: Array.from(waterSupplyMetersMap.values()).map(m => ({
+          ...m,
+          today: Math.round(m.today * 100) / 100,
+          period: Math.round(m.period * 100) / 100,
+        })),
+        // Đã Sử Dụng Nước (Nội Bộ Xưởng)
+        waterConsumptionToday: Math.round(totalWaterConsumptionToday * 100) / 100,
+        waterConsumptionPeriod: Math.round(totalWaterConsumptionPeriod * 100) / 100,
+
+        // Tương thích ngược
+        electricityToday: Math.round(totalElectricitySupplyToday * 100) / 100,
+        waterToday: Math.round(totalWaterSupplyToday * 100) / 100,
+        electricityPeriod: Math.round(totalElectricitySupplyPeriod * 100) / 100,
+        waterPeriod: Math.round(totalWaterSupplyPeriod * 100) / 100,
         days,
       },
       systemStatusCounts,
@@ -1565,19 +1709,22 @@ export class UtilitiesService {
     }
     const timeColumns: TimeCol[] = [];
 
+    const cutoffHour = Number(process.env.UTILITY_SHIFT_CUTOFF_HOUR) || 22;
+
     if (viewMode === 'DAILY') {
       if (type === 'ELECTRICITY') {
-        // Ngày trong tháng (01 -> lastDay)
+        // Ngày trong tháng (01 -> lastDay) theo ca vận hành (22:00 hôm trước -> 22:00 hôm nay)
         const lastDay = new Date(year, month, 0).getDate();
         const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
         for (let d = 1; d <= lastDay; d++) {
-          const s = new Date(year, month - 1, d, 0, 0, 0, 0);
-          const e = new Date(year, month - 1, d, 23, 59, 59, 999);
-          const dayName = weekdays[s.getDay()];
+          const s = new Date(year, month - 1, d - 1, cutoffHour, 0, 0, 0);
+          const e = new Date(year, month - 1, d, cutoffHour, 0, 0, 0);
+          const dayDate = new Date(year, month - 1, d);
+          const dayName = weekdays[dayDate.getDay()];
           const key = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
           timeColumns.push({
             key,
-            label: `${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')} (${dayName})`,
+            label: `${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')} (${dayName}) [22h-${String(d - 1).padStart(2, '0')} -> 22h-${String(d).padStart(2, '0')}]`,
             shortLabel: `${String(d).padStart(2, '0')}`,
             subLabel: dayName,
             startDate: s,
@@ -1585,17 +1732,19 @@ export class UtilitiesService {
           });
         }
       } else {
-        // Nước: 21 tháng trước -> 20 tháng này
+        // Nước: 21 tháng trước -> 20 tháng này theo ca vận hành (22:00 hôm trước -> 22:00 hôm nay)
         const cycle = this.getPeriodCycleInfo('WATER', month, year);
         const curr = new Date(cycle.startDate);
         const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-        while (curr <= cycle.endDate) {
-          const s = new Date(curr.getFullYear(), curr.getMonth(), curr.getDate(), 0, 0, 0, 0);
-          const e = new Date(curr.getFullYear(), curr.getMonth(), curr.getDate(), 23, 59, 59, 999);
-          const dayName = weekdays[s.getDay()];
+        while (curr < cycle.endDate) {
           const dNum = curr.getDate();
           const mNum = curr.getMonth() + 1;
-          const key = `${curr.getFullYear()}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+          const yNum = curr.getFullYear();
+          const s = new Date(curr);
+          const e = new Date(curr);
+          e.setDate(e.getDate() + 1);
+          const dayName = weekdays[curr.getDay()];
+          const key = `${yNum}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
           timeColumns.push({
             key,
             label: `${String(dNum).padStart(2, '0')}/${String(mNum).padStart(2, '0')} (${dayName})`,
@@ -1690,7 +1839,7 @@ export class UtilitiesService {
 
       timeColumns.forEach((col) => {
         const inSlot = p.readings.filter(
-          (r) => r.recordedAt >= col.startDate && r.recordedAt <= col.endDate,
+          (r) => r.recordedAt >= col.startDate && (viewMode === 'DAILY' ? r.recordedAt < col.endDate : r.recordedAt <= col.endDate),
         );
         let cons = 0;
         if (inSlot.length > 0) {
