@@ -63,8 +63,9 @@ export const UtilitiesPage: React.FC = () => {
     }
   };
 
-  // Bộ lọc
-  const [filterType, setFilterType] = useState<string>('ALL');
+  // Bộ lọc Sổ Ghi: Tách thành 2 bộ lọc (1: Theo loại tiện ích/nhóm, 2: Chi tiết từng điểm đo)
+  const [filterCategory, setFilterCategory] = useState<string>('ALL');
+  const [filterPointId, setFilterPointId] = useState<string>('ALL');
   const [filterSearch, setFilterSearch] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'VOIDED'>('ACTIVE');
 
@@ -206,18 +207,8 @@ export const UtilitiesPage: React.FC = () => {
   }, [activeTab]);
 
   useEffect(() => {
-    const isSpecificPointFilter = Boolean(
-      filterType &&
-      filterType !== 'ALL' &&
-      filterType !== 'ELECTRICITY' &&
-      filterType !== 'WATER' &&
-      filterType !== 'SUPPLY' &&
-      filterType !== 'CONSUMPTION' &&
-      filterType !== 'RECYCLED' &&
-      filterType !== 'EXCLUDED'
-    );
-    if (activeTab === 'readings' && isSpecificPointFilter) {
-      api.getUtilityReadings({ pointId: filterType, limit: 500, includeEvn: true }).then((res: any) => {
+    if (activeTab === 'readings' && filterPointId !== 'ALL') {
+      api.getUtilityReadings({ pointId: filterPointId, limit: 500, includeEvn: true }).then((res: any) => {
         const list = Array.isArray(res) ? res : (res?.items || []);
         if (list.length > 0) {
           setReadings((prev) => {
@@ -227,7 +218,7 @@ export const UtilitiesPage: React.FC = () => {
         }
       }).catch(console.error);
     }
-  }, [activeTab, filterType]);
+  }, [activeTab, filterPointId]);
 
   useEffect(() => {
     if (activeTab === 'cumulative') {
@@ -495,18 +486,33 @@ export const UtilitiesPage: React.FC = () => {
     toast.success('Xuất file thành công', 'Đã tải xuống file CSV danh sách ghi chỉ số.');
   };
 
+  // Danh sách các điểm đo tương ứng với bộ lọc 1 (Loại / Nhóm)
+  const filteredPointsForSelect = useMemo(() => {
+    let list = (points || []).filter((p: any) => p.type === 'ELECTRICITY' || p.type === 'WATER');
+    if (filterCategory === 'ELECTRICITY') {
+      list = list.filter((p: any) => p.type === 'ELECTRICITY');
+    } else if (filterCategory === 'WATER') {
+      list = list.filter((p: any) => p.type === 'WATER');
+    } else if (filterCategory === 'SUPPLY') {
+      list = list.filter((p: any) => p.isSupplyMeter);
+    } else if (filterCategory === 'CONSUMPTION') {
+      list = list.filter((p: any) => !p.isSupplyMeter && !p.isRecycledWater && !p.isExcludedFromTotal);
+    } else if (filterCategory === 'RECYCLED') {
+      list = list.filter((p: any) => p.isRecycledWater);
+    } else if (filterCategory === 'EXCLUDED') {
+      list = list.filter((p: any) => p.isExcludedFromTotal);
+    }
+    return list;
+  }, [points, filterCategory]);
+
+  const handleCategoryChange = (cat: string) => {
+    setFilterCategory(cat);
+    setFilterPointId('ALL');
+  };
+
   // Danh sách ghi số đã lọc (mặc định ẩn EVN Bot khi xem chung, nhưng hiển thị đầy đủ khi chọn lọc theo điểm đo cụ thể)
   const filteredReadings = useMemo(() => {
-    const isSpecificPointFilter = Boolean(
-      filterType &&
-      filterType !== 'ALL' &&
-      filterType !== 'ELECTRICITY' &&
-      filterType !== 'WATER' &&
-      filterType !== 'SUPPLY' &&
-      filterType !== 'CONSUMPTION' &&
-      filterType !== 'RECYCLED' &&
-      filterType !== 'EXCLUDED'
-    );
+    const isSpecificPointFilter = filterPointId !== 'ALL';
 
     return readings.filter((r) => {
       // 1. Mặc định ẩn dữ liệu ghi tự động của EVN Bot khỏi sổ ghi chung.
@@ -520,26 +526,35 @@ export const UtilitiesPage: React.FC = () => {
         if (isEvnBot) return false;
       }
 
-      if (filterType !== 'ALL') {
-        if (filterType === 'ELECTRICITY') {
+      // 2. Bộ lọc 1: Theo loại tiện ích / Nhóm (Điện, Nước, Tổng cấp, Tiêu thụ, Tái sử dụng, Đối chứng)
+      if (filterCategory !== 'ALL') {
+        if (filterCategory === 'ELECTRICITY') {
           if (r.point?.type !== 'ELECTRICITY') return false;
-        } else if (filterType === 'WATER') {
+        } else if (filterCategory === 'WATER') {
           if (r.point?.type !== 'WATER') return false;
-        } else if (filterType === 'SUPPLY') {
+        } else if (filterCategory === 'SUPPLY') {
           if (!r.point?.isSupplyMeter) return false;
-        } else if (filterType === 'CONSUMPTION') {
+        } else if (filterCategory === 'CONSUMPTION') {
           if (r.point?.isSupplyMeter || r.point?.isRecycledWater || r.point?.isExcludedFromTotal) return false;
-        } else if (filterType === 'RECYCLED') {
+        } else if (filterCategory === 'RECYCLED') {
           if (!r.point?.isRecycledWater) return false;
-        } else if (filterType === 'EXCLUDED') {
+        } else if (filterCategory === 'EXCLUDED') {
           if (!r.point?.isExcludedFromTotal) return false;
-        } else {
-          // Lọc theo ID của từng điểm đo cụ thể
-          if (r.pointId !== filterType && r.point?.id !== filterType && r.point?.code !== filterType) return false;
         }
       }
+
+      // 3. Bộ lọc 2: Theo điểm đo cụ thể trong nhóm
+      if (filterPointId !== 'ALL') {
+        if (r.pointId !== filterPointId && r.point?.id !== filterPointId && r.point?.code !== filterPointId) {
+          return false;
+        }
+      }
+
+      // 4. Trạng thái bản ghi (Hợp lệ / Đã hủy)
       if (filterStatus === 'ACTIVE' && r.isVoided) return false;
       if (filterStatus === 'VOIDED' && !r.isVoided) return false;
+
+      // 5. Tìm kiếm từ khóa
       if (filterSearch.trim()) {
         const q = filterSearch.toLowerCase();
         const matchCode = r.point?.code?.toLowerCase().includes(q);
@@ -549,9 +564,10 @@ export const UtilitiesPage: React.FC = () => {
         const matchVoidReason = r.voidReason?.toLowerCase().includes(q);
         if (!matchCode && !matchName && !matchLoc && !matchNotes && !matchVoidReason) return false;
       }
+
       return true;
     });
-  }, [readings, filterType, filterStatus, filterSearch]);
+  }, [readings, filterCategory, filterPointId, filterStatus, filterSearch]);
 
   // Danh sách đồng hồ trong kỳ đã lọc (tính toán động, không hardcode tiền tố hay chuỗi ghép)
   const displayedCumulativeMeters = useMemo(() => {
@@ -1030,27 +1046,43 @@ export const UtilitiesPage: React.FC = () => {
               />
             </div>
 
+            {/* Bộ lọc 1: Theo loại điện nước và tổng */}
             <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
+              value={filterCategory}
+              onChange={(e) => handleCategoryChange(e.target.value)}
               className="filter-select"
-              style={{ minWidth: '240px' }}
-              title="Lọc theo phân loại hoặc chọn từng điểm đo"
+              style={{ minWidth: '180px', fontWeight: 500 }}
+              title="Bộ lọc 1: Phân loại tiện ích & nhóm nguồn"
             >
-              <option value="ALL">Tất cả điểm đo ({filteredReadings.length})</option>
-              <option value="ELECTRICITY">Điện (kWh)</option>
-              <option value="WATER">Nước (m³)</option>
-              <option value="SUPPLY">Nguồn Tổng Cấp</option>
-              <option value="CONSUMPTION">Đo Tiêu Thụ</option>
+              <option value="ALL">Tất cả loại & nhóm</option>
+              <option value="ELECTRICITY">⚡ Điện năng (kWh)</option>
+              <option value="WATER">💧 Nước sạch (m³)</option>
+              <option value="SUPPLY">🏢 Nguồn Tổng Cấp</option>
+              <option value="CONSUMPTION">🏭 Đo Tiêu Thụ Nội Bộ</option>
               {points.some((p: any) => p.isRecycledWater) && (
-                <option value="RECYCLED">Nước Tái Sử Dụng</option>
+                <option value="RECYCLED">♻️ Nước Tái Sử Dụng</option>
               )}
               {points.some((p: any) => p.isExcludedFromTotal) && (
-                <option value="EXCLUDED">Đo Đối Chứng</option>
+                <option value="EXCLUDED">⚖️ Đo Đối Chứng</option>
               )}
-              {points.filter((p: any) => p.type === 'ELECTRICITY' || p.type === 'WATER').map((p: any) => (
+            </select>
+
+            {/* Bộ lọc 2: Chi tiết từng điểm đo theo bộ lọc thứ nhất */}
+            <select
+              value={filterPointId}
+              onChange={(e) => setFilterPointId(e.target.value)}
+              className="filter-select"
+              style={{ minWidth: '220px', fontWeight: 500 }}
+              title="Bộ lọc 2: Chi tiết từng điểm đo theo phân loại trên"
+            >
+              <option value="ALL">
+                {filterCategory === 'ALL'
+                  ? `Tất cả điểm đo (${filteredPointsForSelect.length})`
+                  : `Tất cả điểm trong nhóm (${filteredPointsForSelect.length})`}
+              </option>
+              {filteredPointsForSelect.map((p: any) => (
                 <option key={p.id} value={p.id}>
-                  {p.code} - {p.name}
+                  {p.code} - {p.name} {p.isSupplyMeter ? '★ (Tổng cấp)' : ''}
                 </option>
               ))}
             </select>
@@ -1066,10 +1098,11 @@ export const UtilitiesPage: React.FC = () => {
               <option value="VOIDED">Chỉ bản ghi đã hủy</option>
             </select>
 
-            {(filterType !== 'ALL' || filterSearch || filterStatus !== 'ACTIVE') && (
+            {(filterCategory !== 'ALL' || filterPointId !== 'ALL' || filterSearch || filterStatus !== 'ACTIVE') && (
               <button
                 onClick={() => {
-                  setFilterType('ALL');
+                  setFilterCategory('ALL');
+                  setFilterPointId('ALL');
                   setFilterSearch('');
                   setFilterStatus('ACTIVE');
                 }}
