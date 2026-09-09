@@ -414,7 +414,7 @@ export const UtilitiesPage: React.FC = () => {
 
   // Xuất file CSV danh sách ghi số
   const handleExportReadingsCSV = () => {
-    if (readings.length === 0) {
+    if (filteredReadings.length === 0) {
       toast.warning('Chưa có dữ liệu', 'Không có bản ghi nào để xuất file.');
       return;
     }
@@ -459,9 +459,17 @@ export const UtilitiesPage: React.FC = () => {
     toast.success('Xuất file thành công', 'Đã tải xuống file CSV danh sách ghi chỉ số.');
   };
 
-  // Danh sách ghi số đã lọc
+  // Danh sách ghi số đã lọc (loại trừ các bản ghi tự động của EVN Bot)
   const filteredReadings = useMemo(() => {
     return readings.filter((r) => {
+      // 1. Loại bỏ dữ liệu ghi tự động của EVN Bot khỏi giao diện Sổ Ghi Điện Nước
+      const isEvnBot =
+        r.recordedByName?.toLowerCase().includes('evn') ||
+        r.recordedById === 'system-evn-bot' ||
+        r.shift?.toLowerCase().includes('evn') ||
+        r.notes?.toLowerCase().includes('amiss');
+      if (isEvnBot) return false;
+
       if (filterType !== 'ALL') {
         if (filterType === 'ELECTRICITY') {
           if (r.point?.type !== 'ELECTRICITY') return false;
@@ -592,7 +600,7 @@ export const UtilitiesPage: React.FC = () => {
         <div className="util-tabs-bar">
           {[
             { key: 'overview', label: 'Tổng Quan', fullLabel: 'Tổng Quan & Giám Sát', icon: BarChart3 },
-            { key: 'readings', label: `Sổ Ghi (${readings.length})`, fullLabel: `Sổ Ghi Điện & Nước (${readings.length})`, icon: FileText },
+            { key: 'readings', label: `Sổ Ghi (${filteredReadings.length})`, fullLabel: `Sổ Ghi Điện & Nước (${filteredReadings.length})`, icon: FileText },
             { key: 'statusLogs', label: `Bật / Tắt (${statusLogs.length})`, fullLabel: `Lịch Sử Bật / Tắt (${statusLogs.length})`, icon: Cpu },
             { key: 'points', label: `Điểm Đo (${points.length})`, fullLabel: `Danh Mục Điểm Đo & Tem (${points.length})`, icon: Settings },
             { key: 'cumulative', label: 'Báo Cáo Kỳ', fullLabel: 'Báo Cáo Tích Lũy Điện / Nước', icon: Calendar },
@@ -917,7 +925,7 @@ export const UtilitiesPage: React.FC = () => {
               style={{ minWidth: '240px' }}
               title="Lọc theo phân loại hoặc chọn từng điểm đo"
             >
-              <option value="ALL">Tất cả điểm đo ({readings.length})</option>
+              <option value="ALL">Tất cả điểm đo ({filteredReadings.length})</option>
               <option value="ELECTRICITY">Điện (kWh)</option>
               <option value="WATER">Nước (m³)</option>
               <option value="SUPPLY">Nguồn Tổng Cấp</option>

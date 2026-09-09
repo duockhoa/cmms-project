@@ -119,6 +119,7 @@ export class UtilitiesController {
     @Query('endDate') endDate?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('includeEvn') includeEvn?: string,
   ) {
     return this.utilitiesService.getReadings({
       pointId,
@@ -129,6 +130,7 @@ export class UtilitiesController {
       endDate,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 50,
+      includeEvn: includeEvn === 'true',
     } as any);
   }
 

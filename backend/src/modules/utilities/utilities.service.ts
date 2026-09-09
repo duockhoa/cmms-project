@@ -961,6 +961,7 @@ export class UtilitiesService {
     endDate?: string;
     page?: number;
     limit?: number;
+    includeEvn?: boolean;
   }) {
     const where: any = {};
     if (query.pointId) {
@@ -987,6 +988,16 @@ export class UtilitiesService {
         end.setHours(23, 59, 59, 999);
         where.recordedAt.lte = end;
       }
+    }
+
+    // Mặc định loại bỏ dữ liệu ghi tự động của EVN Bot khỏi sổ ghi điện nước
+    if (!query.includeEvn) {
+      where.NOT = [
+        { recordedByName: { contains: 'EVN' } },
+        { shift: { contains: 'EVN' } },
+        { recordedById: 'system-evn-bot' },
+        { notes: { contains: 'AMISS' } },
+      ];
     }
 
     const page = Number(query.page) || 1;

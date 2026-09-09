@@ -514,6 +514,7 @@ export const api = {
     endDate?: string;
     page?: number;
     limit?: number;
+    includeEvn?: boolean;
   }) => {
     return request(`/utilities/readings${toQueryString(params)}`);
   },
