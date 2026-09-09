@@ -520,6 +520,8 @@ export const api = {
   },
   voidUtilityReading: (id: string, reason: string) =>
     request(`/utilities/readings/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  recalculateUtilityReadings: (data?: { pointId?: string }) =>
+    request('/utilities/readings/recalculate', { method: 'POST', body: JSON.stringify(data || {}) }),
 
   recordUtilitySystemStatus: (data: {
     pointId?: string;

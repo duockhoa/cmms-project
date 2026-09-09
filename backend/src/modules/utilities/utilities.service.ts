@@ -954,6 +954,113 @@ export class UtilitiesService {
     };
   }
 
+  // ==========================================
+  // TỰ ĐỘNG CHUẨN HÓA & TÍNH TOÁN LẠI TOÀN BỘ CHUỖI SỐ LIỆU LỊCH SỬ
+  // ==========================================
+  async recalculateReadings(query?: { pointId?: string }) {
+    const where: any = { isActive: true };
+    if (query?.pointId) {
+      where.id = query.pointId;
+    }
+
+    const points = await this.prisma.utilityPoint.findMany({
+      where,
+      include: {
+        readings: {
+          where: { isVoided: false },
+          orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+        },
+      },
+    });
+
+    let totalPointsProcessed = 0;
+    let totalReadingsUpdated = 0;
+    const details: any[] = [];
+
+    for (const point of points) {
+      if (point.readings.length === 0) continue;
+
+      totalPointsProcessed++;
+      const multiplier = point.multiplier || 1.0;
+      let pointUpdatedCount = 0;
+
+      // Duyệt qua từng bản ghi theo thứ tự thời gian tăng dần
+      for (let i = 0; i < point.readings.length; i++) {
+        const reading = point.readings[i];
+        let correctPreviousValue = reading.previousValue;
+        let correctConsumption = reading.consumption;
+
+        if (i === 0) {
+          // Bản ghi đầu tiên trong chuỗi
+          // Nếu ghi chú là chốt mốc đầu kỳ hoặc chỉ số trước = chỉ số mới thì tiêu thụ = 0
+          const isBaseline =
+            reading.notes?.toLowerCase().includes('đầu kỳ') ||
+            reading.previousValue === reading.readingValue;
+          if (isBaseline) {
+            correctPreviousValue = reading.readingValue;
+            correctConsumption = 0;
+          } else {
+            correctPreviousValue = reading.previousValue ?? reading.readingValue;
+            const diff = Math.max(0, reading.readingValue - correctPreviousValue);
+            correctConsumption = Number((diff * multiplier).toFixed(2));
+          }
+        } else {
+          // Các bản ghi tiếp theo: Chỉ số trước PHẢI là chỉ số mới của bản ghi hợp lệ liền trước
+          const prevReading = point.readings[i - 1];
+          correctPreviousValue = prevReading.readingValue;
+          const diff = reading.readingValue - correctPreviousValue;
+          correctConsumption = diff >= 0 ? Number((diff * multiplier).toFixed(2)) : 0;
+        }
+
+        // Chỉ cập nhật nếu có sự sai lệch
+        if (
+          reading.previousValue !== correctPreviousValue ||
+          Math.abs((reading.consumption || 0) - correctConsumption) > 0.001
+        ) {
+          await this.prisma.utilityReading.update({
+            where: { id: reading.id },
+            data: {
+              previousValue: correctPreviousValue,
+              consumption: correctConsumption,
+            },
+          });
+          pointUpdatedCount++;
+          totalReadingsUpdated++;
+        }
+      }
+
+      // Cập nhật lại lastReadingValue của điểm đo về bản ghi mới nhất
+      const latestReading = point.readings[point.readings.length - 1];
+      if (
+        point.lastReadingValue !== latestReading.readingValue ||
+        point.lastReadingAt?.getTime() !== latestReading.recordedAt.getTime()
+      ) {
+        await this.prisma.utilityPoint.update({
+          where: { id: point.id },
+          data: {
+            lastReadingValue: latestReading.readingValue,
+            lastReadingAt: latestReading.recordedAt,
+          },
+        });
+      }
+
+      details.push({
+        pointCode: point.code,
+        pointName: point.name,
+        totalReadings: point.readings.length,
+        updatedReadings: pointUpdatedCount,
+      });
+    }
+
+    return {
+      success: true,
+      message: `Đã tính toán và chuẩn hóa lại dữ liệu thành công cho ${totalPointsProcessed} điểm đo (${totalReadingsUpdated} bản ghi được cập nhật lại).`,
+      totalPointsProcessed,
+      totalReadingsUpdated,
+      details,
+    };
+  }
+
   async getReadings(query: {
     pointId?: string;
     type?: string;

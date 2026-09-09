@@ -73,6 +73,7 @@ export const UtilitiesPage: React.FC = () => {
   const [voidModalReading, setVoidModalReading] = useState<any | null>(null);
   const [voidReason, setVoidReason] = useState<string>('');
   const [voiding, setVoiding] = useState<boolean>(false);
+  const [recalculating, setRecalculating] = useState<boolean>(false);
 
   // Modal State cho Thêm/Sửa Điểm đo
   const [showPointModal, setShowPointModal] = useState(false);
@@ -436,6 +437,31 @@ export const UtilitiesPage: React.FC = () => {
       loadData();
     } catch (err: any) {
       toast.error('Lỗi cập nhật', err?.message || 'Không thể đổi trạng thái.');
+    }
+  };
+
+  // Chuẩn hóa & Tính toán lại toàn bộ chuỗi số liệu lịch sử
+  const handleRecalculateAll = async () => {
+    const ok = await confirm(
+      'Chuẩn Hóa & Tính Lại Toàn Bộ Sản Lượng',
+      'Hệ thống sẽ rà soát toàn bộ lịch sử ghi chỉ số theo thời gian của từng đồng hồ, tự động đồng bộ lại chỉ số trước và tính lại sản lượng tiêu thụ chuẩn xác theo hệ số nhân. Bạn có chắc muốn thực hiện?',
+      { type: 'info' }
+    );
+    if (!ok) return;
+
+    setRecalculating(true);
+    try {
+      const res = await api.recalculateUtilityReadings();
+      toast.success('Đồng bộ thành công', res.message || 'Đã tính toán và chuẩn hóa lại dữ liệu.');
+      await loadData();
+      if (activeTab === 'cumulative') {
+        loadCumulativeReport();
+        loadTrendMatrixReport();
+      }
+    } catch (err: any) {
+      toast.error('Lỗi tính toán lại', err?.message || 'Không thể đồng bộ lại dữ liệu.');
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -1157,6 +1183,30 @@ export const UtilitiesPage: React.FC = () => {
             >
               <RefreshCw size={13} />
               <span>Làm mới</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRecalculateAll}
+              disabled={recalculating}
+              style={{
+                padding: '7px 12px',
+                borderRadius: '6px',
+                border: '1px solid #c7d2fe',
+                backgroundColor: recalculating ? '#e0e7ff' : '#eef2ff',
+                color: '#4338ca',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                cursor: recalculating ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.15s',
+              }}
+              title="Rà soát toàn bộ lịch sử và tự động tính lại chỉ số trước và sản lượng tiêu thụ chuẩn xác theo hệ số nhân"
+            >
+              <RefreshCw size={13} className={recalculating ? 'animate-spin' : ''} />
+              <span>{recalculating ? 'Đang chuẩn hóa...' : 'Tính Lại Sản Lượng'}</span>
             </button>
 
             <button

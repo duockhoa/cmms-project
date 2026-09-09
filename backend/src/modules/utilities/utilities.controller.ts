@@ -143,6 +143,11 @@ export class UtilitiesController {
     return this.utilitiesService.voidReading(id, body, req.user);
   }
 
+  @Post('readings/recalculate')
+  async recalculateReadings(@Body() body: { pointId?: string }) {
+    return this.utilitiesService.recalculateReadings(body);
+  }
+
   // ==========================================
   // 3. THEO DÕI BẬT / TẮT HỆ THỐNG
   // ==========================================
