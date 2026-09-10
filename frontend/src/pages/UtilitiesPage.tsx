@@ -3213,20 +3213,50 @@ export const UtilitiesPage: React.FC = () => {
       {/* MODAL: ĐÁNH DẤU HỦY KẾT QUẢ GHI SAI (AUDIT TRAIL) */}
       {/* MODAL: HỦY KẾT QUẢ SAI */}
       {voidModalReading && (
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
-          <div className="modal-container" style={{ maxWidth: '480px', padding: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', borderBottom: '1px solid #fee2e2', paddingBottom: '12px' }}>
-              <div style={{ padding: '8px', borderRadius: '50%', backgroundColor: '#fee2e2', color: '#dc2626' }}>
-                <ShieldAlert size={22} />
+        <div 
+          className="modal-overlay" 
+          style={{ zIndex: 1100, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)' }}
+          onClick={() => {
+            if (!voiding) {
+              setVoidModalReading(null);
+              setVoidReason('');
+            }
+          }}
+        >
+          <div 
+            className="modal-content" 
+            style={{ 
+              maxWidth: '480px', 
+              padding: '24px', 
+              backgroundColor: '#ffffff', 
+              borderRadius: '12px', 
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              border: '1px solid #e2e8f0' 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', borderBottom: '1px solid #fee2e2', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ padding: '8px', borderRadius: '50%', backgroundColor: '#fee2e2', color: '#dc2626' }}>
+                  <ShieldAlert size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#991b1b' }}>
+                    Xác nhận Hủy Kết Quả Ghi Sai
+                  </h3>
+                  <span style={{ fontSize: '11.5px', color: '#6b7280' }}>
+                    Cơ chế Audit Trail: Dữ liệu được bảo toàn lưu vết, không bị xóa khỏi CSDL.
+                  </span>
+                </div>
               </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#991b1b' }}>
-                  Xác nhận Hủy Kết Quả Ghi Sai
-                </h3>
-                <span style={{ fontSize: '11.5px', color: '#6b7280' }}>
-                  Cơ chế Audit Trail: Dữ liệu được bảo toàn lưu vết, không bị xóa khỏi CSDL.
-                </span>
-              </div>
+              <button 
+                type="button" 
+                onClick={() => { setVoidModalReading(null); setVoidReason(''); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px' }}
+                title="Đóng"
+              >
+                <X size={18} />
+              </button>
             </div>
 
             <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px', marginBottom: '14px', fontSize: '12.5px' }}>
@@ -3305,20 +3335,49 @@ export const UtilitiesPage: React.FC = () => {
 
       {/* MODAL: CHỈNH SỬA BẢN GHI CHỈ SỐ */}
       {editModalReading && (
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
-          <div className="modal-container" style={{ maxWidth: '520px', padding: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
-              <div style={{ padding: '8px', borderRadius: '50%', backgroundColor: '#eff6ff', color: '#2563eb' }}>
-                <Edit2 size={22} />
+        <div 
+          className="modal-overlay" 
+          style={{ zIndex: 1100, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)' }}
+          onClick={() => {
+            if (!savingEditReading) {
+              setEditModalReading(null);
+            }
+          }}
+        >
+          <div 
+            className="modal-content" 
+            style={{ 
+              maxWidth: '520px', 
+              padding: '24px', 
+              backgroundColor: '#ffffff', 
+              borderRadius: '12px', 
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              border: '1px solid #e2e8f0' 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ padding: '8px', borderRadius: '50%', backgroundColor: '#eff6ff', color: '#2563eb' }}>
+                  <Edit2 size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    Chỉnh Sửa Bản Ghi Chỉ Số
+                  </h3>
+                  <span style={{ fontSize: '11.5px', color: '#6b7280' }}>
+                    Hệ thống sẽ tự động cập nhật sản lượng và liên kết lại chuỗi bản ghi.
+                  </span>
+                </div>
               </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  Chỉnh Sửa Bản Ghi Chỉ Số
-                </h3>
-                <span style={{ fontSize: '11.5px', color: '#6b7280' }}>
-                  Hệ thống sẽ tự động cập nhật sản lượng và liên kết lại chuỗi bản ghi.
-                </span>
-              </div>
+              <button 
+                type="button" 
+                onClick={() => setEditModalReading(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px' }}
+                title="Đóng"
+              >
+                <X size={18} />
+              </button>
             </div>
 
             {/* Meter Info card */}

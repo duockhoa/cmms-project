@@ -294,10 +294,10 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
             width: '540px', 
             padding: '28px', 
             borderRadius: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            border: '1px solid var(--border-color)',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             display: 'flex', flexDirection: 'column', gap: '20px',
-            backgroundColor: 'var(--bg-primary)',
+            backgroundColor: '#ffffff',
             maxHeight: '80vh',
             overflowY: 'auto'
           }}>
@@ -407,10 +407,10 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
             width: '420px', 
             padding: '28px', 
             borderRadius: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            border: '1px solid var(--border-color)',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             display: 'flex', flexDirection: 'column', gap: '20px',
-            backgroundColor: 'var(--bg-primary)'
+            backgroundColor: '#ffffff'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>Liên kết phụ tùng</h3>
@@ -480,7 +480,7 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
       {/* Modal - Preview Tài liệu SOP */}
       {previewFileUrl && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' }}>
-          <div className="card" style={{ width: '80%', height: '80%', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-primary)' }}>
+          <div className="card" style={{ width: '80%', height: '80%', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderRadius: '16px', backgroundColor: '#ffffff', border: '1px solid var(--border-color)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>Xem trực tiếp: {previewFileName}</h3>
               <button onClick={() => setPreviewFileUrl(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>

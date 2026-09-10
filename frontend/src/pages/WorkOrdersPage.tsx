@@ -542,6 +542,99 @@ export const WorkOrdersPage: React.FC = () => {
         </div>
       )}
 
+      {/* Modal Create Work Order */}
+      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Tạo phiếu bảo trì (Work Order)">
+        <form onSubmit={handleCreate}>
+          <div className="form-group">
+            <label className="form-label">Tiêu đề công việc *</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              required 
+              placeholder="Mô tả ngắn gọn công việc (VD: Thay vòng bi trục chính, Sửa rò rỉ khí nén...)" 
+              value={formData.title} 
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })} 
+            />
+          </div>
+
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">Thiết bị *</label>
+              <select 
+                className="form-select" 
+                required 
+                value={formData.equipmentId} 
+                onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value })}
+              >
+                {equipmentList.map((eq) => (
+                  <option key={eq.id} value={eq.id}>[{eq.code}] {eq.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Loại công việc</label>
+              <select 
+                className="form-select" 
+                value={formData.workOrderType} 
+                onChange={(e) => setFormData({ ...formData, workOrderType: e.target.value })}
+              >
+                <option value="Sửa chữa">Sửa chữa</option>
+                <option value="Bảo trì phòng ngừa">Bảo trì phòng ngừa</option>
+                <option value="Kiểm tra">Kiểm tra</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">Mức ưu tiên</label>
+              <select 
+                className="form-select" 
+                value={formData.priority} 
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+              >
+                <option value="LOW">Thấp</option>
+                <option value="MEDIUM">Trung bình</option>
+                <option value="HIGH">Cao</option>
+                <option value="URGENT">Khẩn cấp</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Kỹ thuật viên phụ trách</label>
+              <select
+                className="form-select"
+                value={formData.technicianName}
+                onChange={(e) => setFormData({ ...formData, technicianName: e.target.value })}
+              >
+                <option value="">-- Chưa phân công --</option>
+                {techniciansList.map((tech) => (
+                  <option key={tech.id} value={tech.name}>{tech.name} ({tech.specialty || 'Chưa cập nhật'})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Mô tả sự cố / nội dung công việc *</label>
+            <textarea 
+              className="form-textarea" 
+              rows={3} 
+              required 
+              placeholder="Mô tả chi tiết vấn đề hoặc các hạng mục cần thao tác xử lý..." 
+              value={formData.description} 
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
+            />
+          </div>
+
+          <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)}>Hủy</button>
+            <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <Plus size={15} /> Tạo Work Order
+            </button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Checklist execution Modal */}
       {isChecklistOpen && selectedChecklistWO && (
         <Modal 
