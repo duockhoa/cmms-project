@@ -4,8 +4,9 @@ import { useToast, useConfirmDialog } from '../common/Toast';
 import { Modal } from '../common/Modal';
 import { 
   RefreshCw, Shield, Edit2, Trash2, Plus, Save, 
-  Search, Check, AlertTriangle, UserCheck, UserX, User 
+  Search, Check, AlertTriangle, UserCheck, UserX, User, Key, ShieldAlert
 } from 'lucide-react';
+import { UserCustomPermissionsModal } from './UserCustomPermissionsModal';
 
 export const UsersSettingsTab: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -23,6 +24,7 @@ export const UsersSettingsTab: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [permissionsModalUser, setPermissionsModalUser] = useState<any | null>(null);
   const [userForm, setUserForm] = useState({
     name: '',
     email: '',
@@ -56,6 +58,14 @@ export const UsersSettingsTab: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  const getCustomPermsCount = (u: any) => {
+    try {
+      if (Array.isArray(u.customPermissions)) return u.customPermissions.length;
+      if (typeof u.customPermissions === 'string') return JSON.parse(u.customPermissions).length;
+    } catch (e) {}
+    return 0;
+  };
 
   const handleRoleSelectChange = (userId: string, roleId: string) => {
     setPendingRoles(prev => ({
@@ -301,33 +311,56 @@ export const UsersSettingsTab: React.FC = () => {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <select 
-                          className="form-select" 
-                          value={currentRoleId} 
-                          onChange={e => handleRoleSelectChange(u.id, e.target.value)}
-                          style={{ 
-                            padding: '4px 8px', fontSize: '12.5px', flex: 1,
-                            borderColor: isModified ? 'var(--primary)' : undefined,
-                            fontWeight: isModified ? 600 : 400
-                          }}
-                        >
-                          <option value="">-- Chưa gán nhóm quyền --</option>
-                          {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>
-
-                        {/* Save Button for modified role */}
-                        {isModified && (
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => handleSaveSingleRole(u.id)}
-                            disabled={isSaving}
-                            style={{ padding: '4px 8px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--success)', borderColor: 'var(--success)' }}
-                            title="Lưu nhóm quyền mới"
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <select 
+                            className="form-select" 
+                            value={currentRoleId} 
+                            onChange={e => handleRoleSelectChange(u.id, e.target.value)}
+                            style={{ 
+                              padding: '4px 8px', fontSize: '12.5px', flex: 1,
+                              borderColor: isModified ? 'var(--primary)' : undefined,
+                              fontWeight: isModified ? 600 : 400
+                            }}
                           >
-                            {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
-                            Lưu
-                          </button>
+                            <option value="">-- Chưa gán nhóm quyền --</option>
+                            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                          </select>
+
+                          {/* Save Button for modified role */}
+                          {isModified && (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => handleSaveSingleRole(u.id)}
+                              disabled={isSaving}
+                              style={{ padding: '4px 8px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--success)', borderColor: 'var(--success)' }}
+                              title="Lưu nhóm quyền mới"
+                            >
+                              {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
+                              Lưu
+                            </button>
+                          )}
+                        </div>
+
+                        {getCustomPermsCount(u) > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span 
+                              className="badge" 
+                              style={{ 
+                                fontSize: '10.5px', 
+                                backgroundColor: '#dbeafe', 
+                                color: '#1d4ed8', 
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}
+                              onClick={() => setPermissionsModalUser(u)}
+                              title="Nhấn để xem & chỉnh sửa quyền riêng"
+                            >
+                              <Key size={10} /> +{getCustomPermsCount(u)} quyền riêng
+                            </span>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -343,7 +376,15 @@ export const UsersSettingsTab: React.FC = () => {
                       )}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', gap: '6px' }}>
+                      <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          onClick={() => setPermissionsModalUser(u)}
+                          style={{ padding: '4px 8px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#2563eb' }}
+                          title="Cấu hình quyền riêng cho người dùng này"
+                        >
+                          <Key size={12} /> Quyền riêng
+                        </button>
                         <button 
                           className="btn btn-secondary btn-sm" 
                           onClick={() => handleOpenEdit(u)}
@@ -497,6 +538,16 @@ export const UsersSettingsTab: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Direct User Permissions Modal */}
+      {permissionsModalUser && (
+        <UserCustomPermissionsModal
+          isOpen={!!permissionsModalUser}
+          onClose={() => setPermissionsModalUser(null)}
+          user={permissionsModalUser}
+          onUpdated={loadData}
+        />
+      )}
     </div>
   );
 };

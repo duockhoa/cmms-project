@@ -151,6 +151,22 @@ export class UsersService {
     });
   }
 
+  async updateCustomPermissions(id: string, permissions: string[]) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`Không tìm thấy nhân viên với ID: ${id}`);
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        customPermissions: JSON.stringify(permissions || []),
+        version: { increment: 1 },
+      },
+      include: { customRole: true },
+    });
+  }
+
   async createUser(data: any) {
     return this.prisma.user.create({
       data: {

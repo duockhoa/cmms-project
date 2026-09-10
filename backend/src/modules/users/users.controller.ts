@@ -118,6 +118,19 @@ export class UsersController {
     return this.usersService.updateRole(id, body.roleId);
   }
 
+  @ApiStandardResponse({
+    summary: 'Cập nhật danh sách quyền riêng cho từng người dùng',
+    method: 'PATCH',
+    path: '/users/:id/custom-permissions',
+  })
+  @Patch(':id/custom-permissions')
+  async updateCustomPermissions(
+    @Param('id') id: string,
+    @Body() body: { permissions: string[] }
+  ) {
+    return this.usersService.updateCustomPermissions(id, body.permissions);
+  }
+
   @ApiOperation({ summary: 'Tạo mới người dùng thủ công' })
   @Post()
   async createUser(@Body() body: any) {

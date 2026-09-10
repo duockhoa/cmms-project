@@ -66,6 +66,7 @@ model User {
   // Custom Role Association
   roleId                String?
   customRole            Role?                  @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  customPermissions     String?                @db.Text // JSON string of direct permissions override for this user
 }
 
 model Role {

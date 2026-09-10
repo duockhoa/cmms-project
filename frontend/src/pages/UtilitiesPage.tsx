@@ -14,11 +14,13 @@ import {
 } from 'lucide-react';
 import { formatVN } from '../utils/formatters';
 import { UtilityTrendChart } from '../components/utilities/UtilityTrendChart';
+import { usePermissions } from '../hooks/usePermissions';
 
 export const UtilitiesPage: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const { confirm } = useConfirmDialog();
+  const { can, isAdmin } = usePermissions();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'readings' | 'statusLogs' | 'points' | 'cumulative'>('overview');
   const [loading, setLoading] = useState(false);
@@ -74,6 +76,17 @@ export const UtilitiesPage: React.FC = () => {
   const [voidReason, setVoidReason] = useState<string>('');
   const [voiding, setVoiding] = useState<boolean>(false);
   const [recalculating, setRecalculating] = useState<boolean>(false);
+
+  // Modal Chỉnh Sửa Bản Ghi Chỉ Số
+  const [editModalReading, setEditModalReading] = useState<any | null>(null);
+  const [editReadingForm, setEditReadingForm] = useState({
+    readingValue: 0,
+    previousValue: 0,
+    recordedAt: '',
+    shift: 'ALL',
+    notes: '',
+  });
+  const [savingEditReading, setSavingEditReading] = useState(false);
 
   // Modal State cho Thêm/Sửa Điểm đo
   const [showPointModal, setShowPointModal] = useState(false);
@@ -653,6 +666,45 @@ export const UtilitiesPage: React.FC = () => {
     }
   };
 
+  // Mở modal chỉnh sửa bản ghi chỉ số
+  const handleOpenEditReading = (r: any) => {
+    setEditModalReading(r);
+    const d = new Date(r.recordedAt);
+    const tzOffset = d.getTimezoneOffset() * 60000;
+    const localISOTime = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+    setEditReadingForm({
+      readingValue: r.readingValue || 0,
+      previousValue: r.previousValue !== null && r.previousValue !== undefined ? r.previousValue : 0,
+      recordedAt: localISOTime,
+      shift: r.shift || 'ALL',
+      notes: r.notes || '',
+    });
+  };
+
+  // Xử lý xác nhận lưu chỉnh sửa bản ghi chỉ số
+  const handleConfirmEditReading = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalReading) return;
+    setSavingEditReading(true);
+    try {
+      const payload = {
+        readingValue: Number(editReadingForm.readingValue),
+        previousValue: Number(editReadingForm.previousValue),
+        recordedAt: new Date(editReadingForm.recordedAt).toISOString(),
+        shift: editReadingForm.shift,
+        notes: editReadingForm.notes,
+      };
+      await api.updateUtilityReading(editModalReading.id, payload);
+      toast.success('Thành công', 'Đã cập nhật bản ghi chỉ số và tự động tính lại sản lượng.');
+      setEditModalReading(null);
+      await loadData();
+    } catch (err: any) {
+      toast.error('Lỗi cập nhật', err?.message || 'Không thể cập nhật bản ghi.');
+    } finally {
+      setSavingEditReading(false);
+    }
+  };
+
   return (
     <div className="util-page-root">
       {/* 1. Header Trang & Nút Quét QR */}
@@ -1185,37 +1237,41 @@ export const UtilitiesPage: React.FC = () => {
               <span>Làm mới</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleRecalculateAll}
-              disabled={recalculating}
-              style={{
-                padding: '7px 12px',
-                borderRadius: '6px',
-                border: '1px solid #c7d2fe',
-                backgroundColor: recalculating ? '#e0e7ff' : '#eef2ff',
-                color: '#4338ca',
-                fontSize: '12.5px',
-                fontWeight: 600,
-                cursor: recalculating ? 'not-allowed' : 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                transition: 'all 0.15s',
-              }}
-              title="Rà soát toàn bộ lịch sử và tự động tính lại chỉ số trước và sản lượng tiêu thụ chuẩn xác theo hệ số nhân"
-            >
-              <RefreshCw size={13} className={recalculating ? 'animate-spin' : ''} />
-              <span>{recalculating ? 'Đang chuẩn hóa...' : 'Tính Lại Sản Lượng'}</span>
-            </button>
+            {can('utilities:recalculate') && (
+              <button
+                type="button"
+                onClick={handleRecalculateAll}
+                disabled={recalculating}
+                style={{
+                  padding: '7px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #c7d2fe',
+                  backgroundColor: recalculating ? '#e0e7ff' : '#eef2ff',
+                  color: '#4338ca',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  cursor: recalculating ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  transition: 'all 0.15s',
+                }}
+                title="Rà soát toàn bộ lịch sử và tự động tính lại chỉ số trước và sản lượng tiêu thụ chuẩn xác theo hệ số nhân"
+              >
+                <RefreshCw size={13} className={recalculating ? 'animate-spin' : ''} />
+                <span>{recalculating ? 'Đang chuẩn hóa...' : 'Tính Lại Sản Lượng'}</span>
+              </button>
+            )}
 
-            <button
-              onClick={handleExportReadingsCSV}
-              className="btn-export-csv"
-            >
-              <Download size={15} />
-              <span>Xuất Excel / CSV</span>
-            </button>
+            {can('utilities:export') && (
+              <button
+                onClick={handleExportReadingsCSV}
+                className="btn-export-csv"
+              >
+                <Download size={15} />
+                <span>Xuất Excel / CSV</span>
+              </button>
+            )}
           </div>
 
           {/* DUAL-VIEW: 1) DESKTOP TABLE VIEW */}
@@ -1308,30 +1364,57 @@ export const UtilitiesPage: React.FC = () => {
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             {!isVoided ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setVoidModalReading(r);
-                                  setVoidReason('');
-                                }}
-                                className="btn btn-sm"
-                                style={{
-                                  padding: '4px 8px',
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                  color: '#dc2626',
-                                  backgroundColor: '#fef2f2',
-                                  border: '1px solid #fecaca',
-                                  borderRadius: '4px',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  cursor: 'pointer',
-                                }}
-                                title="Đánh dấu hủy kết quả ghi sai này (giữ nguyên nhật ký kiểm toán)"
-                              >
-                                <Ban size={12} /> Hủy số sai
-                              </button>
+                              <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                                {can('utilities:edit_reading') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditReading(r)}
+                                    className="btn btn-sm"
+                                    style={{
+                                      padding: '4px 8px',
+                                      fontSize: '11px',
+                                      fontWeight: 600,
+                                      color: '#2563eb',
+                                      backgroundColor: '#eff6ff',
+                                      border: '1px solid #bfdbfe',
+                                      borderRadius: '4px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      cursor: 'pointer',
+                                    }}
+                                    title="Chỉnh sửa bản ghi chỉ số"
+                                  >
+                                    <Edit2 size={12} /> Sửa
+                                  </button>
+                                )}
+                                {can('utilities:void_reading') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setVoidModalReading(r);
+                                      setVoidReason('');
+                                    }}
+                                    className="btn btn-sm"
+                                    style={{
+                                      padding: '4px 8px',
+                                      fontSize: '11px',
+                                      fontWeight: 600,
+                                      color: '#dc2626',
+                                      backgroundColor: '#fef2f2',
+                                      border: '1px solid #fecaca',
+                                      borderRadius: '4px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      cursor: 'pointer',
+                                    }}
+                                    title="Đánh dấu hủy kết quả ghi sai này (giữ nguyên nhật ký kiểm toán)"
+                                  >
+                                    <Ban size={12} /> Hủy số sai
+                                  </button>
+                                )}
+                              </div>
                             ) : (
                               <span style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic' }}>
                                 Đã lưu vết
@@ -1418,28 +1501,53 @@ export const UtilitiesPage: React.FC = () => {
                       </div>
 
                       {!isVoided && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setVoidModalReading(r);
-                            setVoidReason('');
-                          }}
-                          style={{
-                            padding: '4px 8px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            color: '#dc2626',
-                            backgroundColor: '#ffffff',
-                            border: '1px solid #fecaca',
-                            borderRadius: '4px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <Ban size={12} /> Hủy sai
-                        </button>
+                        <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                          {can('utilities:edit_reading') && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditReading(r)}
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#2563eb',
+                                backgroundColor: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                borderRadius: '4px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Edit2 size={12} /> Sửa
+                            </button>
+                          )}
+                          {can('utilities:void_reading') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVoidModalReading(r);
+                                setVoidReason('');
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#dc2626',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid #fecaca',
+                                borderRadius: '4px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Ban size={12} /> Hủy sai
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1614,13 +1722,15 @@ export const UtilitiesPage: React.FC = () => {
                 </p>
               </div>
 
-              <button
-                onClick={handleOpenAddPoint}
-                className="btn-add-point"
-              >
-                <Plus size={16} />
-                <span>Thêm Điểm Đo</span>
-              </button>
+              {can('utilities:manage_points') && (
+                <button
+                  onClick={handleOpenAddPoint}
+                  className="btn-add-point"
+                >
+                  <Plus size={16} />
+                  <span>Thêm Điểm Đo</span>
+                </button>
+              )}
             </div>
 
             {/* Desktop Table View */}
@@ -1724,20 +1834,24 @@ export const UtilitiesPage: React.FC = () => {
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <div style={{ display: 'inline-flex', gap: '6px' }}>
-                            <button
-                              onClick={() => handleOpenEditPoint(p)}
-                              className="btn-icon-action"
-                              title="Chỉnh sửa"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleDeletePoint(p)}
-                              className="btn-icon-action danger"
-                              title="Xóa điểm đo"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            {can('utilities:manage_points') && (
+                              <button
+                                onClick={() => handleOpenEditPoint(p)}
+                                className="btn-icon-action"
+                                title="Chỉnh sửa"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                            )}
+                            {can('utilities:delete_point') && (
+                              <button
+                                onClick={() => handleDeletePoint(p)}
+                                className="btn-icon-action danger"
+                                title="Xóa điểm đo"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -3097,6 +3211,7 @@ export const UtilitiesPage: React.FC = () => {
       )}
 
       {/* MODAL: ĐÁNH DẤU HỦY KẾT QUẢ GHI SAI (AUDIT TRAIL) */}
+      {/* MODAL: HỦY KẾT QUẢ SAI */}
       {voidModalReading && (
         <div className="modal-overlay" style={{ zIndex: 1100 }}>
           <div className="modal-container" style={{ maxWidth: '480px', padding: '24px' }}>
@@ -3181,6 +3296,158 @@ export const UtilitiesPage: React.FC = () => {
                 >
                   {voiding ? <RefreshCw size={14} className="animate-spin" /> : <Ban size={14} />}
                   <span>Xác nhận Hủy Kết Quả</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CHỈNH SỬA BẢN GHI CHỈ SỐ */}
+      {editModalReading && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-container" style={{ maxWidth: '520px', padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+              <div style={{ padding: '8px', borderRadius: '50%', backgroundColor: '#eff6ff', color: '#2563eb' }}>
+                <Edit2 size={22} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  Chỉnh Sửa Bản Ghi Chỉ Số
+                </h3>
+                <span style={{ fontSize: '11.5px', color: '#6b7280' }}>
+                  Hệ thống sẽ tự động cập nhật sản lượng và liên kết lại chuỗi bản ghi.
+                </span>
+              </div>
+            </div>
+
+            {/* Meter Info card */}
+            <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px', fontSize: '12.5px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#64748b' }}>Đồng hồ / Điểm đo:</span>
+                <strong>{editModalReading.point?.name} ({editModalReading.point?.code})</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#64748b' }}>Hệ số nhân (TI / TU):</span>
+                <strong style={{ color: '#0284c7' }}>x{editModalReading.point?.multiplier ?? 1.0}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Đơn vị đo:</span>
+                <span style={{ fontWeight: 600 }}>{editModalReading.point?.unit || 'kWh'}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmEditReading}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Chỉ số trước (Số cũ) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    className="form-input"
+                    value={editReadingForm.previousValue}
+                    onChange={e => setEditReadingForm({ ...editReadingForm, previousValue: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Chỉ số ghi nhận (Số mới) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    className="form-input"
+                    value={editReadingForm.readingValue}
+                    onChange={e => setEditReadingForm({ ...editReadingForm, readingValue: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+              </div>
+
+              {/* Live preview consumption calculation */}
+              <div style={{ 
+                padding: '10px 12px', 
+                backgroundColor: '#f0fdf4', 
+                border: '1px solid #bbf7d0', 
+                borderRadius: '6px', 
+                marginBottom: '14px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#166534' }}>Sản lượng tiêu thụ tính toán:</div>
+                  <div style={{ fontSize: '11px', color: '#15803d', fontFamily: 'monospace' }}>
+                    ({editReadingForm.readingValue} - {editReadingForm.previousValue}) × {editModalReading.point?.multiplier ?? 1.0}
+                  </div>
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: 800, color: '#15803d' }}>
+                  +{((Number(editReadingForm.readingValue) - Number(editReadingForm.previousValue)) * (editModalReading.point?.multiplier ?? 1.0)).toLocaleString()} {editModalReading.point?.unit}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Thời gian ghi số *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    className="form-input"
+                    value={editReadingForm.recordedAt}
+                    onChange={e => setEditReadingForm({ ...editReadingForm, recordedAt: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Ca làm việc
+                  </label>
+                  <select
+                    className="form-input"
+                    value={editReadingForm.shift}
+                    onChange={e => setEditReadingForm({ ...editReadingForm, shift: e.target.value })}
+                  >
+                    <option value="ALL">Cả ngày / Tự động</option>
+                    <option value="SHIFT_1">Ca 1</option>
+                    <option value="SHIFT_2">Ca 2</option>
+                    <option value="SHIFT_3">Ca 3</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  Ghi chú điều chỉnh
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="VD: Điều chỉnh lại do nhập nhầm số hàng đơn vị hoặc cài lại hệ số..."
+                  value={editReadingForm.notes}
+                  onChange={e => setEditReadingForm({ ...editReadingForm, notes: e.target.value })}
+                />
+              </div>
+
+              <div className="modal-actions-row">
+                <button
+                  type="button"
+                  onClick={() => setEditModalReading(null)}
+                  className="btn-modal-cancel"
+                  disabled={savingEditReading}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-submit"
+                  disabled={savingEditReading}
+                  style={{ backgroundColor: '#2563eb' }}
+                >
+                  {savingEditReading ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>

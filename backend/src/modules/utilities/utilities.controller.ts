@@ -134,6 +134,15 @@ export class UtilitiesController {
     } as any);
   }
 
+  @Put('readings/:id')
+  async updateReading(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: any,
+  ) {
+    return this.utilitiesService.updateReading(id, body, req.user);
+  }
+
   @Post('readings/:id/void')
   async voidReading(
     @Param('id') id: string,

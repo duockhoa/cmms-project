@@ -33,24 +33,44 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('Người dùng không tồn tại');
     }
 
-    // Admins bypass
-    if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
-      return true;
-    }
-
-    if (!user.customRole) {
-      throw new ForbiddenException('Người dùng chưa được gán nhóm quyền');
-    }
-
-    try {
-      const userPermissions: string[] = JSON.parse(user.customRole.permissions);
-      const hasPermission = requiredPermissions.every((perm) => userPermissions.includes(perm));
-
-      if (!hasPermission) {
-        throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
+    let rolePerms: string[] = [];
+    if (user.customRole?.permissions) {
+      try {
+        rolePerms = typeof user.customRole.permissions === 'string'
+          ? JSON.parse(user.customRole.permissions)
+          : user.customRole.permissions;
+      } catch (e) {
+        rolePerms = [];
       }
-    } catch (e) {
-      throw new ForbiddenException('Cấu hình phân quyền bị lỗi');
+    }
+
+    let customPerms: string[] = [];
+    if (user.customPermissions) {
+      try {
+        customPerms = typeof user.customPermissions === 'string'
+          ? JSON.parse(user.customPermissions)
+          : user.customPermissions;
+      } catch (e) {
+        customPerms = [];
+      }
+    }
+
+    const effectivePerms = new Set<string>([...rolePerms, ...customPerms]);
+
+    // Pure dynamic RBAC permission check (Supports '*' and 'ALL' wildcards)
+    const hasPermission = requiredPermissions.every((required) => {
+      // 1. Direct permission match
+      if (effectivePerms.has(required)) return true;
+      // 2. Global wildcard
+      if (effectivePerms.has('*') || effectivePerms.has('ALL')) return true;
+      // 3. Module-level wildcard, e.g. "utilities:*" matches "utilities:edit_reading"
+      const [moduleName] = required.split(':');
+      if (effectivePerms.has(`${moduleName}:*`) || effectivePerms.has(`${moduleName}:ALL`)) return true;
+      return false;
+    });
+
+    if (!hasPermission) {
+      throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
     }
 
     return true;

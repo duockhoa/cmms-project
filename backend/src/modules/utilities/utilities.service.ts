@@ -955,6 +955,118 @@ export class UtilitiesService {
   }
 
   // ==========================================
+  // CHỈNH SỬA BẢN GHI CHỈ SỐ ĐIỆN / NƯỚC (CÓ LIÊN HOÀN CẬP NHẬT TIÊU THỤ)
+  // ==========================================
+  async updateReading(
+    id: string,
+    data: {
+      readingValue?: number;
+      previousValue?: number;
+      recordedAt?: string | Date;
+      shift?: string;
+      notes?: string;
+      normalValue?: number;
+      peakValue?: number;
+      offPeakValue?: number;
+      powerKw?: number;
+      powerFactorCosPhi?: number;
+    },
+    actor: any,
+  ) {
+    const reading = await this.prisma.utilityReading.findUnique({
+      where: { id },
+      include: { point: true },
+    });
+
+    if (!reading) {
+      throw new NotFoundException('Không tìm thấy bản ghi số điện/nước.');
+    }
+
+    const multiplier = reading.point.multiplier || 1.0;
+    const newReadingValue =
+      data.readingValue !== undefined
+        ? (this.parseLocaleNumber(data.readingValue) ?? reading.readingValue)
+        : reading.readingValue;
+
+    const newPreviousValue =
+      data.previousValue !== undefined
+        ? (this.parseLocaleNumber(data.previousValue) ?? reading.previousValue)
+        : reading.previousValue;
+
+    const diff = newReadingValue - newPreviousValue;
+    const newConsumption = diff >= 0 ? Number((diff * multiplier).toFixed(2)) : 0;
+    const newRecordedAt = data.recordedAt ? new Date(data.recordedAt) : reading.recordedAt;
+
+    const normalVal = data.normalValue !== undefined ? this.parseLocaleNumber(data.normalValue) : reading.normalValue;
+    const peakVal = data.peakValue !== undefined ? this.parseLocaleNumber(data.peakValue) : reading.peakValue;
+    const offPeakVal = data.offPeakValue !== undefined ? this.parseLocaleNumber(data.offPeakValue) : reading.offPeakValue;
+    const powerKw = data.powerKw !== undefined ? this.parseLocaleNumber(data.powerKw) : reading.powerKw;
+    const cosPhi = data.powerFactorCosPhi !== undefined ? this.parseLocaleNumber(data.powerFactorCosPhi) : reading.powerFactorCosPhi;
+
+    const updated = await this.prisma.utilityReading.update({
+      where: { id },
+      data: {
+        readingValue: newReadingValue,
+        previousValue: newPreviousValue,
+        consumption: newConsumption,
+        recordedAt: newRecordedAt,
+        shift: data.shift !== undefined ? data.shift : reading.shift,
+        notes: data.notes !== undefined ? data.notes : reading.notes,
+        normalValue: normalVal,
+        peakValue: peakVal,
+        offPeakValue: offPeakVal,
+        powerKw: powerKw,
+        powerFactorCosPhi: cosPhi,
+      },
+      include: { point: true },
+    });
+
+    // Cập nhật liên hoàn: Nếu có bản ghi tiếp theo của điểm đo này, cập nhật previousValue của nó = newReadingValue
+    const nextReading = await this.prisma.utilityReading.findFirst({
+      where: {
+        pointId: reading.pointId,
+        isVoided: false,
+        recordedAt: { gt: newRecordedAt },
+      },
+      orderBy: { recordedAt: 'asc' },
+    });
+
+    if (nextReading) {
+      const nextDiff = nextReading.readingValue - newReadingValue;
+      const nextConsumption = nextDiff >= 0 ? Number((nextDiff * multiplier).toFixed(2)) : 0;
+      await this.prisma.utilityReading.update({
+        where: { id: nextReading.id },
+        data: {
+          previousValue: newReadingValue,
+          consumption: nextConsumption,
+        },
+      });
+    }
+
+    // Nếu đây là bản ghi mới nhất, cập nhật lại lastReadingValue của điểm đo
+    const latestReading = await this.prisma.utilityReading.findFirst({
+      where: { pointId: reading.pointId, isVoided: false },
+      orderBy: { recordedAt: 'desc' },
+    });
+
+    if (latestReading && latestReading.id === id) {
+      await this.prisma.utilityPoint.update({
+        where: { id: reading.pointId },
+        data: {
+          lastReadingValue: newReadingValue,
+          lastReadingAt: newRecordedAt,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: `Đã cập nhật bản ghi chỉ số thành công (${reading.point.code} - ${reading.point.name}).`,
+      reading: updated,
+    };
+  }
+
+  // ==========================================
   // TỰ ĐỘNG CHUẨN HÓA & TÍNH TOÁN LẠI TOÀN BỘ CHUỖI SỐ LIỆU LỊCH SỬ
   // ==========================================
   async recalculateReadings(query?: { pointId?: string }) {

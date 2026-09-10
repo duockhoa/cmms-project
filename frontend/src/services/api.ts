@@ -430,6 +430,13 @@ export const api = {
     });
   },
 
+  updateUserCustomPermissions: async (id: string, permissions: string[]) => {
+    return request(`/users/${id}/custom-permissions`, {
+      method: 'PATCH',
+      body: JSON.stringify({ permissions }),
+    });
+  },
+
   createUser: (data: any) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id: string, data: any) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteUser: (id: string) => request(`/users/${id}`, { method: 'DELETE' }),
@@ -520,6 +527,8 @@ export const api = {
   },
   voidUtilityReading: (id: string, reason: string) =>
     request(`/utilities/readings/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  updateUtilityReading: (id: string, data: any) =>
+    request(`/utilities/readings/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   recalculateUtilityReadings: (data?: { pointId?: string }) =>
     request('/utilities/readings/recalculate', { method: 'POST', body: JSON.stringify(data || {}) }),
 
