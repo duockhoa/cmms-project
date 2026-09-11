@@ -91,8 +91,14 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
-      ...formData,
-      code: formData.code.trim() || `EQ-${Date.now().toString().slice(-4)}`
+      name: formData.name.trim(),
+      category: formData.category,
+      status: formData.status,
+      location: formData.location,
+      serialNumber: formData.serialNumber.trim(),
+      specs: formData.specs.trim(),
+      code: formData.code.trim(),
+      accountingCode: formData.accountingCode.trim() || undefined,
     });
     // Reset state after submit
     setFormData({

@@ -4,7 +4,7 @@
   "description": "Equipment & Maintenance Management Backend (NestJS)",
   "scripts": {
     "postinstall": "prisma generate",
-    "build": "prisma generate && tsc",
+    "build": "tsc",
     "start": "ts-node src/main.ts",
     "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "start:prod": "node dist/main.js",

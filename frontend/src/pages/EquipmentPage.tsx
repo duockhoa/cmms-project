@@ -92,6 +92,7 @@ export const EquipmentPage: React.FC = () => {
             location: finalFormData.location,
             serialNumber: finalFormData.serialNumber,
             specs: finalFormData.specs,
+            accountingCode: finalFormData.accountingCode || undefined,
             expectedVersion: editItem.version,
           })
         });
@@ -102,9 +103,15 @@ export const EquipmentPage: React.FC = () => {
         toast.success('Cập nhật thành công', 'Thông tin thiết bị đã được cập nhật.');
       } else {
         // Create mode: POST
+        const createPayload: any = {
+          ...finalFormData,
+        };
+        if (!createPayload.code) delete createPayload.code;
+        if (!createPayload.accountingCode) delete createPayload.accountingCode;
+
         const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment`, {
           method: 'POST',
-          body: JSON.stringify(finalFormData)
+          body: JSON.stringify(createPayload)
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));

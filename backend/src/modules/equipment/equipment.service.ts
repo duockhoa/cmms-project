@@ -1,10 +1,21 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateEquipmentDto } from './dto/equipment.dto';
 
 @Injectable()
-export class EquipmentService {
+export class EquipmentService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
+
+  async onModuleInit() {
+    try {
+      // Chuẩn hóa dữ liệu cũ: chuyển các giá trị accountingCode là chuỗi rỗng '' thành null để không bị kẹt unique constraint
+      await this.prisma.$executeRawUnsafe(
+        "UPDATE `Equipment` SET `accountingCode` = NULL WHERE `accountingCode` = ''"
+      );
+    } catch (err) {
+      // Bỏ qua nếu bảng chưa tồn tại hoặc DB chưa migrate
+    }
+  }
 
   async findAll(query?: { search?: string; category?: string; status?: string; location?: string; page?: string; limit?: string }) {
     const where: any = { isActive: true };
@@ -114,11 +125,65 @@ export class EquipmentService {
   }
 
   async create(data: any) {
-    if (!data.code) {
-      const count = await this.prisma.equipment.count();
-      data.code = `EQ-${(count + 1).toString().padStart(4, '0')}`;
+    // 1. Chuẩn hóa mã kế toán: chuỗi rỗng -> null
+    const accountingCode = data.accountingCode && String(data.accountingCode).trim() !== ''
+      ? String(data.accountingCode).trim()
+      : null;
+
+    // 2. Tự động sinh mã thiết bị nếu để trống
+    let code = data.code ? String(data.code).trim() : '';
+    if (!code) {
+      let isUnique = false;
+      let counter = (await this.prisma.equipment.count()) + 1;
+      while (!isUnique) {
+        code = `EQ-${counter.toString().padStart(4, '0')}`;
+        const exists = await this.prisma.equipment.findUnique({ where: { code } });
+        if (!exists) {
+          isUnique = true;
+        } else {
+          counter++;
+        }
+      }
+    } else {
+      const existing = await this.prisma.equipment.findUnique({ where: { code } });
+      if (existing) {
+        throw new ConflictException(`Mã thiết bị '${code}' đã tồn tại trong hệ thống.`);
+      }
     }
-    return this.prisma.equipment.create({ data });
+
+    if (accountingCode) {
+      const existingAcc = await this.prisma.equipment.findUnique({ where: { accountingCode } });
+      if (existingAcc) {
+        throw new ConflictException(
+          `Mã kế toán '${accountingCode}' đã được sử dụng cho thiết bị khác (${existingAcc.code} - ${existingAcc.name}).`,
+        );
+      }
+    }
+
+    try {
+      return await this.prisma.equipment.create({
+        data: {
+          ...data,
+          code,
+          accountingCode,
+          serialNumber: data.serialNumber && String(data.serialNumber).trim() !== '' ? String(data.serialNumber).trim() : null,
+          specs: data.specs && String(data.specs).trim() !== '' ? String(data.specs).trim() : null,
+          notes: data.notes && String(data.notes).trim() !== '' ? String(data.notes).trim() : null,
+        },
+      });
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        const target = err.meta?.target || '';
+        if (String(target).includes('accountingCode')) {
+          throw new ConflictException(`Mã kế toán '${accountingCode}' đã tồn tại.`);
+        }
+        if (String(target).includes('code')) {
+          throw new ConflictException(`Mã thiết bị '${code}' đã tồn tại.`);
+        }
+        throw new ConflictException('Dữ liệu thiết bị bị trùng lặp mã định danh duy nhất.');
+      }
+      throw err;
+    }
   }
 
   async update(id: string, data: UpdateEquipmentDto) {
@@ -130,18 +195,39 @@ export class EquipmentService {
     }
 
     const { expectedVersion, ...updateData } = data;
+    const sanitizedData: any = { ...updateData };
+
+    if ('accountingCode' in sanitizedData) {
+      sanitizedData.accountingCode = sanitizedData.accountingCode && String(sanitizedData.accountingCode).trim() !== ''
+        ? String(sanitizedData.accountingCode).trim()
+        : null;
+
+      if (sanitizedData.accountingCode) {
+        const existingAcc = await this.prisma.equipment.findFirst({
+          where: { accountingCode: sanitizedData.accountingCode, NOT: { id } },
+        });
+        if (existingAcc) {
+          throw new ConflictException(
+            `Mã kế toán '${sanitizedData.accountingCode}' đã được sử dụng cho thiết bị khác (${existingAcc.code} - ${existingAcc.name}).`,
+          );
+        }
+      }
+    }
 
     try {
       return await this.prisma.equipment.update({
         where: { id, version: expectedVersion },
         data: {
-          ...updateData,
-          version: { increment: 1 }
-        }
+          ...sanitizedData,
+          version: { increment: 1 },
+        },
       });
     } catch (err: any) {
       if (err.code === 'P2025') {
         throw new ConflictException('Xung đột đồng thời: Thiết bị đã bị thay đổi bởi phiên làm việc khác.');
+      }
+      if (err.code === 'P2002') {
+        throw new ConflictException('Dữ liệu thiết bị bị trùng lặp mã duy nhất.');
       }
       throw err;
     }
