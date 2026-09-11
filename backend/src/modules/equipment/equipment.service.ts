@@ -17,7 +17,7 @@ export class EquipmentService implements OnModuleInit {
     }
   }
 
-  async findAll(query?: { search?: string; category?: string; status?: string; location?: string; page?: string; limit?: string }) {
+  async findAll(query?: { search?: string; category?: string; department?: string; status?: string; location?: string; page?: string; limit?: string }) {
     const where: any = { isActive: true };
     if (query?.search) {
       where.OR = [
@@ -27,6 +27,7 @@ export class EquipmentService implements OnModuleInit {
       ];
     }
     if (query?.category) where.category = query.category;
+    if (query?.department) where.department = query.department;
     if (query?.status) where.status = query.status;
     if (query?.location) where.location = query.location;
 
@@ -166,6 +167,7 @@ export class EquipmentService implements OnModuleInit {
           ...data,
           code,
           accountingCode,
+          department: data.department && String(data.department).trim() !== '' ? String(data.department).trim() : null,
           serialNumber: data.serialNumber && String(data.serialNumber).trim() !== '' ? String(data.serialNumber).trim() : null,
           specs: data.specs && String(data.specs).trim() !== '' ? String(data.specs).trim() : null,
           notes: data.notes && String(data.notes).trim() !== '' ? String(data.notes).trim() : null,
@@ -196,6 +198,11 @@ export class EquipmentService implements OnModuleInit {
 
     const { expectedVersion, ...updateData } = data;
     const sanitizedData: any = { ...updateData };
+    if ('department' in sanitizedData) {
+      sanitizedData.department = sanitizedData.department && String(sanitizedData.department).trim() !== ''
+        ? String(sanitizedData.department).trim()
+        : null;
+    }
 
     if ('accountingCode' in sanitizedData) {
       sanitizedData.accountingCode = sanitizedData.accountingCode && String(sanitizedData.accountingCode).trim() !== ''

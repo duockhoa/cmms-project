@@ -91,7 +91,7 @@ export class RequestsService {
           description: data.description,
           priority: data.priority || 'MEDIUM',
           reporterName: data.reporterName || 'Nhân viên vận hành',
-          department: data.department || 'Phân xưởng sản xuất',
+          department: data.department || equipment.department || null,
           images: data.images ? JSON.stringify(data.images) : null,
         },
         include: { equipment: true },

@@ -33,16 +33,17 @@ export const InventoryPage: React.FC = () => {
   const [historyItem, setHistoryItem] = useState<any>(null);
   const [txHistory, setTxHistory] = useState<any[]>([]);
   const [txLoading, setTxLoading] = useState(false);
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
     itemCode: '',
     name: '',
-    category: 'Cơ khí',
-    quantity: 10,
+    category: '',
+    quantity: 0,
     unit: 'Cái',
-    minQuantity: 5,
-    unitPrice: 150000,
-    location: 'Kệ A-01',
+    minQuantity: 0,
+    unitPrice: 0,
+    location: '',
   });
 
   const loadData = async () => {
@@ -80,6 +81,9 @@ export const InventoryPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    api.getEquipmentCategories()
+      .then(cats => setCategoriesList(cats || []))
+      .catch(() => []);
   }, [search, page]);
 
   useEffect(() => {
@@ -95,6 +99,16 @@ export const InventoryPage: React.FC = () => {
       });
       if (!res.ok) throw new Error('Không thể thêm vật tư');
       setIsAddOpen(false);
+      setFormData({
+        itemCode: '',
+        name: '',
+        category: '',
+        quantity: 0,
+        unit: 'Cái',
+        minQuantity: 0,
+        unitPrice: 0,
+        location: '',
+      });
       toast.success('Thành công', 'Đã thêm vật tư mới vào kho.');
       loadData();
     } catch (err: any) {
@@ -360,9 +374,10 @@ export const InventoryPage: React.FC = () => {
             <div className="form-group">
               <label className="form-label">Loại</label>
               <select className="form-select" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
-                <option value="Cơ khí">Cơ khí</option>
-                <option value="Điện">Điện</option>
-                <option value="Vật tư chung">Vật tư chung</option>
+                <option value="">-- Chọn loại vật tư --</option>
+                {categoriesList.map((cat: any) => (
+                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+                ))}
               </select>
             </div>
           </div>

@@ -87,6 +87,7 @@ model Equipment {
   accountingCode        String?               @unique
   name                  String
   category              String // Máy phay, Máy nén khí, Băng tải, Máy hàn...
+  department            String? // Bộ phận quản lý (Kỹ thuật, Cơ điện, Xưởng sản xuất...)
   location              String // Xưởng A, Xưởng B, Phòng sạch...
   status                String                @default("OPERATIONAL") // OPERATIONAL, UNDER_MAINTENANCE, INCIDENT, DISCOMMISSIONED
   purchaseDate          DateTime?

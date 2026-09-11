@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 
 export const ChecklistsPage: React.FC = () => {
   const [templates, setTemplates] = useState<any[]>([]);
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const toast = useToast();
@@ -19,7 +20,7 @@ export const ChecklistsPage: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     code: 'CL-001',
-    category: 'Cơ khí',
+    category: '',
     description: '',
   });
 
@@ -34,6 +35,9 @@ export const ChecklistsPage: React.FC = () => {
 
   useEffect(() => {
     loadTemplates();
+    api.getEquipmentCategories()
+      .then(cats => setCategoriesList(cats || []))
+      .catch(() => []);
   }, []);
 
   const handleCreateTemplate = async (e: React.FormEvent) => {
@@ -149,10 +153,10 @@ export const ChecklistsPage: React.FC = () => {
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label className="form-label">Phân loại</label>
               <select className="form-select" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
-                <option value="Cơ khí">Cơ khí</option>
-                <option value="Điện">Điện & Điện tử</option>
-                <option value="An toàn">An toàn</option>
-                <option value="Chung">Chung</option>
+                <option value="">-- Chọn phân loại thiết bị --</option>
+                {categoriesList.map((cat: any) => (
+                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+                ))}
               </select>
             </div>
             <div className="form-group" style={{ gridColumn: 'span 2' }}>

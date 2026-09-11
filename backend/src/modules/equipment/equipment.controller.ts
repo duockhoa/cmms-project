@@ -16,12 +16,13 @@ export class EquipmentController {
   findAll(
     @Query('search') search?: string,
     @Query('category') category?: string,
+    @Query('department') department?: string,
     @Query('status') status?: string,
     @Query('location') location?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.equipmentService.findAll({ search, category, status, location, page, limit });
+    return this.equipmentService.findAll({ search, category, department, status, location, page, limit });
   }
 
   @ApiStandardResponse({ summary: 'Lấy chi tiết thiết bị theo ID', method: 'GET', path: '/equipment/{id}' })

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
-import { fetchWithAuth } from '../../services/api';
+import { api, fetchWithAuth } from '../../services/api';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
@@ -10,6 +10,7 @@ interface EquipmentFormModalProps {
   onSubmit: (data: {
     name: string;
     category: string;
+    department?: string;
     status: string;
     location: string;
     serialNumber: string;
@@ -28,11 +29,13 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
 }) => {
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [locationsList, setLocationsList] = useState<any[]>([]);
+  const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
     category: '',
+    department: '',
     status: 'OPERATIONAL',
     location: '',
     serialNumber: '',
@@ -41,25 +44,26 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     accountingCode: '',
   });
 
-  // Fetch categories and locations from DB
+  // Fetch categories, locations, and departments from HRM/DB
   const loadOptions = async () => {
     try {
       setLoadingOptions(true);
-      const catRes = await fetchWithAuth(`${API_BASE}/api/v1/equipment-categories`);
-      const locRes = await fetchWithAuth(`${API_BASE}/api/v1/locations`);
+      const [categories, locations, depts] = await Promise.all([
+        fetchWithAuth(`${API_BASE}/api/v1/equipment-categories`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetchWithAuth(`${API_BASE}/api/v1/locations`).then(r => r.ok ? r.json() : []).catch(() => []),
+        api.getDepartments().catch(() => []),
+      ]);
       
-      const categories = catRes.ok ? await catRes.json() : [];
-      const locations = locRes.ok ? await locRes.json() : [];
-      
-      setCategoriesList(categories);
-      setLocationsList(locations);
+      setCategoriesList(categories || []);
+      setLocationsList(locations || []);
+      setDepartmentsList(depts || []);
       
       // Set default dynamic values if creating new equipment
       if (!initialData) {
         setFormData(prev => ({
           ...prev,
-          category: categories[0]?.name || 'Cơ khí',
-          location: locations[0]?.name || 'Xưởng sản xuất A',
+          category: prev.category || categories?.[0]?.name || '',
+          location: prev.location || locations?.[0]?.name || '',
         }));
       }
     } catch (err) {
@@ -76,6 +80,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
           setFormData({
             name: initialData.name || '',
             category: initialData.category || '',
+            department: initialData.department || '',
             status: initialData.status || 'OPERATIONAL',
             location: initialData.location || '',
             serialNumber: initialData.serialNumber || '',
@@ -93,6 +98,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     onSubmit({
       name: formData.name.trim(),
       category: formData.category,
+      department: formData.department.trim() || undefined,
       status: formData.status,
       location: formData.location,
       serialNumber: formData.serialNumber.trim(),
@@ -103,9 +109,10 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     // Reset state after submit
     setFormData({
       name: '',
-      category: categoriesList[0]?.name || 'Cơ khí',
+      category: categoriesList[0]?.name || '',
+      department: '',
       status: 'OPERATIONAL',
-      location: locationsList[0]?.name || 'Xưởng sản xuất A',
+      location: locationsList[0]?.name || '',
       serialNumber: '',
       specs: '',
       code: '',
@@ -174,12 +181,10 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
               value={formData.category} 
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
             >
+              <option value="">-- Chọn loại thiết bị --</option>
               {categoriesList.map((cat: any) => (
                 <option key={cat.id} value={cat.name}>{cat.name}</option>
               ))}
-              {categoriesList.length === 0 && (
-                <option value="Cơ khí">Cơ khí</option>
-              )}
             </select>
           </div>
           <div className="form-group">
@@ -204,24 +209,36 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
               value={formData.location} 
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
             >
+              <option value="">-- Chọn vị trí lắp đặt --</option>
               {locationsList.map((loc: any) => (
                 <option key={loc.id} value={loc.name}>{loc.name}</option>
               ))}
-              {locationsList.length === 0 && (
-                <option value="Xưởng sản xuất A">Xưởng sản xuất A</option>
-              )}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Số serial</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              placeholder="Nhập số serial thiết bị" 
-              value={formData.serialNumber} 
-              onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })} 
-            />
+            <label className="form-label">Bộ phận quản lý (HRM)</label>
+            <select 
+              className="form-select" 
+              value={formData.department} 
+              onChange={(e) => setFormData({ ...formData, department: e.target.value })} 
+            >
+              <option value="">-- Chọn bộ phận (HRM) --</option>
+              {departmentsList.map((dept: string) => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
           </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Số serial</label>
+          <input 
+            type="text" 
+            className="form-input" 
+            placeholder="Nhập số serial thiết bị" 
+            value={formData.serialNumber} 
+            onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })} 
+          />
         </div>
 
         <div className="form-group">

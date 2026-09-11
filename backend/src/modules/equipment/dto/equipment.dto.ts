@@ -25,6 +25,10 @@ export class CreateEquipmentDto {
   category: string;
 
   @IsString()
+  @IsOptional()
+  department?: string;
+
+  @IsString()
   @IsNotEmpty()
   location: string;
 
@@ -73,6 +77,10 @@ export class UpdateEquipmentDto {
   @IsString()
   @IsOptional()
   category?: string;
+
+  @IsString()
+  @IsOptional()
+  department?: string;
 
   @IsString()
   @IsOptional()

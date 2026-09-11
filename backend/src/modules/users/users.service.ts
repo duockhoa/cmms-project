@@ -8,16 +8,30 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDepartments() {
-    const users = await this.prisma.user.findMany({
-      where: {
-        department: { not: null },
-      },
-      select: {
-        department: true,
-      },
-      distinct: ['department'],
-    });
-    return users.map((u) => u.department).filter(Boolean);
+    const [users, equipments] = await Promise.all([
+      this.prisma.user.findMany({
+        where: {
+          department: { not: null },
+        },
+        select: {
+          department: true,
+        },
+        distinct: ['department'],
+      }),
+      this.prisma.equipment.findMany({
+        where: {
+          department: { not: null },
+        },
+        select: {
+          department: true,
+        },
+        distinct: ['department'],
+      }),
+    ]);
+    const deptSet = new Set<string>();
+    users.forEach((u) => u.department && deptSet.add(u.department.trim()));
+    equipments.forEach((e) => e.department && deptSet.add(e.department.trim()));
+    return Array.from(deptSet).filter(Boolean).sort((a, b) => a.localeCompare(b, 'vi'));
   }
 
   async getUsers(role?: string, includeInactive = false, department?: string) {

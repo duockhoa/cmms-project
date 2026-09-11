@@ -209,6 +209,7 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
       {/* Quick Info Grid */}
       <div className="kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '24px' }}>
         {[
+          { label: 'Bộ phận quản lý', value: data.department || 'Chưa phân công' },
           { label: 'Ngày lắp đặt', value: data.purchaseDate ? new Date(data.purchaseDate).toLocaleDateString('vi-VN') : '---' },
           { label: 'Serial Number', value: data.serialNumber || '---' },
           { label: 'Vị trí', value: data.location || '---' },

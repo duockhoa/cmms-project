@@ -6,6 +6,7 @@ export interface Equipment {
   accountingCode?: string;
   name: string;
   category: string;
+  department?: string;
   location: string;
   status: EquipmentStatus;
   purchaseDate?: string;

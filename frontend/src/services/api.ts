@@ -152,8 +152,8 @@ export const api = {
     request(`/analytics/kpis${toQueryString(params)}`),
 
   // Equipment
-  getEquipment: (params?: { search?: string; category?: string; status?: string; location?: string }) => {
-    const isUnfiltered = !params || (!params.search && !params.category && !params.status && !params.location);
+  getEquipment: (params?: { search?: string; category?: string; department?: string; status?: string; location?: string }) => {
+    const isUnfiltered = !params || (!params.search && !params.category && !params.department && !params.status && !params.location);
     if (isUnfiltered) {
       return catalogCache.fetchWithCache('equipment_all', () => request('/equipment'));
     }

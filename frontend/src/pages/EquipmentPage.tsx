@@ -19,8 +19,10 @@ export const EquipmentPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
+  const [departmentsList, setDepartmentsList] = useState<string[]>([]);
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -41,6 +43,7 @@ export const EquipmentPage: React.FC = () => {
       url.searchParams.append('limit', limit.toString());
       if (search) url.searchParams.append('search', search);
       if (categoryFilter) url.searchParams.append('category', categoryFilter);
+      if (departmentFilter) url.searchParams.append('department', departmentFilter);
       if (statusFilter) url.searchParams.append('status', statusFilter);
 
       const response = await fetchWithAuth(url.toString());
@@ -65,19 +68,25 @@ export const EquipmentPage: React.FC = () => {
 
   useEffect(() => {
     loadEquipment();
-  }, [search, categoryFilter, statusFilter, page]);
+  }, [search, categoryFilter, departmentFilter, statusFilter, page]);
 
   useEffect(() => {
-    // Fetch categories for filter dropdown on mount
+    // Fetch categories and departments for filter dropdown on mount
     fetchWithAuth(`${API_BASE}/api/v1/equipment-categories`)
       .then(res => res.ok ? res.json() : [])
       .then(data => setCategoriesList(data))
+      .catch(err => console.error(err));
+
+    api.getDepartments()
+      .then((depts: string[]) => {
+        setDepartmentsList(depts || []);
+      })
       .catch(err => console.error(err));
   }, []);
 
   useEffect(() => {
     setPage(1);
-  }, [search, categoryFilter, statusFilter]);
+  }, [search, categoryFilter, departmentFilter, statusFilter]);
 
   const handleFormSubmit = async (finalFormData: any) => {
     try {
@@ -88,6 +97,7 @@ export const EquipmentPage: React.FC = () => {
           body: JSON.stringify({
             name: finalFormData.name,
             category: finalFormData.category,
+            department: finalFormData.department || undefined,
             status: finalFormData.status,
             location: finalFormData.location,
             serialNumber: finalFormData.serialNumber,
@@ -189,6 +199,13 @@ export const EquipmentPage: React.FC = () => {
           ))}
         </select>
 
+        <select className="form-select" style={{ width: '170px' }} value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
+          <option value="">Tất cả bộ phận</option>
+          {departmentsList.map((dept: string) => (
+            <option key={dept} value={dept}>{dept}</option>
+          ))}
+        </select>
+
         <select className="form-select" style={{ width: '160px' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">Tất cả trạng thái</option>
           <option value="OPERATIONAL">Hoạt động</option>
@@ -210,6 +227,7 @@ export const EquipmentPage: React.FC = () => {
                   <th>Mã</th>
                   <th>Tên thiết bị</th>
                   <th>Loại</th>
+                  <th>Bộ phận</th>
                   <th>Vị trí</th>
                   <th>Trạng thái</th>
                   <th>Bảo trì tiếp</th>
@@ -219,7 +237,7 @@ export const EquipmentPage: React.FC = () => {
               <tbody>
                 {equipment.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
                       Không có thiết bị nào phù hợp với bộ lọc
                     </td>
                   </tr>
@@ -237,6 +255,11 @@ export const EquipmentPage: React.FC = () => {
                     </td>
                     <td style={{ fontWeight: 600 }}>{item.name}</td>
                     <td>{item.category}</td>
+                    <td>
+                      <span style={{ fontSize: '13px', color: item.department ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                        {item.department || '---'}
+                      </span>
+                    </td>
                     <td>{item.location}</td>
                     <td><StatusBadge status={item.status} /></td>
                     <td style={{ color: 'var(--text-secondary)' }}>
