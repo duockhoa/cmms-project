@@ -397,7 +397,7 @@ export const UtilitySettingsTab: React.FC = () => {
             >
               <Zap size={15} color="#ca8a04" />
               <span>
-                <strong>Logic Kỳ Điện:</strong> {elecCycle?.cycleDescription || `Từ 01 đến ngày cuối tháng`} (Chốt lúc <strong>{elecCycle?.startDayLabel}</strong>)
+                <strong>Logic Kỳ Điện:</strong> {elecCycle?.cycleDescription || `Từ 01 đến ngày cuối tháng`} (Bắt đầu: <strong>{elecCycle?.startDayLabel}</strong>)
               </span>
             </div>
 
@@ -416,7 +416,7 @@ export const UtilitySettingsTab: React.FC = () => {
             >
               <Droplets size={15} color="#0284c7" />
               <span>
-                <strong>Logic Kỳ Nước:</strong> {waterCycle?.cycleDescription || `Từ 21 tháng trước đến 20 tháng này`} (Chốt lúc <strong>{waterCycle?.startDayLabel}</strong>)
+                <strong>Logic Kỳ Nước:</strong> {waterCycle?.cycleDescription || `Từ 21 tháng trước đến 20 tháng này`} (Bắt đầu: <strong>{waterCycle?.startDayLabel}</strong>)
               </span>
             </div>
           </div>

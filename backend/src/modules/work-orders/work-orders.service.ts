@@ -63,48 +63,38 @@ export class WorkOrdersService implements OnModuleInit {
     }
 
     if (query?.handlerTeam) {
-      if (query.handlerTeam === 'CO_DIEN') {
+      const dept = query.handlerTeam.trim();
+      if (dept === 'CO_DIEN') {
+        // Backward compatibility for legacy frontend callers
         const users = await this.prisma.user.findMany({
           where: { department: { contains: 'Cơ điện' } },
-          select: { name: true }
+          select: { id: true, name: true }
         });
         const names = users.map((u) => u.name);
+        const userIds = users.map((u) => u.id);
         andConditions.push({
           OR: [
+            { assignedTechnicianId: { in: userIds } },
             { technicianName: { in: names } },
             { technicianName: { contains: 'Cơ điện' } },
             { title: { contains: 'Cơ điện' } }
           ]
         });
-      } else if (query.handlerTeam === 'XUONG') {
-        const users = await this.prisma.user.findMany({
-          where: { 
-            OR: [
-              { department: null },
-              { NOT: { department: { contains: 'Cơ điện' } } }
-            ]
-          },
-          select: { name: true }
-        });
-        const names = users.map((u) => u.name);
-        andConditions.push({
-          AND: [
-            { OR: [
-              { technicianName: null },
-              { technicianName: { in: names } },
-              { NOT: { technicianName: { contains: 'Cơ điện' } } }
-            ]},
-            { NOT: { title: { contains: 'Cơ điện' } } }
-          ]
-        });
       } else {
+        // Dynamic department from HRM
         const users = await this.prisma.user.findMany({
-          where: { department: query.handlerTeam },
-          select: { name: true }
+          where: { department: dept },
+          select: { id: true, name: true }
         });
         const names = users.map((u) => u.name);
+        const userIds = users.map((u) => u.id);
         andConditions.push({
-          technicianName: { in: names }
+          OR: [
+            ...(userIds.length > 0 ? [{ assignedTechnicianId: { in: userIds } }] : []),
+            ...(names.length > 0 ? [{ technicianName: { in: names } }] : []),
+            { title: { contains: dept } },
+            { equipment: { location: { contains: dept } } }
+          ]
         });
       }
     }
@@ -229,11 +219,11 @@ export class WorkOrdersService implements OnModuleInit {
 
   getPerformerUnitType(user: { role: string; department?: string | null }): PerformerUnitType {
     const dept = (user.department || '').toLowerCase();
-    if (dept.includes('xưởng') || dept.includes('workshop') || user.role === 'OPERATOR') {
-      return PerformerUnitType.WORKSHOP;
-    }
-    if (dept.includes('kỹ thuật') || dept.includes('technical') || user.role === 'ADMIN' || user.role === 'MANAGER') {
+    if (dept.includes('cơ điện') || dept.includes('kỹ thuật') || dept.includes('technical') || user.role === 'ADMIN' || user.role === 'MANAGER') {
       return PerformerUnitType.TECHNICAL;
+    }
+    if (dept.includes('xưởng') || dept.includes('px') || dept.includes('workshop') || user.role === 'OPERATOR') {
+      return PerformerUnitType.WORKSHOP;
     }
     return PerformerUnitType.MAINTENANCE;
   }
@@ -731,8 +721,13 @@ export class WorkOrdersService implements OnModuleInit {
   async assignExecutor(id: string, dto: AssignWorkOrderDto, actorContext?: { id: string; role: string }) {
     if (actorContext && actorContext.role !== 'ADMIN' && actorContext.role !== 'MANAGER') {
       const user = await this.prisma.user.findUnique({ where: { id: actorContext.id } });
-      if (!user || this.getPerformerUnitType(user) !== PerformerUnitType.TECHNICAL) {
-        throw new ForbiddenException('Chỉ phòng kỹ thuật mới có quyền phân công Cơ điện.');
+      if (!user) {
+        throw new ForbiddenException('Người dùng không tồn tại.');
+      }
+      const isTech = this.getPerformerUnitType(user) === PerformerUnitType.TECHNICAL;
+      const isWorkshop = this.getPerformerUnitType(user) === PerformerUnitType.WORKSHOP;
+      if (!isTech && !isWorkshop) {
+        throw new ForbiddenException('Bạn không có quyền phân công người thực hiện cho phiếu bảo trì này.');
       }
     }
 

@@ -774,7 +774,7 @@ export const UtilitiesPage: React.FC = () => {
           {/* 6 Thẻ KPI Cards Thu Gọn (Điện Cấp, Điện Dùng, Nước Cấp, Nước Dùng, Phụ Trợ, Điểm Đo) */}
           <div className="util-kpi-grid">
             {/* Card 1: Điện cấp hôm nay */}
-            <div className="card util-kpi-card kpi-elec-supply" title="Tổng sản lượng điện nguồn cấp vào nhà máy (Chu kỳ chốt ca: 22h hôm trước - 22h hôm nay)">
+            <div className="card util-kpi-card kpi-elec-supply" title="Tổng sản lượng điện nguồn cấp vào nhà máy trong ngày (00h00 - 23h59)">
               <div className="kpi-top">
                 <span className="kpi-label">
                   ĐIỆN CẤP HÔM NAY
@@ -807,7 +807,7 @@ export const UtilitiesPage: React.FC = () => {
             </div>
 
             {/* Card 2: Đã dùng điện hôm nay */}
-            <div className="card util-kpi-card kpi-elec-cons" title="Tổng điện năng tiêu thụ thực tế tại các phân xưởng & phụ tải (Chu kỳ chốt ca: 22h hôm trước - 22h hôm nay)">
+            <div className="card util-kpi-card kpi-elec-cons" title="Tổng điện năng tiêu thụ thực tế tại các phân xưởng & phụ tải trong ngày (00h00 - 23h59)">
               <div className="kpi-top">
                 <span className="kpi-label">ĐÃ DÙNG ĐIỆN</span>
                 <div className="kpi-icon-box" style={{ backgroundColor: '#ffedd5', color: '#c2410c' }}>
@@ -823,7 +823,7 @@ export const UtilitiesPage: React.FC = () => {
             </div>
 
             {/* Card 3: Nước cấp hôm nay */}
-            <div className="card util-kpi-card kpi-water-supply" title="Tổng lượng nước nguồn cấp vào nhà máy (Chu kỳ chốt ca: 22h hôm trước - 22h hôm nay)">
+            <div className="card util-kpi-card kpi-water-supply" title="Tổng lượng nước nguồn cấp vào nhà máy trong ngày (00h00 - 23h59)">
               <div className="kpi-top">
                 <span className="kpi-label">
                   NƯỚC CẤP HÔM NAY
@@ -856,7 +856,7 @@ export const UtilitiesPage: React.FC = () => {
             </div>
 
             {/* Card 4: Đã dùng nước hôm nay */}
-            <div className="card util-kpi-card kpi-water-cons" title="Tổng lượng nước tiêu thụ tại các phân xưởng & dây chuyền nội bộ (Chu kỳ chốt ca: 22h hôm trước - 22h hôm nay)">
+            <div className="card util-kpi-card kpi-water-cons" title="Tổng lượng nước tiêu thụ tại các phân xưởng & dây chuyền nội bộ trong ngày (00h00 - 23h59)">
               <div className="kpi-top">
                 <span className="kpi-label">ĐÃ DÙNG NƯỚC</span>
                 <div className="kpi-icon-box" style={{ backgroundColor: '#ecfeff', color: '#0e7490' }}>

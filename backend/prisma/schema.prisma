@@ -56,6 +56,7 @@ model User {
   scheduleHistories     ScheduleHistory[]      @relation("ScheduleHistoryActedBy")
   responsibleLocations Location[]             @relation("LocationResponsibleTech")
   assignedWorkOrders    WorkOrder[]            @relation("WorkOrderAssignedTechnician")
+  watchedWorkOrders     WorkOrder[]            @relation("WorkOrderWatcher")
   executionLogs         WorkOrderExecutionLog[] @relation("UserExecutionLogs")
   classifiedWorkOrders  WorkOrder[]            @relation("WorkOrderClassificationReporter")
   operationLogs         OperationLog[]         @relation("UserOperationLogs")
@@ -167,6 +168,10 @@ model WorkOrder {
   scheduleHistories   ScheduleHistory[]      @relation("ScheduleHistoryWorkOrder")
   assignedTechnicianId String?
   assignedTechnician   User?                  @relation("WorkOrderAssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: Restrict)
+  assignedTechnicianIds Json?                 // Array of assigned technician IDs (multiple primary)
+  supporterIds         Json?                  // Array of supporter user IDs (optional)
+  watcherId            String?
+  watcher              User?                  @relation("WorkOrderWatcher", fields: [watcherId], references: [id], onDelete: SetNull)
   handlingRoute        HandlingRoute          @default(WORKSHOP_SELF_HANDLE)
   classificationNotes  String?                @db.Text
   classificationResult String?                // WORKSHOP_CONTINUE or MAINTENANCE_REQUIRED

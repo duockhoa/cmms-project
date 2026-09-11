@@ -60,20 +60,20 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
   // Assign Executor Modal State
   const [isAssignExecutorOpen, setIsAssignExecutorOpen] = useState(false);
   const [assignedExecutorId, setAssignedExecutorId] = useState('');
-  const [technicians, setTechnicians] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
 
   // Reject Handover Modal State
-  const [isRejectHandoverOpen, setIsRejectHandoverOpen] = useState(false);
   const [rejectHandoverReason, setRejectHandoverReason] = useState('');
+  const [isRejectHandoverOpen, setIsRejectHandoverOpen] = useState(false);
 
   const getPerformerUnitType = (user: any): 'WORKSHOP' | 'TECHNICAL' | 'MAINTENANCE' => {
     if (!user) return 'MAINTENANCE';
     const dept = (user.department || '').toLowerCase();
-    if (dept.includes('xưởng') || dept.includes('workshop') || user.role === 'OPERATOR') {
-      return 'WORKSHOP';
-    }
-    if (dept.includes('kỹ thuật') || dept.includes('technical') || user.role === 'ADMIN' || user.role === 'MANAGER') {
+    if (dept.includes('cơ điện') || dept.includes('kỹ thuật') || dept.includes('technical') || user.role === 'ADMIN' || user.role === 'MANAGER') {
       return 'TECHNICAL';
+    }
+    if (dept.includes('xưởng') || dept.includes('px') || dept.includes('workshop') || user.role === 'OPERATOR') {
+      return 'WORKSHOP';
     }
     return 'MAINTENANCE';
   };
@@ -83,21 +83,14 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const woData = await api.getWorkOrderById(workOrderId);
+      const [woData, logData, usersData] = await Promise.all([
+        api.getWorkOrderById(workOrderId),
+        api.getWorkOrderRepairLogs(workOrderId),
+        api.getUsers().catch(() => []),
+      ]);
       setWo(woData);
-      
-      const logData = await api.getWorkOrderRepairLogs(workOrderId);
       setLogs(logData);
-
-      // Load technicians if user is manager, admin, or technical
-      const isManagerOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
-      if (isManagerOrAdmin || userUnitType === 'TECHNICAL') {
-        const techs = await api.getUsers({ role: 'TECHNICIAN' });
-        setTechnicians(techs);
-        if (techs.length > 0 && !assignedExecutorId) {
-          setAssignedExecutorId(techs[0].id);
-        }
-      }
+      setAllUsers(usersData);
     } catch (err: any) {
       toast.error('Lỗi tải dữ liệu', err.message || 'Không thể tải chi tiết Work Order');
       onClose();
@@ -105,6 +98,38 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
       setLoading(false);
     }
   };
+
+  // Xác định bộ phận tiếp nhận / xử lý của Work Order
+  const targetDeptLabel = React.useMemo(() => {
+    if (!wo) return '';
+    if (wo.handlingRoute === 'WORKSHOP_SELF_HANDLE') {
+      return wo.request?.department || wo.equipment?.location || 'Phân xưởng';
+    }
+    // Tuyến kỹ thuật/cơ điện: trích xuất bộ phận từ tiêu đề "[... xử lý]" hoặc mặc định Cơ điện
+    const titleMatch = wo.title?.match(/\[(.*?) xử lý\]/);
+    if (titleMatch && titleMatch[1]) {
+      return titleMatch[1];
+    }
+    return 'xưởng cơ điện';
+  }, [wo]);
+
+  // LỌC NGHIÊM NGẶT: Chỉ phân công người thuộc đúng phòng ban đó, tuyệt đối không load toàn bộ người
+  const assignableUsers = React.useMemo(() => {
+    if (!allUsers || !Array.isArray(allUsers) || !targetDeptLabel) return [];
+    const target = targetDeptLabel.trim().toLowerCase();
+    return allUsers.filter((u: any) => {
+      if (u.isActive === false) return false;
+      if (!u.department) return false;
+      const uDept = u.department.trim().toLowerCase();
+      return uDept === target || target.includes(uDept) || uDept.includes(target);
+    });
+  }, [allUsers, targetDeptLabel]);
+
+  useEffect(() => {
+    if (assignableUsers.length > 0 && !assignedExecutorId) {
+      setAssignedExecutorId(assignableUsers[0].id);
+    }
+  }, [assignableUsers, assignedExecutorId]);
 
   useEffect(() => {
     if (workOrderId) {
@@ -378,7 +403,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
       return;
     }
 
-    const tech = technicians.find(t => t.id === assignedExecutorId);
+    const tech = assignableUsers.find((t: any) => t.id === assignedExecutorId);
     try {
       setActionLoading(true);
       await (api as any).assignExecutor(wo.id, {
@@ -386,7 +411,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         assignedTechnicianId: assignedExecutorId,
         technicianName: tech ? tech.name : undefined,
       });
-      toast.success('Phân công thành công', `Đã phân công Cơ điện: ${tech ? tech.name : 'Kỹ thuật viên'}.`);
+      toast.success('Phân công thành công', `Đã phân công: ${tech ? tech.name : 'Nhân sự phụ trách'}.`);
       setIsAssignExecutorOpen(false);
       if (onStatusChangeSuccess) onStatusChangeSuccess();
       loadData();
@@ -537,8 +562,23 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
              )}
 
              {/* Assign */}
-             {wo.status === 'PENDING' && wo.classificationResult === 'MAINTENANCE_REQUIRED' && !wo.assignedTechnicianId && (userUnitType === 'TECHNICAL' || isManagerOrAdmin) && (
-               <ActionButton onClick={() => setIsAssignExecutorOpen(true)} disabled={actionLoading} icon={Plus} label="Phân công Cơ điện" color="#3b82f6" />
+             {wo.status === 'PENDING' && !wo.assignedTechnicianId && (
+               <ActionButton 
+                 onClick={() => setIsAssignExecutorOpen(true)} 
+                 disabled={actionLoading} 
+                 icon={Plus} 
+                 label={wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? "Phân công nội bộ xưởng" : "Phân công Kỹ thuật / Cơ điện"} 
+                 color="#3b82f6" 
+               />
+             )}
+             {['PENDING', 'ASSIGNED'].includes(wo.status) && wo.assignedTechnicianId && (isManagerOrAdmin || userUnitType === 'TECHNICAL') && (
+               <ActionButton 
+                 onClick={() => setIsAssignExecutorOpen(true)} 
+                 disabled={actionLoading} 
+                 icon={ArrowRightLeft} 
+                 label="Đổi người phụ trách" 
+                 color="#6366f1" 
+               />
              )}
 
              {/* Accept/Reject Handover */}
@@ -590,9 +630,42 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
                 <td style={{ padding: '12px 0' }}>{wo.request?.reporterName || 'Hệ thống'} ({wo.request?.department || 'Cơ điện'})</td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Kỹ thuật viên</td>
-                <td style={{ padding: '12px 0' }}>{wo.technicianName || 'Chưa phân công'}</td>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Người phụ trách</td>
+                <td style={{ padding: '12px 0' }}>
+                  {(() => {
+                    const ids: string[] = Array.isArray(wo.assignedTechnicianIds) ? wo.assignedTechnicianIds : [];
+                    if (ids.length > 0 && allUsers.length > 0) {
+                      return ids.map((tid: string) => {
+                        const u = allUsers.find((user: any) => user.id === tid);
+                        return u ? u.name : tid;
+                      }).join(', ');
+                    }
+                    return wo.technicianName || 'Chưa phân công';
+                  })()}
+                </td>
               </tr>
+              {Array.isArray(wo.supporterIds) && wo.supporterIds.length > 0 && (
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Người hỗ trợ</td>
+                  <td style={{ padding: '12px 0' }}>
+                    {wo.supporterIds.map((sid: string) => {
+                      const u = allUsers.find((user: any) => user.id === sid);
+                      return u ? u.name : sid;
+                    }).join(', ')}
+                  </td>
+                </tr>
+              )}
+              {wo.watcherId && (
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Người theo dõi</td>
+                  <td style={{ padding: '12px 0' }}>
+                    {(() => {
+                      const u = allUsers.find((user: any) => user.id === wo.watcherId);
+                      return u ? u.name : wo.watcherId;
+                    })()}
+                  </td>
+                </tr>
+              )}
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Ngày tạo</td>
                 <td style={{ padding: '12px 0' }}>{new Date(wo.createdAt).toLocaleString('vi-VN')}</td>
@@ -1017,22 +1090,40 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         </Modal>
       )}
 
-      {/* 6. Modal Phân công kỹ thuật Cơ điện */}
+      {/* 6. Modal Phân công nhân sự phụ trách */}
       {isAssignExecutorOpen && (
-        <Modal isOpen={isAssignExecutorOpen} onClose={() => setIsAssignExecutorOpen(false)} title="Phân công kỹ thuật viên Cơ điện">
+        <Modal 
+          isOpen={isAssignExecutorOpen} 
+          onClose={() => setIsAssignExecutorOpen(false)} 
+          title={`Phân công nhân sự (${targetDeptLabel})`}
+        >
           <form onSubmit={handleAssignExecutorSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="form-group">
-              <label className="form-label">Chọn kỹ thuật viên *</label>
-              <select className="form-select" value={assignedExecutorId} onChange={(e) => setAssignedExecutorId(e.target.value)}>
-                {technicians.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name} ({t.specialty || 'Kỹ thuật viên'})</option>
-                ))}
-              </select>
+              <label className="form-label">Chọn nhân sự phụ trách *</label>
+              {assignableUsers.length > 0 ? (
+                <select 
+                  className="form-select" 
+                  value={assignedExecutorId} 
+                  onChange={(e) => setAssignedExecutorId(e.target.value)}
+                  required
+                >
+                  <option value="">-- Chọn nhân sự thực hiện --</option>
+                  {assignableUsers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.specialty || t.role || 'Nhân sự'})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{ fontSize: '13px', color: '#b45309', padding: '8px 10px', backgroundColor: '#fffbeb', borderRadius: '6px', border: '1px solid #fef3c7' }}>
+                  Không tìm thấy nhân sự thuộc bộ phận "{targetDeptLabel}".
+                </div>
+              )}
             </div>
 
             <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setIsAssignExecutorOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-primary" disabled={actionLoading}>
+              <button type="submit" className="btn btn-primary" disabled={actionLoading || assignableUsers.length === 0}>
                 {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận phân công"}
               </button>
             </div>

@@ -287,13 +287,16 @@ export const api = {
     request(`/work-orders/${workOrderId}/inventory-transactions`),
 
   // Users & Technicians
-  getUsers: (params?: { role?: string; includeInactive?: boolean }) => {
-    const isUnfiltered = !params || (!params.role && !params.includeInactive);
+  getUsers: (params?: { role?: string; includeInactive?: boolean; department?: string }) => {
+    const isUnfiltered = !params || (!params.role && !params.includeInactive && !params.department);
     if (isUnfiltered) {
       return catalogCache.fetchWithCache('users_all', () => request('/users'));
     }
-    const query = new URLSearchParams(params as any).toString();
-    return request(`/users${query ? `?${query}` : ''}`);
+    const query = new URLSearchParams();
+    if (params.role) query.append('role', params.role);
+    if (params.includeInactive !== undefined) query.append('includeInactive', String(params.includeInactive));
+    if (params.department) query.append('department', params.department);
+    return request(`/users?${query.toString()}`);
   },
   getUserById: (id: string) => request(`/users/${id}`),
   getDepartments: () => catalogCache.fetchWithCache('departments_all', () => request('/users/departments')),

@@ -27,8 +27,13 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
 
   // Modals for actions
   const [approveModalOpen, setApproveModalOpen] = useState(false);
-  const [handlerTeam, setHandlerTeam] = useState('XUONG');
-  const [technicianName, setTechnicianName] = useState('');
+  const [handlerType, setHandlerType] = useState<'WORKSHOP' | 'EXTERNAL_DEPT'>('WORKSHOP');
+  const [internalDepartment, setInternalDepartment] = useState('');
+  const [targetDepartment, setTargetDepartment] = useState('');
+  const [assignedTechnicianIds, setAssignedTechnicianIds] = useState<string[]>([]);
+  const [supporterIds, setSupporterIds] = useState<string[]>([]);
+  const [watcherId, setWatcherId] = useState('');
+  const [departmentsList, setDepartmentsList] = useState<string[]>([]);
 
   const [resubmitModalOpen, setResubmitModalOpen] = useState(false);
   const [resubmitFields, setResubmitFields] = useState<any>({});
@@ -42,10 +47,24 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const data = await api.getRequestById(requestId);
+      const [data, h, depts] = await Promise.all([
+        api.getRequestById(requestId),
+        api.getRequestHistory(requestId),
+        api.getDepartments().catch(() => []),
+      ]);
       setReq(data);
-      const h = await api.getRequestHistory(requestId);
       setHistory(h);
+      setDepartmentsList(depts);
+      const reqDept = data?.department || data?.equipment?.location || '';
+      if (reqDept) {
+        setInternalDepartment(reqDept);
+      } else if (depts.length > 0) {
+        setInternalDepartment(depts[0]);
+      }
+      if (depts.length > 0 && !targetDepartment) {
+        const preferred = depts.find((d: string) => d.toLowerCase().includes('cơ điện')) || depts[0];
+        setTargetDepartment(preferred);
+      }
     } catch (err: any) {
       toast.error('Lỗi tải chi tiết', err.message);
     } finally {
@@ -57,15 +76,65 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
     if (requestId) loadData();
   }, [requestId]);
 
+  // Bộ phận sở tại của sự cố
+  const reqDepartment = req?.department || req?.equipment?.location || '';
+
+  // Danh sách đầy đủ các phòng ban từ HRM kết hợp phòng ban sự cố
+  const allDepartments = React.useMemo(() => {
+    const list = [...departmentsList];
+    if (reqDepartment && !list.some(d => d.toLowerCase() === reqDepartment.toLowerCase())) {
+      list.unshift(reqDepartment);
+    }
+    return list;
+  }, [departmentsList, reqDepartment]);
+
+  // Chỉ lấy nhân sự thuộc đúng bộ phận sở tại khi xử lý nội bộ - TUYỆT ĐỐI KHÔNG LOAD TOÀN BỘ NGƯỜI
+  const internalUsers = React.useMemo(() => {
+    if (!users || !Array.isArray(users)) return [];
+    const target = (internalDepartment || reqDepartment).trim().toLowerCase();
+    if (!target) return [];
+    return users.filter((u: any) => {
+      if (u.isActive === false) return false;
+      if (!u.department) return false;
+      const uDept = u.department.trim().toLowerCase();
+      return uDept === target || target.includes(uDept) || uDept.includes(target);
+    });
+  }, [users, internalDepartment, reqDepartment]);
+
+  // Danh sách các bộ phận khác để chuyển giao (không hardcode)
+  const externalDepartments = React.useMemo(() => {
+    const current = (internalDepartment || reqDepartment).trim().toLowerCase();
+    return departmentsList.filter((dept) => {
+      if (!dept) return false;
+      const dLower = dept.trim().toLowerCase();
+      return dLower !== current && !current.includes(dLower);
+    });
+  }, [departmentsList, internalDepartment, reqDepartment]);
+
   const handleApproveConfirm = async () => {
     try {
+      const firstTech = internalUsers.find((u: any) => assignedTechnicianIds.includes(u.id));
       await api.approveRequest(req.id, { 
-        technicianName: handlerTeam === 'XUONG' ? technicianName : undefined, 
-        handlerTeam 
+        handlerType,
+        targetDepartment: handlerType === 'EXTERNAL_DEPT' ? targetDepartment : undefined,
+        assignedTechnicianIds: handlerType === 'WORKSHOP' && assignedTechnicianIds.length > 0 ? assignedTechnicianIds : undefined,
+        assignedTechnicianId: handlerType === 'WORKSHOP' && assignedTechnicianIds.length > 0 ? assignedTechnicianIds[0] : undefined,
+        technicianName: handlerType === 'WORKSHOP' && firstTech ? firstTech.name : undefined,
+        supporterIds: handlerType === 'WORKSHOP' && supporterIds.length > 0 ? supporterIds : undefined,
+        watcherId: handlerType === 'WORKSHOP' && watcherId ? watcherId : undefined,
+        handlerTeam: handlerType === 'EXTERNAL_DEPT' ? targetDepartment : 'XUONG'
       });
       setApproveModalOpen(false);
-      setHandlerTeam('XUONG');
-      toast.success('Phê duyệt thành công', 'Đã tạo phiếu bảo trì.');
+      setHandlerType('WORKSHOP');
+      setAssignedTechnicianIds([]);
+      setSupporterIds([]);
+      setWatcherId('');
+      toast.success(
+        'Phê duyệt thành công', 
+        handlerType === 'EXTERNAL_DEPT' 
+          ? `Đã tạo phiếu bảo trì chuyển ${targetDepartment} ở trạng thái Chờ phân công.`
+          : 'Đã tạo phiếu bảo trì cho phân xưởng tự xử lý.'
+      );
       onActionSuccess();
       loadData();
     } catch (err: any) {
@@ -338,24 +407,168 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
 
       {/* Approve Modal */}
       {approveModalOpen && (
-        <Modal isOpen={approveModalOpen} onClose={() => { setApproveModalOpen(false); setHandlerTeam('XUONG'); }} title={`Phê duyệt yêu cầu ${req.requestCode}`}>
-          <div>
-            <div className="form-group">
-              <label className="form-label" style={{ fontWeight: 600 }}>Phương án xử lý sự cố *</label>
-              <select className="form-select" value={handlerTeam} onChange={(e) => setHandlerTeam(e.target.value)}>
-                <option value="XUONG">Sự cố nhỏ - Xưởng tự xử lý</option>
-                <option value="CO_DIEN">Sự cố nghiêm trọng - Chuyển bộ phận Cơ điện</option>
-              </select>
+        <Modal 
+          isOpen={approveModalOpen} 
+          onClose={() => { setApproveModalOpen(false); setHandlerType('WORKSHOP'); setAssignedTechnicianIds([]); setSupporterIds([]); setWatcherId(''); }} 
+          title={`Phê duyệt yêu cầu: ${req.requestCode}`}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
+              <div><strong>Thiết bị:</strong> {req.equipment?.name} ({req.equipment?.code})</div>
+              <div><strong>Bộ phận / Vị trí:</strong> <span className="badge badge-secondary" style={{ marginLeft: '4px' }}>{reqDepartment || 'Chưa cập nhật'}</span></div>
             </div>
-            {handlerTeam === 'XUONG' && (
+
+            <div className="form-group">
+              <label className="form-label" style={{ fontWeight: 700 }}>Phương án xử lý sự cố *</label>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 14px', borderRadius: '8px', border: handlerType === 'WORKSHOP' ? '2px solid #2563eb' : '1px solid var(--border-color)', backgroundColor: handlerType === 'WORKSHOP' ? '#eff6ff' : '#ffffff', flex: 1 }}>
+                  <input 
+                    type="radio" 
+                    name="handlerType" 
+                    value="WORKSHOP" 
+                    checked={handlerType === 'WORKSHOP'} 
+                    onChange={() => setHandlerType('WORKSHOP')} 
+                  />
+                  <span style={{ fontWeight: 600, fontSize: '13px', color: '#1e293b' }}>Tự xử lý</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 14px', borderRadius: '8px', border: handlerType === 'EXTERNAL_DEPT' ? '2px solid #2563eb' : '1px solid var(--border-color)', backgroundColor: handlerType === 'EXTERNAL_DEPT' ? '#eff6ff' : '#ffffff', flex: 1 }}>
+                  <input 
+                    type="radio" 
+                    name="handlerType" 
+                    value="EXTERNAL_DEPT" 
+                    checked={handlerType === 'EXTERNAL_DEPT'} 
+                    onChange={() => setHandlerType('EXTERNAL_DEPT')} 
+                  />
+                  <span style={{ fontWeight: 600, fontSize: '13px', color: '#1e293b' }}>Yêu cầu hỗ trợ</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Trường hợp 1: Tự xử lý */}
+            {handlerType === 'WORKSHOP' && (
+              <>
+                {/* Người phụ trách (có thể chọn nhiều) */}
+                <div className="form-group">
+                  <label className="form-label">Người phụ trách</label>
+                  {internalUsers.length > 0 ? (
+                    <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '6px' }}>
+                      {internalUsers.map((u: any) => (
+                        <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={assignedTechnicianIds.includes(u.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setAssignedTechnicianIds(prev => [...prev, u.id]);
+                              } else {
+                                setAssignedTechnicianIds(prev => prev.filter(id => id !== u.id));
+                              }
+                            }}
+                          />
+                          <span>{u.name} ({u.specialty || u.role || 'Nhân viên'})</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '13px', color: '#b45309', padding: '8px 10px', backgroundColor: '#fffbeb', borderRadius: '6px', border: '1px solid #fef3c7' }}>
+                      Không có nhân sự thuộc bộ phận "{internalDepartment || reqDepartment}". WO sẽ ở trạng thái Chờ phân công.
+                    </div>
+                  )}
+                  {assignedTechnicianIds.length > 0 && (
+                    <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>Đã chọn: {assignedTechnicianIds.length} người</div>
+                  )}
+                </div>
+
+                {/* Người hỗ trợ (không bắt buộc, có thể chọn nhiều) */}
+                {internalUsers.length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">Người hỗ trợ <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '12px' }}>(không bắt buộc)</span></label>
+                    <div style={{ maxHeight: '130px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '6px' }}>
+                      {internalUsers.filter((u: any) => !assignedTechnicianIds.includes(u.id)).map((u: any) => (
+                        <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={supporterIds.includes(u.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSupporterIds(prev => [...prev, u.id]);
+                              } else {
+                                setSupporterIds(prev => prev.filter(id => id !== u.id));
+                              }
+                            }}
+                          />
+                          <span>{u.name} ({u.specialty || u.role || 'Nhân viên'})</span>
+                        </label>
+                      ))}
+                    </div>
+                    {supporterIds.length > 0 && (
+                      <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>Đã chọn: {supporterIds.length} người</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Người theo dõi (không bắt buộc, 1 người) */}
+                {internalUsers.length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">Người theo dõi <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '12px' }}>(không bắt buộc)</span></label>
+                    <select
+                      className="form-select"
+                      value={watcherId}
+                      onChange={(e) => setWatcherId(e.target.value)}
+                    >
+                      <option value="">-- Chưa chỉ định --</option>
+                      {internalUsers.filter((u: any) => !assignedTechnicianIds.includes(u.id) && !supporterIds.includes(u.id)).map((u: any) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.specialty || u.role || 'Nhân viên'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Trường hợp 2: Yêu cầu hỗ trợ */}
+            {handlerType === 'EXTERNAL_DEPT' && (
               <div className="form-group">
-                <label className="form-label">Phân công Kỹ thuật viên Phụ trách *</label>
-                <input type="text" className="form-input" value={technicianName} onChange={(e) => setTechnicianName(e.target.value)} placeholder="Nhập tên kỹ thuật viên" />
+                <label className="form-label">Chọn bộ phận tiếp nhận *</label>
+                <select 
+                  className="form-select" 
+                  value={targetDepartment} 
+                  onChange={(e) => setTargetDepartment(e.target.value)}
+                  required
+                >
+                  {externalDepartments.map((dept) => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                  {externalDepartments.length === 0 && (
+                    <option value="xưởng cơ điện">xưởng cơ điện</option>
+                  )}
+                </select>
               </div>
             )}
-            <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
-              <button className="btn btn-secondary" onClick={() => { setApproveModalOpen(false); setHandlerTeam('XUONG'); }}>Hủy</button>
-              <button className="btn btn-success" onClick={handleApproveConfirm}>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '12px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => { setApproveModalOpen(false); setHandlerType('WORKSHOP'); setAssignedTechnicianIds([]); setSupporterIds([]); setWatcherId(''); }}
+              >
+                Hủy
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-success" 
+                onClick={handleApproveConfirm}
+                style={{ fontWeight: 700 }}
+              >
                 Xác nhận Duyệt & Tạo Phiếu WO
               </button>
             </div>

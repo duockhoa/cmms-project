@@ -20,13 +20,16 @@ export class UsersService {
     return users.map((u) => u.department).filter(Boolean);
   }
 
-  async getUsers(role?: string, includeInactive = false) {
+  async getUsers(role?: string, includeInactive = false, department?: string) {
     const whereClause: any = {};
     if (role) {
       whereClause.role = role;
     }
     if (!includeInactive) {
       whereClause.isActive = true;
+    }
+    if (department) {
+      whereClause.department = { contains: department };
     }
 
     const users = await this.prisma.user.findMany({

@@ -53,10 +53,11 @@ export class UsersController {
   @Get()
   async getUsers(
     @Query('role') role?: string,
-    @Query('includeInactive') includeInactive?: string
+    @Query('includeInactive') includeInactive?: string,
+    @Query('department') department?: string
   ) {
     const isIncludeInactive = includeInactive === 'true';
-    return this.usersService.getUsers(role, isIncludeInactive);
+    return this.usersService.getUsers(role, isIncludeInactive, department);
   }
 
   @ApiStandardResponse({

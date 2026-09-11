@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
-
+import { HandlingRoute } from '@prisma/client';
+import { ApproveRequestDto } from './dto/approve-request.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -161,7 +162,7 @@ export class RequestsService {
     return request;
   }
 
-  async approve(id: string, body: { technicianName?: string; note?: string; handlerTeam?: string }, actorId?: string) {
+  async approve(id: string, body: ApproveRequestDto, actorId?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
       // 1. Atomic check-and-set update status first to prevent concurrency anomaly
       const updateResult = await tx.maintenanceRequest.updateMany({
@@ -200,12 +201,48 @@ export class RequestsService {
         }
       }
 
-      // Determine technician/handler name based on decision
-      let assignedTech = body.technicianName || 'Kỹ thuật viên bảo trì';
-      let titlePrefix = '[Sửa chữa]';
-      if (body.handlerTeam === 'CO_DIEN') {
-        assignedTech = 'Bộ phận Cơ điện';
-        titlePrefix = '[Cơ điện xử lý]';
+      // Determine handling route, target department, and technician assignment
+      const isExternalTransfer = 
+        body.handlerType === 'EXTERNAL_DEPT' || 
+        !!body.targetDepartment || 
+        body.handlerTeam === 'CO_DIEN';
+
+      let targetStatus = 'PENDING';
+      let assignedTechName: string | null = null;
+      let assignedTechId: string | null = null;
+      let handlingRoute: HandlingRoute = HandlingRoute.WORKSHOP_SELF_HANDLE;
+      let titlePrefix = '[Sửa chữa nội bộ]';
+      let actionComment = '';
+
+      if (isExternalTransfer) {
+        const targetDept = body.targetDepartment || (body.handlerTeam === 'CO_DIEN' ? 'xưởng cơ điện' : 'Bộ phận kỹ thuật');
+        targetStatus = 'PENDING'; // Chờ quản lý bộ phận tiếp nhận phân công
+        handlingRoute = HandlingRoute.TECHNICAL_MAINTENANCE_SUPPORT;
+        assignedTechName = null;
+        assignedTechId = null;
+        titlePrefix = `[${targetDept} xử lý]`;
+        actionComment = body.note || `Duyệt yêu cầu - Chuyển giao ${targetDept} xử lý (Chờ phân công KTV)`;
+      } else {
+        // Xưởng tự xử lý nội bộ
+        handlingRoute = HandlingRoute.WORKSHOP_SELF_HANDLE;
+        titlePrefix = '[Sửa chữa nội bộ]';
+        const hasAssignees = (body.assignedTechnicianIds && body.assignedTechnicianIds.length > 0) || body.assignedTechnicianId || body.technicianName;
+        if (hasAssignees) {
+          targetStatus = 'ASSIGNED';
+          assignedTechId = body.assignedTechnicianIds?.[0] || body.assignedTechnicianId || null;
+          if (assignedTechId && !body.technicianName) {
+            const firstTech = await tx.user.findUnique({ where: { id: assignedTechId }, select: { name: true } });
+            assignedTechName = firstTech?.name || 'Kỹ thuật viên';
+          } else {
+            assignedTechName = body.technicianName || 'Kỹ thuật viên';
+          }
+          actionComment = body.note || `Duyệt yêu cầu - Xưởng tự xử lý (Đã phân công)`;
+        } else {
+          targetStatus = 'PENDING';
+          assignedTechName = null;
+          assignedTechId = null;
+          actionComment = body.note || 'Duyệt yêu cầu - Xưởng tự xử lý (Chờ phân công)';
+        }
       }
 
       // Create Work Order
@@ -220,8 +257,14 @@ export class RequestsService {
           title: `${titlePrefix} ${request.title}`,
           description: request.description,
           priority: request.priority,
-          status: 'ASSIGNED',
-          technicianName: assignedTech,
+          status: targetStatus,
+          handlingRoute,
+          classificationResult: isExternalTransfer ? 'MAINTENANCE_REQUIRED' : 'WORKSHOP_CONTINUE',
+          technicianName: assignedTechName,
+          assignedTechnicianId: assignedTechId,
+          assignedTechnicianIds: body.assignedTechnicianIds && body.assignedTechnicianIds.length > 0 ? body.assignedTechnicianIds : undefined,
+          supporterIds: body.supporterIds && body.supporterIds.length > 0 ? body.supporterIds : undefined,
+          watcherId: body.watcherId || null,
           actualStartDate: null,
         },
       });
@@ -240,7 +283,7 @@ export class RequestsService {
           action: 'APPROVE',
           fromStatus: 'PENDING',
           toStatus: 'APPROVED',
-          comment: body.note || (body.handlerTeam === 'CO_DIEN' ? 'Duyệt yêu cầu - Chuyển Bộ phận Cơ điện xử lý' : 'Duyệt yêu cầu - Xưởng tự xử lý'),
+          comment: actionComment,
           actedById: actorId || null,
         },
       });
@@ -251,13 +294,13 @@ export class RequestsService {
           entityId: workOrder.id,
           action: 'CREATE',
           fromStatus: null,
-          toStatus: 'ASSIGNED',
+          toStatus: targetStatus,
           comment: `Khởi tạo từ yêu cầu sửa chữa ${request.requestCode}`,
           actedById: actorId || null,
         },
       });
 
-      return { request: updatedRequest, workOrder };
+      return { request: updatedRequest, workOrder, isExternalTransfer };
     });
 
     // Create Database Notifications OUTSIDE transaction to avoid locking/timeouts!
@@ -267,29 +310,29 @@ export class RequestsService {
         include: { equipment: true },
       });
       const orderCode = result.workOrder.orderCode;
-      const assignedTech = result.workOrder.technicianName;
 
-      if (body.handlerTeam === 'CO_DIEN') {
-        // Transferred to Electromechanical department
+      if (result.isExternalTransfer) {
+        const targetDept = body.targetDepartment || (body.handlerTeam === 'CO_DIEN' ? 'xưởng cơ điện' : 'Bộ phận kỹ thuật');
         await this.notifications.createNotification(
           null,
-          null,
-          'Bộ phận Cơ điện',
-          `Phiếu bảo trì chuyển Cơ điện: ${orderCode}`,
-          `Yêu cầu sửa chữa ${request.requestCode} đã chuyển đến bộ phận Cơ điện.`,
+          'MANAGER',
+          targetDept,
+          `Phiếu bảo trì mới chờ phân công: ${orderCode}`,
+          `Yêu cầu sửa chữa ${request.requestCode} (${request.equipment.name}) đã chuyển đến ${targetDept}. Vui lòng phân công kỹ thuật viên thực hiện.`,
         );
-      } else {
-        // Assigned to a specific technician in the workshop
-        const technician = await this.prisma.user.findFirst({
-          where: { name: assignedTech },
-        });
-        if (technician) {
+      } else if (result.workOrder.assignedTechnicianId || result.workOrder.technicianName) {
+        let techId = result.workOrder.assignedTechnicianId;
+        if (!techId && result.workOrder.technicianName) {
+          const tech = await this.prisma.user.findFirst({ where: { name: result.workOrder.technicianName } });
+          if (tech) techId = tech.id;
+        }
+        if (techId) {
           await this.notifications.createNotification(
-            technician.id,
+            techId,
             null,
             null,
             `Phiếu bảo trì mới được phân công: ${orderCode}`,
-            `Bạn được giao xử lý phiếu bảo trì ${orderCode} cho thiết bị ${request.equipment.name}.`,
+            `Bạn được phân công xử lý phiếu bảo trì ${orderCode} cho thiết bị ${request.equipment.name}.`,
           );
         }
       }

@@ -258,27 +258,26 @@ export class UtilitiesService {
   }
 
   getPeriodCycleInfo(type: 'ELECTRICITY' | 'WATER', month: number, year: number) {
-    const cutoffHour = Number(process.env.UTILITY_SHIFT_CUTOFF_HOUR) || 22;
     let startDate: Date;
     let endDate: Date;
     let cycleDescription: string;
     let startDayLabel: string;
 
     if (type === 'ELECTRICITY') {
-      // Kỳ điện: Từ 22h ngày cuối tháng trước đến 22h ngày cuối cùng của tháng đó
-      startDate = new Date(year, month - 1, 0, cutoffHour, 0, 0, 0);
-      endDate = new Date(year, month, 0, cutoffHour, 0, 0, 0);
+      // Kỳ điện: Từ 00:00 ngày đầu tháng đến 23:59:59 ngày cuối cùng của tháng đó
       const lastDay = new Date(year, month, 0).getDate();
-      cycleDescription = `Từ 01/${String(month).padStart(2, '0')}/${year} đến ${String(lastDay).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year} (Chốt ca 22:00)`;
-      startDayLabel = `22:00 ngày cuối tháng trước đến 22:00 ngày ${String(lastDay).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+      startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      cycleDescription = `Từ 01/${String(month).padStart(2, '0')}/${year} đến ${String(lastDay).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+      startDayLabel = `00:00 ngày 01/${String(month).padStart(2, '0')}/${year}`;
     } else {
-      // Kỳ nước: Từ 22h ngày 20 của tháng liền kề trước đó đến 22h ngày 20 của tháng tiếp theo
-      startDate = new Date(year, month - 2, 20, cutoffHour, 0, 0, 0);
-      endDate = new Date(year, month - 1, 20, cutoffHour, 0, 0, 0);
+      // Kỳ nước: Từ 00:00 ngày 21 của tháng trước đến 23:59:59 ngày 20 của tháng hiện tại
+      startDate = new Date(year, month - 2, 21, 0, 0, 0, 0);
+      endDate = new Date(year, month - 1, 20, 23, 59, 59, 999);
       const prevMonth = startDate.getMonth() + 1;
       const prevYear = startDate.getFullYear();
-      cycleDescription = `Từ 21/${String(prevMonth).padStart(2, '0')}/${prevYear} đến 20/${String(month).padStart(2, '0')}/${year} (Chốt ca 22:00)`;
-      startDayLabel = `22:00 ngày 20/${String(prevMonth).padStart(2, '0')}/${prevYear} đến 22:00 ngày 20/${String(month).padStart(2, '0')}/${year}`;
+      cycleDescription = `Từ 21/${String(prevMonth).padStart(2, '0')}/${prevYear} đến 20/${String(month).padStart(2, '0')}/${year}`;
+      startDayLabel = `00:00 ngày 21/${String(prevMonth).padStart(2, '0')}/${prevYear}`;
     }
 
     return { startDate, endDate, cycleDescription, startDayLabel };
@@ -1415,15 +1414,10 @@ export class UtilitiesService {
   // 4. BÁO CÁO & PHÂN TÍCH TIÊU THỤ NĂNG LƯỢNG
   // ==========================================
   /**
-   * Chuyển đổi một mốc thời gian sang mã ngày vận hành (YYYY-MM-DD).
-   * Chu kỳ ca nhà máy: 22h đêm hôm trước đến 22h đêm hôm sau (mặc định 22:00, có thể cấu hình qua env).
-   * Do đó nếu giờ ghi nhận >= cutoffHour, bản ghi thuộc về ngày vận hành tiếp theo.
+   * Chuyển đổi một mốc thời gian sang mã ngày (YYYY-MM-DD) theo đúng ngày dương lịch.
    */
-  getOperationalDateKey(date: Date, cutoffHour: number = Number(process.env.UTILITY_SHIFT_CUTOFF_HOUR) || 22): string {
+  getOperationalDateKey(date: Date): string {
     const d = new Date(date);
-    if (d.getHours() >= cutoffHour) {
-      d.setDate(d.getDate() + 1);
-    }
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -1432,34 +1426,21 @@ export class UtilitiesService {
 
   async getAnalytics(query: { days?: number }) {
     const days = Number(query.days) || 7;
-    const cutoffHour = Number(process.env.UTILITY_SHIFT_CUTOFF_HOUR) || 22;
     const now = new Date();
 
-    // Chu kỳ chốt ca vận hành nhà máy: 22h đêm hôm trước đến 22h đêm hôm sau
-    const currentHour = now.getHours();
-    const todayCutoff = new Date(now);
-    if (currentHour < cutoffHour) {
-      // Trước giờ chốt ca: Chu kỳ 'Hôm nay' bắt đầu từ cutoff hôm qua đến cutoff hôm nay
-      todayCutoff.setHours(cutoffHour, 0, 0, 0);
-    } else {
-      // Từ giờ chốt ca trở đi: Chu kỳ 'Hôm nay' bắt đầu từ cutoff hôm nay đến cutoff ngày mai
-      todayCutoff.setDate(todayCutoff.getDate() + 1);
-      todayCutoff.setHours(cutoffHour, 0, 0, 0);
-    }
+    // Chu kỳ theo đúng ngày dương lịch: 00:00:00 đến 23:59:59
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
 
-    const todayOpEnd = new Date(todayCutoff);
-    const todayOpStart = new Date(todayCutoff);
-    todayOpStart.setDate(todayOpStart.getDate() - 1);
-
-    // Mốc bắt đầu của toàn bộ kỳ phân tích (từ 22h của ngày cách đây `days` ngày)
-    const startDate = new Date(todayOpStart);
+    // Mốc bắt đầu của toàn bộ kỳ phân tích (từ 00:00:00 của `days - 1` ngày trước)
+    const startDate = new Date(todayStart);
     startDate.setDate(startDate.getDate() - (days - 1));
 
     // 1. Lấy tất cả readings trong khoảng thời gian chu kỳ (loại trừ bản ghi đã hủy)
     const readings = await this.prisma.utilityReading.findMany({
       where: {
         isVoided: false,
-        recordedAt: { gte: startDate, lt: todayOpEnd },
+        recordedAt: { gte: startDate, lt: todayEnd },
       },
       include: {
         point: true,
@@ -1540,7 +1521,7 @@ export class UtilitiesService {
       if (!r.point.isActive) return;
 
       const dateKey = this.getOperationalDateKey(r.recordedAt);
-      const isToday = r.recordedAt >= todayOpStart && r.recordedAt < todayOpEnd;
+      const isToday = r.recordedAt >= todayStart && r.recordedAt < todayEnd;
       const isSupply = Boolean(r.point.isSupplyMeter);
       const isRecycled = Boolean(r.point.isRecycledWater);
       const isExcluded = Boolean(r.point.isExcludedFromTotal);
@@ -1615,11 +1596,11 @@ export class UtilitiesService {
 
     return {
       summary: {
-        // Chu kỳ chốt ca vận hành
-        shiftCutoffHour: cutoffHour,
-        operationalCycle: `${cutoffHour}:00 hôm trước đến ${cutoffHour}:00 hôm nay`,
-        operationalTodayStart: todayOpStart.toISOString(),
-        operationalTodayEnd: todayOpEnd.toISOString(),
+        // Chu kỳ theo ngày dương lịch
+        shiftCutoffHour: 0,
+        operationalCycle: 'Theo ngày (00:00 - 23:59)',
+        operationalTodayStart: todayStart.toISOString(),
+        operationalTodayEnd: todayEnd.toISOString(),
 
         // Nguồn Tổng Cấp Điện
         electricitySupplyToday: Math.round(totalElectricitySupplyToday * 100) / 100,
@@ -1949,8 +1930,6 @@ export class UtilitiesService {
     }
     const timeColumns: TimeCol[] = [];
 
-    const cutoffHour = Number(process.env.UTILITY_SHIFT_CUTOFF_HOUR) || 22;
-
     if (viewMode === 'HOURLY') {
       // 24 giờ trong ngày (00h -> 23h) của ngày day/month/year được chọn
       for (let h = 0; h < 24; h++) {
@@ -1969,49 +1948,23 @@ export class UtilitiesService {
         });
       }
     } else if (viewMode === 'DAILY') {
-      if (type === 'ELECTRICITY') {
-        // Ngày trong tháng (01 -> lastDay) theo ca vận hành (22:00 hôm trước -> 22:00 hôm nay)
-        const lastDay = new Date(year, month, 0).getDate();
-        const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-        for (let d = 1; d <= lastDay; d++) {
-          const s = new Date(year, month - 1, d - 1, cutoffHour, 0, 0, 0);
-          const e = new Date(year, month - 1, d, cutoffHour, 0, 0, 0);
-          const dayDate = new Date(year, month - 1, d);
-          const dayName = weekdays[dayDate.getDay()];
-          const key = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-          timeColumns.push({
-            key,
-            label: `${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')} (${dayName}) [22h-${String(d - 1).padStart(2, '0')} -> 22h-${String(d).padStart(2, '0')}]`,
-            shortLabel: `${String(d).padStart(2, '0')}`,
-            subLabel: dayName,
-            startDate: s,
-            endDate: e,
-          });
-        }
-      } else {
-        // Nước: 21 tháng trước -> 20 tháng này theo ca vận hành (22:00 hôm trước -> 22:00 hôm nay)
-        const cycle = this.getPeriodCycleInfo('WATER', month, year);
-        const curr = new Date(cycle.startDate);
-        const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-        while (curr < cycle.endDate) {
-          const dNum = curr.getDate();
-          const mNum = curr.getMonth() + 1;
-          const yNum = curr.getFullYear();
-          const s = new Date(curr);
-          const e = new Date(curr);
-          e.setDate(e.getDate() + 1);
-          const dayName = weekdays[curr.getDay()];
-          const key = `${yNum}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
-          timeColumns.push({
-            key,
-            label: `${String(dNum).padStart(2, '0')}/${String(mNum).padStart(2, '0')} (${dayName})`,
-            shortLabel: `${String(dNum).padStart(2, '0')}`,
-            subLabel: dayName,
-            startDate: s,
-            endDate: e,
-          });
-          curr.setDate(curr.getDate() + 1);
-        }
+      // Ngày trong tháng (01 -> lastDay) theo đúng ngày dương lịch (00:00:00 -> 23:59:59) cho cả Điện và Nước
+      const lastDay = new Date(year, month, 0).getDate();
+      const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+      for (let d = 1; d <= lastDay; d++) {
+        const s = new Date(year, month - 1, d, 0, 0, 0, 0);
+        const e = new Date(year, month - 1, d + 1, 0, 0, 0, 0);
+        const dayDate = new Date(year, month - 1, d);
+        const dayName = weekdays[dayDate.getDay()];
+        const key = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        timeColumns.push({
+          key,
+          label: `${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')} (${dayName})`,
+          shortLabel: `${String(d).padStart(2, '0')}`,
+          subLabel: dayName,
+          startDate: s,
+          endDate: e,
+        });
       }
     } else if (viewMode === 'MONTHLY') {
       // 12 tháng trong năm

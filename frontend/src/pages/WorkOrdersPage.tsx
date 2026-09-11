@@ -289,17 +289,9 @@ export const WorkOrdersPage: React.FC = () => {
             onChange={(e) => setHandlerTeamFilter(e.target.value)}
           >
             <option value="">-- Tất cả bộ phận --</option>
-            <optgroup label="Nhóm bộ phận">
-              <option value="XUONG">Phân xưởng tự xử lý</option>
-              <option value="CO_DIEN">Bộ phận Cơ điện</option>
-            </optgroup>
-            {departments.length > 0 && (
-              <optgroup label="Bộ phận từ nhân sự (HRM)">
-                {departments.map((dept) => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </optgroup>
-            )}
+            {departments.map((dept) => (
+              <option key={dept} value={dept}>{dept}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -608,7 +600,9 @@ export const WorkOrdersPage: React.FC = () => {
               >
                 <option value="">-- Chưa phân công --</option>
                 {techniciansList.map((tech) => (
-                  <option key={tech.id} value={tech.name}>{tech.name} ({tech.specialty || 'Chưa cập nhật'})</option>
+                  <option key={tech.id} value={tech.name}>
+                    {tech.name} ({tech.specialty || tech.role || 'KTV'}) - {tech.department || 'Chưa rõ'}
+                  </option>
                 ))}
               </select>
             </div>
