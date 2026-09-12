@@ -4112,19 +4112,19 @@ export const UtilitiesPage: React.FC = () => {
         }
 
         .quick-btn.start {
-          background-color: #16a34a;
+          background-color: #64748b;
           color: #ffffff;
         }
         .quick-btn.start:hover {
-          background-color: #15803d;
+          background-color: #475569;
         }
 
         .quick-btn.stop {
-          background-color: #475569;
+          background-color: #16a34a;
           color: #ffffff;
         }
         .quick-btn.stop:hover {
-          background-color: #334155;
+          background-color: #15803d;
         }
 
         /* Filter Bar */
