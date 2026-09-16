@@ -926,6 +926,32 @@ export class WorkOrdersService implements OnModuleInit {
 
   async remove(id: string) {
     await this.findOne(id);
-    return this.prisma.workOrder.delete({ where: { id } });
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Delete attachments related to work order
+      await tx.attachment.deleteMany({ where: { workOrderId: id } });
+
+      // 2. Delete checklist executions and items
+      const checkExecs = await tx.checklistExecution.findMany({ where: { workOrderId: id }, select: { id: true } });
+      if (checkExecs.length > 0) {
+        const execIds = checkExecs.map((e) => e.id);
+        await tx.checklistExecutionItem.deleteMany({ where: { executionId: { in: execIds } } });
+        await tx.checklistExecution.deleteMany({ where: { workOrderId: id } });
+      }
+
+      // 3. Delete execution logs
+      await tx.workOrderExecutionLog.deleteMany({ where: { workOrderId: id } });
+
+      // 4. Delete work order items
+      await tx.workOrderItem.deleteMany({ where: { workOrderId: id } });
+
+      // 5. Unlink schedule history
+      await tx.scheduleHistory.updateMany({ where: { workOrderId: id }, data: { workOrderId: null } });
+
+      // 6. Unlink inventory transactions
+      await tx.inventoryTransaction.updateMany({ where: { workOrderId: id }, data: { workOrderId: null, workOrderItemId: null } });
+
+      // 7. Delete work order
+      return tx.workOrder.delete({ where: { id } });
+    });
   }
 }

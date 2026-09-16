@@ -3,7 +3,7 @@ import { api, fetchWithAuth, API_HOST } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { ChecklistManager } from '../components/common/ChecklistManager';
-import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight, Camera, Eye, Trash2, Play, Pause, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
 import { WorkOrderDetailView } from '../components/common/WorkOrderDetailView';
@@ -50,6 +50,14 @@ export const WorkOrdersPage: React.FC = () => {
   const [multipleWosList, setMultipleWosList] = useState<any[]>([]);
   const [isSelectWoOpen, setIsSelectWoOpen] = useState(false);
   const [selectedDetailWoId, setSelectedDetailWoId] = useState<string | null>(null);
+
+  // Quick Pause & Delete modals
+  const [woToPause, setWoToPause] = useState<any | null>(null);
+  const [pauseReason, setPauseReason] = useState('Chờ phụ tùng');
+  const [isPausing, setIsPausing] = useState(false);
+
+  const [woToDelete, setWoToDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -243,6 +251,80 @@ export const WorkOrdersPage: React.FC = () => {
 
 
 
+  const handleQuickStart = async (wo: any) => {
+    try {
+      await api.updateWorkOrderStatus(wo.id, {
+        status: 'IN_PROGRESS',
+        expectedVersion: wo.version,
+      });
+      toast.success('Thành công', `Đã bắt đầu thực hiện phiếu ${wo.orderCode}`);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Không thể bắt đầu');
+    }
+  };
+
+  const handleQuickPause = (wo: any) => {
+    setWoToPause(wo);
+    setPauseReason('Chờ phụ tùng');
+  };
+
+  const confirmQuickPause = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!woToPause) return;
+    const finalReason = pauseReason.trim() || 'Tạm dừng bảo trì';
+    try {
+      setIsPausing(true);
+      await api.updateWorkOrderStatus(woToPause.id, {
+        status: 'ON_HOLD',
+        reason: finalReason,
+        expectedVersion: woToPause.version,
+      } as any);
+      toast.success('Thành công', `Đã chuyển ${woToPause.orderCode} sang trạng thái Tạm dừng`);
+      setWoToPause(null);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Không thể tạm dừng');
+    } finally {
+      setIsPausing(false);
+    }
+  };
+
+  const handleQuickResume = async (wo: any) => {
+    try {
+      await api.updateWorkOrderStatus(wo.id, {
+        status: 'IN_PROGRESS',
+        expectedVersion: wo.version,
+      });
+      toast.success('Thành công', `Đã tiếp tục thực hiện phiếu ${wo.orderCode}`);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Không thể tiếp tục');
+    }
+  };
+
+  const handleDeleteWo = (wo: any) => {
+    setWoToDelete(wo);
+  };
+
+  const confirmDeleteWo = async () => {
+    if (!woToDelete) return;
+    try {
+      setIsDeleting(true);
+      await api.deleteWorkOrder(woToDelete.id);
+      toast.success('Thành công', `Đã xóa phiếu bảo trì ${woToDelete.orderCode}`);
+      if (selectedDetailWoId === woToDelete.id) {
+        setSelectedDetailWoId(null);
+      }
+      setWoToDelete(null);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi xóa phiếu', err.message || 'Không thể xóa phiếu bảo trì');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const startItem = (page - 1) * limit + 1;
   const endItem = Math.min(page * limit, total);
 
@@ -313,7 +395,7 @@ export const WorkOrdersPage: React.FC = () => {
                   <th>Kỹ thuật viên</th>
                   <th style={{ textAlign: 'center' }}>Vật tư</th>
                   <th style={{ textAlign: 'center' }}>Checklist</th>
-                  <th>Thao tác</th>
+                  <th style={{ textAlign: 'center', minWidth: '130px' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -364,7 +446,83 @@ export const WorkOrdersPage: React.FC = () => {
                         Checklist
                       </button>
                     </td>
-                    <td>---</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                        {['PENDING', 'ASSIGNED'].includes(wo.status) && (
+                          <button
+                            className="btn btn-success btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
+                            title="Bắt đầu thực hiện công việc"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickStart(wo);
+                            }}
+                          >
+                            <Play size={12} /> Bắt đầu
+                          </button>
+                        )}
+
+                        {wo.status === 'IN_PROGRESS' && (
+                          <>
+                            <button
+                              className="btn btn-warning btn-sm"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
+                              title="Tạm dừng công việc"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickPause(wo);
+                              }}
+                            >
+                              <Pause size={12} /> Tạm dừng
+                            </button>
+                            <button
+                              className="btn btn-success btn-sm"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
+                              title="Xem chi tiết để hoàn thành / bàn giao"
+                              onClick={() => setSelectedDetailWoId(wo.id)}
+                            >
+                              <CheckCircle2 size={12} /> Hoàn thành
+                            </button>
+                          </>
+                        )}
+
+                        {wo.status === 'ON_HOLD' && (
+                          <button
+                            className="btn btn-success btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
+                            title="Tiếp tục thực hiện"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickResume(wo);
+                            }}
+                          >
+                            <Play size={12} /> Tiếp tục
+                          </button>
+                        )}
+
+                        <button 
+                          className="btn btn-secondary btn-sm"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
+                          title="Xem chi tiết & xử lý"
+                          onClick={() => setSelectedDetailWoId(wo.id)}
+                        >
+                          <Eye size={13} /> Chi tiết
+                        </button>
+                        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER') && (
+                          <button 
+                            className="btn btn-outline-danger btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px' }}
+                            title="Xóa phiếu bảo trì"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteWo(wo);
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -861,6 +1019,138 @@ export const WorkOrdersPage: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 6. Quick Pause Modal */}
+      {woToPause && (
+        <Modal
+          isOpen={Boolean(woToPause)}
+          onClose={() => !isPausing && setWoToPause(null)}
+          title={`Tạm dừng phiếu: ${woToPause.orderCode}`}
+          maxWidth="480px"
+        >
+          <form onSubmit={confirmQuickPause} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <p style={{ fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>
+                Vui lòng cung cấp lý do tạm dừng thực hiện công việc bảo trì cho thiết bị <strong>{woToPause.equipment?.name || '---'}</strong>:
+              </p>
+              
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                {[
+                  'Chờ phụ tùng',
+                  'Chờ dừng máy sản xuất',
+                  'Chờ bàn giao ca',
+                  'Cần chuyên gia kỹ thuật hỗ trợ'
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      fontSize: '12px',
+                      padding: '4px 10px',
+                      borderRadius: '14px',
+                      borderColor: pauseReason === preset ? '#f59e0b' : undefined,
+                      backgroundColor: pauseReason === preset ? 'rgba(245, 158, 11, 0.15)' : undefined,
+                      color: pauseReason === preset ? '#d97706' : undefined,
+                      fontWeight: pauseReason === preset ? 600 : 400
+                    }}
+                    onClick={() => setPauseReason(preset)}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                className="form-input"
+                rows={3}
+                placeholder="Nhập chi tiết lý do tạm dừng..."
+                value={pauseReason}
+                onChange={(e) => setPauseReason(e.target.value)}
+                style={{ width: '100%', resize: 'vertical' }}
+                autoFocus
+              />
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={isPausing}
+                onClick={() => setWoToPause(null)}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="submit"
+                className="btn btn-warning"
+                disabled={isPausing || !pauseReason.trim()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Pause size={14} /> {isPausing ? 'Đang cập nhật...' : 'Xác nhận tạm dừng'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 7. Delete Confirmation Modal */}
+      {woToDelete && (
+        <Modal
+          isOpen={Boolean(woToDelete)}
+          onClose={() => !isDeleting && setWoToDelete(null)}
+          title="Xác nhận xóa phiếu bảo trì"
+          maxWidth="460px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'flex-start', 
+              gap: '12px', 
+              padding: '12px', 
+              backgroundColor: 'rgba(239, 68, 68, 0.08)', 
+              border: '1px solid rgba(239, 68, 68, 0.2)', 
+              borderRadius: '8px' 
+            }}>
+              <AlertTriangle size={24} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                Bạn có chắc chắn muốn xóa phiếu bảo trì <strong style={{ color: '#ef4444' }}>{woToDelete.orderCode}</strong>?
+                <div style={{ marginTop: '4px', color: 'var(--text-secondary)' }}>
+                  Tiêu đề: <strong>{woToDelete.title}</strong>
+                </div>
+                {woToDelete.equipment?.name && (
+                  <div style={{ color: 'var(--text-secondary)' }}>
+                    Thiết bị: <strong>{woToDelete.equipment.name}</strong>
+                  </div>
+                )}
+                <div style={{ marginTop: '8px', fontSize: '12px', color: '#dc2626' }}>
+                  ⚠️ Lưu ý: Mọi nhật ký thao tác, checklist và dữ liệu vật tư đính kèm sẽ bị xóa. Hành động này không thể hoàn tác!
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={isDeleting}
+                onClick={() => setWoToDelete(null)}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={isDeleting}
+                onClick={confirmDeleteWo}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Trash2 size={14} /> {isDeleting ? 'Đang xóa...' : 'Xóa vĩnh viễn'}
+              </button>
             </div>
           </div>
         </Modal>

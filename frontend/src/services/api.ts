@@ -126,7 +126,21 @@ async function request(endpoint: string, options: RequestInit = {}) {
       const err = await res.json().catch(() => ({ message: res.statusText }));
       throw new Error(err.message || 'API request failed');
     }
-    return await res.json();
+
+    if (res.status === 204) {
+      return null;
+    }
+
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   } catch (error) {
     console.error(`API Error on ${endpoint}:`, error);
     throw error;
