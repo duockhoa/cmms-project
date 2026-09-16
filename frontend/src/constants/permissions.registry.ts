@@ -141,42 +141,42 @@ export const PERMISSIONS_REGISTRY: ModulePermissions[] = [
   },
   {
     id: 'work_orders',
-    name: 'Phiếu bảo trì (Work Orders)',
+    name: 'Phiếu sửa chữa (Work Orders)',
     permissions: [
       {
         code: 'work_orders:view',
-        name: 'Xem phiếu bảo trì',
-        description: 'Xem danh sách, chi tiết tiến độ và nhật ký phiếu bảo trì',
+        name: 'Xem phiếu sửa chữa',
+        description: 'Xem danh sách, chi tiết tiến độ và nhật ký phiếu sửa chữa',
       },
       {
         code: 'work_orders:create',
-        name: 'Tạo phiếu bảo trì mới',
-        description: 'Lập phiếu sửa chữa, bảo trì máy móc đột xuất hoặc định kỳ',
+        name: 'Tạo phiếu sửa chữa mới',
+        description: 'Lập phiếu sửa chữa máy móc đột xuất hoặc định kỳ',
       },
       {
         code: 'work_orders:edit',
-        name: 'Chỉnh sửa phiếu bảo trì',
+        name: 'Chỉnh sửa phiếu sửa chữa',
         description: 'Cập nhật phương án sửa chữa, vật tư và thông tin phiếu',
       },
       {
         code: 'work_orders:assign',
         name: 'Phân công kỹ thuật viên',
-        description: 'Giao việc cho kỹ thuật viên hoặc đội bảo trì thực hiện',
+        description: 'Giao việc cho kỹ thuật viên hoặc đội sửa chữa thực hiện',
       },
       {
         code: 'work_orders:execute',
-        name: 'Thực hiện bảo trì & ghi nhật ký',
+        name: 'Thực hiện sửa chữa & ghi nhật ký',
         description: 'Bắt đầu, ghi nhận nhật ký xử lý, chụp ảnh và hoàn thành công việc',
       },
       {
         code: 'work_orders:close',
         name: 'Nghiệm thu & đóng phiếu',
-        description: 'Xác nhận nghiệm thu công việc và đóng phiếu bảo trì',
+        description: 'Xác nhận nghiệm thu công việc và đóng phiếu sửa chữa',
       },
       {
         code: 'work_orders:cancel',
-        name: 'Hủy phiếu bảo trì',
-        description: 'Hủy phiếu bảo trì không thực hiện',
+        name: 'Hủy phiếu sửa chữa',
+        description: 'Hủy phiếu sửa chữa không thực hiện',
       },
     ],
   },

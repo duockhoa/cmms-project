@@ -47,7 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
     { id: 'requests', label: 'Báo cáo sự cố', icon: AlertCircle },
     { id: 'operation-logs', label: 'Sổ vận hành', icon: ClipboardList },
     { id: 'utilities', label: 'Điện, Nước & Tiện ích', icon: Zap },
-    { id: 'work-orders', label: 'Phiếu bảo trì (WO)', icon: Wrench },
+    { id: 'work-orders', label: 'Phiếu sửa chữa', icon: Wrench },
     { id: 'checklists', label: 'Checklist bảo trì', icon: CheckSquare },
     { id: 'spare-parts', label: 'Kho phụ tùng', icon: Package },
     { id: 'reports', label: 'Báo cáo & Phân tích', icon: BarChart3 },

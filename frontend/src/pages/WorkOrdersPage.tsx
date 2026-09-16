@@ -142,12 +142,12 @@ export const WorkOrdersPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-      if (!res.ok) throw new Error('Không thể tạo phiếu bảo trì');
+      if (!res.ok) throw new Error('Không thể tạo phiếu sửa chữa');
       setIsAddOpen(false);
-      toast.success('Thành công', 'Đã tạo phiếu bảo trì mới.');
+      toast.success('Thành công', 'Đã tạo phiếu sửa chữa mới.');
       loadData();
     } catch (err) {
-      toast.error('Lỗi', 'Không thể tạo phiếu bảo trì!');
+      toast.error('Lỗi', 'Không thể tạo phiếu sửa chữa!');
     }
   };
 
@@ -179,7 +179,7 @@ export const WorkOrdersPage: React.FC = () => {
     const returnableQty = totalIssued - totalReturned;
 
     if (totalIssued === 0) {
-      toast.warning('Không thể trả', 'Vật tư này chưa từng được xuất cho phiếu bảo trì này.');
+      toast.warning('Không thể trả', 'Vật tư này chưa từng được xuất cho phiếu sửa chữa này.');
       return;
     }
     if (returnableQty <= 0) {
@@ -312,14 +312,14 @@ export const WorkOrdersPage: React.FC = () => {
     try {
       setIsDeleting(true);
       await api.deleteWorkOrder(woToDelete.id);
-      toast.success('Thành công', `Đã xóa phiếu bảo trì ${woToDelete.orderCode}`);
+      toast.success('Thành công', `Đã xóa phiếu sửa chữa ${woToDelete.orderCode}`);
       if (selectedDetailWoId === woToDelete.id) {
         setSelectedDetailWoId(null);
       }
       setWoToDelete(null);
       loadData();
     } catch (err: any) {
-      toast.error('Lỗi xóa phiếu', err.message || 'Không thể xóa phiếu bảo trì');
+      toast.error('Lỗi xóa phiếu', err.message || 'Không thể xóa phiếu sửa chữa');
     } finally {
       setIsDeleting(false);
     }
@@ -334,7 +334,7 @@ export const WorkOrdersPage: React.FC = () => {
         <>
           <div className="page-header">
         <div>
-          <h1 className="page-title">Phiếu bảo trì (Work Orders)</h1>
+          <h1 className="page-title">Phiếu sửa chữa</h1>
           <p className="page-subtitle">Quản lý lệnh sửa chữa và vật tư liên quan</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -380,7 +380,7 @@ export const WorkOrdersPage: React.FC = () => {
 
       {/* Table */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách phiếu bảo trì...</div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách phiếu sửa chữa...</div>
       ) : (
         <div>
           <div className="table-wrapper">
@@ -402,7 +402,7 @@ export const WorkOrdersPage: React.FC = () => {
                 {workOrders.length === 0 ? (
                   <tr>
                     <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
-                      Không có phiếu bảo trì nào được tìm thấy
+                      Không có phiếu sửa chữa nào được tìm thấy
                     </td>
                   </tr>
                 ) : workOrders.map((wo) => (
@@ -512,7 +512,7 @@ export const WorkOrdersPage: React.FC = () => {
                           <button 
                             className="btn btn-outline-danger btn-sm"
                             style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px' }}
-                            title="Xóa phiếu bảo trì"
+                            title="Xóa phiếu sửa chữa"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteWo(wo);
@@ -542,7 +542,7 @@ export const WorkOrdersPage: React.FC = () => {
               backgroundColor: 'var(--bg-secondary)' 
             }}>
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Hiển thị <strong>{startItem}-{endItem}</strong> trong tổng số <strong>{total}</strong> phiếu bảo trì
+                Hiển thị <strong>{startItem}-{endItem}</strong> trong tổng số <strong>{total}</strong> phiếu sửa chữa
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <button 
@@ -693,7 +693,7 @@ export const WorkOrdersPage: React.FC = () => {
       )}
 
       {/* Modal Create Work Order */}
-      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Tạo phiếu bảo trì (Work Order)">
+      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Tạo phiếu sửa chữa (Work Order)">
         <form onSubmit={handleCreate}>
           <div className="form-group">
             <label className="form-label">Tiêu đề công việc *</label>
@@ -781,7 +781,7 @@ export const WorkOrdersPage: React.FC = () => {
           <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
             <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)}>Hủy</button>
             <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <Plus size={15} /> Tạo Work Order
+              <Plus size={15} /> Tạo phiếu sửa chữa
             </button>
           </div>
         </form>
@@ -1103,7 +1103,7 @@ export const WorkOrdersPage: React.FC = () => {
         <Modal
           isOpen={Boolean(woToDelete)}
           onClose={() => !isDeleting && setWoToDelete(null)}
-          title="Xác nhận xóa phiếu bảo trì"
+          title="Xác nhận xóa phiếu sửa chữa"
           maxWidth="460px"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1118,7 +1118,7 @@ export const WorkOrdersPage: React.FC = () => {
             }}>
               <AlertTriangle size={24} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
               <div style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                Bạn có chắc chắn muốn xóa phiếu bảo trì <strong style={{ color: '#ef4444' }}>{woToDelete.orderCode}</strong>?
+                Bạn có chắc chắn muốn xóa phiếu sửa chữa <strong style={{ color: '#ef4444' }}>{woToDelete.orderCode}</strong>?
                 <div style={{ marginTop: '4px', color: 'var(--text-secondary)' }}>
                   Tiêu đề: <strong>{woToDelete.title}</strong>
                 </div>
