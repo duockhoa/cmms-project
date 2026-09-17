@@ -3,7 +3,7 @@ import { api } from '../../services/api';
 import { StatusBadge } from './Badge';
 import { Modal } from './Modal';
 import { useToast } from './Toast';
-import { CheckCircle, XCircle, RotateCcw, Send, Ban, Loader2, XOctagon } from 'lucide-react';
+import { CheckCircle, XCircle, RotateCcw, Send, Ban, Loader2, XOctagon, Cpu } from 'lucide-react';
 
 interface RequestDetailViewProps {
   requestId: string;
@@ -316,6 +316,26 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Thiết bị</td>
                 <td style={{ padding: '12px 0', fontWeight: 600 }}>{req.equipment?.code} - {req.equipment?.name}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Cụm chức năng lỗi</td>
+                <td style={{ padding: '12px 0', fontWeight: 600 }}>
+                  {req.functionalUnit ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#1d4ed8' }}>
+                      <Cpu size={15} />
+                      <span>{req.functionalUnit.name} {req.functionalUnit.code ? `(${req.functionalUnit.code})` : ''}</span>
+                      {req.functionalUnit.libraryItem?.category && (
+                        <span className="badge" style={{ fontSize: '11px', marginLeft: '4px' }}>
+                          {req.functionalUnit.libraryItem.category}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      Toàn bộ thiết bị / Chưa phân loại cụm
+                    </span>
+                  )}
+                </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Trạng thái</td>

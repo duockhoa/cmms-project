@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsDateString, IsArray } from 'class-validator';
 
 export enum EquipmentStatus {
   OPERATIONAL = 'OPERATIONAL',
@@ -60,6 +60,14 @@ export class CreateEquipmentDto {
   @IsOptional()
   notes?: string;
 
+  @IsString()
+  @IsOptional()
+  functionalUnit?: string;
+
+  @IsArray()
+  @IsOptional()
+  functionalUnits?: string[];
+
   @IsNumber()
   @IsOptional()
   currentOperatingHours?: number;
@@ -113,6 +121,14 @@ export class UpdateEquipmentDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  functionalUnit?: string;
+
+  @IsArray()
+  @IsOptional()
+  functionalUnits?: string[];
 
   @IsNumber()
   @IsOptional()

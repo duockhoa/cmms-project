@@ -44,7 +44,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     accountingCode: '',
   });
 
-  // Fetch categories, locations, and departments from HRM/DB
+  // Fetch categories, locations, departments
   const loadOptions = async () => {
     try {
       setLoadingOptions(true);
@@ -87,6 +87,18 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
             specs: initialData.specs || '',
             code: initialData.code || '',
             accountingCode: initialData.accountingCode || '',
+          });
+        } else {
+          setFormData({
+            name: '',
+            category: '',
+            department: '',
+            status: 'OPERATIONAL',
+            location: '',
+            serialNumber: '',
+            specs: '',
+            code: '',
+            accountingCode: '',
           });
         }
       });

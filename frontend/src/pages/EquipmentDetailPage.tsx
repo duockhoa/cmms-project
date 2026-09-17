@@ -13,6 +13,7 @@ import { QRCodeTab } from '../components/equipment/QRCodeTab';
 import { LogsTab } from '../components/equipment/LogsTab';
 import { OperationParametersTab } from '../components/equipment/OperationParametersTab';
 import { EquipmentOperationLogsTab } from '../components/equipment/EquipmentOperationLogsTab';
+import { FunctionalUnitsTab } from '../components/equipment/FunctionalUnitsTab';
 
 import { api } from '../services/api';
 
@@ -59,7 +60,7 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     fetchDetail();
   }, [item.id]);
 
-  const subTabs = ['Tổng quan', 'Lịch sử sửa chữa', 'Lịch bảo trì', 'Phụ tùng', 'SOP & Tài liệu', 'Mã QR', 'Thông số vận hành', 'Sổ vận hành', 'Nhật ký'];
+  const subTabs = ['Tổng quan', 'Cụm chức năng chính', 'Lịch sử sửa chữa', 'Lịch bảo trì', 'Phụ tùng', 'SOP & Tài liệu', 'Mã QR', 'Thông số vận hành', 'Sổ vận hành', 'Nhật ký'];
 
   if (loading) {
     return (
@@ -249,6 +250,14 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
         {/* Tab content */}
         {activeSubTab === 'Tổng quan' && (
           <OverviewTab parsedSpecs={parsedSpecs} openSpecsModal={openSpecsModal} />
+        )}
+        {activeSubTab === 'Cụm chức năng chính' && (
+          <FunctionalUnitsTab 
+            equipmentId={data.id} 
+            equipmentCode={data.code} 
+            equipmentName={data.name} 
+            onUnitsUpdated={fetchDetail}
+          />
         )}
         {activeSubTab === 'Lịch sử sửa chữa' && (
           <RepairHistoryTab workOrdersList={workOrdersList} />

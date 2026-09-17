@@ -28,4 +28,12 @@ export class CreateMaintenanceRequestDto {
   @IsString()
   @IsOptional()
   images?: string;
+
+  @IsString()
+  @IsOptional()
+  functionalUnitId?: string;
+
+  @IsString()
+  @IsOptional()
+  reporterId?: string;
 }

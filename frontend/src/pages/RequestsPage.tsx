@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode } from 'lucide-react';
+import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode, Cpu } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
 import { RequestDetailView } from '../components/common/RequestDetailView';
@@ -10,6 +10,8 @@ import { RequestDetailView } from '../components/common/RequestDetailView';
 export const RequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
+  const [functionalUnits, setFunctionalUnits] = useState<any[]>([]);
+  const [loadingUnits, setLoadingUnits] = useState(false);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const [statusFilter, setStatusFilter] = useState('');
@@ -26,7 +28,7 @@ export const RequestsPage: React.FC = () => {
       const eqId = decodedText.split(':')[1];
       const matched = equipmentList.find((e) => e.id === eqId);
       if (matched) {
-        setFormData((prev) => ({ ...prev, equipmentId: eqId }));
+        setFormData((prev) => ({ ...prev, equipmentId: eqId, functionalUnitId: '' }));
         toast.success('Nhận diện thiết bị thành công', `Thiết bị: ${matched.name} (${matched.code})`);
         setShowScanner(false);
       } else {
@@ -40,11 +42,12 @@ export const RequestsPage: React.FC = () => {
 
   const [formData, setFormData] = useState({
     equipmentId: '',
+    functionalUnitId: '',
     title: '',
     description: '',
     priority: 'HIGH',
-    reporterName: 'Lê Hoàng Nam (Quản đốc)',
-    department: 'Bộ phận Đóng gói',
+    reporterName: '',
+    department: '',
   });
 
   const [users, setUsers] = useState<any[]>([]);
@@ -67,7 +70,7 @@ export const RequestsPage: React.FC = () => {
         setFormData((prev) => ({
           ...prev,
           reporterName: meRes.user.name,
-          department: meRes.user.department || 'Phòng ban khác',
+          department: meRes.user.department || '',
         }));
       }
 
@@ -84,6 +87,32 @@ export const RequestsPage: React.FC = () => {
     }
   };
 
+  // Tải danh sách cụm chức năng theo thiết bị được chọn
+  useEffect(() => {
+    if (!formData.equipmentId) {
+      setFunctionalUnits([]);
+      return;
+    }
+    let isMounted = true;
+    const fetchUnits = async () => {
+      try {
+        setLoadingUnits(true);
+        const res = await api.getEquipmentFunctionalUnits(formData.equipmentId);
+        if (isMounted) {
+          setFunctionalUnits(Array.isArray(res) ? res : []);
+        }
+      } catch (err) {
+        if (isMounted) setFunctionalUnits([]);
+      } finally {
+        if (isMounted) setLoadingUnits(false);
+      }
+    };
+    fetchUnits();
+    return () => {
+      isMounted = false;
+    };
+  }, [formData.equipmentId]);
+
   const getActiveUserId = () => {
     const active = users.find((u: any) => u.isActive);
     return active ? active.id : (users[0]?.id || 'user-id');
@@ -96,19 +125,27 @@ export const RequestsPage: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.createRequest(formData);
+      await api.createRequest({
+        ...formData,
+        reporterId: currentUser?.id || undefined,
+        reporterName: currentUser?.name || undefined,
+        department: currentUser?.department || undefined,
+        functionalUnitId: formData.functionalUnitId || undefined,
+      });
       setIsAddOpen(false);
       setFormData({
         equipmentId: equipmentList[0]?.id || '',
+        functionalUnitId: '',
         title: '',
         description: '',
         priority: 'HIGH',
-        reporterName: currentUser ? currentUser.name : 'Lê Hoàng Nam (Quản đốc)',
-        department: currentUser ? (currentUser.department || 'Phòng ban khác') : 'Bộ phận Đóng gói',
+        reporterName: currentUser?.name || '',
+        department: currentUser?.department || '',
       });
+      toast.success('Thành công', 'Đã gửi báo cáo sự cố!');
       loadData();
-    } catch (err) {
-      toast.error('Lỗi', 'Không thể tạo yêu cầu bảo trì!');
+    } catch (err: any) {
+      toast.error('Lỗi', err?.message || 'Không thể tạo yêu cầu bảo trì!');
     }
   };
 
@@ -171,6 +208,11 @@ export const RequestsPage: React.FC = () => {
                   <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>{req.title}</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                     Thiết bị: {req.equipment?.code || '---'}
+                    {req.functionalUnit && (
+                      <span style={{ marginLeft: '6px', color: '#2563eb', fontWeight: 500 }}>
+                        • Cụm: {req.functionalUnit.name}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -200,7 +242,19 @@ export const RequestsPage: React.FC = () => {
                           {req.requestCode}
                         </button>
                       </td>
-                      <td style={{ fontWeight: 600 }}>{req.equipment?.name || '---'}</td>
+                      <td style={{ fontWeight: 600 }}>
+                        <div>{req.equipment?.name || '---'}</div>
+                        {req.functionalUnit ? (
+                          <div style={{ fontSize: '11px', color: '#2563eb', fontWeight: 500, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Cpu size={12} />
+                            <span>Cụm: {req.functionalUnit.name} {req.functionalUnit.code ? `(${req.functionalUnit.code})` : ''}</span>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            Toàn bộ thiết bị
+                          </div>
+                        )}
+                      </td>
                       <td>
                         <div style={{ fontWeight: 600 }}>{req.title}</div>
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{req.description}</div>
@@ -258,7 +312,12 @@ export const RequestsPage: React.FC = () => {
                 <QRScanner onScanSuccess={handleQRScan} onClose={() => setShowScanner(false)} />
               </div>
             ) : (
-              <select className="form-select" required value={formData.equipmentId} onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value })}>
+              <select 
+                className="form-select" 
+                required 
+                value={formData.equipmentId} 
+                onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value, functionalUnitId: '' })}
+              >
                 {equipmentList.map((eq) => (
                   <option key={eq.id} value={eq.id}>
                     [{eq.code}] {eq.name} - {eq.location}
@@ -268,25 +327,57 @@ export const RequestsPage: React.FC = () => {
             )}
           </div>
 
+          {/* Cụm chức năng gặp lỗi (Load theo thiết bị đã chọn) */}
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Cpu size={15} style={{ color: '#2563eb' }} />
+                <span>Cụm chức năng lỗi (Tùy chọn)</span>
+              </label>
+              {loadingUnits && (
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Đang tải danh sách cụm...
+                </span>
+              )}
+            </div>
+            <select
+              className="form-select"
+              value={formData.functionalUnitId}
+              onChange={(e) => setFormData({ ...formData, functionalUnitId: e.target.value })}
+              disabled={loadingUnits}
+            >
+              <option value="">-- Toàn bộ thiết bị / Chưa phân loại cụm --</option>
+              {functionalUnits.map((fu) => (
+                <option key={fu.id} value={fu.id}>
+                  {fu.code ? `[${fu.code}] ` : ''}{fu.name} {fu.libraryItem?.category ? `(${fu.libraryItem.category})` : ''}
+                </option>
+              ))}
+            </select>
+            {formData.equipmentId && functionalUnits.length === 0 && !loadingUnits && (
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                💡 Thiết bị này chưa được cấu hình cụm chức năng riêng lẻ (sự cố sẽ áp dụng cho toàn bộ máy).
+              </div>
+            )}
+            {formData.functionalUnitId && (
+              <div style={{ fontSize: '11px', color: '#2563eb', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                ✓ Đã chọn cụm sự cố: <strong>{functionalUnits.find(u => u.id === formData.functionalUnitId)?.name}</strong>
+              </div>
+            )}
+          </div>
+
           <div className="form-group">
             <label className="form-label">Tên sự cố / Tiêu đề ngắn *</label>
             <input type="text" className="form-input" required value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Băng tải kêu rít, Máy dừng đột ngột..." />
           </div>
 
-          <div className="grid-2">
-            <div className="form-group">
-              <label className="form-label">Mức độ ưu tiên</label>
-              <select className="form-select" value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })}>
-                <option value="URGENT">Khẩn cấp (Dừng sản xuất)</option>
-                <option value="HIGH">Cao</option>
-                <option value="MEDIUM">Trung bình</option>
-                <option value="LOW">Thấp</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Người báo sự cố</label>
-              <input type="text" className="form-input" value={formData.reporterName} onChange={(e) => setFormData({ ...formData, reporterName: e.target.value })} />
-            </div>
+          <div className="form-group">
+            <label className="form-label">Mức độ ưu tiên</label>
+            <select className="form-select" value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })}>
+              <option value="URGENT">Khẩn cấp (Dừng sản xuất)</option>
+              <option value="HIGH">Cao</option>
+              <option value="MEDIUM">Trung bình</option>
+              <option value="LOW">Thấp</option>
+            </select>
           </div>
 
           <div className="form-group">

@@ -92,6 +92,7 @@ export class EquipmentService implements OnModuleInit {
         requests: { orderBy: { createdAt: 'desc' }, take: 10 },
         workOrders: { orderBy: { createdAt: 'desc' }, take: 10, include: { items: { include: { inventoryItem: true } } } },
         schedules: true,
+        functionalUnits: { include: { libraryItem: true }, orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
       },
     });
     if (!item) throw new NotFoundException('Không tìm thấy thiết bị');
@@ -162,7 +163,7 @@ export class EquipmentService implements OnModuleInit {
     }
 
     try {
-      return await this.prisma.equipment.create({
+      const newEquipment = await this.prisma.equipment.create({
         data: {
           ...data,
           code,
@@ -171,8 +172,54 @@ export class EquipmentService implements OnModuleInit {
           serialNumber: data.serialNumber && String(data.serialNumber).trim() !== '' ? String(data.serialNumber).trim() : null,
           specs: data.specs && String(data.specs).trim() !== '' ? String(data.specs).trim() : null,
           notes: data.notes && String(data.notes).trim() !== '' ? String(data.notes).trim() : null,
+          functionalUnit: (Array.isArray(data.functionalUnits) && data.functionalUnits.length > 0)
+            ? data.functionalUnits.map((u: any) => String(u).trim()).filter(Boolean).join(', ')
+            : (data.functionalUnit && String(data.functionalUnit).trim() !== '' ? String(data.functionalUnit).trim() : null),
         },
       });
+
+      // Tự động đồng bộ cụm chức năng vào Thư viện và tạo bản ghi cụm chức năng con cho thiết bị
+      const rawUnits = Array.isArray(data.functionalUnits)
+        ? data.functionalUnits
+        : (newEquipment.functionalUnit ? newEquipment.functionalUnit.split(',') : []);
+      const unitNames = rawUnits.map((s: any) => String(s).trim()).filter(Boolean);
+
+      if (unitNames.length > 0) {
+        for (let i = 0; i < unitNames.length; i++) {
+          const uName = unitNames[i];
+          try {
+            // 1. Kiểm tra hoặc thêm vào thư viện
+            let libItem = await this.prisma.functionalUnitLibrary.findFirst({
+              where: { name: uName }
+            });
+            if (!libItem) {
+              libItem = await this.prisma.functionalUnitLibrary.create({
+                data: {
+                  name: uName,
+                  code: `FU-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+                  category: data.category || 'Cơ khí',
+                  description: `Tự động lưu từ thiết bị ${newEquipment.code}`,
+                }
+              });
+            }
+            // 2. Tạo cụm chức năng cho thiết bị
+            await this.prisma.equipmentFunctionalUnit.create({
+              data: {
+                equipmentId: newEquipment.id,
+                libraryId: libItem.id,
+                name: uName,
+                code: `${newEquipment.code}-CU${(i + 1).toString().padStart(2, '0')}`,
+                status: 'OPERATIONAL',
+                orderIndex: i,
+              }
+            });
+          } catch (unitErr) {
+            console.warn('Lỗi khi tự động khởi tạo cụm chức năng:', unitErr);
+          }
+        }
+      }
+
+      return newEquipment;
     } catch (err: any) {
       if (err.code === 'P2002') {
         const target = err.meta?.target || '';
@@ -201,6 +248,12 @@ export class EquipmentService implements OnModuleInit {
     if ('department' in sanitizedData) {
       sanitizedData.department = sanitizedData.department && String(sanitizedData.department).trim() !== ''
         ? String(sanitizedData.department).trim()
+        : null;
+    }
+
+    if ('functionalUnit' in sanitizedData) {
+      sanitizedData.functionalUnit = sanitizedData.functionalUnit && String(sanitizedData.functionalUnit).trim() !== ''
+        ? String(sanitizedData.functionalUnit).trim()
         : null;
     }
 

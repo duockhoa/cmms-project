@@ -36,8 +36,8 @@ export class RequestsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() data: CreateMaintenanceRequestDto) {
-    return this.requestsService.create(data);
+  create(@Body() data: CreateMaintenanceRequestDto, @Req() req: any) {
+    return this.requestsService.create(data, req?.user?.id);
   }
 
   @Post(':id/approve')

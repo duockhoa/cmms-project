@@ -190,6 +190,29 @@ export const api = {
     return res;
   },
 
+  // Functional Unit Library (Thư viện cụm chức năng dùng chung)
+  getFunctionalUnitLibrary: () => request('/functional-unit-library'),
+  createFunctionalUnitLibraryItem: (data: any) =>
+    request('/functional-unit-library', { method: 'POST', body: JSON.stringify(data) }),
+  updateFunctionalUnitLibraryItem: (id: string, data: any) =>
+    request(`/functional-unit-library/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteFunctionalUnitLibraryItem: (id: string) =>
+    request(`/functional-unit-library/${id}`, { method: 'DELETE' }),
+
+  // Equipment Functional Units (Cụm chức năng theo thiết bị)
+  getEquipmentFunctionalUnits: (equipmentId: string) =>
+    request(`/equipment/${equipmentId}/functional-units`),
+  createEquipmentFunctionalUnit: (equipmentId: string, data: any) =>
+    request(`/equipment/${equipmentId}/functional-units`, { method: 'POST', body: JSON.stringify(data) }),
+  createBatchEquipmentFunctionalUnits: (equipmentId: string, items: any[]) =>
+    request(`/equipment/${equipmentId}/functional-units/batch`, { method: 'POST', body: JSON.stringify({ items }) }),
+  updateEquipmentFunctionalUnit: (equipmentId: string, id: string, data: any) =>
+    request(`/equipment/${equipmentId}/functional-units/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteEquipmentFunctionalUnit: (equipmentId: string, id: string) =>
+    request(`/equipment/${equipmentId}/functional-units/${id}`, { method: 'DELETE' }),
+  cloneEquipmentFunctionalUnits: (equipmentId: string, data: { sourceEquipmentId: string; unitIds?: string[] }) =>
+    request(`/equipment/${equipmentId}/functional-units/clone`, { method: 'POST', body: JSON.stringify(data) }),
+
   // Maintenance Requests
   getRequests: (params?: { status?: string; priority?: string; search?: string }) =>
     request(`/requests${toQueryString(params)}`),

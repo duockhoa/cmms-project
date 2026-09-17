@@ -46,6 +46,7 @@ model User {
   checklistExecutions   ChecklistExecution[]   @relation("ExecutedByChecklists")
   cancelledChecklists   ChecklistExecution[]   @relation("CancelledByChecklists")
   attachments           Attachment[]
+  reportedRequests      MaintenanceRequest[]   @relation("RequestReporter")
   cancelledRequests     MaintenanceRequest[]   @relation("RequestCancelledBy")
   workflowActions       WorkflowHistory[]      @relation("WorkflowActedBy")
   inventoryTransactions InventoryTransaction[] @relation("InventoryTxActedBy")
@@ -96,6 +97,7 @@ model Equipment {
   serialNumber          String?
   specs                 String? // JSON or Text description
   notes                 String?
+  functionalUnit        String? // Cụm chức năng chính/khái quát
   currentOperatingHours Float                 @default(0)
   isActive              Boolean               @default(true)
   createdAt             DateTime              @default(now())
@@ -108,17 +110,22 @@ model Equipment {
   parameters            EquipmentParameter[]
   technicalSpecs        EquipmentTechnicalSpec[]
   operationLogs         OperationLog[]
+  functionalUnits       EquipmentFunctionalUnit[]
 }
 
 model MaintenanceRequest {
-  id              String      @id @default(uuid())
-  requestCode     String      @unique
+  id              String                   @id @default(uuid())
+  requestCode     String                   @unique
   equipmentId     String
-  equipment       Equipment   @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  equipment       Equipment                @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  functionalUnitId String?
+  functionalUnit  EquipmentFunctionalUnit? @relation(fields: [functionalUnitId], references: [id], onDelete: SetNull)
   title           String
   description     String
-  priority        String      @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
-  status          String      @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED, CANCELLED
+  priority        String                   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status          String                   @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED, CANCELLED
+  reporterId      String?
+  reporter        User?                    @relation("RequestReporter", fields: [reporterId], references: [id], onDelete: SetNull)
   reporterName    String
   department      String?
   images          String? // [LEGACY] JSON array of image URLs
@@ -127,10 +134,14 @@ model MaintenanceRequest {
   cancelledReason String?
   cancelledAt     DateTime?
   cancelledById   String?
-  cancelledBy     User?       @relation("RequestCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
-  createdAt       DateTime    @default(now())
-  version         Int         @default(1)
+  cancelledBy     User?                    @relation("RequestCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  createdAt       DateTime                 @default(now())
+  version         Int                      @default(1)
   workOrders      WorkOrder[]
+
+  @@index([equipmentId])
+  @@index([functionalUnitId])
+  @@index([reporterId])
 }
 
 model WorkOrder {
@@ -138,6 +149,8 @@ model WorkOrder {
   orderCode           String                 @unique
   equipmentId         String
   equipment           Equipment              @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  functionalUnitId    String?
+  functionalUnit      EquipmentFunctionalUnit? @relation(fields: [functionalUnitId], references: [id], onDelete: SetNull)
   requestId           String?                @unique
   request             MaintenanceRequest?    @relation(fields: [requestId], references: [id], onDelete: SetNull)
   title               String
@@ -183,6 +196,7 @@ model WorkOrder {
 
   @@unique([scheduleId, scheduledDueDate])
   @@index([scheduleId])
+  @@index([functionalUnitId])
 }
 
 model WorkOrderItem {
@@ -581,6 +595,42 @@ model EquipmentTechnicalSpec {
   notes       String?   // Ghi chú thêm
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// BẢNG: THƯ VIỆN CỤM CHỨC NĂNG DÙNG CHUNG TOÀN NHÀ MÁY
+model FunctionalUnitLibrary {
+  id          String   @id @default(uuid())
+  name        String   @unique // Tên cụm chức năng chuẩn (VD: Cụm bơm áp lực, Cụm cấp phôi, Cụm sấy khí nén...)
+  code        String?  // Mã quy chuẩn (VD: FU-PUMP, FU-CONV...)
+  category    String?  // Cơ khí, Điện - Tự động hóa, Khí nén, Thủy lực...
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  functionalUnits EquipmentFunctionalUnit[]
+}
+
+// BẢNG: CỤM CHỨC NĂNG CHI TIẾT CỦA TỪNG THIẾT BỊ
+model EquipmentFunctionalUnit {
+  id          String                 @id @default(uuid())
+  equipmentId String
+  equipment   Equipment              @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  libraryId   String?
+  libraryItem FunctionalUnitLibrary? @relation(fields: [libraryId], references: [id], onDelete: SetNull)
+  code        String?                // Mã cụm trên máy (VD: FNC-01, TBSX917-CU01)
+  name        String                 // Tên cụm chức năng
+  description String?                @db.Text
+  status      String                 @default("OPERATIONAL") // OPERATIONAL, WARNING, INCIDENT, INACTIVE
+  orderIndex  Int                    @default(0)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  requests    MaintenanceRequest[]
+  workOrders  WorkOrder[]
+
+  @@index([equipmentId])
+  @@index([libraryId])
 }
 
 model OperationLog {

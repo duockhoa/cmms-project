@@ -18,11 +18,13 @@ import { RolesSettingsTab } from '../components/settings/RolesSettingsTab';
 import { UsersSettingsTab } from '../components/settings/UsersSettingsTab';
 import { TechniciansSettingsTab } from '../components/settings/TechniciansSettingsTab';
 import { EquipmentParameterAssignTab } from '../components/settings/EquipmentParameterAssignTab';
+import { FunctionalUnitLibraryTab } from '../components/settings/FunctionalUnitLibraryTab';
 
 export type SettingsTabId =
   | 'categories'
   | 'locations'
   | 'production-lines'
+  | 'functional-unit-library'
   | 'standard-technical-specs'
   | 'standard-parameters'
   | 'equipment-parameters'
@@ -64,6 +66,12 @@ const SETTINGS_GROUPS: NavGroup[] = [
         label: 'Khu vực / Dây chuyền',
         description: 'Line sản xuất, dây chuyền đóng gói',
         icon: Layers,
+      },
+      {
+        id: 'functional-unit-library',
+        label: 'Thư viện Cụm chức năng',
+        description: 'Cụm bơm, chiết rót, cấp phôi, băng tải...',
+        icon: Cpu,
       },
       {
         id: 'standard-technical-specs',
@@ -336,6 +344,7 @@ export const SettingsPage: React.FC = () => {
           {activeTab === 'categories' && <CategoriesSettingsTab />}
           {activeTab === 'locations' && <LocationsSettingsTab />}
           {activeTab === 'production-lines' && <ProductionLinesSettingsTab />}
+          {activeTab === 'functional-unit-library' && <FunctionalUnitLibraryTab />}
           {activeTab === 'standard-technical-specs' && <StandardTechnicalSpecsTab />}
           {activeTab === 'standard-parameters' && <StandardParametersTab />}
           {activeTab === 'equipment-parameters' && <EquipmentParameterAssignTab />}

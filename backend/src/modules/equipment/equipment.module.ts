@@ -8,6 +8,8 @@ import { EquipmentTechnicalSpecsService } from './equipment-technical-specs.serv
 import { EquipmentTechnicalSpecsController } from './equipment-technical-specs.controller';
 import { OperationLogsService } from './operation-logs.service';
 import { OperationLogsController, GlobalOperationLogsController } from './operation-logs.controller';
+import { FunctionalUnitsService } from './functional-units.service';
+import { FunctionalUnitsController, FunctionalUnitLibraryController } from './functional-units.controller';
 
 @Module({
   controllers: [
@@ -15,21 +17,26 @@ import { OperationLogsController, GlobalOperationLogsController } from './operat
     EquipmentParametersController, 
     EquipmentTechnicalSpecsController,
     OperationLogsController, 
-    GlobalOperationLogsController
+    GlobalOperationLogsController,
+    FunctionalUnitsController,
+    FunctionalUnitLibraryController,
   ],
   providers: [
     EquipmentService, 
     EquipmentStatusService, 
     EquipmentParametersService, 
     EquipmentTechnicalSpecsService,
-    OperationLogsService
+    OperationLogsService,
+    FunctionalUnitsService,
   ],
   exports: [
     EquipmentService, 
     EquipmentStatusService, 
     EquipmentParametersService, 
     EquipmentTechnicalSpecsService,
-    OperationLogsService
+    OperationLogsService,
+    FunctionalUnitsService,
   ],
 })
 export class EquipmentModule {}
+

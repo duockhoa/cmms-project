@@ -103,6 +103,7 @@ export const EquipmentPage: React.FC = () => {
             serialNumber: finalFormData.serialNumber,
             specs: finalFormData.specs,
             accountingCode: finalFormData.accountingCode || undefined,
+            functionalUnit: finalFormData.functionalUnit || undefined,
             expectedVersion: editItem.version,
           })
         });

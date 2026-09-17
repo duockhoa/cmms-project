@@ -39,6 +39,8 @@ export class RequestsService {
           orderBy: { createdAt: 'desc' },
           include: {
             equipment: true,
+            functionalUnit: { include: { libraryItem: true } },
+            reporter: true,
             workOrders: true,
           },
         })
@@ -60,6 +62,8 @@ export class RequestsService {
       orderBy: { createdAt: 'desc' },
       include: {
         equipment: true,
+        functionalUnit: { include: { libraryItem: true } },
+        reporter: true,
         workOrders: true,
       },
     });
@@ -68,16 +72,32 @@ export class RequestsService {
   async findOne(id: string) {
     const request = await this.prisma.maintenanceRequest.findUnique({
       where: { id },
-      include: { equipment: true, workOrders: true },
+      include: { 
+        equipment: true, 
+        functionalUnit: { include: { libraryItem: true } },
+        reporter: true,
+        workOrders: true 
+      },
     });
     if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
     return request;
   }
 
-  async create(data: any) {
+  async create(data: any, actorId?: string) {
     // Business Validation: Equipment must exist
     const equipment = await this.prisma.equipment.findUnique({ where: { id: data.equipmentId } });
     if (!equipment) throw new BadRequestException('Thiết bị không tồn tại');
+
+    // Lấy thông tin người báo cáo từ tài khoản đăng nhập (actorId hoặc data.reporterId)
+    const effectiveUserId = data.reporterId || actorId;
+    let reporterUser: any = null;
+    if (effectiveUserId) {
+      reporterUser = await this.prisma.user.findUnique({ where: { id: effectiveUserId } });
+    }
+
+    const reporterName = reporterUser?.name || data.reporterName || 'Nhân viên vận hành';
+    const department = reporterUser?.department || data.department || equipment.department || null;
+    const reporterId = reporterUser?.id || null;
 
     const request = await this.prisma.$transaction(async (tx) => {
       const count = await tx.maintenanceRequest.count();
@@ -87,15 +107,30 @@ export class RequestsService {
         data: {
           requestCode,
           equipmentId: data.equipmentId,
+          functionalUnitId: data.functionalUnitId || null,
           title: data.title,
           description: data.description,
           priority: data.priority || 'MEDIUM',
-          reporterName: data.reporterName || 'Nhân viên vận hành',
-          department: data.department || equipment.department || null,
+          reporterId,
+          reporterName,
+          department,
           images: data.images ? JSON.stringify(data.images) : null,
         },
-        include: { equipment: true },
+        include: { 
+          equipment: true,
+          functionalUnit: { include: { libraryItem: true } },
+          reporter: true,
+        },
       });
+
+      // Cập nhật trạng thái cụm chức năng gặp lỗi (nếu có chọn cụm)
+      if (data.functionalUnitId) {
+        const fuStatus = (data.priority === 'URGENT' || data.priority === 'HIGH') ? 'INCIDENT' : 'WARNING';
+        await tx.equipmentFunctionalUnit.update({
+          where: { id: data.functionalUnitId },
+          data: { status: fuStatus },
+        }).catch(() => {});
+      }
 
       // Recalculate equipment status
       await this.equipmentStatus.calculateAndSetStatus(data.equipmentId, tx);
@@ -253,6 +288,7 @@ export class RequestsService {
         data: {
           orderCode,
           equipmentId: request.equipmentId,
+          functionalUnitId: request.functionalUnitId || null,
           requestId: request.id,
           title: `${titlePrefix} ${request.title}`,
           description: request.description,
