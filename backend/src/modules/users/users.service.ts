@@ -230,7 +230,96 @@ export class UsersService {
       throw new NotFoundException(`Không tìm thấy người dùng với ID: ${id}`);
     }
 
-    return this.prisma.user.delete({ where: { id } });
+    // Tìm xem có tài khoản khác cùng người (cùng tên hoặc cùng email/mã HRM) để gộp quan hệ sang không
+    const otherUser = await this.prisma.user.findFirst({
+      where: {
+        id: { not: id },
+        OR: [
+          { name: user.name },
+          ...(user.email ? [{ email: user.email }] : []),
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const targetUserId = otherUser ? otherUser.id : null;
+
+    return await this.prisma.$transaction(async (tx) => {
+      if (targetUserId) {
+        // Nếu có tài khoản tương ứng, chuyển toàn bộ quan hệ sang tài khoản đó rồi xóa tài khoản này
+        await tx.maintenanceRequest.updateMany({ where: { reporterId: id }, data: { reporterId: targetUserId } });
+        await tx.maintenanceRequest.updateMany({ where: { cancelledById: id }, data: { cancelledById: targetUserId } });
+        await tx.operationLog.updateMany({ where: { recordedById: id }, data: { recordedById: targetUserId } });
+        await tx.operationLog.updateMany({ where: { voidedById: id }, data: { voidedById: targetUserId } });
+        await tx.utilityReading.updateMany({ where: { recordedById: id }, data: { recordedById: targetUserId } });
+        await tx.utilitySystemStatusLog.updateMany({ where: { recordedById: id }, data: { recordedById: targetUserId } });
+        await tx.workOrder.updateMany({ where: { assignedTechnicianId: id }, data: { assignedTechnicianId: targetUserId } });
+        await tx.workOrder.updateMany({ where: { watcherId: id }, data: { watcherId: targetUserId } });
+        await tx.workOrder.updateMany({ where: { classificationReporterId: id }, data: { classificationReporterId: targetUserId } });
+        await tx.workOrderExecutionLog.updateMany({ where: { performedById: id }, data: { performedById: targetUserId } });
+        await tx.checklistExecution.updateMany({ where: { executedById: id }, data: { executedById: targetUserId } });
+        await tx.checklistExecution.updateMany({ where: { cancelledById: id }, data: { cancelledById: targetUserId } });
+        await tx.maintenanceSchedule.updateMany({ where: { createdById: id }, data: { createdById: targetUserId } });
+        await tx.maintenanceSchedule.updateMany({ where: { assignedTechnicianId: id }, data: { assignedTechnicianId: targetUserId } });
+        await tx.maintenanceSchedule.updateMany({ where: { pausedById: id }, data: { pausedById: targetUserId } });
+        await tx.maintenanceSchedule.updateMany({ where: { cancelledById: id }, data: { cancelledById: targetUserId } });
+        await tx.workflowHistory.updateMany({ where: { actedById: id }, data: { actedById: targetUserId } });
+        await tx.scheduleHistory.updateMany({ where: { actedById: id }, data: { actedById: targetUserId } });
+        await tx.inventoryTransaction.updateMany({ where: { actedById: id }, data: { actedById: targetUserId } });
+        await tx.location.updateMany({ where: { responsibleTechId: id }, data: { responsibleTechId: targetUserId } });
+        await tx.attachment.updateMany({ where: { uploadedById: id }, data: { uploadedById: targetUserId } });
+
+        // Đổi email tạm để tránh xung đột duy nhất trước khi xóa
+        await tx.user.update({
+          where: { id },
+          data: { email: `del_${id}_${Date.now()}@temp.merge` },
+        });
+
+        return tx.user.delete({ where: { id } });
+      }
+
+      // Nếu không có tài khoản trùng, kiểm tra xem có lịch sử kiểm toán bắt buộc không (onDelete: Restrict)
+      const [opCount, utCount, usCount, schedCount, execCount, chkCount] = await Promise.all([
+        tx.operationLog.count({ where: { recordedById: id } }),
+        tx.utilityReading.count({ where: { recordedById: id } }),
+        tx.utilitySystemStatusLog.count({ where: { recordedById: id } }),
+        tx.maintenanceSchedule.count({ where: { createdById: id } }),
+        tx.workOrderExecutionLog.count({ where: { performedById: id } }),
+        tx.checklistExecution.count({ where: { executedById: id } }),
+      ]);
+
+      const hasRestrictedHistory = (opCount + utCount + usCount + schedCount + execCount + chkCount) > 0;
+
+      if (hasRestrictedHistory) {
+        // Soft delete: Vô hiệu hóa tài khoản và giải phóng email để tài khoản biến mất khỏi danh sách
+        return tx.user.update({
+          where: { id },
+          data: {
+            isActive: false,
+            email: `deleted_${id}_${Date.now()}@deleted.local`,
+          },
+        });
+      }
+
+      // Xóa quan hệ nullable
+      await tx.maintenanceRequest.updateMany({ where: { reporterId: id }, data: { reporterId: null } });
+      await tx.maintenanceRequest.updateMany({ where: { cancelledById: id }, data: { cancelledById: null } });
+      await tx.operationLog.updateMany({ where: { voidedById: id }, data: { voidedById: null } });
+      await tx.workOrder.updateMany({ where: { assignedTechnicianId: id }, data: { assignedTechnicianId: null } });
+      await tx.workOrder.updateMany({ where: { watcherId: id }, data: { watcherId: null } });
+      await tx.workOrder.updateMany({ where: { classificationReporterId: id }, data: { classificationReporterId: null } });
+      await tx.checklistExecution.updateMany({ where: { cancelledById: id }, data: { cancelledById: null } });
+      await tx.maintenanceSchedule.updateMany({ where: { assignedTechnicianId: id }, data: { assignedTechnicianId: null } });
+      await tx.maintenanceSchedule.updateMany({ where: { pausedById: id }, data: { pausedById: null } });
+      await tx.maintenanceSchedule.updateMany({ where: { cancelledById: id }, data: { cancelledById: null } });
+      await tx.workflowHistory.updateMany({ where: { actedById: id }, data: { actedById: null } });
+      await tx.scheduleHistory.updateMany({ where: { actedById: id }, data: { actedById: null } });
+      await tx.inventoryTransaction.updateMany({ where: { actedById: id }, data: { actedById: null } });
+      await tx.location.updateMany({ where: { responsibleTechId: id }, data: { responsibleTechId: null } });
+      await tx.attachment.updateMany({ where: { uploadedById: id }, data: { uploadedById: null } });
+
+      return tx.user.delete({ where: { id } });
+    });
   }
 
   async syncHrmUsers(accessToken: string) {
