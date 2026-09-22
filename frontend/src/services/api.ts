@@ -218,6 +218,10 @@ export const api = {
     request(`/requests${toQueryString(params)}`),
   getRequestById: (id: string) => request(`/requests/${id}`),
   createRequest: (data: any) => request('/requests', { method: 'POST', body: JSON.stringify(data) }),
+  updateRequest: (id: string, data: any) =>
+    request(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRequest: (id: string) =>
+    request(`/requests/${id}`, { method: 'DELETE' }),
   approveRequest: (id: string, body?: any) =>
     request(`/requests/${id}/approve`, { method: 'POST', body: JSON.stringify(body || {}) }),
   rejectRequest: (id: string, body?: { reason?: string }) =>

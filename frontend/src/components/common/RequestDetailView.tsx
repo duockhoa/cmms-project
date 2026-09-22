@@ -3,7 +3,7 @@ import { api } from '../../services/api';
 import { StatusBadge } from './Badge';
 import { Modal } from './Modal';
 import { useToast } from './Toast';
-import { CheckCircle, XCircle, RotateCcw, Send, Ban, Loader2, XOctagon, Cpu } from 'lucide-react';
+import { CheckCircle, XCircle, RotateCcw, Send, Ban, Loader2, XOctagon, Cpu, Edit2, Trash2 } from 'lucide-react';
 
 interface RequestDetailViewProps {
   requestId: string;
@@ -11,6 +11,8 @@ interface RequestDetailViewProps {
   users: any[];
   onActionSuccess: () => void;
   onClose: () => void;
+  onEdit?: (request: any) => void;
+  onDelete?: (request: any) => void;
 }
 
 export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
@@ -19,6 +21,8 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
   users,
   onActionSuccess,
   onClose,
+  onEdit,
+  onDelete,
 }) => {
   const toast = useToast();
   const [req, setReq] = useState<any>(null);
@@ -291,7 +295,16 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
                </>
              )}
 
-             {['APPROVED', 'REJECTED', 'CANCELLED'].includes(req.status) && (
+             {/* Thao tác Chỉnh sửa & Xóa */}
+             {onEdit && (
+               <ActionButton onClick={() => onEdit(req)} icon={Edit2} label="Chỉnh sửa" color="#3b82f6" />
+             )}
+
+             {onDelete && (!req.workOrders || req.workOrders.length === 0) && (
+               <ActionButton onClick={() => onDelete(req)} icon={Trash2} label="Xóa sự cố" color="#dc2626" />
+             )}
+
+             {['APPROVED', 'REJECTED', 'CANCELLED'].includes(req.status) && !onEdit && !onDelete && (
                <div style={{ color: 'var(--text-muted)', fontSize: '14px', fontStyle: 'italic' }}>
                  Yêu cầu này đã xử lý xong. Không có hành động nào khả dụng.
                </div>

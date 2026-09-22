@@ -81,6 +81,7 @@ async function main() {
     'requests:approve',
     'requests:reject',
     'requests:cancel',
+    'requests:delete',
     // Phiếu bảo trì
     'work_orders:view',
     'work_orders:create',

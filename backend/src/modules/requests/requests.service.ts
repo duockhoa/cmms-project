@@ -678,6 +678,108 @@ export class RequestsService {
     });
   }
 
+  // ─── UPDATE REQUEST ───
+  async update(id: string, body: any, actorId?: string) {
+    const existing = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      include: { workOrders: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
+    }
+
+    // Nếu đổi thiết bị, kiểm tra thiết bị có tồn tại không
+    if (body.equipmentId && body.equipmentId !== existing.equipmentId) {
+      const eq = await this.prisma.equipment.findUnique({ where: { id: body.equipmentId } });
+      if (!eq) throw new BadRequestException('Thiết bị được chọn không tồn tại');
+    }
+
+    const dataToUpdate: any = {};
+    if (body.title !== undefined) dataToUpdate.title = body.title.trim();
+    if (body.description !== undefined) dataToUpdate.description = body.description.trim();
+    if (body.priority !== undefined) dataToUpdate.priority = body.priority;
+    if (body.equipmentId !== undefined) dataToUpdate.equipmentId = body.equipmentId;
+    if (body.functionalUnitId !== undefined) dataToUpdate.functionalUnitId = body.functionalUnitId || null;
+    if (body.reporterName !== undefined) dataToUpdate.reporterName = body.reporterName;
+    if (body.department !== undefined) dataToUpdate.department = body.department;
+
+    dataToUpdate.version = { increment: 1 };
+
+    const updated = await this.prisma.maintenanceRequest.update({
+      where: { id },
+      data: dataToUpdate,
+      include: {
+        equipment: true,
+        functionalUnit: { include: { libraryItem: true } },
+        reporter: true,
+        workOrders: true,
+      },
+    });
+
+    // Ghi nhận WorkflowHistory
+    try {
+      await this.prisma.workflowHistory.create({
+        data: {
+          entityType: 'MaintenanceRequest',
+          entityId: id,
+          action: 'UPDATE',
+          fromStatus: existing.status,
+          toStatus: updated.status,
+          comment: 'Chỉnh sửa thông tin báo cáo sự cố',
+          actedById: actorId || null,
+          requestVersionBefore: existing.version,
+          requestVersionAfter: updated.version,
+        },
+      });
+    } catch (e) {
+      console.warn('Lỗi ghi workflow history khi update request:', e);
+    }
+
+    return updated;
+  }
+
+  // ─── DELETE REQUEST ───
+  async delete(id: string, actorId?: string) {
+    const existing = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      include: { workOrders: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa cần xóa');
+    }
+
+    if (existing.workOrders.length > 0) {
+      throw new BadRequestException(
+        'Không thể xóa yêu cầu đã được chuyển thành Phiếu sửa chữa (Work Order). Vui lòng hủy hoặc xử lý các phiếu sửa chữa liên quan trước.'
+      );
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      // Xóa WorkflowHistory liên quan
+      await tx.workflowHistory.deleteMany({
+        where: {
+          entityType: 'MaintenanceRequest',
+          entityId: id,
+        },
+      });
+
+      // Xóa Attachment liên quan
+      await tx.attachment.deleteMany({
+        where: {
+          entityType: 'MaintenanceRequest',
+          entityId: id,
+        },
+      });
+
+      // Xóa chính bản ghi MaintenanceRequest
+      await tx.maintenanceRequest.delete({
+        where: { id },
+      });
+
+      return { success: true, message: `Đã xóa yêu cầu báo hỏng ${existing.requestCode} thành công.` };
+    });
+  }
+
   // ─── WORKFLOW HISTORY ───
   async getHistory(requestId: string) {
     return this.prisma.workflowHistory.findMany({

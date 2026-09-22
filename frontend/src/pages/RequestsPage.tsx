@@ -2,12 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode, Cpu } from 'lucide-react';
+import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode, Cpu, Edit2, Trash2, Eye, AlertTriangle } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
 import { RequestDetailView } from '../components/common/RequestDetailView';
+import { usePermissions } from '../hooks/usePermissions';
 
 export const RequestsPage: React.FC = () => {
+  const { can, isAdmin } = usePermissions();
+  const canEdit = isAdmin || can('requests:edit');
+  const canDelete = isAdmin || can('requests:delete') || can('requests:cancel');
+
   const [requests, setRequests] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [functionalUnits, setFunctionalUnits] = useState<any[]>([]);
@@ -22,6 +27,24 @@ export const RequestsPage: React.FC = () => {
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+
+  // Edit Modal State
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingReq, setEditingReq] = useState<any | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    equipmentId: '',
+    functionalUnitId: '',
+    title: '',
+    description: '',
+    priority: 'HIGH',
+  });
+  const [editFunctionalUnits, setEditFunctionalUnits] = useState<any[]>([]);
+  const [loadingEditUnits, setLoadingEditUnits] = useState(false);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Delete Modal State
+  const [deleteConfirmReq, setDeleteConfirmReq] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleQRScan = (decodedText: string) => {
     if (decodedText.startsWith('cmms-equipment:')) {
@@ -149,6 +172,89 @@ export const RequestsPage: React.FC = () => {
     }
   };
 
+  // Tải danh sách cụm chức năng theo thiết bị được chọn trong Edit modal
+  useEffect(() => {
+    if (!editFormData.equipmentId) {
+      setEditFunctionalUnits([]);
+      return;
+    }
+    let isMounted = true;
+    const fetchUnits = async () => {
+      try {
+        setLoadingEditUnits(true);
+        const res = await api.getEquipmentFunctionalUnits(editFormData.equipmentId);
+        if (isMounted) {
+          setEditFunctionalUnits(Array.isArray(res) ? res : []);
+        }
+      } catch (err) {
+        if (isMounted) setEditFunctionalUnits([]);
+      } finally {
+        if (isMounted) setLoadingEditUnits(false);
+      }
+    };
+    fetchUnits();
+    return () => {
+      isMounted = false;
+    };
+  }, [editFormData.equipmentId]);
+
+  const openEditModal = (req: any) => {
+    setEditingReq(req);
+    setEditFormData({
+      equipmentId: req.equipmentId || '',
+      functionalUnitId: req.functionalUnitId || '',
+      title: req.title || '',
+      description: req.description || '',
+      priority: req.priority || 'HIGH',
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReq) return;
+    try {
+      setIsSubmittingEdit(true);
+      await api.updateRequest(editingReq.id, {
+        equipmentId: editFormData.equipmentId,
+        functionalUnitId: editFormData.functionalUnitId || null,
+        title: editFormData.title.trim(),
+        description: editFormData.description.trim(),
+        priority: editFormData.priority,
+      });
+      setIsEditOpen(false);
+      setEditingReq(null);
+      toast.success('Thành công', `Đã cập nhật yêu cầu sự cố ${editingReq.requestCode}`);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi cập nhật', err?.message || 'Không thể cập nhật yêu cầu sự cố!');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const openDeleteConfirm = (req: any) => {
+    setDeleteConfirmReq(req);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirmReq) return;
+    try {
+      setIsDeleting(true);
+      await api.deleteRequest(deleteConfirmReq.id);
+      toast.success('Thành công', `Đã xóa yêu cầu sự cố ${deleteConfirmReq.requestCode}`);
+      if (selectedDetailReqId === deleteConfirmReq.id) {
+        setSelectedDetailReqId(null);
+      }
+      setDeleteConfirmReq(null);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi khi xóa', err?.message || 'Không thể xóa yêu cầu sự cố!');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
 
 
   return (
@@ -201,9 +307,33 @@ export const RequestsPage: React.FC = () => {
                     boxShadow: selectedDetailReqId === req.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <span style={{ fontWeight: 800, color: 'var(--primary)' }}>{req.requestCode}</span>
-                    <StatusBadge status={req.status} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <StatusBadge status={req.status} />
+                      {canEdit && (
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          title="Chỉnh sửa"
+                          onClick={(e) => { e.stopPropagation(); openEditModal(req); }}
+                          style={{ padding: '4px', borderRadius: '4px', color: '#d97706', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                      )}
+                      {canDelete && (!req.workOrders || req.workOrders.length === 0) && (
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          title="Xóa"
+                          onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
+                          style={{ padding: '4px', borderRadius: '4px', color: '#dc2626', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>{req.title}</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -229,6 +359,7 @@ export const RequestsPage: React.FC = () => {
                     <th>Người báo</th>
                     <th>Ưu tiên</th>
                     <th>Trạng thái</th>
+                    <th style={{ textAlign: 'center', width: '130px' }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -270,6 +401,41 @@ export const RequestsPage: React.FC = () => {
                       </td>
                       <td><StatusBadge status={req.priority} /></td>
                       <td><StatusBadge status={req.status} /></td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            title="Xem chi tiết"
+                            onClick={() => setSelectedDetailReqId(req.id)}
+                            style={{ padding: '6px', borderRadius: '6px', color: '#2563eb', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                          >
+                            <Eye size={15} />
+                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="btn-icon"
+                              title="Chỉnh sửa yêu cầu"
+                              onClick={() => openEditModal(req)}
+                              style={{ padding: '6px', borderRadius: '6px', color: '#d97706', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                            >
+                              <Edit2 size={15} />
+                            </button>
+                          )}
+                          {canDelete && (!req.workOrders || req.workOrders.length === 0) && (
+                            <button
+                              type="button"
+                              className="btn-icon"
+                              title="Xóa yêu cầu sự cố"
+                              onClick={() => openDeleteConfirm(req)}
+                              style={{ padding: '6px', borderRadius: '6px', color: '#dc2626', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -287,6 +453,8 @@ export const RequestsPage: React.FC = () => {
               currentUser={currentUser} 
               onActionSuccess={() => { loadData(); }} 
               onClose={() => setSelectedDetailReqId(null)} 
+              onEdit={canEdit ? openEditModal : undefined}
+              onDelete={canDelete ? openDeleteConfirm : undefined}
             />
           </div>
         )}
@@ -392,6 +560,165 @@ export const RequestsPage: React.FC = () => {
         </form>
       </Modal>
 
+      {/* Edit Request Modal */}
+      {isEditOpen && (
+        <Modal 
+          isOpen={isEditOpen} 
+          onClose={() => { setIsEditOpen(false); setEditingReq(null); }} 
+          title={`Chỉnh sửa Yêu cầu: ${editingReq?.requestCode || ''}`}
+        >
+          <form onSubmit={handleUpdate}>
+            <div className="form-group">
+              <label className="form-label">Thiết bị gặp sự cố *</label>
+              <select 
+                className="form-select" 
+                required 
+                value={editFormData.equipmentId} 
+                onChange={(e) => setEditFormData({ ...editFormData, equipmentId: e.target.value, functionalUnitId: '' })}
+              >
+                {equipmentList.map((eq) => (
+                  <option key={eq.id} value={eq.id}>
+                    [{eq.code}] {eq.name} - {eq.location}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Cụm chức năng gặp lỗi */}
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Cpu size={15} style={{ color: '#2563eb' }} />
+                  <span>Cụm chức năng lỗi (Tùy chọn)</span>
+                </label>
+                {loadingEditUnits && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Đang tải danh sách cụm...
+                  </span>
+                )}
+              </div>
+              <select
+                className="form-select"
+                value={editFormData.functionalUnitId}
+                onChange={(e) => setEditFormData({ ...editFormData, functionalUnitId: e.target.value })}
+                disabled={loadingEditUnits}
+              >
+                <option value="">-- Toàn bộ thiết bị / Chưa phân loại cụm --</option>
+                {editFunctionalUnits.map((fu) => (
+                  <option key={fu.id} value={fu.id}>
+                    {fu.code ? `[${fu.code}] ` : ''}{fu.name} {fu.libraryItem?.category ? `(${fu.libraryItem.category})` : ''}
+                  </option>
+                ))}
+              </select>
+              {editFormData.functionalUnitId && (
+                <div style={{ fontSize: '11px', color: '#2563eb', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  ✓ Cụm đã chọn: <strong>{editFunctionalUnits.find(u => u.id === editFormData.functionalUnitId)?.name || 'Cụm chức năng'}</strong>
+                </div>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Tên sự cố / Tiêu đề ngắn *</label>
+              <input 
+                type="text" 
+                className="form-input" 
+                required 
+                value={editFormData.title} 
+                onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })} 
+                placeholder="Băng tải kêu rít, Máy dừng đột ngột..." 
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Mức độ ưu tiên</label>
+              <select 
+                className="form-select" 
+                value={editFormData.priority} 
+                onChange={(e) => setEditFormData({ ...editFormData, priority: e.target.value })}
+              >
+                <option value="URGENT">Khẩn cấp (Dừng sản xuất)</option>
+                <option value="HIGH">Cao</option>
+                <option value="MEDIUM">Trung bình</option>
+                <option value="LOW">Thấp</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Mô tả chi tiết hiện trạng hư hỏng</label>
+              <textarea 
+                className="form-textarea" 
+                rows={3} 
+                value={editFormData.description} 
+                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })} 
+                placeholder="Hiện tượng, thời điểm xảy ra..." 
+              />
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => { setIsEditOpen(false); setEditingReq(null); }}
+                disabled={isSubmittingEdit}
+              >
+                Hủy
+              </button>
+              <button 
+                type="submit" 
+                className="btn btn-primary" 
+                disabled={isSubmittingEdit}
+              >
+                {isSubmittingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmReq && (
+        <Modal 
+          isOpen={Boolean(deleteConfirmReq)} 
+          onClose={() => setDeleteConfirmReq(null)} 
+          title="Xác nhận xóa Yêu cầu sự cố"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 16px', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
+              <AlertTriangle size={24} style={{ color: '#dc2626', flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '13px', color: '#991b1b' }}>
+                <strong>Cảnh báo:</strong> Hành động này sẽ xóa vĩnh viễn yêu cầu sự cố và lịch sử liên quan khỏi hệ thống. Hành động này không thể hoàn tác!
+              </div>
+            </div>
+
+            <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '13px', border: '1px solid var(--border-color)' }}>
+              <div><strong>Mã yêu cầu:</strong> <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{deleteConfirmReq.requestCode}</span></div>
+              <div style={{ marginTop: '4px' }}><strong>Tiêu đề:</strong> {deleteConfirmReq.title}</div>
+              <div style={{ marginTop: '4px' }}><strong>Thiết bị:</strong> {deleteConfirmReq.equipment?.name} ({deleteConfirmReq.equipment?.code})</div>
+              <div style={{ marginTop: '4px' }}><strong>Người báo:</strong> {deleteConfirmReq.reporterName}</div>
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '12px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => setDeleteConfirmReq(null)} 
+                disabled={isDeleting}
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-danger" 
+                onClick={handleDelete} 
+                disabled={isDeleting} 
+                style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none' }}
+              >
+                {isDeleting ? 'Đang xóa...' : 'Xóa vĩnh viễn'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
     </div>
   );

@@ -137,6 +137,11 @@ export const PERMISSIONS_REGISTRY: ModulePermissions[] = [
         name: 'Hủy yêu cầu sự cố',
         description: 'Hủy bỏ yêu cầu bảo trì khi không còn nhu cầu',
       },
+      {
+        code: 'requests:delete',
+        name: 'Xóa yêu cầu sự cố',
+        description: 'Xóa vĩnh viễn phiếu sự cố khi chưa phát sinh phiếu sửa chữa',
+      },
     ],
   },
   {

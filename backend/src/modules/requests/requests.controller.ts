@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards, Req, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req, HttpCode, HttpStatus } from '@nestjs/common';
 import { RequestsService } from './requests.service';
 import { CreateMaintenanceRequestDto } from './dto/create-request.dto';
+import { UpdateMaintenanceRequestDto } from './dto/update-request.dto';
 import { ApproveMaintenanceRequestDto } from './dto/approve-request.dto';
 import { RejectMaintenanceRequestDto } from './dto/reject-request.dto';
 import { ReturnRequestDto } from './dto/return-request.dto';
@@ -38,6 +39,16 @@ export class RequestsController {
   @HttpCode(HttpStatus.CREATED)
   create(@Body() data: CreateMaintenanceRequestDto, @Req() req: any) {
     return this.requestsService.create(data, req?.user?.id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() body: UpdateMaintenanceRequestDto, @Req() req: any) {
+    return this.requestsService.update(id, body, req?.user?.id);
+  }
+
+  @Delete(':id')
+  delete(@Param('id') id: string, @Req() req: any) {
+    return this.requestsService.delete(id, req?.user?.id);
   }
 
   @Post(':id/approve')
