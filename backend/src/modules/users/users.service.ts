@@ -387,8 +387,14 @@ export class UsersService {
           orConditions.push({ email: hrmUser.email });
         }
         if (hrmUsername) {
+          orConditions.push({ email: hrmUsername });
           orConditions.push({ email: `${hrmUsername}${dummyDomain}` });
           orConditions.push({ email: `${hrmId}${dummyDomain}` });
+        }
+        orConditions.push({ email: hrmId });
+        orConditions.push({ email: `0${hrmId}` });
+        if (name && name !== `User ${hrmId}`) {
+          orConditions.push({ name: name });
         }
 
         // Find all potential duplicate records for this HRM user
