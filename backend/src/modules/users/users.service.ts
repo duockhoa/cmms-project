@@ -309,11 +309,12 @@ export class UsersService {
         });
 
         if (existingUsers.length > 1) {
-          // MERGE duplicates: keep the first (oldest) record, transfer important data, delete rest
-          const primary = existingUsers[0];
-          const duplicates = existingUsers.slice(1);
+          // MERGE duplicates:
+          // Ưu tiên bản ghi có id khớp với hrmId, nếu không thì lấy bản ghi cũ nhất
+          const primary = existingUsers.find((u) => u.id === hrmId) || existingUsers[0];
+          const duplicates = existingUsers.filter((u) => u.id !== primary.id);
 
-          // Collect best data from all records (prefer ADMIN role, non-null values)
+          // Thu thập thông tin tốt nhất (ưu tiên role ADMIN, roleId, quyền tùy chỉnh)
           let bestRole = primary.role;
           let bestRoleId = primary.roleId;
           let bestCustomPerms = primary.customPermissions;
@@ -323,8 +324,70 @@ export class UsersService {
             if (dup.customPermissions && !bestCustomPerms) bestCustomPerms = dup.customPermissions;
           }
 
-          // Update primary record with merged data + fresh HRM info
-          const bestEmail = hasRealEmail ? hrmUser.email : (primary.email.includes('@') && !primary.email.endsWith(dummyDomain) ? primary.email : dummyEmail);
+          const bestEmail = hasRealEmail
+            ? hrmUser.email
+            : (primary.email.includes('@') && !primary.email.endsWith(dummyDomain) ? primary.email : dummyEmail);
+
+          // BƯỚC 1: Đổi email của tất cả bản ghi trùng sang email tạm thời
+          // để tránh lỗi Unique constraint failed trên `User_email_key`
+          for (let i = 0; i < duplicates.length; i++) {
+            const dup = duplicates[i];
+            try {
+              await this.prisma.user.update({
+                where: { id: dup.id },
+                data: { email: `merged_${dup.id}_${Date.now()}_${i}@merge.local` },
+              });
+            } catch (tempErr: any) {
+              console.warn(`Không thể đổi email tạm cho dup ${dup.id}:`, tempErr?.message);
+            }
+          }
+
+          // BƯỚC 2: Chuyển toàn bộ quan hệ foreign key từ duplicate sang primary để khi xóa không bị lỗi ràng buộc
+          for (const dup of duplicates) {
+            try {
+              await this.prisma.maintenanceRequest.updateMany({ where: { reporterId: dup.id }, data: { reporterId: primary.id } });
+              await this.prisma.maintenanceRequest.updateMany({ where: { cancelledById: dup.id }, data: { cancelledById: primary.id } });
+              await this.prisma.operationLog.updateMany({ where: { recordedById: dup.id }, data: { recordedById: primary.id } });
+              await this.prisma.operationLog.updateMany({ where: { voidedById: dup.id }, data: { voidedById: primary.id } });
+              await this.prisma.utilityReading.updateMany({ where: { recordedById: dup.id }, data: { recordedById: primary.id } });
+              await this.prisma.utilitySystemStatusLog.updateMany({ where: { recordedById: dup.id }, data: { recordedById: primary.id } });
+              await this.prisma.workOrder.updateMany({ where: { assignedTechnicianId: dup.id }, data: { assignedTechnicianId: primary.id } });
+              await this.prisma.workOrder.updateMany({ where: { watcherId: dup.id }, data: { watcherId: primary.id } });
+              await this.prisma.workOrder.updateMany({ where: { classificationReporterId: dup.id }, data: { classificationReporterId: primary.id } });
+              await this.prisma.workOrderExecutionLog.updateMany({ where: { performedById: dup.id }, data: { performedById: primary.id } });
+              await this.prisma.checklistExecution.updateMany({ where: { executedById: dup.id }, data: { executedById: primary.id } });
+              await this.prisma.checklistExecution.updateMany({ where: { cancelledById: dup.id }, data: { cancelledById: primary.id } });
+              await this.prisma.maintenanceSchedule.updateMany({ where: { createdById: dup.id }, data: { createdById: primary.id } });
+              await this.prisma.maintenanceSchedule.updateMany({ where: { assignedTechnicianId: dup.id }, data: { assignedTechnicianId: primary.id } });
+              await this.prisma.maintenanceSchedule.updateMany({ where: { pausedById: dup.id }, data: { pausedById: primary.id } });
+              await this.prisma.maintenanceSchedule.updateMany({ where: { cancelledById: dup.id }, data: { cancelledById: primary.id } });
+              await this.prisma.workflowHistory.updateMany({ where: { actedById: dup.id }, data: { actedById: primary.id } });
+              await this.prisma.scheduleHistory.updateMany({ where: { actedById: dup.id }, data: { actedById: primary.id } });
+              await this.prisma.inventoryTransaction.updateMany({ where: { actedById: dup.id }, data: { actedById: primary.id } });
+              await this.prisma.location.updateMany({ where: { responsibleTechId: dup.id }, data: { responsibleTechId: primary.id } });
+              await this.prisma.attachment.updateMany({ where: { uploadedById: dup.id }, data: { uploadedById: primary.id } });
+            } catch (relErr: any) {
+              console.warn(`Lỗi chuyển quan hệ từ dup ${dup.id} sang ${primary.id}:`, relErr?.message);
+            }
+          }
+
+          // BƯỚC 3: Xóa các bản ghi duplicate
+          for (const dup of duplicates) {
+            try {
+              await this.prisma.user.delete({ where: { id: dup.id } });
+            } catch (delErr: any) {
+              console.warn(`Không thể xóa bản ghi trùng ${dup.id}:`, delErr?.message);
+              // Nếu không xóa được, vô hiệu hóa tài khoản duplicate
+              try {
+                await this.prisma.user.update({
+                  where: { id: dup.id },
+                  data: { isActive: false },
+                });
+              } catch (_) {}
+            }
+          }
+
+          // BƯỚC 4: Cập nhật bản ghi chính (primary) với dữ liệu đã gộp và email chuẩn (an toàn tuyệt đối)
           await this.prisma.user.update({
             where: { id: primary.id },
             data: {
@@ -339,44 +402,57 @@ export class UsersService {
             },
           });
 
-          // Delete duplicate records
-          for (const dup of duplicates) {
-            try {
-              await this.prisma.user.delete({ where: { id: dup.id } });
-            } catch (delErr: any) {
-              console.warn(`Không thể xóa bản ghi trùng ${dup.id} (${dup.email}): ${delErr?.message}`);
-            }
-          }
           mergedCount += duplicates.length;
         } else if (existingUsers.length === 1) {
-          // Single existing record — just update it
+          // Chỉ có 1 bản ghi — cập nhật thông tin
           const existing = existingUsers[0];
+          const updateData: any = {
+            name: name,
+            department: hrmUser.department || null,
+            specialty: position || undefined,
+            isActive: isUserActive,
+          };
+          if (hasRealEmail && existing.email !== hrmUser.email) {
+            const conflictUser = await this.prisma.user.findUnique({ where: { email: hrmUser.email } });
+            if (!conflictUser || conflictUser.id === existing.id) {
+              updateData.email = hrmUser.email;
+            }
+          }
           await this.prisma.user.update({
             where: { id: existing.id },
-            data: {
-              name: name,
-              department: hrmUser.department || null,
-              specialty: position || undefined,
-              isActive: isUserActive,
-            },
+            data: updateData,
           });
         } else {
-          // No existing record — create new
-          try {
-            await this.prisma.user.create({
+          // Chưa có bản ghi nào — kiểm tra email trước khi tạo mới để tránh xung đột
+          const conflictUser = await this.prisma.user.findUnique({ where: { email: emailOrUsername } });
+          if (conflictUser) {
+            await this.prisma.user.update({
+              where: { id: conflictUser.id },
               data: {
-                id: hrmId,
-                email: emailOrUsername,
                 name: name,
-                role: defaultRole,
                 department: hrmUser.department || null,
                 specialty: position || null,
                 isActive: isUserActive,
               },
             });
-          } catch (createErr: any) {
-            // Handle race condition or id conflict
-            console.warn(`Sync create conflict for HRM user ${hrmId}: ${createErr?.message}`);
+          } else {
+            try {
+              const defaultUserRole = await this.prisma.role.findFirst({ where: { name: 'Người dùng' } });
+              await this.prisma.user.create({
+                data: {
+                  id: hrmId,
+                  email: emailOrUsername,
+                  name: name,
+                  role: defaultRole,
+                  roleId: defaultUserRole?.id || null,
+                  department: hrmUser.department || null,
+                  specialty: position || null,
+                  isActive: isUserActive,
+                },
+              });
+            } catch (createErr: any) {
+              console.warn(`Sync create conflict for HRM user ${hrmId}: ${createErr?.message}`);
+            }
           }
         }
         syncedCount++;
