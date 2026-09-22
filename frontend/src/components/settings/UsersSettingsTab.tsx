@@ -185,7 +185,7 @@ export const UsersSettingsTab: React.FC = () => {
     setIsSyncing(true);
     try {
       const res = await api.syncHrmUsers();
-      toast.success('Thành công', `Đã đồng bộ ${res.syncedCount || 0} người dùng từ HRM`);
+      toast.success('Thành công', `Đã đồng bộ ${res.syncedCount || 0} người dùng từ HRM${res.mergedCount ? ` (gộp ${res.mergedCount} bản ghi trùng)` : ''}`);
       loadData();
     } catch (err: any) {
       toast.error('Lỗi đồng bộ', err.message || 'Không thể đồng bộ người dùng từ HRM');

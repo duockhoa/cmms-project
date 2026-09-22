@@ -272,41 +272,117 @@ export class UsersService {
       const inactiveStatuses = inactiveStatusesStr.split(',').map(s => s.trim().toUpperCase());
 
       let syncedCount = 0;
+      let mergedCount = 0;
       
-      // Upsert each user
+      // Upsert each user — search by multiple criteria to avoid duplicates
       for (const hrmUser of hrmUsers) {
         // Skip users without id or username/email
         if (!hrmUser.id || (!hrmUser.email && !hrmUser.username)) continue;
         
-        const emailOrUsername = (hrmUser.email && hrmUser.email.includes('@'))
-          ? hrmUser.email
-          : `${hrmUser.username || hrmUser.id}${dummyDomain}`;
-        const name = hrmUser.name || hrmUser.username || `User ${hrmUser.id}`;
+        const hrmId = String(hrmUser.id);
+        const hrmUsername = hrmUser.username ? String(hrmUser.username) : null;
+        const hasRealEmail = hrmUser.email && hrmUser.email.includes('@');
+        const dummyEmail = `${hrmUsername || hrmId}${dummyDomain}`;
+        const emailOrUsername = hasRealEmail ? hrmUser.email : dummyEmail;
+        const name = hrmUser.name || hrmUser.username || `User ${hrmId}`;
         const isUserActive = !inactiveStatuses.includes(String(hrmUser.status || '').toUpperCase());
         const position = hrmUser.position || hrmUser.role || null;
         
-        await this.prisma.user.upsert({
-          where: { email: emailOrUsername },
-          update: {
-            name: name,
-            department: hrmUser.department || null,
-            specialty: position || undefined,
-            isActive: isUserActive,
-          },
-          create: {
-            id: String(hrmUser.id),
-            email: emailOrUsername,
-            name: name,
-            role: defaultRole, // Configurable via .env
-            department: hrmUser.department || null,
-            specialty: position || null,
-            isActive: isUserActive,
-          }
+        // Build search conditions to find ALL possible matching records
+        const orConditions: any[] = [
+          { email: emailOrUsername },
+          { email: dummyEmail },
+          { id: hrmId },
+        ];
+        if (hasRealEmail) {
+          orConditions.push({ email: hrmUser.email });
+        }
+        if (hrmUsername) {
+          orConditions.push({ email: `${hrmUsername}${dummyDomain}` });
+          orConditions.push({ email: `${hrmId}${dummyDomain}` });
+        }
+
+        // Find all potential duplicate records for this HRM user
+        const existingUsers = await this.prisma.user.findMany({
+          where: { OR: orConditions },
+          orderBy: { createdAt: 'asc' },
         });
+
+        if (existingUsers.length > 1) {
+          // MERGE duplicates: keep the first (oldest) record, transfer important data, delete rest
+          const primary = existingUsers[0];
+          const duplicates = existingUsers.slice(1);
+
+          // Collect best data from all records (prefer ADMIN role, non-null values)
+          let bestRole = primary.role;
+          let bestRoleId = primary.roleId;
+          let bestCustomPerms = primary.customPermissions;
+          for (const dup of duplicates) {
+            if (dup.role === 'ADMIN') bestRole = 'ADMIN';
+            if (dup.roleId && !bestRoleId) bestRoleId = dup.roleId;
+            if (dup.customPermissions && !bestCustomPerms) bestCustomPerms = dup.customPermissions;
+          }
+
+          // Update primary record with merged data + fresh HRM info
+          const bestEmail = hasRealEmail ? hrmUser.email : (primary.email.includes('@') && !primary.email.endsWith(dummyDomain) ? primary.email : dummyEmail);
+          await this.prisma.user.update({
+            where: { id: primary.id },
+            data: {
+              email: bestEmail,
+              name: name,
+              role: bestRole,
+              roleId: bestRoleId,
+              customPermissions: bestCustomPerms,
+              department: hrmUser.department || primary.department || null,
+              specialty: position || primary.specialty || null,
+              isActive: isUserActive,
+            },
+          });
+
+          // Delete duplicate records
+          for (const dup of duplicates) {
+            try {
+              await this.prisma.user.delete({ where: { id: dup.id } });
+            } catch (delErr: any) {
+              console.warn(`Không thể xóa bản ghi trùng ${dup.id} (${dup.email}): ${delErr?.message}`);
+            }
+          }
+          mergedCount += duplicates.length;
+        } else if (existingUsers.length === 1) {
+          // Single existing record — just update it
+          const existing = existingUsers[0];
+          await this.prisma.user.update({
+            where: { id: existing.id },
+            data: {
+              name: name,
+              department: hrmUser.department || null,
+              specialty: position || undefined,
+              isActive: isUserActive,
+            },
+          });
+        } else {
+          // No existing record — create new
+          try {
+            await this.prisma.user.create({
+              data: {
+                id: hrmId,
+                email: emailOrUsername,
+                name: name,
+                role: defaultRole,
+                department: hrmUser.department || null,
+                specialty: position || null,
+                isActive: isUserActive,
+              },
+            });
+          } catch (createErr: any) {
+            // Handle race condition or id conflict
+            console.warn(`Sync create conflict for HRM user ${hrmId}: ${createErr?.message}`);
+          }
+        }
         syncedCount++;
       }
 
-      return { success: true, syncedCount };
+      return { success: true, syncedCount, mergedCount };
     } catch (err: any) {
       if (err instanceof HttpException) throw err;
       throw new HttpException(`Lỗi kết nối tới HRM: ${err.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
