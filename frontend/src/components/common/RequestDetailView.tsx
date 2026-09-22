@@ -3,7 +3,7 @@ import { api } from '../../services/api';
 import { StatusBadge } from './Badge';
 import { Modal } from './Modal';
 import { useToast } from './Toast';
-import { CheckCircle, XCircle, RotateCcw, Send, Ban, Loader2, XOctagon, Cpu, Edit2, Trash2 } from 'lucide-react';
+import { CheckCircle, XCircle, RotateCcw, Send, Ban, Loader2, XOctagon, Cpu, Edit2, Trash2, Lock } from 'lucide-react';
 
 interface RequestDetailViewProps {
   requestId: string;
@@ -257,6 +257,8 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
     </button>
   );
 
+  const isLocked = req.status === 'CLOSED' || (req.workOrders && req.workOrders.length > 0);
+
   return (
     <div className="request-detail-view" style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       
@@ -278,39 +280,61 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
              Các thao tác
            </h3>
            
-           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
-             
-             {req.status === 'PENDING' && (
-               <>
-                 <ActionButton onClick={() => setApproveModalOpen(true)} icon={CheckCircle} label="Duyệt" color="#10b981" />
-                 <ActionButton onClick={handleReject} icon={XCircle} label="Từ chối" color="#ef4444" />
-                 <ActionButton onClick={handleReturn} icon={RotateCcw} label="Trả lại" color="#f59e0b" />
-               </>
-             )}
-
-             {req.status === 'RETURNED' && (
-               <>
-                 <ActionButton onClick={openResubmit} icon={Send} label="Tái gửi" color="#3b82f6" />
-                 <ActionButton onClick={handleCancel} icon={Ban} label="Hủy" color="#ef4444" />
-               </>
-             )}
-
-             {/* Thao tác Chỉnh sửa & Xóa */}
-             {onEdit && (
-               <ActionButton onClick={() => onEdit(req)} icon={Edit2} label="Chỉnh sửa" color="#3b82f6" />
-             )}
-
-             {onDelete && (!req.workOrders || req.workOrders.length === 0) && (
-               <ActionButton onClick={() => onDelete(req)} icon={Trash2} label="Xóa sự cố" color="#dc2626" />
-             )}
-
-             {['APPROVED', 'REJECTED', 'CANCELLED'].includes(req.status) && !onEdit && !onDelete && (
-               <div style={{ color: 'var(--text-muted)', fontSize: '14px', fontStyle: 'italic' }}>
-                 Yêu cầu này đã xử lý xong. Không có hành động nào khả dụng.
+           {req.status === 'CLOSED' ? (
+             <div style={{
+               display: 'flex',
+               flexDirection: 'column',
+               alignItems: 'center',
+               gap: '10px',
+               padding: '18px 24px',
+               backgroundColor: 'rgba(16, 185, 129, 0.08)',
+               border: '1px solid rgba(16, 185, 129, 0.3)',
+               borderRadius: '10px',
+               textAlign: 'center',
+               maxWidth: '620px',
+               margin: '0 auto',
+             }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '15px', color: '#059669' }}>
+                 <Lock size={18} />
+                 <span>Yêu cầu đã Đóng & Nghiệm thu hoàn tất</span>
                </div>
-             )}
+               <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                 Phiếu sửa chữa liên kết đến sự cố này đã hoàn thành nghiệm thu. Yêu cầu báo sự cố đã tự động chuyển sang trạng thái <strong>ĐÃ ĐÓNG</strong> và bị khóa toàn bộ thao tác nhằm đảm bảo tính toàn vẹn dữ liệu bảo trì GMP.
+               </div>
+             </div>
+           ) : (
+             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
+               {req.status === 'PENDING' && (
+                 <>
+                   <ActionButton onClick={() => setApproveModalOpen(true)} icon={CheckCircle} label="Duyệt" color="#10b981" />
+                   <ActionButton onClick={handleReject} icon={XCircle} label="Từ chối" color="#ef4444" />
+                   <ActionButton onClick={handleReturn} icon={RotateCcw} label="Trả lại" color="#f59e0b" />
+                 </>
+               )}
 
-           </div>
+               {req.status === 'RETURNED' && (
+                 <>
+                   <ActionButton onClick={openResubmit} icon={Send} label="Tái gửi" color="#3b82f6" />
+                   <ActionButton onClick={handleCancel} icon={Ban} label="Hủy" color="#ef4444" />
+                 </>
+               )}
+
+               {/* Thao tác Chỉnh sửa & Xóa - Chỉ cho phép khi chưa khóa và chưa có Work Order */}
+               {!isLocked && onEdit && (
+                 <ActionButton onClick={() => onEdit(req)} icon={Edit2} label="Chỉnh sửa" color="#3b82f6" />
+               )}
+
+               {!isLocked && onDelete && (
+                 <ActionButton onClick={() => onDelete(req)} icon={Trash2} label="Xóa sự cố" color="#dc2626" />
+               )}
+
+               {['APPROVED', 'REJECTED', 'CANCELLED'].includes(req.status) && (!onEdit || isLocked) && (
+                 <div style={{ color: 'var(--text-muted)', fontSize: '14px', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                   {isLocked && <Lock size={14} />} Yêu cầu này đã được phê duyệt hoặc chuyển thành phiếu sửa chữa. Thao tác đã khóa.
+                 </div>
+               )}
+             </div>
+           )}
         </div>
 
         {/* Metadata Table */}
@@ -374,6 +398,27 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
                 <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mô tả chi tiết</td>
                 <td style={{ padding: '12px 0' }}>{req.description}</td>
               </tr>
+              
+              {/* Phiếu sửa chữa liên kết nếu có */}
+              {req.workOrders && req.workOrders.length > 0 && (
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Phiếu sửa chữa liên kết</td>
+                  <td style={{ padding: '12px 0' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {req.workOrders.map((wo: any) => (
+                        <div key={wo.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{wo.code}</span>
+                          <StatusBadge status={wo.status} />
+                          {wo.title && <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>- {wo.title}</span>}
+                          {wo.assignedTechnicianName && (
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>(KTV: {wo.assignedTechnicianName})</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
               
               {/* Lý do trả/từ chối/huỷ nếu có */}
               {req.returnedReason && (

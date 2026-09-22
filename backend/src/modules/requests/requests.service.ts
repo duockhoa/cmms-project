@@ -14,6 +14,29 @@ export class RequestsService {
   ) {}
 
   async findAll(query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string }) {
+    // Tự động kiểm tra và đồng bộ các yêu cầu có Phiếu sửa chữa đã nghiệm thu/đóng sang CLOSED
+    try {
+      const closedWos = await this.prisma.workOrder.findMany({
+        where: {
+          requestId: { not: null },
+          status: { in: ['VERIFIED', 'CLOSED'] },
+        },
+        select: { requestId: true },
+      });
+      const idsToClose = closedWos.map((w) => w.requestId).filter(Boolean) as string[];
+      if (idsToClose.length > 0) {
+        await this.prisma.maintenanceRequest.updateMany({
+          where: {
+            id: { in: idsToClose },
+            status: { not: 'CLOSED' },
+          },
+          data: { status: 'CLOSED' },
+        });
+      }
+    } catch (syncErr) {
+      console.warn('Lỗi đồng bộ trạng thái yêu cầu theo phiếu sửa chữa:', syncErr);
+    }
+
     const where: any = {};
     if (query?.status) where.status = query.status;
     if (query?.priority) where.priority = query.priority;
@@ -80,6 +103,19 @@ export class RequestsService {
       },
     });
     if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
+
+    // Tự động chuyển sang CLOSED nếu WorkOrder đã nghiệm thu/đóng mà request chưa CLOSED
+    const hasCompletedWo = request.workOrders.some((w) => ['VERIFIED', 'CLOSED'].includes(w.status));
+    if (hasCompletedWo && request.status !== 'CLOSED') {
+      try {
+        await this.prisma.maintenanceRequest.update({
+          where: { id },
+          data: { status: 'CLOSED' },
+        });
+        request.status = 'CLOSED';
+      } catch (_) {}
+    }
+
     return request;
   }
 
@@ -688,6 +724,14 @@ export class RequestsService {
       throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
     }
 
+    if (existing.status === 'CLOSED') {
+      throw new BadRequestException('Yêu cầu báo sự cố này đã được nghiệm thu hoàn tất và đã đóng. Đã khóa toàn bộ, không thể chỉnh sửa.');
+    }
+
+    if (existing.workOrders && existing.workOrders.length > 0) {
+      throw new BadRequestException('Yêu cầu báo sự cố này đã được chuyển thành Phiếu sửa chữa (Work Order). Đã khóa, không thể chỉnh sửa.');
+    }
+
     // Nếu đổi thiết bị, kiểm tra thiết bị có tồn tại không
     if (body.equipmentId && body.equipmentId !== existing.equipmentId) {
       const eq = await this.prisma.equipment.findUnique({ where: { id: body.equipmentId } });
@@ -748,9 +792,13 @@ export class RequestsService {
       throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa cần xóa');
     }
 
+    if (existing.status === 'CLOSED') {
+      throw new BadRequestException('Yêu cầu báo sự cố này đã được nghiệm thu hoàn tất và đã đóng. Đã khóa toàn bộ, không thể xóa.');
+    }
+
     if (existing.workOrders.length > 0) {
       throw new BadRequestException(
-        'Không thể xóa yêu cầu đã được chuyển thành Phiếu sửa chữa (Work Order). Vui lòng hủy hoặc xử lý các phiếu sửa chữa liên quan trước.'
+        'Không thể xóa yêu cầu đã được chuyển thành Phiếu sửa chữa (Work Order).'
       );
     }
 

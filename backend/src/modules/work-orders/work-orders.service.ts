@@ -502,6 +502,55 @@ export class WorkOrdersService implements OnModuleInit {
 
       await this.equipmentStatus.calculateAndSetStatus(wo.equipmentId, tx);
 
+      // ─── ĐỒNG BỘ TRẠNG THÁI YÊU CẦU SỰ CỐ LIÊN KẾT ───
+      if (wo.requestId) {
+        if (targetStatus === 'VERIFIED' || targetStatus === 'CLOSED' || actionName === 'VERIFY' || actionName === 'CLOSE') {
+          // Phiếu sửa chữa đã hoàn thành nghiệm thu / đóng vĩnh viễn -> Tự động chuyển yêu cầu sự cố sang CLOSED và KHÓA LẠI
+          try {
+            await tx.maintenanceRequest.updateMany({
+              where: { id: wo.requestId, status: { not: 'CLOSED' } },
+              data: { status: 'CLOSED', version: { increment: 1 } },
+            });
+
+            await tx.workflowHistory.create({
+              data: {
+                entityType: 'MaintenanceRequest',
+                entityId: wo.requestId,
+                action: 'CLOSE',
+                fromStatus: 'APPROVED',
+                toStatus: 'CLOSED',
+                comment: `Phiếu sửa chữa ${wo.orderCode} đã được ${targetStatus === 'VERIFIED' ? 'nghiệm thu hoàn tất' : 'đóng'}. Tự động đóng và khóa yêu cầu sự cố.`,
+                actedById: actorContext?.id || null,
+              },
+            });
+          } catch (reqCloseErr) {
+            console.warn(`Lỗi tự động đóng yêu cầu sự cố ${wo.requestId}:`, reqCloseErr);
+          }
+        } else if (actionName === 'REOPEN' || targetStatus === 'IN_PROGRESS') {
+          // Nếu phiếu sửa chữa bị mở lại từ trạng thái đã nghiệm thu -> Trả yêu cầu sự cố về APPROVED
+          try {
+            await tx.maintenanceRequest.updateMany({
+              where: { id: wo.requestId, status: 'CLOSED' },
+              data: { status: 'APPROVED', version: { increment: 1 } },
+            });
+
+            await tx.workflowHistory.create({
+              data: {
+                entityType: 'MaintenanceRequest',
+                entityId: wo.requestId,
+                action: 'REOPEN',
+                fromStatus: 'CLOSED',
+                toStatus: 'APPROVED',
+                comment: `Phiếu sửa chữa ${wo.orderCode} được mở lại. Mở lại yêu cầu sự cố về trạng thái Đã duyệt.`,
+                actedById: actorContext?.id || null,
+              },
+            });
+          } catch (reqReopenErr) {
+            console.warn(`Lỗi mở lại yêu cầu sự cố ${wo.requestId}:`, reqReopenErr);
+          }
+        }
+      }
+
       await tx.workflowHistory.create({
         data: {
           entityType: 'WorkOrder',

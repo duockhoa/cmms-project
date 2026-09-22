@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode, Cpu, Edit2, Trash2, Eye, AlertTriangle } from 'lucide-react';
+import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode, Cpu, Edit2, Trash2, Eye, AlertTriangle, Lock } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
 import { RequestDetailView } from '../components/common/RequestDetailView';
@@ -255,7 +255,10 @@ export const RequestsPage: React.FC = () => {
     }
   };
 
-
+  const isReqLocked = (req: any) => {
+    if (!req) return false;
+    return req.status === 'CLOSED' || (req.workOrders && req.workOrders.length > 0);
+  };
 
   return (
     <div>
@@ -273,10 +276,11 @@ export const RequestsPage: React.FC = () => {
 
       {/* Filter Bar */}
       <div className="card mb-4">
-        <select className="form-select" style={{ width: '220px' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <select className="form-select" style={{ width: '250px' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">-- Tất cả Trạng thái --</option>
           <option value="PENDING">Chờ xử lý (Phê duyệt)</option>
-          <option value="APPROVED">Đã duyệt (Đã chuyển thành WO)</option>
+          <option value="APPROVED">Đã duyệt (Đang sửa chữa)</option>
+          <option value="CLOSED">Đã đóng (Đã nghiệm thu xong)</option>
           <option value="REJECTED">Đã từ chối</option>
           <option value="RETURNED">Đã trả lại</option>
           <option value="CANCELLED">Đã hủy</option>
@@ -311,27 +315,38 @@ export const RequestsPage: React.FC = () => {
                     <span style={{ fontWeight: 800, color: 'var(--primary)' }}>{req.requestCode}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <StatusBadge status={req.status} />
-                      {canEdit && (
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          title="Chỉnh sửa"
-                          onClick={(e) => { e.stopPropagation(); openEditModal(req); }}
-                          style={{ padding: '4px', borderRadius: '4px', color: '#d97706', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                      {isReqLocked(req) ? (
+                        <span 
+                          title={req.status === 'CLOSED' ? 'Sự cố đã nghiệm thu hoàn tất và đóng' : 'Đã chuyển thành phiếu sửa chữa, đã khóa'} 
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)', padding: '2px 6px', borderRadius: '4px' }}
                         >
-                          <Edit2 size={13} />
-                        </button>
-                      )}
-                      {canDelete && (!req.workOrders || req.workOrders.length === 0) && (
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          title="Xóa"
-                          onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
-                          style={{ padding: '4px', borderRadius: '4px', color: '#dc2626', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                          <Lock size={11} /> Đã khóa
+                        </span>
+                      ) : (
+                        <>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="btn-icon"
+                              title="Chỉnh sửa"
+                              onClick={(e) => { e.stopPropagation(); openEditModal(req); }}
+                              style={{ padding: '4px', borderRadius: '4px', color: '#d97706', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              className="btn-icon"
+                              title="Xóa"
+                              onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
+                              style={{ padding: '4px', borderRadius: '4px', color: '#dc2626', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -402,7 +417,7 @@ export const RequestsPage: React.FC = () => {
                       <td><StatusBadge status={req.priority} /></td>
                       <td><StatusBadge status={req.status} /></td>
                       <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'center' }}>
+                        <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
                           <button
                             type="button"
                             className="btn-icon"
@@ -412,27 +427,38 @@ export const RequestsPage: React.FC = () => {
                           >
                             <Eye size={15} />
                           </button>
-                          {canEdit && (
-                            <button
-                              type="button"
-                              className="btn-icon"
-                              title="Chỉnh sửa yêu cầu"
-                              onClick={() => openEditModal(req)}
-                              style={{ padding: '6px', borderRadius: '6px', color: '#d97706', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                          {isReqLocked(req) ? (
+                            <span 
+                              title={req.status === 'CLOSED' ? 'Yêu cầu đã đóng sau khi hoàn thành nghiệm thu' : 'Đã chuyển thành phiếu sửa chữa, đã khóa'}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)', padding: '4px 8px', borderRadius: '6px' }}
                             >
-                              <Edit2 size={15} />
-                            </button>
-                          )}
-                          {canDelete && (!req.workOrders || req.workOrders.length === 0) && (
-                            <button
-                              type="button"
-                              className="btn-icon"
-                              title="Xóa yêu cầu sự cố"
-                              onClick={() => openDeleteConfirm(req)}
-                              style={{ padding: '6px', borderRadius: '6px', color: '#dc2626', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
-                            >
-                              <Trash2 size={15} />
-                            </button>
+                              <Lock size={13} /> Đã khóa
+                            </span>
+                          ) : (
+                            <>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  className="btn-icon"
+                                  title="Chỉnh sửa yêu cầu"
+                                  onClick={() => openEditModal(req)}
+                                  style={{ padding: '6px', borderRadius: '6px', color: '#d97706', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                              )}
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  className="btn-icon"
+                                  title="Xóa yêu cầu sự cố"
+                                  onClick={() => openDeleteConfirm(req)}
+                                  style={{ padding: '6px', borderRadius: '6px', color: '#dc2626', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -453,8 +479,8 @@ export const RequestsPage: React.FC = () => {
               currentUser={currentUser} 
               onActionSuccess={() => { loadData(); }} 
               onClose={() => setSelectedDetailReqId(null)} 
-              onEdit={canEdit ? openEditModal : undefined}
-              onDelete={canDelete ? openDeleteConfirm : undefined}
+              onEdit={canEdit && !isReqLocked(requests.find(r => r.id === selectedDetailReqId)) ? openEditModal : undefined}
+              onDelete={canDelete && !isReqLocked(requests.find(r => r.id === selectedDetailReqId)) ? openDeleteConfirm : undefined}
             />
           </div>
         )}
