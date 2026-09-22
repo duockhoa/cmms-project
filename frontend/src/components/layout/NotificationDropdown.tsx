@@ -29,10 +29,11 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ curr
   useEffect(() => {
     if (!currentUser?.id) return;
 
-    const socketUrl =
-      window.location.protocol === 'https:'
-        ? `https://${window.location.hostname}:3001/notifications`
-        : `http://${window.location.hostname}:3001/notifications`;
+    // Xác định socket URL: Nếu chạy localhost thì dùng port 3001, nếu production thì dùng cùng origin qua Nginx reverse proxy
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const socketUrl = isLocalhost
+      ? `${window.location.protocol}//${window.location.hostname}:3001/notifications`
+      : `${window.location.origin}/notifications`;
 
     const socket: Socket = io(socketUrl, {
       query: {
@@ -40,7 +41,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ curr
         role: currentUser.role,
         department: currentUser.department || '',
       },
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 3,
+      timeout: 5000,
     });
 
     socket.on('notification', (newNotification: any) => {
