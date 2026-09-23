@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
 import { HandlingRoute } from '@prisma/client';
 import { ApproveRequestDto } from './dto/approve-request.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { canManageDepartmentRequest } from '../../common/utils/rbac.helper';
 
 @Injectable()
 export class RequestsService {
@@ -254,29 +255,22 @@ export class RequestsService {
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
 
-      // Authorization Check
+      // Dynamic RBAC Authorization Check by Reporter's Department
       if (actorId) {
-        const actor = await tx.user.findUnique({ where: { id: actorId } });
-        if (actor) {
-          const location = await tx.location.findFirst({
-            where: { name: request.equipment.location },
-          });
-          const isAuthorized = 
-            actor.role === 'ADMIN' || 
-            actor.role === 'MANAGER' || 
-            (actor.role === 'TECHNICIAN' && location && location.responsibleTechId === actor.id);
-
-          if (!isAuthorized) {
-            throw new BadRequestException('Bạn không có quyền phê duyệt yêu cầu sửa chữa cho vị trí/nhà xưởng này.');
-          }
+        const actor = await tx.user.findUnique({ 
+          where: { id: actorId },
+          include: { customRole: true }
+        });
+        const authCheck = canManageDepartmentRequest(actor, request.department, 'requests:approve');
+        if (!authCheck.allowed) {
+          throw new ForbiddenException(authCheck.reason);
         }
       }
 
       // Determine handling route, target department, and technician assignment
       const isExternalTransfer = 
         body.handlerType === 'EXTERNAL_DEPT' || 
-        !!body.targetDepartment || 
-        body.handlerTeam === 'CO_DIEN';
+        !!body.targetDepartment;
 
       let targetStatus = 'PENDING';
       let assignedTechName: string | null = null;
@@ -286,7 +280,7 @@ export class RequestsService {
       let actionComment = '';
 
       if (isExternalTransfer) {
-        const targetDept = body.targetDepartment || (body.handlerTeam === 'CO_DIEN' ? 'xưởng cơ điện' : 'Bộ phận kỹ thuật');
+        const targetDept = body.targetDepartment || 'Bộ phận kỹ thuật';
         targetStatus = 'PENDING'; // Chờ quản lý bộ phận tiếp nhận phân công
         handlingRoute = HandlingRoute.TECHNICAL_MAINTENANCE_SUPPORT;
         assignedTechName = null;
@@ -384,7 +378,7 @@ export class RequestsService {
       const orderCode = result.workOrder.orderCode;
 
       if (result.isExternalTransfer) {
-        const targetDept = body.targetDepartment || (body.handlerTeam === 'CO_DIEN' ? 'xưởng cơ điện' : 'Bộ phận kỹ thuật');
+        const targetDept = body.targetDepartment || 'Bộ phận kỹ thuật';
         await this.notifications.createNotification(
           null,
           'MANAGER',
@@ -423,21 +417,15 @@ export class RequestsService {
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
 
-      // Authorization Check
+      // Dynamic RBAC Authorization Check by Reporter's Department
       if (actorId) {
-        const actor = await tx.user.findUnique({ where: { id: actorId } });
-        if (actor) {
-          const location = await tx.location.findFirst({
-            where: { name: request.equipment.location },
-          });
-          const isAuthorized = 
-            actor.role === 'ADMIN' || 
-            actor.role === 'MANAGER' || 
-            (actor.role === 'TECHNICIAN' && location && location.responsibleTechId === actor.id);
-
-          if (!isAuthorized) {
-            throw new BadRequestException('Bạn không có quyền từ chối yêu cầu sửa chữa cho vị trí/nhà xưởng này.');
-          }
+        const actor = await tx.user.findUnique({ 
+          where: { id: actorId },
+          include: { customRole: true }
+        });
+        const authCheck = canManageDepartmentRequest(actor, request.department, 'requests:reject');
+        if (!authCheck.allowed) {
+          throw new ForbiddenException(authCheck.reason);
         }
       }
 
@@ -504,21 +492,15 @@ export class RequestsService {
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
 
-      // Authorization Check
+      // Dynamic RBAC Authorization Check by Reporter's Department
       if (actorId) {
-        const actor = await tx.user.findUnique({ where: { id: actorId } });
-        if (actor) {
-          const location = await tx.location.findFirst({
-            where: { name: request.equipment.location },
-          });
-          const isAuthorized = 
-            actor.role === 'ADMIN' || 
-            actor.role === 'MANAGER' || 
-            (actor.role === 'TECHNICIAN' && location && location.responsibleTechId === actor.id);
-
-          if (!isAuthorized) {
-            throw new BadRequestException('Bạn không có quyền trả lại yêu cầu sửa chữa cho vị trí/nhà xưởng này.');
-          }
+        const actor = await tx.user.findUnique({ 
+          where: { id: actorId },
+          include: { customRole: true }
+        });
+        const authCheck = canManageDepartmentRequest(actor, request.department, 'requests:reject');
+        if (!authCheck.allowed) {
+          throw new ForbiddenException(authCheck.reason);
         }
       }
 

@@ -3,7 +3,8 @@ import { api } from '../../services/api';
 import { StatusBadge } from './Badge';
 import { Modal } from './Modal';
 import { useToast } from './Toast';
-import { CheckCircle, XCircle, RotateCcw, Send, Ban, Loader2, XOctagon, Cpu, Edit2, Trash2, Lock } from 'lucide-react';
+import { CheckCircle, XCircle, RotateCcw, Send, Ban, Loader2, XOctagon, Cpu, Edit2, Trash2, Lock, MapPin, Building2, ShieldAlert } from 'lucide-react';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface RequestDetailViewProps {
   requestId: string;
@@ -48,6 +49,9 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
     return active ? active.id : (users[0]?.id || 'user-id');
   };
 
+  const { can, isAdmin, user: authUser } = usePermissions();
+  const effectiveUser = currentUser || authUser;
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -59,15 +63,15 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
       setReq(data);
       setHistory(h);
       setDepartmentsList(depts);
-      const reqDept = data?.department || data?.equipment?.location || '';
+
+      const reqDept = (data?.department || data?.equipment?.department || '').trim();
       if (reqDept) {
         setInternalDepartment(reqDept);
-      } else if (depts.length > 0) {
-        setInternalDepartment(depts[0]);
       }
-      if (depts.length > 0 && !targetDepartment) {
-        const preferred = depts.find((d: string) => d.toLowerCase().includes('cơ điện')) || depts[0];
-        setTargetDepartment(preferred);
+
+      const otherDepts = depts.filter((d: string) => d.trim().toLowerCase() !== reqDept.toLowerCase());
+      if (otherDepts.length > 0 && !targetDepartment) {
+        setTargetDepartment(otherDepts[0]);
       }
     } catch (err: any) {
       toast.error('Lỗi tải chi tiết', err.message);
@@ -80,40 +84,41 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
     if (requestId) loadData();
   }, [requestId]);
 
-  // Bộ phận sở tại của sự cố
-  const reqDepartment = req?.department || req?.equipment?.location || '';
+  // Bộ phận sở tại phát sinh sự cố (Bộ phận của người báo cáo / thiết bị)
+  const reqDepartment = (req?.department || req?.equipment?.department || internalDepartment || '').trim();
+  // Vị trí địa lý đặt thiết bị trong nhà máy
+  const equipmentLocation = req?.equipment?.location || 'Chưa cập nhật vị trí';
 
-  // Danh sách đầy đủ các phòng ban từ HRM kết hợp phòng ban sự cố
-  const allDepartments = React.useMemo(() => {
-    const list = [...departmentsList];
-    if (reqDepartment && !list.some(d => d.toLowerCase() === reqDepartment.toLowerCase())) {
-      list.unshift(reqDepartment);
-    }
-    return list;
-  }, [departmentsList, reqDepartment]);
+  // Xác định thẩm quyền phê duyệt: Quản trị viên (Toàn quyền) HOẶC Quản lý cùng bộ phận
+  const isGlobalManager = isAdmin || can('ALL') || can('*');
+  const userDept = (effectiveUser?.department || '').trim().toLowerCase();
+  const requestDeptLower = reqDepartment.toLowerCase();
+  const isDepartmentMatch = Boolean(userDept && requestDeptLower && userDept === requestDeptLower);
 
-  // Chỉ lấy nhân sự thuộc đúng bộ phận sở tại khi xử lý nội bộ - TUYỆT ĐỐI KHÔNG LOAD TOÀN BỘ NGƯỜI
+  const canApprove = isGlobalManager || (can('requests:approve') && isDepartmentMatch);
+  const canReject = isGlobalManager || (can('requests:reject') && isDepartmentMatch);
+
+  // Chỉ lấy nhân sự thuộc đúng bộ phận sở tại khi xử lý nội bộ - Không lấy nhầm người xưởng khác
   const internalUsers = React.useMemo(() => {
     if (!users || !Array.isArray(users)) return [];
-    const target = (internalDepartment || reqDepartment).trim().toLowerCase();
-    if (!target) return [];
+    if (!reqDepartment) return [];
+    const target = reqDepartment.toLowerCase();
     return users.filter((u: any) => {
       if (u.isActive === false) return false;
       if (!u.department) return false;
-      const uDept = u.department.trim().toLowerCase();
-      return uDept === target || target.includes(uDept) || uDept.includes(target);
+      return u.department.trim().toLowerCase() === target;
     });
-  }, [users, internalDepartment, reqDepartment]);
+  }, [users, reqDepartment]);
 
-  // Danh sách các bộ phận khác để chuyển giao (không hardcode)
+  // Danh sách các bộ phận khác để chuyển giao (hoàn toàn động từ API, loại trừ bộ phận sở tại)
   const externalDepartments = React.useMemo(() => {
-    const current = (internalDepartment || reqDepartment).trim().toLowerCase();
+    if (!departmentsList || !Array.isArray(departmentsList)) return [];
+    const current = reqDepartment.toLowerCase();
     return departmentsList.filter((dept) => {
       if (!dept) return false;
-      const dLower = dept.trim().toLowerCase();
-      return dLower !== current && !current.includes(dLower);
+      return dept.trim().toLowerCase() !== current;
     });
-  }, [departmentsList, internalDepartment, reqDepartment]);
+  }, [departmentsList, reqDepartment]);
 
   const handleApproveConfirm = async () => {
     try {
@@ -126,7 +131,6 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
         technicianName: handlerType === 'WORKSHOP' && firstTech ? firstTech.name : undefined,
         supporterIds: handlerType === 'WORKSHOP' && supporterIds.length > 0 ? supporterIds : undefined,
         watcherId: handlerType === 'WORKSHOP' && watcherId ? watcherId : undefined,
-        handlerTeam: handlerType === 'EXTERNAL_DEPT' ? targetDepartment : 'XUONG'
       });
       setApproveModalOpen(false);
       setHandlerType('WORKSHOP');
@@ -136,7 +140,7 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
       toast.success(
         'Phê duyệt thành công', 
         handlerType === 'EXTERNAL_DEPT' 
-          ? `Đã tạo phiếu bảo trì chuyển ${targetDepartment} ở trạng thái Chờ phân công.`
+          ? `Đã tạo phiếu bảo trì chuyển giao ${targetDepartment} ở trạng thái Chờ phân công.`
           : 'Đã tạo phiếu bảo trì cho phân xưởng tự xử lý.'
       );
       onActionSuccess();
@@ -303,12 +307,30 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
                </div>
              </div>
            ) : (
-             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
+             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center', alignItems: 'center' }}>
                {req.status === 'PENDING' && (
                  <>
-                   <ActionButton onClick={() => setApproveModalOpen(true)} icon={CheckCircle} label="Duyệt" color="#10b981" />
-                   <ActionButton onClick={handleReject} icon={XCircle} label="Từ chối" color="#ef4444" />
-                   <ActionButton onClick={handleReturn} icon={RotateCcw} label="Trả lại" color="#f59e0b" />
+                   {canApprove && (
+                     <ActionButton onClick={() => setApproveModalOpen(true)} icon={CheckCircle} label="Duyệt" color="#10b981" />
+                   )}
+                   {canReject && (
+                     <>
+                       <ActionButton onClick={handleReject} icon={XCircle} label="Từ chối" color="#ef4444" />
+                       <ActionButton onClick={handleReturn} icon={RotateCcw} label="Trả lại" color="#f59e0b" />
+                     </>
+                   )}
+                   {!canApprove && !canReject && (
+                     <div style={{ 
+                       display: 'inline-flex', alignItems: 'center', gap: '8px', 
+                       padding: '10px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', 
+                       border: '1px solid var(--border-color)', fontSize: '13px', color: 'var(--text-secondary)' 
+                     }}>
+                       <ShieldAlert size={16} style={{ color: '#d97706' }} />
+                       <span>
+                         Sự cố thuộc bộ phận <strong>{reqDepartment || 'chưa xác định'}</strong>. Chỉ Quản lý bộ phận này hoặc Quản trị viên mới có quyền phê duyệt.
+                       </span>
+                     </div>
+                   )}
                  </>
                )}
 
@@ -387,8 +409,24 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Bộ phận phát sinh</td>
+                <td style={{ padding: '12px 0', fontWeight: 600 }}>
+                  <span className="badge badge-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <Building2 size={13} /> {reqDepartment || 'Chưa cập nhật'}
+                  </span>
+                </td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Vị trí đặt máy</td>
+                <td style={{ padding: '12px 0' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-primary)' }}>
+                    <MapPin size={13} style={{ color: '#dc2626' }} /> {equipmentLocation}
+                  </span>
+                </td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Người báo</td>
-                <td style={{ padding: '12px 0' }}>{req.reporterName} ({req.department})</td>
+                <td style={{ padding: '12px 0' }}>{req.reporterName} {req.department ? `(${req.department})` : ''}</td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Version</td>
@@ -493,7 +531,8 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
               <div><strong>Thiết bị:</strong> {req.equipment?.name} ({req.equipment?.code})</div>
-              <div><strong>Bộ phận / Vị trí:</strong> <span className="badge badge-secondary" style={{ marginLeft: '4px' }}>{reqDepartment || 'Chưa cập nhật'}</span></div>
+              <div style={{ marginTop: '4px' }}><strong>Vị trí đặt máy:</strong> <span style={{ marginLeft: '4px', fontWeight: 600 }}>{equipmentLocation}</span></div>
+              <div style={{ marginTop: '4px' }}><strong>Bộ phận sở tại:</strong> <span className="badge badge-secondary" style={{ marginLeft: '4px' }}>{reqDepartment || 'Chưa cập nhật'}</span></div>
             </div>
 
             <div className="form-group">
@@ -627,7 +666,7 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
                     <option key={dept} value={dept}>{dept}</option>
                   ))}
                   {externalDepartments.length === 0 && (
-                    <option value="xưởng cơ điện">xưởng cơ điện</option>
+                    <option value="" disabled>-- Chưa có danh sách bộ phận khác --</option>
                   )}
                 </select>
               </div>

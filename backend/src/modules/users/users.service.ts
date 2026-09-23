@@ -158,10 +158,28 @@ export class UsersService {
       throw new NotFoundException(`Không tìm thấy nhân viên với ID: ${id}`);
     }
 
+    let roleString = user.role;
+    if (roleId) {
+      const targetRole = await this.prisma.role.findUnique({ where: { id: roleId } });
+      if (targetRole) {
+        const lowerName = targetRole.name.toLowerCase();
+        if (lowerName.includes('quản lý') || lowerName.includes('manager')) {
+          roleString = 'MANAGER';
+        } else if (lowerName.includes('kỹ thuật') || lowerName.includes('technician')) {
+          roleString = 'TECHNICIAN';
+        } else if (lowerName.includes('quản trị') || lowerName.includes('admin')) {
+          roleString = 'ADMIN';
+        } else if (lowerName.includes('người dùng') || lowerName.includes('user')) {
+          roleString = 'USER';
+        }
+      }
+    }
+
     return this.prisma.user.update({
       where: { id },
       data: {
         roleId,
+        role: roleString,
         version: { increment: 1 }
       },
       include: { customRole: true }

@@ -91,8 +91,10 @@ export class AuthController {
       },
       permissions: permissions,
       scope: {
-        department: dbUser.role === 'MANAGER' ? (dbUser.department || 'ALL') : 'ALL',
-        assignedOnly: dbUser.role === 'TECHNICIAN',
+        department: (dbUser.role === 'MANAGER' || permissions.includes('requests:approve') || dbUser.customRole?.name?.toLowerCase().includes('quản lý')) 
+          ? (dbUser.department || 'ALL') 
+          : 'ALL',
+        assignedOnly: dbUser.role === 'TECHNICIAN' && !permissions.includes('requests:approve'),
       },
     };
   }
