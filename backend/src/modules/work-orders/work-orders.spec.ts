@@ -453,13 +453,21 @@ describe('Work Orders Module', () => {
         { id: maintUser!.id, role: 'TECHNICIAN' }
       );
 
-      // 4. Workshop accepts handover -> goes to VERIFIED
+      // 4. Workshop accepts handover -> goes to INSPECTION (Chờ QA nghiệm thu)
       const acceptedWo = await workOrdersService.acceptHandover(
         wo.id,
-        { expectedVersion: handoverWo2!.version },
+        { expectedVersion: handoverWo2!.version, comment: 'Xưởng chạy thử đạt yêu cầu' },
         { id: workshopUser!.id, role: 'TECHNICIAN' }
       );
-      expect(acceptedWo?.status).toBe('VERIFIED');
+      expect(acceptedWo?.status).toBe('INSPECTION');
+
+      // 5. QA verifies -> goes to VERIFIED
+      const qaVerifiedWo = await workOrdersService.qaVerify(
+        wo.id,
+        { expectedVersion: acceptedWo!.version, comment: 'QA thẩm định hồ sơ đạt' },
+        { id: maintUser!.id, role: 'ADMIN' }
+      );
+      expect(qaVerifiedWo?.status).toBe('VERIFIED');
     });
 
     it('should enforce strict actionType on custom logs', async () => {

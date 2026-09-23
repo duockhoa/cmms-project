@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api, API_HOST } from '../../services/api';
 import { Modal } from './Modal';
 import { useToast } from './Toast';
-import { Play, Pause, CheckCircle2, FileText, Camera, Upload, Plus, AlertTriangle, Eye, Loader2, ArrowRightLeft, ShieldCheck, XOctagon } from 'lucide-react';
+import { Play, Pause, CheckCircle2, FileText, Camera, Upload, Plus, AlertTriangle, Eye, Loader2, ArrowRightLeft, ShieldCheck, XOctagon, Lock } from 'lucide-react';
 
 interface WorkOrderDetailViewProps {
   workOrderId: string;
@@ -65,6 +65,22 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
   // Reject Handover Modal State
   const [rejectHandoverReason, setRejectHandoverReason] = useState('');
   const [isRejectHandoverOpen, setIsRejectHandoverOpen] = useState(false);
+
+  // Workshop Acceptance Modal State
+  const [isWorkshopAcceptOpen, setIsWorkshopAcceptOpen] = useState(false);
+  const [workshopComment, setWorkshopComment] = useState('');
+  const [testRunResult, setTestRunResult] = useState('Đạt yêu cầu vận hành, máy hoạt động ổn định, đủ thông số kỹ thuật');
+  const [cleanlinessResult, setCleanlinessResult] = useState('Đạt tiêu chuẩn vệ sinh 5S / xưởng sạch sẽ, không rơi vãi đồ nghề');
+
+  // QA Acceptance Modal State
+  const [isQaAcceptOpen, setIsQaAcceptOpen] = useState(false);
+  const [qaComment, setQaComment] = useState('');
+  const [gmpImpactAssessment, setGmpImpactAssessment] = useState('Không ảnh hưởng đến chất lượng sản phẩm / Đạt tiêu chuẩn GMP');
+  const [lineClearanceResult, setLineClearanceResult] = useState('Đồng ý giải phóng chuyền, cho phép đưa thiết bị vào sản xuất trở lại');
+
+  // QA Reject Modal State
+  const [isQaRejectOpen, setIsQaRejectOpen] = useState(false);
+  const [qaRejectReason, setQaRejectReason] = useState('');
 
   const getPerformerUnitType = (user: any): 'WORKSHOP' | 'TECHNICAL' | 'MAINTENANCE' => {
     if (!user) return 'MAINTENANCE';
@@ -151,6 +167,11 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
   // Permission Checks
   const isAssigned = wo.assignedTechnicianId === currentUser?.id;
   const isManagerOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
+  const isQA = isManagerOrAdmin || 
+               (currentUser?.department || '').toLowerCase().includes('qa') || 
+               (currentUser?.department || '').toLowerCase().includes('chất lượng') ||
+               (currentUser?.department || '').toLowerCase().includes('quality');
+  const isWorkshopUser = userUnitType === 'WORKSHOP' || isManagerOrAdmin;
   
   // Can execute standard repair logs
   const canModify = isAssigned || isManagerOrAdmin || (wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' && userUnitType === 'WORKSHOP');
@@ -422,15 +443,80 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
     }
   };
 
-  const handleAcceptHandover = async () => {
+  const handleWorkshopAcceptSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workshopComment.trim()) {
+      toast.error('Yêu cầu nhập ý kiến', 'Vui lòng nhập ý kiến / đánh giá nghiệm thu của phân xưởng.');
+      return;
+    }
+
     try {
       setActionLoading(true);
-      await (api as any).acceptHandover(wo.id, { expectedVersion: wo.version });
-      toast.success('Đã nghiệm thu nhận bàn giao', 'Đã chuyển trạng thái sang Đã nghiệm thu (VERIFIED).');
+      await api.acceptHandover(wo.id, {
+        expectedVersion: wo.version,
+        comment: workshopComment.trim(),
+        testRunResult: testRunResult.trim(),
+        cleanlinessResult: cleanlinessResult.trim(),
+      });
+      toast.success('Xưởng nghiệm thu thành công', 'Đã chuyển phiếu sang bước Chờ QA thẩm định & nghiệm thu (INSPECTION).');
+      setIsWorkshopAcceptOpen(false);
+      setWorkshopComment('');
       if (onStatusChangeSuccess) onStatusChangeSuccess();
       loadData();
     } catch (err: any) {
-      toast.error('Lỗi', err.message);
+      toast.error('Lỗi nghiệm thu', err.message || 'Không thể thực hiện nghiệm thu');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleQaVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qaComment.trim()) {
+      toast.error('Yêu cầu nhập kết luận', 'Vui lòng nhập kết luận thẩm định của bộ phận QA.');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await api.qaVerifyWorkOrder(wo.id, {
+        expectedVersion: wo.version,
+        comment: qaComment.trim(),
+        gmpImpactAssessment: gmpImpactAssessment.trim(),
+        lineClearanceResult: lineClearanceResult.trim(),
+      });
+      toast.success('QA Nghiệm thu hoàn tất', 'Đã phê duyệt nghiệm thu phiếu sửa chữa (VERIFIED) và tự động đóng yêu cầu sự cố.');
+      setIsQaAcceptOpen(false);
+      setQaComment('');
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi thẩm định QA', err.message || 'Không thể nghiệm thu QA');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleQaRejectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qaRejectReason.trim()) {
+      toast.error('Yêu cầu nhập lý do', 'Vui lòng nhập lý do QA yêu cầu xử lý lại.');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await api.qaRejectWorkOrder(wo.id, {
+        expectedVersion: wo.version,
+        reason: qaRejectReason.trim(),
+      });
+      toast.success('QA yêu cầu xử lý lại', 'Đã trả phiếu về Đang thực hiện sửa chữa (IN_PROGRESS).');
+      setIsQaRejectOpen(false);
+      setQaRejectReason('');
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Không thể gửi yêu cầu xử lý lại');
     } finally {
       setActionLoading(false);
     }
@@ -449,7 +535,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         expectedVersion: wo.version,
         reason: rejectHandoverReason,
       });
-      toast.success('Từ chối bàn giao thành công', 'Đã chuyển trả phiếu về Đang sửa chữa cho Cơ điện.');
+      toast.success('Yêu cầu xử lý lại thành công', 'Đã chuyển trả phiếu về Đang sửa chữa cho Kỹ thuật viên.');
       setIsRejectHandoverOpen(false);
       setRejectHandoverReason('');
       if (onStatusChangeSuccess) onStatusChangeSuccess();
@@ -582,11 +668,60 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
              )}
 
              {/* Accept/Reject Handover */}
-             {wo.status === 'COMPLETED' && wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' && (userUnitType === 'WORKSHOP' || isManagerOrAdmin) && (
+             {wo.status === 'COMPLETED' && (userUnitType === 'WORKSHOP' || isManagerOrAdmin || wo.handlingRoute === 'WORKSHOP_SELF_HANDLE') && (
                <>
-                 <ActionButton onClick={handleAcceptHandover} disabled={actionLoading} icon={ShieldCheck} label="Nghiệm thu bàn giao" color="#059669" />
-                 <ActionButton onClick={() => setIsRejectHandoverOpen(true)} disabled={actionLoading} icon={XOctagon} label="Từ chối bàn giao" color="#ef4444" />
+                  <ActionButton 
+                    onClick={() => {
+                      setWorkshopComment('');
+                      setIsWorkshopAcceptOpen(true);
+                    }} 
+                    disabled={actionLoading} 
+                    icon={ShieldCheck} 
+                    label="Nghiệm thu bàn giao (Xưởng)" 
+                    color="#059669" 
+                  />
+                 <ActionButton onClick={() => setIsRejectHandoverOpen(true)} disabled={actionLoading} icon={XOctagon} label="Yêu cầu xử lý lại" color="#ef4444" />
                </>
+             )}
+
+             {/* QA Verification Actions */}
+             {wo.status === 'INSPECTION' && isQA && (
+               <>
+                 <ActionButton 
+                   onClick={() => {
+                     setQaComment('');
+                     setIsQaAcceptOpen(true);
+                   }} 
+                   disabled={actionLoading} 
+                   icon={ShieldCheck} 
+                   label="QA Thẩm định & Nghiệm thu" 
+                   color="#7c3aed" 
+                 />
+                 <ActionButton 
+                   onClick={() => {
+                     setQaRejectReason('');
+                     setIsQaRejectOpen(true);
+                   }} 
+                   disabled={actionLoading} 
+                   icon={XOctagon} 
+                   label="QA Yêu cầu xử lý lại" 
+                   color="#ef4444" 
+                 />
+               </>
+             )}
+
+             {wo.status === 'INSPECTION' && !isQA && (
+               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', backgroundColor: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', color: '#b45309', fontSize: '13px' }}>
+                 <ShieldCheck size={18} />
+                 <span>Xưởng đã nghiệm thu đạt. Đang chờ <strong>Bộ phận Đảm bảo chất lượng (QA)</strong> thẩm định hoàn tất.</span>
+               </div>
+             )}
+
+             {['VERIFIED', 'CLOSED'].includes(wo.status) && (
+               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', backgroundColor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', color: '#047857', fontSize: '13px' }}>
+                 <Lock size={18} />
+                 <span>Phiếu đã được <strong>Phân xưởng</strong> và <strong>Bộ phận QA</strong> nghiệm thu hoàn tất. Thao tác đã khóa.</span>
+               </div>
              )}
 
            </div>
@@ -716,7 +851,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
                   if (log.actionType === 'PAUSE') badgeColor = '#ef4444';
                   if (log.actionType === 'RESUME') badgeColor = '#3b82f6';
                   if (log.actionType === 'COMPLETE' || log.actionType === 'HANDOVER_SUBMIT') badgeColor = '#10b981';
-                  if (log.actionType === 'HANDOVER_ACCEPT') badgeColor = '#059669';
+                  if (log.actionType === 'HANDOVER_ACCEPT') badgeColor = log.content?.includes('[QA') ? '#7c3aed' : '#059669';
                   if (log.actionType === 'HANDOVER_REJECT') badgeColor = '#ef4444';
                   if (log.actionType === 'ESCALATE') badgeColor = '#dc2626';
                   if (log.actionType === 'CLASSIFY') badgeColor = '#f59e0b';
@@ -756,6 +891,14 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
                             <div><strong>Kết quả test:</strong> {log.testResult || '---'}</div>
                             <div><strong>Kết luận:</strong> <span style={{ fontWeight: 700, color: '#10b981' }}>{log.conclusion || '---'}</span></div>
                             {log.recommendations && <div><strong>Khuyến nghị/Công việc tiếp theo:</strong> {log.recommendations}</div>}
+                          </div>
+                        )}
+
+                        {log.actionType === 'HANDOVER_ACCEPT' && (log.testResult || log.recommendations || log.conclusion) && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: log.content?.includes('[QA') ? 'rgba(124, 58, 237, 0.05)' : 'rgba(5, 150, 105, 0.05)', border: `1px dashed ${log.content?.includes('[QA') ? 'rgba(124, 58, 237, 0.2)' : 'rgba(5, 150, 105, 0.2)'}`, padding: '12px', borderRadius: '6px', marginTop: '12px', fontSize: '13px' }}>
+                            {log.conclusion && <div><strong>Kết luận:</strong> <span style={{ fontWeight: 700, color: log.content?.includes('[QA') ? '#7c3aed' : '#059669' }}>{log.conclusion}</span></div>}
+                            {log.testResult && <div><strong>{log.content?.includes('[QA') ? 'Tác động chất lượng GMP:' : 'Kiểm tra chạy thử:'}</strong> {log.testResult}</div>}
+                            {log.recommendations && <div><strong>{log.content?.includes('[QA') ? 'Giải phóng chuyền SX:' : 'Vệ sinh 5S khu vực:'}</strong> {log.recommendations}</div>}
                           </div>
                         )}
 
@@ -1133,15 +1276,15 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
 
       {/* 7. Modal Từ chối nhận bàn giao */}
       {isRejectHandoverOpen && (
-        <Modal isOpen={isRejectHandoverOpen} onClose={() => setIsRejectHandoverOpen(false)} title="Từ chối nhận bàn giao nghiệm thu">
+        <Modal isOpen={isRejectHandoverOpen} onClose={() => setIsRejectHandoverOpen(false)} title="Yêu cầu xử lý lại (Từ chối nghiệm thu)">
           <form onSubmit={handleRejectHandoverSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="form-group">
-              <label className="form-label">Lý do từ chối nhận bàn giao *</label>
+              <label className="form-label">Lý do yêu cầu xử lý lại *</label>
               <textarea
                 className="form-input"
                 rows={3}
                 required
-                placeholder="Ví dụ: Thiết bị chạy thử vẫn bị rung động mạnh, chưa đạt yêu cầu..."
+                placeholder="Ví dụ: Thiết bị chạy thử vẫn bị rung động mạnh, nhiệt độ chưa đạt mức cài đặt..."
                 value={rejectHandoverReason}
                 onChange={(e) => setRejectHandoverReason(e.target.value)}
               />
@@ -1150,7 +1293,165 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
             <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setIsRejectHandoverOpen(false)}>Hủy</button>
               <button type="submit" className="btn btn-danger" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận từ chối"}
+                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận gửi yêu cầu"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 8. Modal Nghiệm thu Phân xưởng */}
+      {isWorkshopAcceptOpen && (
+        <Modal isOpen={isWorkshopAcceptOpen} onClose={() => setIsWorkshopAcceptOpen(false)} title="Biên bản Nghiệm thu Bàn giao (Phân xưởng)">
+          <form onSubmit={handleWorkshopAcceptSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ padding: '12px', backgroundColor: 'rgba(16, 185, 129, 0.08)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)', fontSize: '13px', color: '#065f46' }}>
+              <strong>Lưu ý GMP:</strong> Sau khi phân xưởng nghiệm thu đạt, phiếu sẽ được chuyển tiếp sang <strong>Bộ phận Đảm bảo chất lượng (QA)</strong> để thẩm định hồ sơ và cấp phép giải phóng chuyền (Line Clearance).
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Tình trạng chạy thử & kiểm tra vận hành *</label>
+              <select
+                className="form-select"
+                value={testRunResult}
+                onChange={(e) => setTestRunResult(e.target.value)}
+              >
+                <option value="Đạt yêu cầu vận hành, máy hoạt động ổn định, đủ thông số kỹ thuật">Đạt yêu cầu vận hành, máy hoạt động ổn định, đủ thông số kỹ thuật</option>
+                <option value="Đạt mức cơ bản, cần tiếp tục theo dõi thêm trong ca sản xuất">Đạt mức cơ bản, cần tiếp tục theo dõi thêm trong ca sản xuất</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Tình trạng vệ sinh 5S khu vực máy *</label>
+              <select
+                className="form-select"
+                value={cleanlinessResult}
+                onChange={(e) => setCleanlinessResult(e.target.value)}
+              >
+                <option value="Đạt tiêu chuẩn vệ sinh 5S / xưởng sạch sẽ, không rơi vãi đồ nghề">Đạt tiêu chuẩn vệ sinh 5S / xưởng sạch sẽ, không rơi vãi đồ nghề</option>
+                <option value="Đã vệ sinh sơ bộ, đang tiếp tục lau dọn khử trùng">Đã vệ sinh sơ bộ, đang tiếp tục lau dọn khử trùng</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Ý kiến / Nhận xét của Phân xưởng *</label>
+              <textarea
+                className="form-input"
+                rows={3}
+                required
+                placeholder="Nhập nhận xét cụ thể từ đại diện xưởng (ví dụ: Đã cho chạy thử 30 phút, máy chạy êm, áp suất đạt chuẩn...)"
+                value={workshopComment}
+                onChange={(e) => setWorkshopComment(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button 
+                type="button" 
+                className="btn btn-danger"
+                onClick={() => {
+                  setIsWorkshopAcceptOpen(false);
+                  setIsRejectHandoverOpen(true);
+                }}
+              >
+                Yêu cầu xử lý lại
+              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsWorkshopAcceptOpen(false)}>Hủy</button>
+                <button type="submit" className="btn btn-success" disabled={actionLoading}>
+                  {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận Nghiệm thu & Chuyển QA"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 9. Modal QA Thẩm định & Nghiệm thu */}
+      {isQaAcceptOpen && (
+        <Modal isOpen={isQaAcceptOpen} onClose={() => setIsQaAcceptOpen(false)} title="Biên bản Thẩm định & Nghiệm thu (Đảm bảo chất lượng - QA)">
+          <form onSubmit={handleQaVerifySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ padding: '12px', backgroundColor: 'rgba(124, 58, 237, 0.08)', borderRadius: '8px', border: '1px solid rgba(124, 58, 237, 0.2)', fontSize: '13px', color: '#5b21b6' }}>
+              <strong>Phê duyệt QA (Cấp cuối):</strong> Sau khi QA phê duyệt, phiếu sửa chữa chính thức hoàn tất (VERIFIED). Hệ thống sẽ tự động đóng và khóa yêu cầu sự cố liên kết để bảo toàn hồ sơ bảo trì GMP.
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Đánh giá tác động chất lượng sản phẩm (GMP Impact) *</label>
+              <select
+                className="form-select"
+                value={gmpImpactAssessment}
+                onChange={(e) => setGmpImpactAssessment(e.target.value)}
+              >
+                <option value="Không ảnh hưởng đến chất lượng sản phẩm / Đạt tiêu chuẩn GMP">Không ảnh hưởng đến chất lượng sản phẩm / Đạt tiêu chuẩn GMP</option>
+                <option value="Ảnh hưởng thấp, đã lấy mẫu kiểm nghiệm theo dõi lô tiếp theo">Ảnh hưởng thấp, đã lấy mẫu kiểm nghiệm theo dõi lô tiếp theo</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Giải phóng chuyền & Cấp phép sản xuất (Line Clearance) *</label>
+              <select
+                className="form-select"
+                value={lineClearanceResult}
+                onChange={(e) => setLineClearanceResult(e.target.value)}
+              >
+                <option value="Đồng ý giải phóng chuyền, cho phép đưa thiết bị vào sản xuất trở lại">Đồng ý giải phóng chuyền, cho phép đưa thiết bị vào sản xuất trở lại</option>
+                <option value="Cho phép vận hành thử nghiệm có giám sát QA">Cho phép vận hành thử nghiệm có giám sát QA</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Kết luận / Đánh giá của QA *</label>
+              <textarea
+                className="form-input"
+                rows={3}
+                required
+                placeholder="Nhập kết luận thẩm định từ QA (ví dụ: Hồ sơ bảo trì đầy đủ, vật tư thay thế chính hãng có CO/CoA, máy móc đạt tiêu chuẩn GMP đưa vào sản xuất)..."
+                value={qaComment}
+                onChange={(e) => setQaComment(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button 
+                type="button" 
+                className="btn btn-danger"
+                onClick={() => {
+                  setIsQaAcceptOpen(false);
+                  setIsQaRejectOpen(true);
+                }}
+              >
+                QA Yêu cầu xử lý lại
+              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsQaAcceptOpen(false)}>Hủy</button>
+                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#7c3aed', borderColor: '#7c3aed' }} disabled={actionLoading}>
+                  {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "QA Phê duyệt Nghiệm thu"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 10. Modal QA Yêu cầu xử lý lại */}
+      {isQaRejectOpen && (
+        <Modal isOpen={isQaRejectOpen} onClose={() => setIsQaRejectOpen(false)} title="QA Yêu cầu xử lý lại">
+          <form onSubmit={handleQaRejectSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Lý do QA yêu cầu xử lý lại *</label>
+              <textarea
+                className="form-input"
+                rows={3}
+                required
+                placeholder="Nhập lý do chi tiết từ QA (ví dụ: Nhật ký chưa đầy đủ thông số chạy thử, phụ tùng thay thế chưa cập nhật số lô/CoA, vệ sinh chưa đạt chuẩn GMP...)"
+                value={qaRejectReason}
+                onChange={(e) => setQaRejectReason(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setIsQaRejectOpen(false)}>Hủy</button>
+              <button type="submit" className="btn btn-danger" disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận gửi yêu cầu xử lý lại"}
               </button>
             </div>
           </form>

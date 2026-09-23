@@ -10,6 +10,9 @@ import {
   ClassifyWorkOrderDto,
   SubmitHandoverDto,
   RejectHandoverDto,
+  AcceptHandoverDto,
+  QaVerifyWorkOrderDto,
+  QaRejectWorkOrderDto,
   AssignWorkOrderDto
 } from './dto/work-orders.dto';
 import { ExecutionLogActionType, PerformerUnitType, HandlingRoute } from '@prisma/client';
@@ -395,16 +398,22 @@ export class WorkOrdersService implements OnModuleInit {
         const unitType = this.getPerformerUnitType(user);
 
         if (wo.handlingRoute === HandlingRoute.WORKSHOP_SELF_HANDLE) {
-          if (unitType !== PerformerUnitType.WORKSHOP && wo.assignedTechnicianId !== actorContext.id) {
+          const isAllowedSelf = unitType === PerformerUnitType.WORKSHOP || 
+            wo.assignedTechnicianId === actorContext.id ||
+            actionName === 'QA_VERIFY' || actionName === 'QA_REJECT' ||
+            actionName === 'HANDOVER_ACCEPT' || actionName === 'HANDOVER_REJECT';
+          if (!isAllowedSelf) {
             throw new ForbiddenException('Bạn không thuộc Xưởng hoặc không được giao xử lý WO này.');
           }
         } else {
+          const isQaAction = actionName === 'QA_VERIFY' || actionName === 'QA_REJECT' || actionName === 'VERIFY';
           const isHandoverAction = actionName === 'HANDOVER_ACCEPT' || actionName === 'HANDOVER_REJECT';
           if (wo.assignedTechnicianId !== actorContext.id && 
               actionName !== 'ESCALATE' && 
               actionName !== 'CLASSIFY' && 
               actionName !== 'ASSIGN' &&
-              !isHandoverAction) {
+              !isHandoverAction &&
+              !isQaAction) {
             throw new ForbiddenException('Bạn không phải Cơ điện được phân công cho WO này.');
           }
         }
@@ -462,11 +471,11 @@ export class WorkOrdersService implements OnModuleInit {
         logActionType = ExecutionLogActionType.ASSIGN;
       } else if (actionName === 'HANDOVER_SUBMIT') {
         logActionType = ExecutionLogActionType.HANDOVER_SUBMIT;
-      } else if (actionName === 'HANDOVER_ACCEPT') {
+      } else if (actionName === 'HANDOVER_ACCEPT' || actionName === 'QA_VERIFY') {
         logActionType = ExecutionLogActionType.HANDOVER_ACCEPT;
-      } else if (actionName === 'HANDOVER_REJECT') {
+      } else if (actionName === 'HANDOVER_REJECT' || actionName === 'QA_REJECT') {
         logActionType = ExecutionLogActionType.HANDOVER_REJECT;
-        logContent = `Từ chối nhận bàn giao. Lý do: ${reason}`;
+        logContent = reason ? `Từ chối bàn giao / Yêu cầu xử lý lại. Lý do: ${reason}` : logContent;
       }
 
       if (logActionType && actorId) {
@@ -504,7 +513,7 @@ export class WorkOrdersService implements OnModuleInit {
 
       // ─── ĐỒNG BỘ TRẠNG THÁI YÊU CẦU SỰ CỐ LIÊN KẾT ───
       if (wo.requestId) {
-        if (targetStatus === 'VERIFIED' || targetStatus === 'CLOSED' || actionName === 'VERIFY' || actionName === 'CLOSE') {
+        if (targetStatus === 'VERIFIED' || targetStatus === 'CLOSED' || actionName === 'VERIFY' || actionName === 'QA_VERIFY' || actionName === 'CLOSE') {
           // Phiếu sửa chữa đã hoàn thành nghiệm thu / đóng vĩnh viễn -> Tự động chuyển yêu cầu sự cố sang CLOSED và KHÓA LẠI
           try {
             await tx.maintenanceRequest.updateMany({
@@ -526,7 +535,7 @@ export class WorkOrdersService implements OnModuleInit {
           } catch (reqCloseErr) {
             console.warn(`Lỗi tự động đóng yêu cầu sự cố ${wo.requestId}:`, reqCloseErr);
           }
-        } else if (actionName === 'REOPEN' || targetStatus === 'IN_PROGRESS') {
+        } else if (actionName === 'REOPEN' || actionName === 'QA_REJECT' || actionName === 'HANDOVER_REJECT' || targetStatus === 'IN_PROGRESS') {
           // Nếu phiếu sửa chữa bị mở lại từ trạng thái đã nghiệm thu -> Trả yêu cầu sự cố về APPROVED
           try {
             await tx.maintenanceRequest.updateMany({
@@ -805,15 +814,64 @@ export class WorkOrdersService implements OnModuleInit {
     );
   }
 
-  async acceptHandover(id: string, dto: { expectedVersion: number }, actorContext?: { id: string; role: string }) {
+  async acceptHandover(id: string, dto: AcceptHandoverDto, actorContext?: { id: string; role: string }) {
+    let fullComment = `[Xưởng Nghiệm thu] ${dto.comment}`;
+    if (dto.testRunResult) fullComment += ` | Chạy thử: ${dto.testRunResult}`;
+    if (dto.cleanlinessResult) fullComment += ` | Vệ sinh: ${dto.cleanlinessResult}`;
+
+    return this.updateStatusTransaction(
+      id,
+      dto.expectedVersion,
+      'INSPECTION',
+      {
+        _completionFields: {
+          testResult: dto.testRunResult || null,
+          recommendations: dto.cleanlinessResult || null,
+          conclusion: 'Xưởng nghiệm thu đạt - Chờ QA thẩm định',
+        },
+      },
+      'HANDOVER_ACCEPT',
+      fullComment,
+      undefined,
+      undefined,
+      actorContext,
+    );
+  }
+
+  async qaVerify(id: string, dto: QaVerifyWorkOrderDto, actorContext?: { id: string; role: string }) {
+    let fullComment = `[QA Nghiệm thu] ${dto.comment}`;
+    if (dto.gmpImpactAssessment) fullComment += ` | Đánh giá GMP: ${dto.gmpImpactAssessment}`;
+    if (dto.lineClearanceResult) fullComment += ` | Cấp phép bàn giao SX: ${dto.lineClearanceResult}`;
+
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
       'VERIFIED',
-      {},
-      'HANDOVER_ACCEPT',
-      'Chấp nhận bàn giao nghiệm thu thành công',
+      {
+        verifiedAt: new Date(),
+        _completionFields: {
+          testResult: dto.gmpImpactAssessment || null,
+          recommendations: dto.lineClearanceResult || null,
+          conclusion: 'QA thẩm định & nghiệm thu đạt',
+        },
+      },
+      'QA_VERIFY',
+      fullComment,
       undefined,
+      undefined,
+      actorContext,
+    );
+  }
+
+  async qaReject(id: string, dto: QaRejectWorkOrderDto, actorContext?: { id: string; role: string }) {
+    return this.updateStatusTransaction(
+      id,
+      dto.expectedVersion,
+      'IN_PROGRESS',
+      {},
+      'QA_REJECT',
+      `[QA Từ chối] Yêu cầu xử lý lại. Lý do: ${dto.reason}`,
+      dto.reason,
       undefined,
       actorContext,
     );

@@ -256,10 +256,14 @@ export const api = {
     request(`/work-orders/${id}/assign-executor`, { method: 'POST', body: JSON.stringify(body) }),
   submitHandover: (id: string, body: { expectedVersion: number; workDone: string; equipmentStatusAfter: string; testResult: string; conclusion: string; recommendation?: string }) =>
     request(`/work-orders/${id}/submit-handover`, { method: 'POST', body: JSON.stringify(body) }),
-  acceptHandover: (id: string, body: { expectedVersion: number }) =>
+  acceptHandover: (id: string, body: { expectedVersion: number; comment: string; testRunResult?: string; cleanlinessResult?: string }) =>
     request(`/work-orders/${id}/accept-handover`, { method: 'POST', body: JSON.stringify(body) }),
   rejectHandover: (id: string, body: { expectedVersion: number; reason: string }) =>
     request(`/work-orders/${id}/reject-handover`, { method: 'POST', body: JSON.stringify(body) }),
+  qaVerifyWorkOrder: (id: string, body: { expectedVersion: number; comment: string; gmpImpactAssessment?: string; lineClearanceResult?: string }) =>
+    request(`/work-orders/${id}/qa-verify`, { method: 'POST', body: JSON.stringify(body) }),
+  qaRejectWorkOrder: (id: string, body: { expectedVersion: number; reason: string }) =>
+    request(`/work-orders/${id}/qa-reject`, { method: 'POST', body: JSON.stringify(body) }),
   addWorkOrderItem: (id: string, item: { inventoryItemId: string; quantity: number }) =>
     request(`/work-orders/${id}/items`, { method: 'POST', body: JSON.stringify(item) }),
   deleteWorkOrder: (id: string) => request(`/work-orders/${id}`, { method: 'DELETE' }),

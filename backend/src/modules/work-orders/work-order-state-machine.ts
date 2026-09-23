@@ -6,6 +6,7 @@ export type WorkOrderStatus =
   | 'IN_PROGRESS'
   | 'ON_HOLD'
   | 'COMPLETED'
+  | 'INSPECTION'
   | 'VERIFIED'
   | 'CLOSED'
   | 'CANCELLED';
@@ -16,7 +17,8 @@ export class WorkOrderStateMachine {
     ASSIGNED: ['IN_PROGRESS', 'CANCELLED', 'PENDING', 'ASSIGNED'],
     IN_PROGRESS: ['ON_HOLD', 'COMPLETED', 'PENDING'],
     ON_HOLD: ['IN_PROGRESS', 'PENDING'],
-    COMPLETED: ['VERIFIED', 'IN_PROGRESS'],
+    COMPLETED: ['INSPECTION', 'VERIFIED', 'IN_PROGRESS'],
+    INSPECTION: ['VERIFIED', 'IN_PROGRESS'],
     VERIFIED: ['CLOSED'],
     CLOSED: [],
     CANCELLED: [],

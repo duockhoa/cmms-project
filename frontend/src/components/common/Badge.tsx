@@ -21,9 +21,9 @@ export const StatusBadge: React.FC<BadgeProps> = ({ status }) => {
       case 'ASSIGNED': return { className: 'badge-info', text: 'Đã phân công' };
       case 'IN_PROGRESS': return { className: 'badge-info', text: 'Đang thực hiện' };
       case 'ON_HOLD': return { className: 'badge-warning', text: 'Tạm dừng' };
-      case 'INSPECTION': return { className: 'badge-warning', text: 'Nghiệm thu' };
-      case 'COMPLETED': return { className: 'badge-success', text: 'Hoàn thành' };
-      case 'VERIFIED': return { className: 'badge-success', text: 'Đã nghiệm thu' };
+      case 'COMPLETED': return { className: 'badge-info', text: 'Chờ xưởng nghiệm thu' };
+      case 'INSPECTION': return { className: 'badge-warning', text: 'Chờ QA nghiệm thu' };
+      case 'VERIFIED': return { className: 'badge-success', text: 'Đã nghiệm thu (QA)' };
       case 'RESOLVED': return { className: 'badge-success', text: 'Đã xử lý' };
       case 'CLOSED': return { className: 'badge-neutral', text: 'Đã đóng' };
       case 'CANCELLED': return { className: 'badge-neutral', text: 'Đã hủy' };

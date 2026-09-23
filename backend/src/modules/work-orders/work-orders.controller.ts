@@ -21,6 +21,9 @@ import {
   ClassifyWorkOrderDto,
   SubmitHandoverDto,
   RejectHandoverDto,
+  AcceptHandoverDto,
+  QaVerifyWorkOrderDto,
+  QaRejectWorkOrderDto,
 } from './dto/work-orders.dto';
 
 @ApiTags('Work Orders')
@@ -155,9 +158,9 @@ export class WorkOrdersController {
     return this.workOrdersService.submitHandover(id, body, req.user);
   }
 
-  @ApiStandardResponse({ summary: 'Chấp nhận bàn giao', method: 'POST', path: '/work-orders/{id}/accept-handover' })
+  @ApiStandardResponse({ summary: 'Chấp nhận bàn giao (Xưởng nghiệm thu)', method: 'POST', path: '/work-orders/{id}/accept-handover' })
   @Post(':id/accept-handover')
-  acceptHandover(@Param('id') id: string, @Body() body: { expectedVersion: number }, @Req() req: any) {
+  acceptHandover(@Param('id') id: string, @Body() body: AcceptHandoverDto, @Req() req: any) {
     return this.workOrdersService.acceptHandover(id, body, req.user);
   }
 
@@ -165,6 +168,18 @@ export class WorkOrdersController {
   @Post(':id/reject-handover')
   rejectHandover(@Param('id') id: string, @Body() body: RejectHandoverDto, @Req() req: any) {
     return this.workOrdersService.rejectHandover(id, body, req.user);
+  }
+
+  @ApiStandardResponse({ summary: 'QA thẩm định & nghiệm thu', method: 'POST', path: '/work-orders/{id}/qa-verify' })
+  @Post(':id/qa-verify')
+  qaVerify(@Param('id') id: string, @Body() body: QaVerifyWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.qaVerify(id, body, req.user);
+  }
+
+  @ApiStandardResponse({ summary: 'QA yêu cầu xử lý lại', method: 'POST', path: '/work-orders/{id}/qa-reject' })
+  @Post(':id/qa-reject')
+  qaReject(@Param('id') id: string, @Body() body: QaRejectWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.qaReject(id, body, req.user);
   }
 
   @ApiStandardResponse({ summary: 'Xác minh work order', method: 'POST', path: '/work-orders/{id}/verify' })

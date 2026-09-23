@@ -16,6 +16,7 @@ export const WorkOrdersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [handlerTeamFilter, setHandlerTeamFilter] = useState('');
   const [departments, setDepartments] = useState<string[]>([]);
 
@@ -105,6 +106,7 @@ export const WorkOrdersPage: React.FC = () => {
       url.searchParams.append('limit', limit.toString());
       if (search) url.searchParams.append('search', search);
       if (handlerTeamFilter) url.searchParams.append('handlerTeam', handlerTeamFilter);
+      if (statusFilter) url.searchParams.append('status', statusFilter);
 
       const response = await fetchWithAuth(url.toString());
       if (!response.ok) throw new Error('Không thể tải danh sách Work Orders');
@@ -128,11 +130,11 @@ export const WorkOrdersPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [search, page, handlerTeamFilter]);
+  }, [search, page, handlerTeamFilter, statusFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, handlerTeamFilter]);
+  }, [search, handlerTeamFilter, statusFilter]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -359,6 +361,28 @@ export const WorkOrdersPage: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+
+        {/* Trạng thái Filter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '240px' }}>
+          <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Trạng thái:</label>
+          <select 
+            className="form-select" 
+            style={{ flex: 1, height: '38px', fontSize: '13px', padding: '0 12px' }} 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">-- Tất cả trạng thái --</option>
+            <option value="PENDING">Chờ phân công</option>
+            <option value="ASSIGNED">Đã phân công</option>
+            <option value="IN_PROGRESS">Đang thực hiện</option>
+            <option value="ON_HOLD">Tạm dừng</option>
+            <option value="COMPLETED">Chờ xưởng nghiệm thu</option>
+            <option value="INSPECTION">Chờ QA nghiệm thu</option>
+            <option value="VERIFIED">Đã nghiệm thu (QA)</option>
+            <option value="CLOSED">Đã đóng</option>
+            <option value="CANCELLED">Đã hủy</option>
+          </select>
         </div>
 
         {/* Bộ phận phụ trách Filter */}

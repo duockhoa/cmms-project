@@ -224,3 +224,49 @@ export class RejectHandoverDto {
   @IsNotEmpty()
   expectedVersion: number;
 }
+
+export class AcceptHandoverDto {
+  @IsInt()
+  @IsNotEmpty()
+  expectedVersion: number;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Ý kiến / nhận xét nghiệm thu của phân xưởng không được để trống' })
+  comment: string;
+
+  @IsString()
+  @IsOptional()
+  testRunResult?: string;
+
+  @IsString()
+  @IsOptional()
+  cleanlinessResult?: string;
+}
+
+export class QaVerifyWorkOrderDto {
+  @IsInt()
+  @IsNotEmpty()
+  expectedVersion: number;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Kết luận thẩm định của QA không được để trống' })
+  comment: string;
+
+  @IsString()
+  @IsOptional()
+  gmpImpactAssessment?: string;
+
+  @IsString()
+  @IsOptional()
+  lineClearanceResult?: string;
+}
+
+export class QaRejectWorkOrderDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Lý do QA yêu cầu xử lý lại không được để trống' })
+  reason: string;
+
+  @IsInt()
+  @IsNotEmpty()
+  expectedVersion: number;
+}
