@@ -7,6 +7,7 @@ import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
 import { RequestDetailView } from '../components/common/RequestDetailView';
 import { usePermissions } from '../hooks/usePermissions';
+import { TableSkeleton, CardListSkeleton } from '../components/common/Skeleton';
 
 export const RequestsPage: React.FC = () => {
   const { can } = usePermissions();
@@ -321,88 +322,94 @@ export const RequestsPage: React.FC = () => {
         
         {/* Master List Pane */}
         <div className={`master-pane ${selectedDetailReqId ? 'has-selection' : ''}`}>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách yêu cầu...</div>
-          ) : selectedDetailReqId ? (
+          {selectedDetailReqId ? (
             // Cột bên trái khi đang xem chi tiết (Card List)
             <div style={{ overflowY: 'auto', flex: 1, padding: '12px', backgroundColor: 'var(--bg-secondary)' }}>
-              {requests.map(req => (
-                <div 
-                  key={req.id}
-                  onClick={() => setSelectedDetailReqId(req.id)}
-                  style={{
-                    padding: '12px',
-                    marginBottom: '8px',
-                    borderRadius: '8px',
-                    backgroundColor: selectedDetailReqId === req.id ? 'var(--bg-primary)' : 'var(--bg-card)',
-                    border: selectedDetailReqId === req.id ? '1px solid var(--primary)' : '1px solid var(--border-color)',
-                    cursor: 'pointer',
-                    boxShadow: selectedDetailReqId === req.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{req.requestCode}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <StatusBadge status={req.status} />
-                      {isReqLocked(req) ? (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <span 
-                            title={req.status === 'CLOSED' ? 'Sự cố đã nghiệm thu hoàn tất và đóng' : 'Đã chuyển thành phiếu sửa chữa, đã khóa'} 
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)', padding: '2px 6px', borderRadius: '4px' }}
-                          >
-                            <Lock size={11} /> Đã khóa
-                          </span>
-                          {canDelete && (
-                            <button
-                              type="button"
-                              className="btn-icon"
-                              title="Xóa yêu cầu sự cố (Quản trị viên)"
-                              onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
-                              style={{ padding: '4px', borderRadius: '4px', color: '#dc2626', border: '1px solid #fecaca', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+              {loading ? (
+                <CardListSkeleton count={5} />
+              ) : requests.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                  Không có yêu cầu sự cố nào
+                </div>
+              ) : (
+                requests.map(req => (
+                  <div 
+                    key={req.id}
+                    onClick={() => setSelectedDetailReqId(req.id)}
+                    style={{
+                      padding: '12px',
+                      marginBottom: '8px',
+                      borderRadius: '8px',
+                      backgroundColor: selectedDetailReqId === req.id ? 'var(--bg-primary)' : 'var(--bg-card)',
+                      border: selectedDetailReqId === req.id ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                      cursor: 'pointer',
+                      boxShadow: selectedDetailReqId === req.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{req.requestCode}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <StatusBadge status={req.status} />
+                        {isReqLocked(req) ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <span 
+                              title={req.status === 'CLOSED' ? 'Sự cố đã nghiệm thu hoàn tất và đóng' : 'Đã chuyển thành phiếu sửa chữa, đã khóa'} 
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)', padding: '2px 6px', borderRadius: '4px' }}
                             >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <>
-                          {canEdit && (
-                            <button
-                              type="button"
-                              className="btn-icon"
-                              title="Chỉnh sửa"
-                              onClick={(e) => { e.stopPropagation(); openEditModal(req); }}
-                              style={{ padding: '4px', borderRadius: '4px', color: '#d97706', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
-                            >
-                              <Edit2 size={13} />
-                            </button>
-                          )}
-                          {canDelete && (
-                            <button
-                              type="button"
-                              className="btn-icon"
-                              title="Xóa"
-                              onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
-                              style={{ padding: '4px', borderRadius: '4px', color: '#dc2626', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </>
+                              <Lock size={11} /> Đã khóa
+                            </span>
+                            {canDelete && (
+                              <button
+                                type="button"
+                                className="btn-icon"
+                                title="Xóa yêu cầu sự cố (Quản trị viên)"
+                                onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
+                                style={{ padding: '4px', borderRadius: '4px', color: '#dc2626', border: '1px solid #fecaca', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                className="btn-icon"
+                                title="Chỉnh sửa"
+                                onClick={(e) => { e.stopPropagation(); openEditModal(req); }}
+                                style={{ padding: '4px', borderRadius: '4px', color: '#d97706', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                type="button"
+                                className="btn-icon"
+                                title="Xóa"
+                                onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
+                                style={{ padding: '4px', borderRadius: '4px', color: '#dc2626', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>{req.title}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Thiết bị: {req.equipment?.code || '---'}
+                      {req.functionalUnit && (
+                        <span style={{ marginLeft: '6px', color: '#2563eb', fontWeight: 500 }}>
+                          • Cụm: {req.functionalUnit.name}
+                        </span>
                       )}
                     </div>
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>{req.title}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Thiết bị: {req.equipment?.code || '---'}
-                    {req.functionalUnit && (
-                      <span style={{ marginLeft: '6px', color: '#2563eb', fontWeight: 500 }}>
-                        • Cụm: {req.functionalUnit.name}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           ) : (
             // Full Table khi không xem chi tiết
@@ -420,7 +427,16 @@ export const RequestsPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {requests.map((req) => (
+                  {loading ? (
+                    <TableSkeleton columns={7} rows={6} />
+                  ) : requests.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        Không có yêu cầu sự cố nào phù hợp
+                      </td>
+                    </tr>
+                  ) : (
+                    requests.map((req) => (
                     <tr 
                       key={req.id}
                       onClick={() => setSelectedDetailReqId(req.id)}
@@ -517,7 +533,7 @@ export const RequestsPage: React.FC = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  )))}
                 </tbody>
               </table>
             </div>

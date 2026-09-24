@@ -5,6 +5,7 @@ import { Modal } from './Modal';
 import { useToast } from './Toast';
 import { CheckCircle, XCircle, RotateCcw, Send, Ban, Loader2, XOctagon, Cpu, Edit2, Trash2, Lock, MapPin, Building2, ShieldAlert } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
+import { DetailViewSkeleton } from './Skeleton';
 
 interface RequestDetailViewProps {
   requestId: string;
@@ -229,11 +230,8 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
 
   if (loading || !req) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
-        <div style={{ textAlign: 'center' }}>
-          <Loader2 className="animate-spin" style={{ margin: '0 auto 12px auto' }} size={24} />
-          Đang tải chi tiết yêu cầu...
-        </div>
+      <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
+        <DetailViewSkeleton />
       </div>
     );
   }

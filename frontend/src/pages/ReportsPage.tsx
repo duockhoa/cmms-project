@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BarChart3, Download, RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
+import { DashboardSkeleton } from '../components/common/Skeleton';
 
 export const ReportsPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState('Tháng này');
@@ -36,7 +37,17 @@ export const ReportsPage: React.FC = () => {
   }, []);
 
   if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center' }}>Đang tải báo cáo & phân tích...</div>;
+    return (
+      <div>
+        <div className="page-header" style={{ marginBottom: '24px' }}>
+          <div>
+            <h1 className="page-title">Báo cáo & Phân tích</h1>
+            <p className="page-subtitle">Chỉ số KPI, hiệu suất và phân tích thời gian dừng máy MTTR/MTBF</p>
+          </div>
+        </div>
+        <DashboardSkeleton />
+      </div>
+    );
   }
 
   const kpi = dashboardData?.kpi || {};

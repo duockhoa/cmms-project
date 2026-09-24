@@ -7,6 +7,7 @@ import {
   MessageSquarePlus, Search, RefreshCw, Filter, 
   Bug, Sparkles, CheckCircle2, Clock, Eye, Image as ImageIcon 
 } from 'lucide-react';
+import { TableSkeleton } from '../components/common/Skeleton';
 
 export const FeedbacksPage: React.FC = () => {
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
@@ -196,11 +197,7 @@ export const FeedbacksPage: React.FC = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={16} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    Đang tải dữ liệu báo cáo & góp ý...
-                  </td>
-                </tr>
+                <TableSkeleton columns={16} rows={6} />
               ) : feedbacks.length === 0 ? (
                 <tr>
                   <td colSpan={16} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>

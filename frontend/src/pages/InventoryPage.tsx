@@ -3,6 +3,7 @@ import { api, fetchWithAuth } from '../services/api';
 import { Modal } from '../components/common/Modal';
 import { Plus, AlertCircle, ArrowUpRight, ArrowDownRight, Trash2, History, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
+import { TableSkeleton } from '../components/common/Skeleton';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
@@ -216,32 +217,31 @@ export const InventoryPage: React.FC = () => {
       </div>
 
       {/* Table */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách vật tư...</div>
-      ) : (
-        <div>
-          <div className="table-wrapper">
-            <table className="custom-table">
-              <thead>
+      <div>
+        <div className="table-wrapper">
+          <table className="custom-table">
+            <thead>
+              <tr>
+                <th>Mã vật tư</th>
+                <th>Tên phụ tùng / Vật tư</th>
+                <th>Loại</th>
+                <th>Số lượng</th>
+                <th>Mức tối thiểu</th>
+                <th>Vị trí kệ</th>
+                <th>Đơn giá</th>
+                <th style={{ textAlign: 'center' }}>Thao tác điều chỉnh</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <TableSkeleton columns={8} rows={6} />
+              ) : inventory.length === 0 ? (
                 <tr>
-                  <th>Mã vật tư</th>
-                  <th>Tên phụ tùng / Vật tư</th>
-                  <th>Loại</th>
-                  <th>Số lượng</th>
-                  <th>Mức tối thiểu</th>
-                  <th>Vị trí kệ</th>
-                  <th>Đơn giá</th>
-                  <th style={{ textAlign: 'center' }}>Thao tác điều chỉnh</th>
+                  <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
+                    Không tìm thấy phụ tùng hoặc vật tư nào
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {inventory.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
-                      Không tìm thấy phụ tùng hoặc vật tư nào
-                    </td>
-                  </tr>
-                ) : inventory.map((item) => {
+              ) : inventory.map((item) => {
                   const isLowStock = item.quantity <= item.minQuantity;
                   return (
                     <tr key={item.id}>
@@ -356,7 +356,6 @@ export const InventoryPage: React.FC = () => {
             </div>
           )}
         </div>
-      )}
 
       {/* Modal Add Item */}
       <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Thêm vật tư phụ tùng mới">

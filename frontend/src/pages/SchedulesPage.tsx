@@ -16,6 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
+import { TableSkeleton } from '../components/common/Skeleton';
 
 export const SchedulesPage: React.FC = () => {
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -414,28 +415,32 @@ export const SchedulesPage: React.FC = () => {
       </div>
 
       {/* Table */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách kế hoạch bảo trì...</div>
-      ) : schedules.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Chưa có kế hoạch bảo trì nào.</div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="custom-table">
-            <thead>
+      <div className="table-wrapper">
+        <table className="custom-table">
+          <thead>
+            <tr>
+              <th>Mã Lịch</th>
+              <th>Tên Kế hoạch</th>
+              <th>Thiết bị</th>
+              <th>Chu kỳ</th>
+              <th>Ngày đến hạn kế tiếp</th>
+              <th>Kỹ thuật viên</th>
+              <th>Trạng thái</th>
+              <th>Cảnh báo</th>
+              <th style={{ textAlign: 'center' }}>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <TableSkeleton columns={9} rows={6} />
+            ) : schedules.length === 0 ? (
               <tr>
-                <th>Mã Lịch</th>
-                <th>Tên Kế hoạch</th>
-                <th>Thiết bị</th>
-                <th>Chu kỳ</th>
-                <th>Ngày đến hạn kế tiếp</th>
-                <th>Kỹ thuật viên</th>
-                <th>Trạng thái</th>
-                <th>Cảnh báo</th>
-                <th style={{ textAlign: 'center' }}>Thao tác</th>
+                <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px' }}>
+                  Chưa có kế hoạch bảo trì nào.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {schedules.map((sch) => {
+            ) : (
+              schedules.map((sch) => {
                 const now = new Date();
                 const nextDate = sch.nextDueDate ? new Date(sch.nextDueDate) : null;
                 const leadMs = (sch.leadTimeDays || 0) * 24 * 60 * 60 * 1000;
@@ -573,11 +578,10 @@ export const SchedulesPage: React.FC = () => {
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>
-      )}
 
       {/* Modal Add / Edit Schedule */}
       {(isAddOpen || editTarget) && (

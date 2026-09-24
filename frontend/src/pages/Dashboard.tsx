@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Cpu, AlertTriangle, Calendar, CheckCircle2, ArrowUpRight, BellRing } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { DashboardSkeleton } from '../components/common/Skeleton';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -14,7 +15,17 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   if (loading || !data) {
-    return <div style={{ padding: '40px', textAlign: 'center' }}>Đang tải dữ liệu...</div>;
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Tổng quan</h1>
+            <p className="page-subtitle">Theo dõi tình hình bảo trì và vận hành thiết bị</p>
+          </div>
+        </div>
+        <DashboardSkeleton />
+      </div>
+    );
   }
 
   const { kpi, recentRequests, urgentWorkOrders } = data;

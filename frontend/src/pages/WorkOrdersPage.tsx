@@ -8,6 +8,7 @@ import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
 import { WorkOrderDetailView } from '../components/common/WorkOrderDetailView';
 import { usePermissions } from '../hooks/usePermissions';
+import { TableSkeleton, CardListSkeleton } from '../components/common/Skeleton';
 
 const API_BASE = API_HOST;
 
@@ -414,33 +415,32 @@ export const WorkOrdersPage: React.FC = () => {
       </div>
 
       {/* Table */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải danh sách phiếu sửa chữa...</div>
-      ) : (
-        <div>
-          <div className="table-wrapper">
-            <table className="custom-table">
-              <thead>
+      <div>
+        <div className="table-wrapper">
+          <table className="custom-table">
+            <thead>
+              <tr>
+                <th>Mã phiếu</th>
+                <th>Tiêu đề bảo trì</th>
+                <th>Thiết bị</th>
+                <th>Trạng thái</th>
+                <th>Độ ưu tiên</th>
+                <th>Kỹ thuật viên</th>
+                <th style={{ textAlign: 'center' }}>Vật tư</th>
+                <th style={{ textAlign: 'center' }}>Checklist</th>
+                <th style={{ textAlign: 'center', minWidth: '130px' }}>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <TableSkeleton columns={9} rows={6} />
+              ) : workOrders.length === 0 ? (
                 <tr>
-                  <th>Mã phiếu</th>
-                  <th>Tiêu đề bảo trì</th>
-                  <th>Thiết bị</th>
-                  <th>Trạng thái</th>
-                  <th>Độ ưu tiên</th>
-                  <th>Kỹ thuật viên</th>
-                  <th style={{ textAlign: 'center' }}>Vật tư</th>
-                  <th style={{ textAlign: 'center' }}>Checklist</th>
-                  <th style={{ textAlign: 'center', minWidth: '130px' }}>Thao tác</th>
+                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
+                    Không có phiếu sửa chữa nào được tìm thấy
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {workOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
-                      Không có phiếu sửa chữa nào được tìm thấy
-                    </td>
-                  </tr>
-                ) : workOrders.map((wo) => (
+              ) : workOrders.map((wo) => (
                   <tr key={wo.id}>
                     <td 
                       style={{ fontWeight: 700, color: '#2563eb', cursor: 'pointer' }}
@@ -620,7 +620,6 @@ export const WorkOrdersPage: React.FC = () => {
             </div>
           )}
         </div>
-      )}
       </>
       ) : (
         <div className="master-detail-container">
@@ -641,7 +640,7 @@ export const WorkOrdersPage: React.FC = () => {
 
             {/* List Cards */}
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '13px' }}>Đang tải danh sách...</div>
+              <CardListSkeleton count={5} />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: '16px' }}>
                 {workOrders.length === 0 ? (

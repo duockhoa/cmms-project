@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { StatusBadge } from './Badge';
+import { DetailViewSkeleton } from './Skeleton';
 
 interface EquipmentOperationDetailViewProps {
   equipmentId: string;
@@ -210,8 +211,8 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
 
   if (loading || !equipment) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-        <RefreshCw size={24} className="animate-spin" style={{ marginRight: '8px' }} /> Đang tải Sổ vận hành...
+      <div style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
+        <DetailViewSkeleton />
       </div>
     );
   }

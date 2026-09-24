@@ -7,6 +7,7 @@ import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRi
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
+import { TableSkeleton } from '../components/common/Skeleton';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
@@ -217,32 +218,31 @@ export const EquipmentPage: React.FC = () => {
       </div>
 
       {/* Table */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>Đang tải...</div>
-      ) : (
-        <div>
-          <div className="table-wrapper">
-            <table className="custom-table">
-              <thead>
+      <div>
+        <div className="table-wrapper">
+          <table className="custom-table">
+            <thead>
+              <tr>
+                <th>Mã</th>
+                <th>Tên thiết bị</th>
+                <th>Loại</th>
+                <th>Bộ phận</th>
+                <th>Vị trí</th>
+                <th>Trạng thái</th>
+                <th>Bảo trì tiếp</th>
+                <th style={{ textAlign: 'center' }}>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <TableSkeleton columns={8} rows={6} />
+              ) : equipment.length === 0 ? (
                 <tr>
-                  <th>Mã</th>
-                  <th>Tên thiết bị</th>
-                  <th>Loại</th>
-                  <th>Bộ phận</th>
-                  <th>Vị trí</th>
-                  <th>Trạng thái</th>
-                  <th>Bảo trì tiếp</th>
-                  <th style={{ textAlign: 'center' }}>Thao tác</th>
+                  <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
+                    Không có thiết bị nào phù hợp với bộ lọc
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {equipment.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
-                      Không có thiết bị nào phù hợp với bộ lọc
-                    </td>
-                  </tr>
-                ) : equipment.map((item) => (
+              ) : equipment.map((item) => (
                   <tr 
                     key={item.id} 
                     onClick={() => navigate(`/equipment/${item.id}`)}
@@ -369,7 +369,6 @@ export const EquipmentPage: React.FC = () => {
             </div>
           )}
         </div>
-      )}
 
       {/* Modal Add/Edit Equipment */}
       <EquipmentFormModal 

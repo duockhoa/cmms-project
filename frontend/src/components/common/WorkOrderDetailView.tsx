@@ -3,6 +3,7 @@ import { api, API_HOST } from '../../services/api';
 import { Modal } from './Modal';
 import { useToast } from './Toast';
 import { Play, Pause, CheckCircle2, FileText, Camera, Upload, Plus, AlertTriangle, Eye, Loader2, ArrowRightLeft, ShieldCheck, XOctagon, Lock } from 'lucide-react';
+import { DetailViewSkeleton } from './Skeleton';
 
 interface WorkOrderDetailViewProps {
   workOrderId: string;
@@ -155,11 +156,8 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
 
   if (loading || !wo) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
-        <div style={{ textAlign: 'center' }}>
-          <Loader2 className="animate-spin" style={{ margin: '0 auto 12px auto' }} size={24} />
-          Đang tải chi tiết lệnh sửa chữa...
-        </div>
+      <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
+        <DetailViewSkeleton />
       </div>
     );
   }
