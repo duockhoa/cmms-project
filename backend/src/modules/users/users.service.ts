@@ -294,6 +294,7 @@ export class UsersService implements OnModuleInit {
         await tx.inventoryTransaction.updateMany({ where: { actedById: id }, data: { actedById: targetUserId } });
         await tx.location.updateMany({ where: { responsibleTechId: id }, data: { responsibleTechId: targetUserId } });
         await tx.attachment.updateMany({ where: { uploadedById: id }, data: { uploadedById: targetUserId } });
+        await tx.notification.updateMany({ where: { userId: id }, data: { userId: targetUserId } });
 
         // Đổi email tạm để tránh xung đột duy nhất trước khi xóa
         await tx.user.update({
@@ -343,6 +344,7 @@ export class UsersService implements OnModuleInit {
       await tx.inventoryTransaction.updateMany({ where: { actedById: id }, data: { actedById: null } });
       await tx.location.updateMany({ where: { responsibleTechId: id }, data: { responsibleTechId: null } });
       await tx.attachment.updateMany({ where: { uploadedById: id }, data: { uploadedById: null } });
+      await tx.notification.deleteMany({ where: { userId: id } });
 
       return tx.user.delete({ where: { id } });
     });
@@ -432,8 +434,17 @@ export class UsersService implements OnModuleInit {
 
         if (existingUsers.length > 1) {
           // MERGE duplicates:
-          // Ưu tiên bản ghi có id khớp với hrmId, nếu không thì lấy bản ghi cũ nhất
-          const primary = existingUsers.find((u) => u.id === hrmId) || existingUsers[0];
+          // Ưu tiên tài khoản:
+          // 1. Có email thật (không kết thúc bằng dummyDomain '@local.hrm')
+          // 2. Đã được phân nhóm quyền (roleId !== null)
+          // 3. Có vai trò ADMIN
+          // 4. Khớp với hrmId
+          // 5. Bản ghi tạo sớm nhất
+          const primary = existingUsers.find((u) => u.email && !u.email.endsWith(dummyDomain) && u.email.includes('@'))
+            || existingUsers.find((u) => u.roleId !== null)
+            || existingUsers.find((u) => u.role === 'ADMIN')
+            || existingUsers.find((u) => u.id === hrmId)
+            || existingUsers[0];
           const duplicates = existingUsers.filter((u) => u.id !== primary.id);
 
           // Thu thập thông tin tốt nhất (ưu tiên role ADMIN, roleId, quyền tùy chỉnh)
@@ -446,9 +457,9 @@ export class UsersService implements OnModuleInit {
             if (dup.customPermissions && !bestCustomPerms) bestCustomPerms = dup.customPermissions;
           }
 
-          const bestEmail = hasRealEmail
-            ? hrmUser.email
-            : (primary.email.includes('@') && !primary.email.endsWith(dummyDomain) ? primary.email : dummyEmail);
+          const targetEmail = (primary.email && !primary.email.endsWith(dummyDomain) && primary.email.includes('@'))
+            ? primary.email
+            : (hasRealEmail ? hrmUser.email : (primary.email.includes('@') && !primary.email.endsWith(dummyDomain) ? primary.email : dummyEmail));
 
           // BƯỚC 1: Đổi email của tất cả bản ghi trùng sang email tạm thời
           // để tránh lỗi Unique constraint failed trên `User_email_key`
@@ -488,6 +499,7 @@ export class UsersService implements OnModuleInit {
               await this.prisma.inventoryTransaction.updateMany({ where: { actedById: dup.id }, data: { actedById: primary.id } });
               await this.prisma.location.updateMany({ where: { responsibleTechId: dup.id }, data: { responsibleTechId: primary.id } });
               await this.prisma.attachment.updateMany({ where: { uploadedById: dup.id }, data: { uploadedById: primary.id } });
+              await this.prisma.notification.updateMany({ where: { userId: dup.id }, data: { userId: primary.id } });
             } catch (relErr: any) {
               console.warn(`Lỗi chuyển quan hệ từ dup ${dup.id} sang ${primary.id}:`, relErr?.message);
             }
@@ -503,7 +515,7 @@ export class UsersService implements OnModuleInit {
               try {
                 await this.prisma.user.update({
                   where: { id: dup.id },
-                  data: { isActive: false },
+                  data: { isActive: false, email: `disabled_${dup.id}_${Date.now()}@disabled.local` },
                 });
               } catch (_) {}
             }
@@ -513,7 +525,7 @@ export class UsersService implements OnModuleInit {
           await this.prisma.user.update({
             where: { id: primary.id },
             data: {
-              email: bestEmail,
+              email: targetEmail,
               name: name,
               role: bestRole,
               roleId: bestRoleId,
@@ -596,95 +608,122 @@ export class UsersService implements OnModuleInit {
   }
 
   /**
-   * Tự động rà soát và gộp an toàn các tài khoản phụ sinh ra do SSO đăng nhập cũ
-   * Nhận diện: ID dạng UUID và email kết thúc bằng '@local.hrm', khớp ID gốc và tên người dùng.
+   * Tự động rà soát và gộp an toàn các tài khoản phụ sinh ra do SSO đăng nhập cũ hoặc đồng bộ trùng lặp
+   * Nhận diện: Tài khoản có email kết thúc bằng '@local.hrm' trùng họ tên hoặc mã nhân viên với tài khoản chính thức.
    */
   async cleanSsoDuplicates(): Promise<{ mergedCount: number; details: string[] }> {
     const details: string[] = [];
     let mergedCount = 0;
 
     try {
-      const dupUsers = await this.prisma.user.findMany({
+      // Lấy toàn bộ người dùng có email dạng dummy (@local.hrm)
+      const dummyUsers = await this.prisma.user.findMany({
         where: { email: { endsWith: '@local.hrm' } },
       });
 
-      for (const dup of dupUsers) {
-        // Chỉ xử lý các tài khoản phụ có ID dạng UUID (> 20 ký tự)
-        if (!dup.id || dup.id.length < 20) continue;
+      for (const dummyUser of dummyUsers) {
+        // Kiểm tra xem dummyUser này đã bị gộp/xóa ở vòng trước chưa
+        const currentDummy = await this.prisma.user.findUnique({ where: { id: dummyUser.id } });
+        if (!currentDummy) continue;
 
-        const prefix = dup.email.replace('@local.hrm', '').trim();
+        const prefix = currentDummy.email.replace('@local.hrm', '').trim();
         const cleanPrefix = prefix.replace(/^0+/, '');
-        const candidateIds = [prefix, cleanPrefix].filter(Boolean);
+        const candidateCodes = [prefix, cleanPrefix].filter(Boolean);
 
-        // Tìm tài khoản gốc chính thức khớp mã nhân viên và trùng họ tên
-        const primary = await this.prisma.user.findFirst({
+        // Tìm các tài khoản ứng viên có cùng tên hoặc có ID / Email khớp mã nhân viên
+        const potentialMatches = await this.prisma.user.findMany({
           where: {
-            AND: [
-              { id: { in: candidateIds } },
-              { id: { not: dup.id } },
-              { name: dup.name },
+            id: { not: currentDummy.id },
+            OR: [
+              { name: currentDummy.name },
+              { id: { in: candidateCodes } },
+              ...(candidateCodes.map((code) => ({ email: { startsWith: `${code}@` } }))),
             ],
           },
           include: { customRole: true },
         });
 
+        if (potentialMatches.length === 0) continue;
+
+        // Chọn primary tốt nhất (ưu tiên tài khoản có email thật, có role, có customRole)
+        const primary = potentialMatches.find((u) => u.email && !u.email.endsWith('@local.hrm') && u.email.includes('@'))
+          || potentialMatches.find((u) => u.roleId !== null)
+          || potentialMatches.find((u) => u.role === 'ADMIN')
+          || potentialMatches.find((u) => candidateCodes.includes(u.id))
+          || potentialMatches[0];
+
         if (!primary) continue;
 
-        console.log(`[AUTO-CLEANUP] Phát hiện tài khoản trùng SSO: "${dup.name}" (${dup.email}, ID: ${dup.id}) -> Tài khoản gốc ID: ${primary.id} (${primary.email})`);
+        const targetPrimary = primary;
+        const targetDup = currentDummy;
 
-        // Tiến hành gộp an toàn trong transaction
+        console.log(`[AUTO-CLEANUP] Gộp tài khoản trùng: "${targetDup.name}" (${targetDup.email}, ID: ${targetDup.id}) -> Tài khoản chính: ${targetPrimary.name} (${targetPrimary.email}, ID: ${targetPrimary.id})`);
+
         await this.prisma.$transaction(async (tx) => {
-          // 1. Đổi email tạm để không bị xung đột unique key
+          // 1. Đổi email tạm cho bản ghi trùng để tránh xung đột unique key
           await tx.user.update({
-            where: { id: dup.id },
-            data: { email: `merged_${dup.id}_${Date.now()}@merge.local` },
+            where: { id: targetDup.id },
+            data: { email: `merged_${targetDup.id}_${Date.now()}@merge.local` },
           });
 
-          // 2. Chuyển toàn bộ quan hệ foreign key sang tài khoản gốc
-          await tx.maintenanceRequest.updateMany({ where: { reporterId: dup.id }, data: { reporterId: primary.id } });
-          await tx.maintenanceRequest.updateMany({ where: { cancelledById: dup.id }, data: { cancelledById: primary.id } });
-          await tx.operationLog.updateMany({ where: { recordedById: dup.id }, data: { recordedById: primary.id } });
-          await tx.operationLog.updateMany({ where: { voidedById: dup.id }, data: { voidedById: primary.id } });
-          await tx.utilityReading.updateMany({ where: { recordedById: dup.id }, data: { recordedById: primary.id } });
-          await tx.utilitySystemStatusLog.updateMany({ where: { recordedById: dup.id }, data: { recordedById: primary.id } });
-          await tx.workOrder.updateMany({ where: { assignedTechnicianId: dup.id }, data: { assignedTechnicianId: primary.id } });
-          await tx.workOrder.updateMany({ where: { watcherId: dup.id }, data: { watcherId: primary.id } });
-          await tx.workOrder.updateMany({ where: { classificationReporterId: dup.id }, data: { classificationReporterId: primary.id } });
-          await tx.workOrderExecutionLog.updateMany({ where: { performedById: dup.id }, data: { performedById: primary.id } });
-          await tx.checklistExecution.updateMany({ where: { executedById: dup.id }, data: { executedById: primary.id } });
-          await tx.checklistExecution.updateMany({ where: { cancelledById: dup.id }, data: { cancelledById: primary.id } });
-          await tx.maintenanceSchedule.updateMany({ where: { createdById: dup.id }, data: { createdById: primary.id } });
-          await tx.maintenanceSchedule.updateMany({ where: { assignedTechnicianId: dup.id }, data: { assignedTechnicianId: primary.id } });
-          await tx.maintenanceSchedule.updateMany({ where: { pausedById: dup.id }, data: { pausedById: primary.id } });
-          await tx.maintenanceSchedule.updateMany({ where: { cancelledById: dup.id }, data: { cancelledById: primary.id } });
-          await tx.workflowHistory.updateMany({ where: { actedById: dup.id }, data: { actedById: primary.id } });
-          await tx.scheduleHistory.updateMany({ where: { actedById: dup.id }, data: { actedById: primary.id } });
-          await tx.inventoryTransaction.updateMany({ where: { actedById: dup.id }, data: { actedById: primary.id } });
-          await tx.location.updateMany({ where: { responsibleTechId: dup.id }, data: { responsibleTechId: primary.id } });
-          await tx.attachment.updateMany({ where: { uploadedById: dup.id }, data: { uploadedById: primary.id } });
+          // 2. Chuyển toàn bộ quan hệ foreign key sang targetPrimary
+          await tx.maintenanceRequest.updateMany({ where: { reporterId: targetDup.id }, data: { reporterId: targetPrimary.id } });
+          await tx.maintenanceRequest.updateMany({ where: { cancelledById: targetDup.id }, data: { cancelledById: targetPrimary.id } });
+          await tx.operationLog.updateMany({ where: { recordedById: targetDup.id }, data: { recordedById: targetPrimary.id } });
+          await tx.operationLog.updateMany({ where: { voidedById: targetDup.id }, data: { voidedById: targetPrimary.id } });
+          await tx.utilityReading.updateMany({ where: { recordedById: targetDup.id }, data: { recordedById: targetPrimary.id } });
+          await tx.utilitySystemStatusLog.updateMany({ where: { recordedById: targetDup.id }, data: { recordedById: targetPrimary.id } });
+          await tx.workOrder.updateMany({ where: { assignedTechnicianId: targetDup.id }, data: { assignedTechnicianId: targetPrimary.id } });
+          await tx.workOrder.updateMany({ where: { watcherId: targetDup.id }, data: { watcherId: targetPrimary.id } });
+          await tx.workOrder.updateMany({ where: { classificationReporterId: targetDup.id }, data: { classificationReporterId: targetPrimary.id } });
+          await tx.workOrderExecutionLog.updateMany({ where: { performedById: targetDup.id }, data: { performedById: targetPrimary.id } });
+          await tx.checklistExecution.updateMany({ where: { executedById: targetDup.id }, data: { executedById: targetPrimary.id } });
+          await tx.checklistExecution.updateMany({ where: { cancelledById: targetDup.id }, data: { cancelledById: targetPrimary.id } });
+          await tx.maintenanceSchedule.updateMany({ where: { createdById: targetDup.id }, data: { createdById: targetPrimary.id } });
+          await tx.maintenanceSchedule.updateMany({ where: { assignedTechnicianId: targetDup.id }, data: { assignedTechnicianId: targetPrimary.id } });
+          await tx.maintenanceSchedule.updateMany({ where: { pausedById: targetDup.id }, data: { pausedById: targetPrimary.id } });
+          await tx.maintenanceSchedule.updateMany({ where: { cancelledById: targetDup.id }, data: { cancelledById: targetPrimary.id } });
+          await tx.workflowHistory.updateMany({ where: { actedById: targetDup.id }, data: { actedById: targetPrimary.id } });
+          await tx.scheduleHistory.updateMany({ where: { actedById: targetDup.id }, data: { actedById: targetPrimary.id } });
+          await tx.inventoryTransaction.updateMany({ where: { actedById: targetDup.id }, data: { actedById: targetPrimary.id } });
+          await tx.location.updateMany({ where: { responsibleTechId: targetDup.id }, data: { responsibleTechId: targetPrimary.id } });
+          await tx.attachment.updateMany({ where: { uploadedById: targetDup.id }, data: { uploadedById: targetPrimary.id } });
+          await tx.notification.updateMany({ where: { userId: targetDup.id }, data: { userId: targetPrimary.id } });
 
-          // 3. Xóa tài khoản phụ
-          await tx.user.delete({ where: { id: dup.id } });
+          // 3. Xóa tài khoản trùng lặp
+          try {
+            await tx.user.delete({ where: { id: targetDup.id } });
+          } catch (delErr: any) {
+            console.warn(`[AUTO-CLEANUP] Không thể xóa bản ghi ${targetDup.id}, vô hiệu hóa:`, delErr?.message);
+            await tx.user.update({
+              where: { id: targetDup.id },
+              data: { isActive: false, email: `disabled_${targetDup.id}_${Date.now()}@disabled.local` },
+            });
+          }
 
-          // 4. Cập nhật thuộc tính tối ưu cho tài khoản gốc
-          const bestRole = (dup.role === 'ADMIN' || primary.role === 'ADMIN') ? 'ADMIN' : primary.role;
-          const bestRoleId = primary.roleId || dup.roleId || null;
-          const bestCustomPerms = primary.customPermissions || dup.customPermissions || null;
-          const bestAvatar = primary.avatar || dup.avatar || null;
+          // 4. Cập nhật quyền hạn và dữ liệu tốt nhất cho targetPrimary
+          const bestRole = (targetDup.role === 'ADMIN' || targetPrimary.role === 'ADMIN') ? 'ADMIN' : targetPrimary.role;
+          const bestRoleId = targetPrimary.roleId || targetDup.roleId || null;
+          const bestCustomPerms = targetPrimary.customPermissions || targetDup.customPermissions || null;
+          const bestAvatar = targetPrimary.avatar || targetDup.avatar || null;
+          const bestDepartment = targetPrimary.department || targetDup.department || null;
+          const bestSpecialty = targetPrimary.specialty || targetDup.specialty || null;
 
           await tx.user.update({
-            where: { id: primary.id },
+            where: { id: targetPrimary.id },
             data: {
               role: bestRole,
               roleId: bestRoleId,
               customPermissions: bestCustomPerms,
               avatar: bestAvatar,
+              department: bestDepartment,
+              specialty: bestSpecialty,
               isActive: true,
             },
           });
         });
 
-        details.push(`Gộp thành công: ${dup.name} (${dup.email}) -> ${primary.email} (ID: ${primary.id})`);
+        details.push(`Gộp thành công: ${targetDup.name} (${targetDup.email}) -> ${targetPrimary.email} (ID: ${targetPrimary.id})`);
         mergedCount++;
       }
     } catch (err: any) {
@@ -692,7 +731,7 @@ export class UsersService implements OnModuleInit {
     }
 
     if (mergedCount > 0) {
-      console.log(`[AUTO-CLEANUP] Đã hoàn tất tự động dọn dẹp và gộp ${mergedCount} tài khoản trùng lặp do SSO cũ.`);
+      console.log(`[AUTO-CLEANUP] Đã hoàn tất tự động dọn dẹp và gộp ${mergedCount} tài khoản trùng lặp.`);
     }
 
     return { mergedCount, details };

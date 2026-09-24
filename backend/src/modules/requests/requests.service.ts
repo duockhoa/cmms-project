@@ -866,29 +866,93 @@ export class RequestsService {
     }
 
     return await this.prisma.$transaction(async (tx) => {
-      // Nếu là Admin xóa yêu cầu có Work Orders liên quan -> Dọn dẹp an toàn các Work Order con
+      // 1. Dọn dẹp an toàn các Work Order con (nếu có)
       for (const wo of existing.workOrders) {
-        await tx.attachment.deleteMany({ where: { workOrderId: wo.id } });
-        const checkExecs = await tx.checklistExecution.findMany({ where: { workOrderId: wo.id }, select: { id: true } });
-        if (checkExecs.length > 0) {
-          const execIds = checkExecs.map((e) => e.id);
-          await tx.checklistExecutionItem.deleteMany({ where: { executionId: { in: execIds } } });
-          await tx.checklistExecution.deleteMany({ where: { workOrderId: wo.id } });
-        }
-        await tx.workOrderExecutionLog.deleteMany({ where: { workOrderId: wo.id } });
-        await tx.workOrderItem.deleteMany({ where: { workOrderId: wo.id } });
-        await tx.workflowHistory.deleteMany({
+        // Tìm toàn bộ executionLogIds của work order này
+        const execLogs = await tx.workOrderExecutionLog.findMany({
+          where: { workOrderId: wo.id },
+          select: { id: true },
+        });
+        const execLogIds = execLogs.map((l) => l.id);
+
+        // Tìm toàn bộ checklistExecutionIds của work order này
+        const checkExecs = await tx.checklistExecution.findMany({
+          where: { workOrderId: wo.id },
+          select: { id: true },
+        });
+        const checkExecIds = checkExecs.map((e) => e.id);
+        const checkItems = await tx.checklistExecutionItem.findMany({
+          where: { executionId: { in: checkExecIds } },
+          select: { id: true },
+        });
+        const checkItemIds = checkItems.map((i) => i.id);
+
+        // A. Xóa tất cả attachments liên quan đến work order, execution logs, checklist
+        await tx.attachment.deleteMany({
           where: {
-            entityType: 'WorkOrder',
-            entityId: wo.id,
+            OR: [
+              { workOrderId: wo.id },
+              { executionLogId: { in: execLogIds } },
+              { entityType: 'WorkOrder', entityId: wo.id },
+              { entityType: 'ChecklistExecution', entityId: { in: checkExecIds } },
+              { entityType: 'ChecklistExecutionItem', entityId: { in: checkItemIds } },
+            ],
           },
         });
-        await tx.scheduleHistory.updateMany({ where: { workOrderId: wo.id }, data: { workOrderId: null } });
-        await tx.inventoryTransaction.updateMany({ where: { workOrderId: wo.id }, data: { workOrderId: null, workOrderItemId: null } });
+
+        // B. Bẻ gãy liên kết tự tham chiếu adjustedLogId trong WorkOrderExecutionLog
+        await tx.workOrderExecutionLog.updateMany({
+          where: { workOrderId: wo.id },
+          data: { adjustedLogId: null },
+        });
+
+        // C. Xóa các bản ghi nhật ký thực thi WorkOrderExecutionLog
+        await tx.workOrderExecutionLog.deleteMany({ where: { workOrderId: wo.id } });
+
+        // D. Xóa các mục kiểm tra checklist và checklist execution
+        if (checkExecIds.length > 0) {
+          await tx.checklistExecutionItem.deleteMany({ where: { executionId: { in: checkExecIds } } });
+          await tx.checklistExecution.deleteMany({ where: { workOrderId: wo.id } });
+        }
+
+        // E. Ngắt liên kết giao dịch kho và lịch trình trước khi xóa work order item
+        await tx.inventoryTransaction.updateMany({
+          where: { workOrderId: wo.id },
+          data: { workOrderId: null, workOrderItemId: null },
+        });
+        await tx.scheduleHistory.updateMany({
+          where: { workOrderId: wo.id },
+          data: { workOrderId: null },
+        });
+
+        // F. Xóa vật tư work order items
+        await tx.workOrderItem.deleteMany({ where: { workOrderId: wo.id } });
+
+        // G. Xóa lịch sử luồng duyệt của WorkOrder
+        await tx.workflowHistory.deleteMany({
+          where: { entityType: 'WorkOrder', entityId: wo.id },
+        });
+
+        // H. Xóa chính bản ghi WorkOrder
         await tx.workOrder.delete({ where: { id: wo.id } });
       }
 
-      // Xóa WorkflowHistory liên quan đến Request
+      // 2. Ngắt liên kết bất kỳ work order nào khác đang trỏ tới requestId (nếu có)
+      await tx.workOrder.updateMany({
+        where: { requestId: id },
+        data: { requestId: null },
+      });
+
+      // 3. Xóa Attachment liên quan đến Request
+      await tx.attachment.deleteMany({
+        where: {
+          OR: [
+            { entityType: 'MaintenanceRequest', entityId: id },
+          ],
+        },
+      });
+
+      // 4. Xóa WorkflowHistory liên quan đến Request
       await tx.workflowHistory.deleteMany({
         where: {
           entityType: 'MaintenanceRequest',
@@ -896,15 +960,7 @@ export class RequestsService {
         },
       });
 
-      // Xóa Attachment liên quan đến Request
-      await tx.attachment.deleteMany({
-        where: {
-          entityType: 'MaintenanceRequest',
-          entityId: id,
-        },
-      });
-
-      // Xóa chính bản ghi MaintenanceRequest
+      // 5. Xóa chính bản ghi MaintenanceRequest
       await tx.maintenanceRequest.delete({
         where: { id },
       });
