@@ -48,7 +48,7 @@ export class RequestsController {
 
   @Delete(':id')
   delete(@Param('id') id: string, @Req() req: any) {
-    return this.requestsService.delete(id, req?.user?.id);
+    return this.requestsService.delete(id, req?.user);
   }
 
   @Post(':id/approve')

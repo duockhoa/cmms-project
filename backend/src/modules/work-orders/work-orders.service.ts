@@ -16,6 +16,7 @@ import {
   AssignWorkOrderDto
 } from './dto/work-orders.dto';
 import { ExecutionLogActionType, PerformerUnitType, HandlingRoute } from '@prisma/client';
+import { hasPermission, isGlobalAdmin } from '../../common/utils/rbac.helper';
 
 @Injectable()
 export class WorkOrdersService implements OnModuleInit {
@@ -165,8 +166,23 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async create(data: any) {
-    const equipment = await this.prisma.equipment.findUnique({ where: { id: data.equipmentId } });
+    let eqIdentifier = (data.equipmentId || data.equipmentCode || '').toString().trim();
+    if (eqIdentifier.includes('$')) {
+      eqIdentifier = eqIdentifier.split('$')[0].trim();
+    }
+    const equipment = await this.prisma.equipment.findFirst({
+      where: {
+        OR: [
+          { id: eqIdentifier },
+          { code: eqIdentifier },
+          { accountingCode: eqIdentifier },
+          { code: eqIdentifier.toUpperCase() },
+          { code: eqIdentifier.toLowerCase() },
+        ],
+      },
+    });
     if (!equipment) throw new BadRequestException('Thiết bị không tồn tại');
+    data.equipmentId = equipment.id;
 
     if (data.requestId) {
       const request = await this.prisma.maintenanceRequest.findUnique({ where: { id: data.requestId } });
@@ -247,10 +263,14 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async findByEquipmentQr(qrToken: string, userId: string, scanMethod: string = 'QR_SCAN') {
-    const cleanToken = (qrToken || '')
+    let cleanToken = (qrToken || '')
       .replace(/^cmms-equipment:/i, '')
       .replace(/^equipment:/i, '')
       .trim();
+
+    if (cleanToken.includes('$')) {
+      cleanToken = cleanToken.split('$')[0].trim();
+    }
 
     const equipment = await this.prisma.equipment.findFirst({
       where: {
@@ -1059,8 +1079,12 @@ export class WorkOrdersService implements OnModuleInit {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, actorContext?: any) {
+    const wo = await this.findOne(id);
+    if (!hasPermission(actorContext, 'work_orders:delete')) {
+      throw new ForbiddenException('Bạn không có quyền xóa phiếu bảo trì này (yêu cầu quyền work_orders:delete).');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       // 1. Delete attachments related to work order
       await tx.attachment.deleteMany({ where: { workOrderId: id } });
@@ -1079,14 +1103,24 @@ export class WorkOrdersService implements OnModuleInit {
       // 4. Delete work order items
       await tx.workOrderItem.deleteMany({ where: { workOrderId: id } });
 
-      // 5. Unlink schedule history
+      // 6. Delete workflow history for work order
+      await tx.workflowHistory.deleteMany({
+        where: {
+          entityType: 'WorkOrder',
+          entityId: id,
+        },
+      });
+
+      // 7. Unlink schedule history
       await tx.scheduleHistory.updateMany({ where: { workOrderId: id }, data: { workOrderId: null } });
 
-      // 6. Unlink inventory transactions
+      // 8. Unlink inventory transactions
       await tx.inventoryTransaction.updateMany({ where: { workOrderId: id }, data: { workOrderId: null, workOrderItemId: null } });
 
-      // 7. Delete work order
-      return tx.workOrder.delete({ where: { id } });
+      // 9. Delete work order
+      await tx.workOrder.delete({ where: { id } });
+
+      return { success: true, message: `Đã xóa phiếu bảo trì ${wo.orderCode} thành công.` };
     });
   }
 }

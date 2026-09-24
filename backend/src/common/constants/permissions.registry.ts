@@ -137,6 +137,11 @@ export const PERMISSIONS_REGISTRY: ModulePermissions[] = [
         name: 'Hủy yêu cầu sự cố',
         description: 'Hủy bỏ yêu cầu bảo trì khi không còn nhu cầu',
       },
+      {
+        code: 'requests:delete',
+        name: 'Xóa yêu cầu sự cố',
+        description: 'Xóa vĩnh viễn yêu cầu sự cố (Dành cho Quản trị viên)',
+      },
     ],
   },
   {
@@ -177,6 +182,11 @@ export const PERMISSIONS_REGISTRY: ModulePermissions[] = [
         code: 'work_orders:cancel',
         name: 'Hủy phiếu bảo trì',
         description: 'Hủy phiếu bảo trì không thực hiện',
+      },
+      {
+        code: 'work_orders:delete',
+        name: 'Xóa phiếu bảo trì',
+        description: 'Xóa vĩnh viễn phiếu bảo trì (Dành cho Quản trị viên)',
       },
     ],
   },

@@ -9,9 +9,9 @@ import { RequestDetailView } from '../components/common/RequestDetailView';
 import { usePermissions } from '../hooks/usePermissions';
 
 export const RequestsPage: React.FC = () => {
-  const { can, isAdmin } = usePermissions();
-  const canEdit = isAdmin || can('requests:edit');
-  const canDelete = isAdmin || can('requests:delete') || can('requests:cancel');
+  const { can } = usePermissions();
+  const canEdit = can('requests:edit');
+  const canDelete = can('requests:delete');
 
   const [requests, setRequests] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
@@ -47,10 +47,15 @@ export const RequestsPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleQRScan = (decodedText: string) => {
-    const rawCode = (decodedText || '')
+    let rawCode = (decodedText || '')
       .replace(/^cmms-equipment:/i, '')
       .replace(/^equipment:/i, '')
       .trim();
+
+    // Tách mã máy nếu quét chuỗi dạng Mã$Tên_Máy (VD: TBSX412$Máy_Rửa_Lọ)
+    if (rawCode.includes('$')) {
+      rawCode = rawCode.split('$')[0].trim();
+    }
 
     const matched = equipmentList.find(
       (e) =>
@@ -340,12 +345,25 @@ export const RequestsPage: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <StatusBadge status={req.status} />
                       {isReqLocked(req) ? (
-                        <span 
-                          title={req.status === 'CLOSED' ? 'Sự cố đã nghiệm thu hoàn tất và đóng' : 'Đã chuyển thành phiếu sửa chữa, đã khóa'} 
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)', padding: '2px 6px', borderRadius: '4px' }}
-                        >
-                          <Lock size={11} /> Đã khóa
-                        </span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <span 
+                            title={req.status === 'CLOSED' ? 'Sự cố đã nghiệm thu hoàn tất và đóng' : 'Đã chuyển thành phiếu sửa chữa, đã khóa'} 
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)', padding: '2px 6px', borderRadius: '4px' }}
+                          >
+                            <Lock size={11} /> Đã khóa
+                          </span>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              className="btn-icon"
+                              title="Xóa yêu cầu sự cố (Quản trị viên)"
+                              onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
+                              style={{ padding: '4px', borderRadius: '4px', color: '#dc2626', border: '1px solid #fecaca', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <>
                           {canEdit && (
@@ -452,12 +470,25 @@ export const RequestsPage: React.FC = () => {
                             <Eye size={15} />
                           </button>
                           {isReqLocked(req) ? (
-                            <span 
-                              title={req.status === 'CLOSED' ? 'Yêu cầu đã đóng sau khi hoàn thành nghiệm thu' : 'Đã chuyển thành phiếu sửa chữa, đã khóa'}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)', padding: '4px 8px', borderRadius: '6px' }}
-                            >
-                              <Lock size={13} /> Đã khóa
-                            </span>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <span 
+                                title={req.status === 'CLOSED' ? 'Yêu cầu đã đóng sau khi hoàn thành nghiệm thu' : 'Đã chuyển thành phiếu sửa chữa, đã khóa'}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)', padding: '4px 8px', borderRadius: '6px' }}
+                              >
+                                <Lock size={13} /> Đã khóa
+                              </span>
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  className="btn-icon"
+                                  title="Xóa yêu cầu sự cố (Quản trị viên)"
+                                  onClick={() => openDeleteConfirm(req)}
+                                  style={{ padding: '6px', borderRadius: '6px', color: '#dc2626', border: '1px solid #fecaca', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <>
                               {canEdit && (
@@ -739,6 +770,15 @@ export const RequestsPage: React.FC = () => {
                 <strong>Cảnh báo:</strong> Hành động này sẽ xóa vĩnh viễn yêu cầu sự cố và lịch sử liên quan khỏi hệ thống. Hành động này không thể hoàn tác!
               </div>
             </div>
+
+            {isReqLocked(deleteConfirmReq) && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fef3c7', fontSize: '12px', color: '#b45309' }}>
+                <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong>Dữ liệu đã đóng / có phiếu sửa chữa:</strong> Với quyền Quản trị viên (ADMIN), thao tác xóa này sẽ tự động dọn dẹp sạch toàn bộ phiếu sửa chữa (Work Order) và dữ liệu liên quan đi kèm.
+                </div>
+              </div>
+            )}
 
             <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '13px', border: '1px solid var(--border-color)' }}>
               <div><strong>Mã yêu cầu:</strong> <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{deleteConfirmReq.requestCode}</span></div>

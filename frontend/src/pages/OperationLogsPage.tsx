@@ -88,6 +88,10 @@ export const OperationLogsPage: React.FC = () => {
                 .trim();
             }
 
+            if (rawText.includes('$')) {
+              rawText = rawText.split('$')[0].trim();
+            }
+
             // Look up in equipmentList by code, accountingCode or id
             let matchedEq = equipmentList.find(
               (eq) =>

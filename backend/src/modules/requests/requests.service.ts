@@ -4,7 +4,7 @@ import { EquipmentStatusService } from '../equipment/equipment-status.service';
 import { HandlingRoute } from '@prisma/client';
 import { ApproveRequestDto } from './dto/approve-request.dto';
 import { NotificationsService } from '../notifications/notifications.service';
-import { canManageDepartmentRequest } from '../../common/utils/rbac.helper';
+import { canManageDepartmentRequest, hasPermission, isGlobalAdmin } from '../../common/utils/rbac.helper';
 
 @Injectable()
 export class RequestsService {
@@ -121,7 +121,16 @@ export class RequestsService {
   }
 
   async create(data: any, actorId?: string) {
-    const eqIdentifier = (data.equipmentCode || data.equipmentId || '').toString().trim();
+    let eqIdentifier = (data.equipmentCode || data.equipmentId || '')
+      .toString()
+      .replace(/^cmms-equipment:/i, '')
+      .replace(/^equipment:/i, '')
+      .trim();
+
+    if (eqIdentifier.includes('$')) {
+      eqIdentifier = eqIdentifier.split('$')[0].trim();
+    }
+
     if (!eqIdentifier) {
       throw new BadRequestException('Vui lòng cung cấp mã hoặc ID thiết bị (equipmentCode hoặc equipmentId)');
     }
@@ -842,7 +851,8 @@ export class RequestsService {
   }
 
   // ─── DELETE REQUEST ───
-  async delete(id: string, actorId?: string) {
+  // ─── DELETE REQUEST ───
+  async delete(id: string, actorContext?: any) {
     const existing = await this.prisma.maintenanceRequest.findUnique({
       where: { id },
       include: { workOrders: true },
@@ -851,18 +861,34 @@ export class RequestsService {
       throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa cần xóa');
     }
 
-    if (existing.status === 'CLOSED') {
-      throw new BadRequestException('Yêu cầu báo sự cố này đã được nghiệm thu hoàn tất và đã đóng. Đã khóa toàn bộ, không thể xóa.');
-    }
-
-    if (existing.workOrders.length > 0) {
-      throw new BadRequestException(
-        'Không thể xóa yêu cầu đã được chuyển thành Phiếu sửa chữa (Work Order).'
-      );
+    if (!hasPermission(actorContext, 'requests:delete')) {
+      throw new ForbiddenException('Bạn không có quyền xóa yêu cầu sự cố này (yêu cầu quyền requests:delete).');
     }
 
     return await this.prisma.$transaction(async (tx) => {
-      // Xóa WorkflowHistory liên quan
+      // Nếu là Admin xóa yêu cầu có Work Orders liên quan -> Dọn dẹp an toàn các Work Order con
+      for (const wo of existing.workOrders) {
+        await tx.attachment.deleteMany({ where: { workOrderId: wo.id } });
+        const checkExecs = await tx.checklistExecution.findMany({ where: { workOrderId: wo.id }, select: { id: true } });
+        if (checkExecs.length > 0) {
+          const execIds = checkExecs.map((e) => e.id);
+          await tx.checklistExecutionItem.deleteMany({ where: { executionId: { in: execIds } } });
+          await tx.checklistExecution.deleteMany({ where: { workOrderId: wo.id } });
+        }
+        await tx.workOrderExecutionLog.deleteMany({ where: { workOrderId: wo.id } });
+        await tx.workOrderItem.deleteMany({ where: { workOrderId: wo.id } });
+        await tx.workflowHistory.deleteMany({
+          where: {
+            entityType: 'WorkOrder',
+            entityId: wo.id,
+          },
+        });
+        await tx.scheduleHistory.updateMany({ where: { workOrderId: wo.id }, data: { workOrderId: null } });
+        await tx.inventoryTransaction.updateMany({ where: { workOrderId: wo.id }, data: { workOrderId: null, workOrderItemId: null } });
+        await tx.workOrder.delete({ where: { id: wo.id } });
+      }
+
+      // Xóa WorkflowHistory liên quan đến Request
       await tx.workflowHistory.deleteMany({
         where: {
           entityType: 'MaintenanceRequest',
@@ -870,7 +896,7 @@ export class RequestsService {
         },
       });
 
-      // Xóa Attachment liên quan
+      // Xóa Attachment liên quan đến Request
       await tx.attachment.deleteMany({
         where: {
           entityType: 'MaintenanceRequest',

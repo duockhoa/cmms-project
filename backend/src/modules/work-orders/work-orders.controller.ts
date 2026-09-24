@@ -217,10 +217,9 @@ export class WorkOrdersController {
     return this.inventoryService.materialReturn(workOrderId, body, req.user.id);
   }
 
-  @ApiStandardResponse({ summary: 'Xóa work order', method: 'DELETE', path: '/work-orders/{id}' })
+  @ApiStandardResponse({ summary: 'Xóa work order (Dành cho Quản trị viên)', method: 'DELETE', path: '/work-orders/{id}' })
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id') id: string) {
-    return this.workOrdersService.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.workOrdersService.remove(id, req?.user);
   }
 }

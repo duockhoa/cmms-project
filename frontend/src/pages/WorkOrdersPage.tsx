@@ -7,10 +7,12 @@ import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, Refres
 import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
 import { WorkOrderDetailView } from '../components/common/WorkOrderDetailView';
+import { usePermissions } from '../hooks/usePermissions';
 
 const API_BASE = API_HOST;
 
 export const WorkOrdersPage: React.FC = () => {
+  const { can, isAdmin } = usePermissions();
   const [workOrders, setWorkOrders] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +61,8 @@ export const WorkOrdersPage: React.FC = () => {
 
   const [woToDelete, setWoToDelete] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const canDeleteWo = can('work_orders:delete');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -229,7 +233,14 @@ export const WorkOrdersPage: React.FC = () => {
   const handleDeviceIdentified = async (deviceCode: string, method: 'QR_SCAN' | 'MANUAL_ENTRY') => {
     try {
       setLoading(true);
-      const res = await api.getWorkOrdersByEquipmentQr(deviceCode, method);
+      let cleanCode = (deviceCode || '')
+        .replace(/^cmms-equipment:/i, '')
+        .replace(/^equipment:/i, '')
+        .trim();
+      if (cleanCode.includes('$')) {
+        cleanCode = cleanCode.split('$')[0].trim();
+      }
+      const res = await api.getWorkOrdersByEquipmentQr(cleanCode, method);
       
       toast.success('Nhận diện thiết bị', `Thiết bị: ${res.equipment.name} (${res.equipment.code})`);
       
@@ -532,11 +543,11 @@ export const WorkOrdersPage: React.FC = () => {
                         >
                           <Eye size={13} /> Chi tiết
                         </button>
-                        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER') && (
+                        {canDeleteWo && (
                           <button 
                             className="btn btn-outline-danger btn-sm"
-                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px' }}
-                            title="Xóa phiếu sửa chữa"
+                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px', color: '#dc2626', borderColor: '#fca5a5' }}
+                            title="Xóa phiếu sửa chữa (Quản trị viên)"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteWo(wo);
@@ -656,7 +667,23 @@ export const WorkOrdersPage: React.FC = () => {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <span style={{ fontWeight: 700, color: '#2563eb', fontSize: '14px' }}>{wo.orderCode}</span>
-                      <StatusBadge status={wo.status} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <StatusBadge status={wo.status} />
+                        {canDeleteWo && (
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            title="Xóa phiếu (Quản trị viên)"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteWo(wo);
+                            }}
+                            style={{ padding: '3px 5px', borderRadius: '4px', color: '#dc2626', border: '1px solid #fca5a5', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{wo.title}</div>
                     <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>

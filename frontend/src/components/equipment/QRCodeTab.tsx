@@ -5,6 +5,10 @@ interface QRCodeTabProps {
 }
 
 export const QRCodeTab: React.FC<QRCodeTabProps> = ({ data }) => {
+  const code = (data.code || data.id || '').trim();
+  const nameFormatted = (data.name || '').trim().replace(/\s+/g, '_');
+  const qrPayload = nameFormatted ? `${code}$${nameFormatted}` : code;
+
   return (
     <div style={{ padding: '24px 0', display: 'flex', justifyContent: 'center' }}>
       <div className="card" style={{ 
@@ -30,8 +34,8 @@ export const QRCodeTab: React.FC<QRCodeTabProps> = ({ data }) => {
           alignItems: 'center'
         }}>
           <img 
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.code || data.id)}`}
-            alt={`QR Code ${data.code}`}
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrPayload)}`}
+            alt={`QR Code ${qrPayload}`}
             style={{ width: '200px', height: '200px' }}
           />
         </div>
@@ -41,13 +45,16 @@ export const QRCodeTab: React.FC<QRCodeTabProps> = ({ data }) => {
           {data.location && (
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Vị trí: {data.location}</span>
           )}
+          <span style={{ fontSize: '11px', color: '#2563eb', fontFamily: 'monospace', marginTop: '2px', wordBreak: 'break-all' }}>
+            Nội dung quét: {qrPayload}
+          </span>
         </div>
         <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '8px' }}>
           <button 
             className="btn btn-secondary btn-sm" 
             style={{ flex: 1, fontSize: '12px', padding: '8px' }}
             onClick={() => {
-              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(data.code || data.id)}`;
+              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrPayload)}`;
               window.open(qrUrl, '_blank');
             }}
           >
@@ -76,7 +83,7 @@ export const QRCodeTab: React.FC<QRCodeTabProps> = ({ data }) => {
                     <body onload="window.print(); window.close();">
                       <div class="label-container">
                         <div class="header-tag">CMMS - QUẢN LÝ BẢO TRÌ</div>
-                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.code || data.id)}" />
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrPayload)}" />
                         <h2>${data.name}</h2>
                         <div class="code">[ ${data.code} ]</div>
                         ${data.location ? `<div class="loc">📍 ${data.location}</div>` : ''}

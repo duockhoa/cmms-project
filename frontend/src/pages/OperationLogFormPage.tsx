@@ -73,6 +73,10 @@ export function OperationLogFormPage() {
                     .trim();
                 }
 
+                if (rawText.includes('$')) {
+                  rawText = rawText.split('$')[0].trim();
+                }
+
                 const matchesCurrent =
                   equipment.id?.toLowerCase() === rawText.toLowerCase() ||
                   equipment.code?.toLowerCase() === rawText.toLowerCase() ||
