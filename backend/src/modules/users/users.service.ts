@@ -1,20 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, HttpException, HttpStatus, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateTechnicalProfileDto } from './dto/update-technical-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 
 @Injectable()
-export class UsersService implements OnModuleInit {
+export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
-
-  async onModuleInit() {
-    // Chạy ngầm dọn dẹp sau khi server đã khởi động xong hoàn toàn, không chặn tiến trình listen của NestJS
-    setTimeout(() => {
-      this.cleanSsoDuplicates().catch((err: any) => {
-        console.warn('[USERS_INIT] Background cleanup SSO duplicates error:', err?.message || err);
-      });
-    }, 3000);
-  }
 
   async getDepartments() {
     const [users, equipments] = await Promise.all([
