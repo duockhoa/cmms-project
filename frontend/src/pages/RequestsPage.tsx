@@ -47,18 +47,24 @@ export const RequestsPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleQRScan = (decodedText: string) => {
-    if (decodedText.startsWith('cmms-equipment:')) {
-      const eqId = decodedText.split(':')[1];
-      const matched = equipmentList.find((e) => e.id === eqId);
-      if (matched) {
-        setFormData((prev) => ({ ...prev, equipmentId: eqId, functionalUnitId: '' }));
-        toast.success('Nhận diện thiết bị thành công', `Thiết bị: ${matched.name} (${matched.code})`);
-        setShowScanner(false);
-      } else {
-        toast.error('Thiết bị không tồn tại', 'ID thiết bị quét từ mã QR không tồn tại trong hệ thống.');
-      }
+    const rawCode = (decodedText || '')
+      .replace(/^cmms-equipment:/i, '')
+      .replace(/^equipment:/i, '')
+      .trim();
+
+    const matched = equipmentList.find(
+      (e) =>
+        e.code?.toLowerCase() === rawCode.toLowerCase() ||
+        e.id === rawCode ||
+        e.accountingCode?.toLowerCase() === rawCode.toLowerCase()
+    );
+
+    if (matched) {
+      setFormData((prev) => ({ ...prev, equipmentId: matched.id, functionalUnitId: '' }));
+      toast.success('Nhận diện thiết bị thành công', `Thiết bị: ${matched.name} (${matched.code})`);
+      setShowScanner(false);
     } else {
-      toast.warning('Mã QR không đúng định dạng', 'Mã QR quét được không thuộc hệ thống CMMS thiết bị.');
+      toast.error('Thiết bị không tồn tại', `Mã quét [${rawCode}] không tồn tại trong danh mục thiết bị.`);
     }
   };
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -147,13 +153,31 @@ export const RequestsPage: React.FC = () => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.equipmentId) {
+      toast.warning('Cảnh báo', 'Vui lòng chọn thiết bị gặp sự cố!');
+      return;
+    }
+    const cleanTitle = (formData.title || '').trim();
+    const cleanDesc = (formData.description || '').trim();
+    if (!cleanTitle) {
+      toast.warning('Cảnh báo', 'Tiêu đề sự cố không được để trống!');
+      return;
+    }
+    if (!cleanDesc) {
+      toast.warning('Cảnh báo', 'Mô tả hiện trạng hư hỏng không được để trống!');
+      return;
+    }
+
     try {
       await api.createRequest({
-        ...formData,
+        equipmentId: formData.equipmentId,
+        title: cleanTitle,
+        description: cleanDesc,
+        priority: formData.priority || 'HIGH',
         reporterId: currentUser?.id || undefined,
         reporterName: currentUser?.name || undefined,
         department: currentUser?.department || undefined,
-        functionalUnitId: formData.functionalUnitId || undefined,
+        functionalUnitId: formData.functionalUnitId?.trim() || undefined,
       });
       setIsAddOpen(false);
       setFormData({
@@ -575,8 +599,8 @@ export const RequestsPage: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Mô tả chi tiết hiện trạng hư hỏng</label>
-            <textarea className="form-textarea" rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Hiện tượng, thời điểm xảy ra..." />
+            <label className="form-label">Mô tả chi tiết hiện trạng hư hỏng *</label>
+            <textarea className="form-textarea" required rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Hiện tượng, thời điểm xảy ra..." />
           </div>
 
           <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>

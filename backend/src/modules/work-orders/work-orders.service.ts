@@ -184,8 +184,23 @@ export class WorkOrdersService implements OnModuleInit {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const count = await tx.workOrder.count();
-      const orderCode = `WO-${(count + 1).toString().padStart(4, '0')}`;
+      let nextWoNum = 1;
+      const lastWo = await tx.workOrder.findFirst({
+        where: { orderCode: { startsWith: 'WO-' } },
+        orderBy: { createdAt: 'desc' },
+        select: { orderCode: true },
+      });
+      if (lastWo) {
+        const match = lastWo.orderCode.match(/WO-(\d+)/);
+        if (match) {
+          nextWoNum = parseInt(match[1], 10) + 1;
+        }
+      }
+      let orderCode = `WO-${nextWoNum.toString().padStart(4, '0')}`;
+      while (await tx.workOrder.findUnique({ where: { orderCode } })) {
+        nextWoNum++;
+        orderCode = `WO-${nextWoNum.toString().padStart(4, '0')}`;
+      }
 
       const workOrder = await tx.workOrder.create({
         data: {
@@ -232,12 +247,25 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async findByEquipmentQr(qrToken: string, userId: string, scanMethod: string = 'QR_SCAN') {
+    const cleanToken = (qrToken || '')
+      .replace(/^cmms-equipment:/i, '')
+      .replace(/^equipment:/i, '')
+      .trim();
+
     const equipment = await this.prisma.equipment.findFirst({
-      where: { code: qrToken }
+      where: {
+        OR: [
+          { code: cleanToken },
+          { id: cleanToken },
+          { accountingCode: cleanToken },
+          { code: cleanToken.toUpperCase() },
+          { code: cleanToken.toLowerCase() },
+        ],
+      },
     });
 
     if (!equipment) {
-      throw new NotFoundException('Không tìm thấy thiết bị với mã này.');
+      throw new NotFoundException(`Không tìm thấy thiết bị với mã [${cleanToken}].`);
     }
 
     await this.prisma.workflowHistory.create({

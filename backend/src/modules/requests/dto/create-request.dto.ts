@@ -2,8 +2,12 @@ import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 
 export class CreateMaintenanceRequestDto {
   @IsString()
-  @IsNotEmpty({ message: 'Thiết bị không được để trống' })
-  equipmentId: string;
+  @IsOptional()
+  equipmentId?: string; // ID hoặc mã thiết bị (UUID hoặc code như TBSX915)
+
+  @IsString()
+  @IsOptional()
+  equipmentCode?: string; // Mã thiết bị thực tế từ hệ thống ngoài (VD: TBSX915, TBSX001)
 
   @IsString()
   @IsNotEmpty({ message: 'Tiêu đề không được để trống' })
@@ -15,25 +19,26 @@ export class CreateMaintenanceRequestDto {
 
   @IsString()
   @IsOptional()
-  priority?: string;
+  priority?: string; // LOW, MEDIUM, HIGH, URGENT (Mặc định: MEDIUM)
 
   @IsString()
   @IsOptional()
-  reporterName?: string;
+  functionalUnitId?: string; // Tùy chọn: ID cụm chức năng bị lỗi
 
   @IsString()
   @IsOptional()
-  department?: string;
+  images?: string; // Tùy chọn: Link hoặc mảng JSON ảnh đính kèm
 
   @IsString()
   @IsOptional()
-  images?: string;
+  reporterName?: string; // Tùy chọn: Tự động trích xuất từ tài khoản đăng nhập nếu không truyền
 
   @IsString()
   @IsOptional()
-  functionalUnitId?: string;
+  department?: string; // Tùy chọn: Tự động trích xuất từ tài khoản đăng nhập nếu không truyền
 
   @IsString()
   @IsOptional()
-  reporterId?: string;
+  reporterId?: string; // Tùy chọn: Tự động trích xuất từ tài khoản đăng nhập nếu không truyền
 }
+

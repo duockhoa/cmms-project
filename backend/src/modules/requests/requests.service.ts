@@ -121,9 +121,39 @@ export class RequestsService {
   }
 
   async create(data: any, actorId?: string) {
-    // Business Validation: Equipment must exist
-    const equipment = await this.prisma.equipment.findUnique({ where: { id: data.equipmentId } });
-    if (!equipment) throw new BadRequestException('Thiết bị không tồn tại');
+    const eqIdentifier = (data.equipmentCode || data.equipmentId || '').toString().trim();
+    if (!eqIdentifier) {
+      throw new BadRequestException('Vui lòng cung cấp mã hoặc ID thiết bị (equipmentCode hoặc equipmentId)');
+    }
+
+    // Business Validation: Equipment can be looked up by id, code, or accountingCode
+    const equipment = await this.prisma.equipment.findFirst({
+      where: {
+        OR: [
+          { id: eqIdentifier },
+          { code: eqIdentifier },
+          { accountingCode: eqIdentifier },
+          { code: eqIdentifier.toUpperCase() },
+          { code: eqIdentifier.toLowerCase() },
+        ],
+      },
+    });
+    if (!equipment) {
+      throw new BadRequestException(`Không tìm thấy thiết bị với mã hoặc ID [${eqIdentifier}] trên hệ thống.`);
+    }
+
+    // Business Validation: Functional Unit must exist and belong to equipment (if provided)
+    if (data.functionalUnitId) {
+      const fu = await this.prisma.equipmentFunctionalUnit.findUnique({
+        where: { id: data.functionalUnitId },
+      });
+      if (!fu) {
+        throw new BadRequestException('Cụm chức năng (functionalUnitId) không tồn tại trên hệ thống.');
+      }
+      if (fu.equipmentId !== equipment.id) {
+        throw new BadRequestException('Cụm chức năng không thuộc thiết bị đã chọn.');
+      }
+    }
 
     // Lấy thông tin người báo cáo từ tài khoản đăng nhập (actorId hoặc data.reporterId)
     const effectiveUserId = data.reporterId || actorId;
@@ -137,13 +167,29 @@ export class RequestsService {
     const reporterId = reporterUser?.id || null;
 
     const request = await this.prisma.$transaction(async (tx) => {
-      const count = await tx.maintenanceRequest.count();
-      const requestCode = `REQ-${(count + 1).toString().padStart(4, '0')}`;
+      // Safe collision-resistant requestCode generation
+      let nextNum = 1;
+      const lastReq = await tx.maintenanceRequest.findFirst({
+        where: { requestCode: { startsWith: 'REQ-' } },
+        orderBy: { createdAt: 'desc' },
+        select: { requestCode: true },
+      });
+      if (lastReq) {
+        const match = lastReq.requestCode.match(/REQ-(\d+)/);
+        if (match) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+      let requestCode = `REQ-${nextNum.toString().padStart(4, '0')}`;
+      while (await tx.maintenanceRequest.findUnique({ where: { requestCode } })) {
+        nextNum++;
+        requestCode = `REQ-${nextNum.toString().padStart(4, '0')}`;
+      }
 
       const request = await tx.maintenanceRequest.create({
         data: {
           requestCode,
-          equipmentId: data.equipmentId,
+          equipmentId: equipment.id,
           functionalUnitId: data.functionalUnitId || null,
           title: data.title,
           description: data.description,
@@ -170,7 +216,7 @@ export class RequestsService {
       }
 
       // Recalculate equipment status
-      await this.equipmentStatus.calculateAndSetStatus(data.equipmentId, tx);
+      await this.equipmentStatus.calculateAndSetStatus(equipment.id, tx);
 
       // Resolve location and responsible technician
       const location = await tx.location.findFirst({
@@ -294,10 +340,17 @@ export class RequestsService {
         const hasAssignees = (body.assignedTechnicianIds && body.assignedTechnicianIds.length > 0) || body.assignedTechnicianId || body.technicianName;
         if (hasAssignees) {
           targetStatus = 'ASSIGNED';
-          assignedTechId = body.assignedTechnicianIds?.[0] || body.assignedTechnicianId || null;
-          if (assignedTechId && !body.technicianName) {
-            const firstTech = await tx.user.findUnique({ where: { id: assignedTechId }, select: { name: true } });
-            assignedTechName = firstTech?.name || 'Kỹ thuật viên';
+          const candidateTechId = body.assignedTechnicianIds?.[0] || body.assignedTechnicianId || null;
+          if (candidateTechId) {
+            const firstTech = await tx.user.findUnique({ where: { id: candidateTechId }, select: { id: true, name: true } });
+            if (firstTech) {
+              assignedTechId = firstTech.id;
+              assignedTechName = body.technicianName || firstTech.name || 'Kỹ thuật viên';
+            } else {
+              // If candidateTechId does not exist as UUID, do not set foreign key to avoid 500 error
+              assignedTechId = null;
+              assignedTechName = body.technicianName || 'Kỹ thuật viên';
+            }
           } else {
             assignedTechName = body.technicianName || 'Kỹ thuật viên';
           }
@@ -310,9 +363,33 @@ export class RequestsService {
         }
       }
 
-      // Create Work Order
-      const woCount = await tx.workOrder.count();
-      const orderCode = `WO-${(woCount + 1).toString().padStart(4, '0')}`;
+      // Validate watcherId if provided to prevent foreign key constraint failure
+      let validatedWatcherId: string | null = null;
+      if (body.watcherId) {
+        const watcherUser = await tx.user.findUnique({ where: { id: body.watcherId }, select: { id: true } });
+        if (watcherUser) {
+          validatedWatcherId = watcherUser.id;
+        }
+      }
+
+      // Safe collision-resistant orderCode generation
+      let nextWoNum = 1;
+      const lastWo = await tx.workOrder.findFirst({
+        where: { orderCode: { startsWith: 'WO-' } },
+        orderBy: { createdAt: 'desc' },
+        select: { orderCode: true },
+      });
+      if (lastWo) {
+        const match = lastWo.orderCode.match(/WO-(\d+)/);
+        if (match) {
+          nextWoNum = parseInt(match[1], 10) + 1;
+        }
+      }
+      let orderCode = `WO-${nextWoNum.toString().padStart(4, '0')}`;
+      while (await tx.workOrder.findUnique({ where: { orderCode } })) {
+        nextWoNum++;
+        orderCode = `WO-${nextWoNum.toString().padStart(4, '0')}`;
+      }
 
       const workOrder = await tx.workOrder.create({
         data: {
@@ -330,7 +407,7 @@ export class RequestsService {
           assignedTechnicianId: assignedTechId,
           assignedTechnicianIds: body.assignedTechnicianIds && body.assignedTechnicianIds.length > 0 ? body.assignedTechnicianIds : undefined,
           supporterIds: body.supporterIds && body.supporterIds.length > 0 ? body.supporterIds : undefined,
-          watcherId: body.watcherId || null,
+          watcherId: validatedWatcherId,
           actualStartDate: null,
         },
       });
