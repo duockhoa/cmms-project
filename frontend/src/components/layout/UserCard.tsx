@@ -6,8 +6,13 @@ import { clearAuthTokens } from '../../utils/authStorage';
 
 export default function UserCard({ user }: { user: any }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.avatar]);
 
   const handleLogout = () => {
     clearAuthTokens();
@@ -87,15 +92,12 @@ export default function UserCard({ user }: { user: any }) {
             border: '2px solid var(--border-color, #e2e8f0)',
           }}
         >
-          {user?.avatar ? (
+          {user?.avatar && !imageError ? (
             <img
               src={user.avatar}
               alt={user?.name || 'Avatar'}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={(e) => {
-                // If avatar image fails, fallback to initials
-                (e.target as HTMLElement).style.display = 'none';
-              }}
+              onError={() => setImageError(true)}
             />
           ) : (
             <span>{getInitials(user?.name)}</span>
@@ -147,7 +149,7 @@ export default function UserCard({ user }: { user: any }) {
           <div
             onClick={() => {
               setIsOpen(false);
-              navigate('/about');
+              window.location.href = `${portalUrl.replace(/\/$/, '')}/profile`;
             }}
             style={{
               display: 'flex',
@@ -170,7 +172,7 @@ export default function UserCard({ user }: { user: any }) {
           <div
             onClick={() => {
               setIsOpen(false);
-              window.open(portalUrl, '_blank');
+              window.location.href = portalUrl;
             }}
             style={{
               display: 'flex',

@@ -394,6 +394,7 @@ export class UsersService {
         const name = hrmUser.name || hrmUser.username || `User ${hrmId}`;
         const isUserActive = !inactiveStatuses.includes(String(hrmUser.status || '').toUpperCase());
         const position = hrmUser.position || hrmUser.role || null;
+        const avatar = hrmUser.avatar || null;
         
         // Build search conditions to find ALL possible matching records
         const orConditions: any[] = [
@@ -511,6 +512,7 @@ export class UsersService {
               customPermissions: bestCustomPerms,
               department: hrmUser.department || primary.department || null,
               specialty: position || primary.specialty || null,
+              avatar: avatar || primary.avatar || null,
               isActive: isUserActive,
             },
           });
@@ -523,6 +525,7 @@ export class UsersService {
             name: name,
             department: hrmUser.department || null,
             specialty: position || undefined,
+            avatar: avatar || undefined,
             isActive: isUserActive,
           };
           if (hasRealEmail && existing.email !== hrmUser.email) {
@@ -545,6 +548,7 @@ export class UsersService {
                 name: name,
                 department: hrmUser.department || null,
                 specialty: position || null,
+                avatar: avatar || null,
                 isActive: isUserActive,
               },
             });
@@ -560,6 +564,7 @@ export class UsersService {
                   roleId: defaultUserRole?.id || null,
                   department: hrmUser.department || null,
                   specialty: position || null,
+                  avatar: avatar,
                   isActive: isUserActive,
                 },
               });

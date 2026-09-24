@@ -88,6 +88,8 @@ export class AuthController {
         status: dbUser.status,
         isActive: dbUser.isActive,
         department: dbUser.department,
+        position: dbUser.specialty,
+        avatar: dbUser.avatar,
       },
       permissions: permissions,
       scope: {

@@ -98,9 +98,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     let department = dbUser?.department || null;
     let name = dbUser?.name || payload.preferred_username || payload.name || payload.username || `User ${sub}`;
     let specialty = dbUser?.specialty || null;
+    let avatar = dbUser?.avatar || payload.avatar || null;
     
-    // Nếu user chưa tồn tại hoặc thiếu department trong DB, thử lấy trực tiếp từ HRM để đồng bộ
-    if (!dbUser || dbUser.department === null) {
+    // Nếu user chưa tồn tại hoặc thiếu department/avatar trong DB, thử lấy trực tiếp từ HRM để đồng bộ
+    if (!dbUser || dbUser.department === null || !dbUser.avatar) {
       try {
         let token = req.headers?.authorization;
         if (!token && req.query?.token) {
@@ -120,6 +121,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
               department = hrmUser.department || department;
               name = hrmUser.name || name;
               specialty = hrmUser.position || specialty;
+              avatar = hrmUser.avatar || avatar;
             }
           }
         }
@@ -151,6 +153,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             role: defaultRole,
             department: department,
             specialty: specialty,
+            avatar: avatar,
           },
           include: {
             customRole: true
@@ -182,6 +185,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       const needsUpdate = (department && dbUser.department !== department) || 
                           (specialty && dbUser.specialty !== specialty) || 
                           (name && dbUser.name !== name) ||
+                          (avatar && dbUser.avatar !== avatar) ||
                           (isSuperAdmin && dbUser.role !== 'ADMIN');
       if (needsUpdate) {
         dbUser = await this.prisma.user.update({
@@ -190,6 +194,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             department: department || dbUser.department,
             specialty: specialty || dbUser.specialty,
             name: name || dbUser.name,
+            avatar: avatar || dbUser.avatar,
             role: isSuperAdmin ? 'ADMIN' : dbUser.role, // Upgrade to admin if matched
           },
           include: { customRole: true }

@@ -167,8 +167,6 @@ export function LoginPage() {
             Bạn chưa có tài khoản?{' '}
             <a
               href={`${HRM_API_URL}/register`}
-              target="_blank"
-              rel="noopener noreferrer"
               className="login-link"
             >
               Đăng ký
@@ -176,8 +174,6 @@ export function LoginPage() {
           </p>
           <a
             href={`${HRM_API_URL}/forgot-password`}
-            target="_blank"
-            rel="noopener noreferrer"
             className="login-link"
           >
             Lấy lại mật khẩu...
