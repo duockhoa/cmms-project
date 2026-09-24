@@ -8,11 +8,12 @@ export class UsersService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
-    try {
-      await this.cleanSsoDuplicates();
-    } catch (err: any) {
-      console.warn('[USERS_INIT] Auto-cleanup SSO duplicates error:', err?.message || err);
-    }
+    // Chạy ngầm dọn dẹp sau khi server đã khởi động xong hoàn toàn, không chặn tiến trình listen của NestJS
+    setTimeout(() => {
+      this.cleanSsoDuplicates().catch((err: any) => {
+        console.warn('[USERS_INIT] Background cleanup SSO duplicates error:', err?.message || err);
+      });
+    }, 3000);
   }
 
   async getDepartments() {
@@ -630,28 +631,17 @@ export class UsersService implements OnModuleInit {
         const cleanPrefix = prefix.replace(/^0+/, '');
         const candidateCodes = [prefix, cleanPrefix].filter(Boolean);
 
-        // Tìm các tài khoản ứng viên có cùng tên hoặc có ID / Email khớp mã nhân viên
-        const potentialMatches = await this.prisma.user.findMany({
+        // Tìm tài khoản chính thức có EMAIL THẬT và trùng họ tên
+        const primary = await this.prisma.user.findFirst({
           where: {
             id: { not: currentDummy.id },
-            OR: [
-              { name: currentDummy.name },
-              { id: { in: candidateCodes } },
-              ...(candidateCodes.map((code) => ({ email: { startsWith: `${code}@` } }))),
-            ],
+            name: currentDummy.name,
+            email: { not: { endsWith: '@local.hrm' } },
           },
           include: { customRole: true },
         });
 
-        if (potentialMatches.length === 0) continue;
-
-        // Chọn primary tốt nhất (ưu tiên tài khoản có email thật, có role, có customRole)
-        const primary = potentialMatches.find((u) => u.email && !u.email.endsWith('@local.hrm') && u.email.includes('@'))
-          || potentialMatches.find((u) => u.roleId !== null)
-          || potentialMatches.find((u) => u.role === 'ADMIN')
-          || potentialMatches.find((u) => candidateCodes.includes(u.id))
-          || potentialMatches[0];
-
+        // Nếu không có tài khoản email thật trùng tên -> đây là nhân viên HRM bình thường, bỏ qua
         if (!primary) continue;
 
         const targetPrimary = primary;
