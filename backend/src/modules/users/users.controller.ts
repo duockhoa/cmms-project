@@ -25,6 +25,16 @@ export class UsersController {
     return this.usersService.syncHrmUsers(token);
   }
 
+  @Post('clean-duplicates')
+  @ApiStandardResponse({
+    summary: 'Tự động rà soát và dọn dẹp tài khoản trùng lặp do SSO cũ',
+    method: 'POST',
+    path: '/users/clean-duplicates',
+  })
+  async cleanDuplicates() {
+    return this.usersService.cleanSsoDuplicates();
+  }
+
   @ApiStandardResponse({
     summary: 'Lấy danh sách người dùng đang hoạt động',
     method: 'GET',

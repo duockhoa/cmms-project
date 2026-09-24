@@ -53,6 +53,20 @@ export class AuthController {
     // Total effective permissions: Role permissions + Direct User permissions (Strict RBAC)
     const merged = new Set<string>([...rolePerms, ...customPerms]);
 
+    // Backward-compatibility & Security: ADMIN or SUPER_ADMIN always has full permissions
+    const adminCodes = [
+      process.env.ADMIN_EMPLOYEE_CODE,
+      ...(process.env.SUPER_ADMIN_EMPLOYEE_CODES ? process.env.SUPER_ADMIN_EMPLOYEE_CODES.split(',') : [])
+    ].filter(Boolean).map(c => c!.trim().toLowerCase());
+
+    const isGlobalAdmin = dbUser.role === 'ADMIN' || dbUser.role === 'SUPER_ADMIN' || adminCodes.some(code =>
+      (dbUser.id && dbUser.id.toLowerCase() === code) ||
+      (dbUser.email && dbUser.email.toLowerCase().includes(code))
+    );
+    if (isGlobalAdmin) {
+      merged.add('*');
+    }
+
     // Dynamic wildcard expansion: if role or user has '*' or 'ALL', expand to all permissions
     let permissions: string[] = [];
     if (merged.has('*') || merged.has('ALL')) {

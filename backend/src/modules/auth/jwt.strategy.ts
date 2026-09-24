@@ -78,18 +78,31 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token payload is invalid or missing subject.');
     }
 
-    // Try to find the user in the CMMS database by email or username
+    // Try to find the user in the CMMS database by id, sub, email or username
     const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
     const emailOrUsername = payload.email || payload.username || `${sub}${dummyDomain}`;
-    
+    const subStr = String(sub);
+    const subCleanId = subStr.replace(/^0+/, '');
+    const usernameStr = payload.username ? String(payload.username) : null;
+    const usernameCleanId = usernameStr ? usernameStr.replace(/^0+/, '') : null;
+
+    const orConditions: any[] = [
+      { id: subStr },
+      ...(subCleanId ? [{ id: subCleanId }] : []),
+      ...(usernameStr ? [{ id: usernameStr }] : []),
+      ...(usernameCleanId ? [{ id: usernameCleanId }] : []),
+      { email: emailOrUsername },
+      ...(payload.email ? [{ email: payload.email }] : []),
+      ...(payload.username ? [{ email: `${payload.username}@local.hrm` }, { name: payload.username }] : []),
+      { email: `${subStr}@local.hrm` },
+      ...(subCleanId ? [{ email: `${subCleanId}@local.hrm` }] : []),
+    ];
+    if (payload.name) {
+      orConditions.push({ name: payload.name });
+    }
+
     let dbUser = await this.prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: emailOrUsername },
-          ...(payload.username ? [{ email: `${payload.username}@local.hrm` }, { name: payload.username }] : []),
-          ...(sub ? [{ email: `${sub}@local.hrm` }] : []),
-        ]
-      },
+      where: { OR: orConditions },
       include: {
         customRole: true
       }
@@ -108,7 +121,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           token = `Bearer ${req.query.token}`;
         }
         if (token) {
-          const hrmApiUrl = process.env.HRM_API_URL || 'https://hrm.example.com';
+          const hrmApiUrl = process.env.HRM_API_URL || 'https://hrmserver.dkpharma.io.vn';
           const res = await fetch(`${hrmApiUrl}/users/me`, {
             headers: {
               'Authorization': token,
@@ -122,6 +135,27 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
               name = hrmUser.name || name;
               specialty = hrmUser.position || specialty;
               avatar = hrmUser.avatar || avatar;
+
+              // Nếu lúc đầu chưa tìm thấy dbUser, thử tìm lại bằng dữ liệu chính xác từ HRM
+              if (!dbUser) {
+                const hrmOr: any[] = [];
+                if (hrmUser.id) {
+                  hrmOr.push({ id: String(hrmUser.id) });
+                  hrmOr.push({ id: String(hrmUser.id).replace(/^0+/, '') });
+                }
+                if (hrmUser.email && hrmUser.email.includes('@')) {
+                  hrmOr.push({ email: hrmUser.email });
+                }
+                if (hrmUser.name) {
+                  hrmOr.push({ name: hrmUser.name });
+                }
+                if (hrmOr.length > 0) {
+                  dbUser = await this.prisma.user.findFirst({
+                    where: { OR: hrmOr },
+                    include: { customRole: true }
+                  });
+                }
+              }
             }
           }
         }
@@ -139,7 +173,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       (payload.username && payload.username.toString().toLowerCase() === code) ||
       (sub && sub.toString().toLowerCase() === code) ||
       (emailOrUsername && emailOrUsername.toString().toLowerCase().includes(code)) ||
-      (name && name.toString().toLowerCase().includes(code))
+      (name && name.toString().toLowerCase().includes(code)) ||
+      (dbUser?.email && dbUser.email.toLowerCase().includes(code))
     );
     const defaultRole = isSuperAdmin ? 'ADMIN' : (process.env.DEFAULT_SYNC_ROLE || 'USER');
 

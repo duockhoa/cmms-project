@@ -73,12 +73,13 @@ export const usePermissions = () => {
 
   const checkSinglePermission = useCallback(
     (code: string): boolean => {
+      if (state.isAdmin) return true;
       if (state.permissions.includes('ALL') || state.permissions.includes('*')) return true;
       const [mod] = code.split(':');
       if (state.permissions.includes(`${mod}:*`) || state.permissions.includes(`${mod}:ALL`)) return true;
       return state.permissions.includes(code);
     },
-    [state.permissions]
+    [state.permissions, state.isAdmin]
   );
 
   const can = useCallback(
