@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Menu, Sun, Moon } from 'lucide-react';
-import { api } from '../../services/api';
+import { usePermissions } from '../../hooks/usePermissions';
 import { HeaderSearch } from './HeaderSearch';
 import { NotificationDropdown } from './NotificationDropdown';
 import { UserCard } from './UserCard';
@@ -12,19 +12,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }) => {
-  const [currentUser, setCurrentUser] = useState<any>(null);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await api.getMe();
-        setCurrentUser(res?.user || res);
-      } catch (e) {
-        console.error('Failed to load user profile in Navbar:', e);
-      }
-    };
-    fetchUser();
-  }, []);
+  const { user: currentUser } = usePermissions();
 
   return (
     <header

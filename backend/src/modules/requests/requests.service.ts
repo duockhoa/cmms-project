@@ -15,29 +15,6 @@ export class RequestsService {
   ) {}
 
   async findAll(query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string }) {
-    // Tự động kiểm tra và đồng bộ các yêu cầu có Phiếu sửa chữa đã nghiệm thu/đóng sang CLOSED
-    try {
-      const closedWos = await this.prisma.workOrder.findMany({
-        where: {
-          requestId: { not: null },
-          status: { in: ['VERIFIED', 'CLOSED'] },
-        },
-        select: { requestId: true },
-      });
-      const idsToClose = closedWos.map((w) => w.requestId).filter(Boolean) as string[];
-      if (idsToClose.length > 0) {
-        await this.prisma.maintenanceRequest.updateMany({
-          where: {
-            id: { in: idsToClose },
-            status: { not: 'CLOSED' },
-          },
-          data: { status: 'CLOSED' },
-        });
-      }
-    } catch (syncErr) {
-      console.warn('Lỗi đồng bộ trạng thái yêu cầu theo phiếu sửa chữa:', syncErr);
-    }
-
     const where: any = {};
     if (query?.status) where.status = query.status;
     if (query?.priority) where.priority = query.priority;

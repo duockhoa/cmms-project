@@ -50,8 +50,20 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshPromise;
 }
 
+let cachedMeData: any = null;
+let cachedMeTimestamp = 0;
+let inFlightMePromise: Promise<any> | null = null;
+const ME_CACHE_TTL_MS = 5 * 60 * 1000; // 5 mins
+
+export const invalidateMeCache = () => {
+  cachedMeData = null;
+  cachedMeTimestamp = 0;
+  inFlightMePromise = null;
+};
+
 function handleAuthFailure() {
   clearAuthTokens();
+  invalidateMeCache();
   if (window.location.pathname !== '/login') {
     const currentPath = window.location.pathname + window.location.search;
     window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
@@ -389,7 +401,24 @@ export const api = {
     request(`/checklist-executions/${executionId}/complete`, { method: 'POST', body: JSON.stringify(body) }),
   cancelChecklistExecution: (executionId: string, body: any) =>
     request(`/checklist-executions/${executionId}/cancel`, { method: 'POST', body: JSON.stringify(body) }),
-  getMe: () => request('/auth/me'),
+  getMe: async () => {
+    if (cachedMeData && Date.now() - cachedMeTimestamp < ME_CACHE_TTL_MS) {
+      return cachedMeData;
+    }
+    if (inFlightMePromise) {
+      return inFlightMePromise;
+    }
+    inFlightMePromise = request('/auth/me')
+      .then((res) => {
+        cachedMeData = res;
+        cachedMeTimestamp = Date.now();
+        return res;
+      })
+      .finally(() => {
+        inFlightMePromise = null;
+      });
+    return inFlightMePromise;
+  },
   getNotifications: () => request('/notifications'),
   markNotificationRead: (id: string) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
 

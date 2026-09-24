@@ -16,9 +16,41 @@ const cookieExtractor = (request: any): string | null => {
   return null;
 };
 
+interface CachedUserAuth {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    roles: string[];
+    scope: string;
+    department: string | null;
+  };
+  cachedAt: number;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   private prisma: PrismaService;
+  // In-memory cache to eliminate repeated DB queries and external network round-trips
+  private static authCache = new Map<string, CachedUserAuth>();
+  private static readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+  /**
+   * Helper to invalidate cache when a user profile or role is updated
+   */
+  public static invalidateCache(userIdOrSub?: string) {
+    if (!userIdOrSub) {
+      JwtStrategy.authCache.clear();
+      return;
+    }
+    const cleanId = String(userIdOrSub).replace(/^0+/, '');
+    for (const [key, entry] of JwtStrategy.authCache.entries()) {
+      if (entry.user.id === userIdOrSub || entry.user.id === cleanId || key.includes(userIdOrSub)) {
+        JwtStrategy.authCache.delete(key);
+      }
+    }
+  }
 
   constructor(configService: ConfigService, prisma: PrismaService) {
     const hrmJwtSecret = configService.get<string>('HRM_JWT_SECRET');
@@ -78,6 +110,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token payload is invalid or missing subject.');
     }
 
+    const cacheKey = `${sub}_${payload.exp || ''}`;
+    const cached = JwtStrategy.authCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < JwtStrategy.CACHE_TTL_MS) {
+      return cached.user;
+    }
+
     // Try to find the user in the CMMS database by id, sub, email or username
     const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
     const emailOrUsername = payload.email || payload.username || `${sub}${dummyDomain}`;
@@ -113,8 +151,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     let specialty = dbUser?.specialty || null;
     let avatar = dbUser?.avatar || payload.avatar || null;
     
-    // Nếu user chưa tồn tại hoặc thiếu department/avatar trong DB, thử lấy trực tiếp từ HRM để đồng bộ
-    if (!dbUser || dbUser.department === null || !dbUser.avatar) {
+    // CHỈ gọi HRM khi tài khoản HOÀN TOÀN CHƯA CÓ TRONG DB (Auto-provision lần đầu)
+    // Tuyệt đối không gọi HRM trên mỗi request thông thường khi avatar == null
+    if (!dbUser) {
       try {
         let token = req.headers?.authorization;
         if (!token && req.query?.token) {
@@ -122,12 +161,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
         if (token) {
           const hrmApiUrl = process.env.HRM_API_URL || 'https://hrmserver.dkpharma.io.vn';
+          // Đặt timeout 3s để không bao giờ làm treo hệ thống nếu HRM phản hồi chậm
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+
           const res = await fetch(`${hrmApiUrl}/users/me`, {
             headers: {
               'Authorization': token,
               'Content-Type': 'application/json'
-            }
-          });
+            },
+            signal: controller.signal
+          }).finally(() => clearTimeout(timeoutId));
+
           if (res.ok) {
             const hrmUser: any = await res.json();
             if (hrmUser) {
@@ -136,31 +181,29 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
               specialty = hrmUser.position || specialty;
               avatar = hrmUser.avatar || avatar;
 
-              // Nếu lúc đầu chưa tìm thấy dbUser, thử tìm lại bằng dữ liệu chính xác từ HRM
-              if (!dbUser) {
-                const hrmOr: any[] = [];
-                if (hrmUser.id) {
-                  hrmOr.push({ id: String(hrmUser.id) });
-                  hrmOr.push({ id: String(hrmUser.id).replace(/^0+/, '') });
-                }
-                if (hrmUser.email && hrmUser.email.includes('@')) {
-                  hrmOr.push({ email: hrmUser.email });
-                }
-                if (hrmUser.name) {
-                  hrmOr.push({ name: hrmUser.name });
-                }
-                if (hrmOr.length > 0) {
-                  dbUser = await this.prisma.user.findFirst({
-                    where: { OR: hrmOr },
-                    include: { customRole: true }
-                  });
-                }
+              // Thử tìm lại bằng ID chính xác từ HRM nếu có
+              const hrmOr: any[] = [];
+              if (hrmUser.id) {
+                hrmOr.push({ id: String(hrmUser.id) });
+                hrmOr.push({ id: String(hrmUser.id).replace(/^0+/, '') });
+              }
+              if (hrmUser.email && hrmUser.email.includes('@')) {
+                hrmOr.push({ email: hrmUser.email });
+              }
+              if (hrmUser.name) {
+                hrmOr.push({ name: hrmUser.name });
+              }
+              if (hrmOr.length > 0) {
+                dbUser = await this.prisma.user.findFirst({
+                  where: { OR: hrmOr },
+                  include: { customRole: true }
+                });
               }
             }
           }
         }
       } catch (error) {
-        console.error('Failed to fetch user profile from HRM during validation:', error);
+        console.warn('HRM profile sync timeout or skipped for new user:', error);
       }
     }
 
@@ -217,20 +260,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     } else {
       // Check if we need to update info or upgrade to ADMIN
-      const needsUpdate = (department && dbUser.department !== department) || 
-                          (specialty && dbUser.specialty !== specialty) || 
-                          (name && dbUser.name !== name) ||
-                          (avatar && dbUser.avatar !== avatar) ||
-                          (isSuperAdmin && dbUser.role !== 'ADMIN');
+      const needsUpdate = (isSuperAdmin && dbUser.role !== 'ADMIN');
       if (needsUpdate) {
         dbUser = await this.prisma.user.update({
           where: { id: dbUser.id },
           data: {
-            department: department || dbUser.department,
-            specialty: specialty || dbUser.specialty,
-            name: name || dbUser.name,
-            avatar: avatar || dbUser.avatar,
-            role: isSuperAdmin ? 'ADMIN' : dbUser.role, // Upgrade to admin if matched
+            role: 'ADMIN',
           },
           include: { customRole: true }
         });
@@ -242,7 +277,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (dbUser.role) roles.push(dbUser.role);
     if (dbUser.customRole?.name) roles.push(dbUser.customRole.name);
 
-    return {
+    const validatedUser = {
       id: dbUser.id,
       email: dbUser.email,
       name: dbUser.name,
@@ -251,5 +286,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       scope: payload.scope || '',
       department: dbUser.department,
     };
+
+    // Cache the result for subsequent requests
+    JwtStrategy.authCache.set(cacheKey, {
+      user: validatedUser,
+      cachedAt: Date.now(),
+    });
+
+    return validatedUser;
   }
 }

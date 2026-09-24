@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { api } from '../../services/api';
+import { usePermissions } from '../../hooks/usePermissions';
 import {
   LayoutDashboard,
   Cpu,
@@ -25,21 +25,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) => {
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    api.getMe()
-      .then((res: any) => {
-        const u = res?.user || res;
-        if (u) {
-          const role = u.role?.toUpperCase();
-          if (role === 'ADMIN' || role === 'SUPER_ADMIN' || res?.permissions?.includes('ALL')) {
-            setIsAdmin(true);
-          }
-        }
-      })
-      .catch(() => null);
-  }, []);
+  const { isAdmin } = usePermissions();
 
   const allMenuItems = [
     { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },

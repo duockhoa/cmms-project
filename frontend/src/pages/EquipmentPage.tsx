@@ -7,6 +7,7 @@ import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRi
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
+import { useDebounce } from '../hooks/useDebounce';
 import { TableSkeleton } from '../components/common/Skeleton';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
@@ -19,6 +20,7 @@ export const EquipmentPage: React.FC = () => {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [categoryFilter, setCategoryFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -42,7 +44,7 @@ export const EquipmentPage: React.FC = () => {
       const url = new URL(`${API_BASE}/api/v1/equipment`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
-      if (search) url.searchParams.append('search', search);
+      if (debouncedSearch) url.searchParams.append('search', debouncedSearch);
       if (categoryFilter) url.searchParams.append('category', categoryFilter);
       if (departmentFilter) url.searchParams.append('department', departmentFilter);
       if (statusFilter) url.searchParams.append('status', statusFilter);
@@ -69,7 +71,7 @@ export const EquipmentPage: React.FC = () => {
 
   useEffect(() => {
     loadEquipment();
-  }, [search, categoryFilter, departmentFilter, statusFilter, page]);
+  }, [debouncedSearch, categoryFilter, departmentFilter, statusFilter, page]);
 
   useEffect(() => {
     // Fetch categories and departments for filter dropdown on mount
@@ -85,9 +87,10 @@ export const EquipmentPage: React.FC = () => {
       .catch(err => console.error(err));
   }, []);
 
-  useEffect(() => {
+  const handleFilterChange = (setter: (val: string) => void, val: string) => {
+    setter(val);
     setPage(1);
-  }, [search, categoryFilter, departmentFilter, statusFilter]);
+  };
 
   const handleFormSubmit = async (finalFormData: any) => {
     try {
@@ -190,25 +193,25 @@ export const EquipmentPage: React.FC = () => {
             style={{ paddingLeft: '34px' }}
             placeholder="Tìm theo tên, số serial, vị trí..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleFilterChange(setSearch, e.target.value)}
           />
         </div>
 
-        <select className="form-select" style={{ width: '160px' }} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+        <select className="form-select" style={{ width: '160px' }} value={categoryFilter} onChange={(e) => handleFilterChange(setCategoryFilter, e.target.value)}>
           <option value="">Tất cả loại</option>
           {categoriesList.map((cat: any) => (
             <option key={cat.id} value={cat.name}>{cat.name}</option>
           ))}
         </select>
 
-        <select className="form-select" style={{ width: '170px' }} value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
+        <select className="form-select" style={{ width: '170px' }} value={departmentFilter} onChange={(e) => handleFilterChange(setDepartmentFilter, e.target.value)}>
           <option value="">Tất cả bộ phận</option>
           {departmentsList.map((dept: string) => (
             <option key={dept} value={dept}>{dept}</option>
           ))}
         </select>
 
-        <select className="form-select" style={{ width: '160px' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <select className="form-select" style={{ width: '160px' }} value={statusFilter} onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}>
           <option value="">Tất cả trạng thái</option>
           <option value="OPERATIONAL">Hoạt động</option>
           <option value="REPAIRING">Đang sửa chữa</option>

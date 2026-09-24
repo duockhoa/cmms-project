@@ -4,12 +4,16 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CustomLogger } from './common/logger/custom.logger';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as compression from 'compression';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new CustomLogger(),
   });
   const configService = app.get(ConfigService);
+
+  // Enable HTTP response compression (Gzip/Deflate) to minimize payload transfer size
+  app.use(compression());
 
   // Enable CORS based on environment configuration
   const corsOrigin = configService.get<string>('CORS_ORIGIN') || 'http://localhost:5173';

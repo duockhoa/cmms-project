@@ -9,6 +9,7 @@ import { QRScanner } from '../components/common/QRScanner';
 import { WorkOrderDetailView } from '../components/common/WorkOrderDetailView';
 import { usePermissions } from '../hooks/usePermissions';
 import { TableSkeleton, CardListSkeleton } from '../components/common/Skeleton';
+import { useDebounce } from '../hooks/useDebounce';
 
 const API_BASE = API_HOST;
 
@@ -19,6 +20,7 @@ export const WorkOrdersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState('');
   const [handlerTeamFilter, setHandlerTeamFilter] = useState('');
   const [departments, setDepartments] = useState<string[]>([]);
@@ -79,21 +81,18 @@ export const WorkOrdersPage: React.FC = () => {
 
   const [techniciansList, setTechniciansList] = useState<any[]>([]);
 
-  const loadData = async () => {
+  // Load static catalogs (equipment, users, departments) ONCE on mount
+  const loadCatalogs = async () => {
     try {
-      setLoading(true);
-
-      // Fetch dynamic users and tech lists, plus departments, plus current user profile
-      const [eqRes, techRes, userRes, deptRes, meRes] = await Promise.all([
+      const [eqRes, userRes, deptRes, meRes] = await Promise.all([
         api.getEquipment(),
-        api.getUsers({ role: 'TECHNICIAN' }),
         api.getUsers().catch(() => []),
         api.getDepartments().catch(() => []),
         api.getMe().catch(() => null),
       ]);
       setEquipmentList(eqRes);
-      setTechniciansList(techRes);
       setUsers(userRes);
+      setTechniciansList(userRes.filter((u: any) => u.role === 'TECHNICIAN'));
       setDepartments(deptRes);
       if (meRes && meRes.user) {
         setCurrentUser(meRes.user);
@@ -104,12 +103,19 @@ export const WorkOrdersPage: React.FC = () => {
       if (eqRes.length > 0 && !formData.equipmentId) {
         setFormData((prev) => ({ ...prev, equipmentId: eqRes[0].id }));
       }
+    } catch (err) {
+      console.error('Failed to load catalogs in WorkOrdersPage:', err);
+    }
+  };
 
-      // Fetch Work Orders with pagination
+  // Load Work Orders list with pagination & filters
+  const loadWorkOrders = async () => {
+    try {
+      setLoading(true);
       const url = new URL(`${API_BASE}/api/v1/work-orders`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
-      if (search) url.searchParams.append('search', search);
+      if (debouncedSearch) url.searchParams.append('search', debouncedSearch);
       if (handlerTeamFilter) url.searchParams.append('handlerTeam', handlerTeamFilter);
       if (statusFilter) url.searchParams.append('status', statusFilter);
 
@@ -133,13 +139,20 @@ export const WorkOrdersPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, [search, page, handlerTeamFilter, statusFilter]);
+  const loadData = () => loadWorkOrders();
 
   useEffect(() => {
+    loadCatalogs();
+  }, []);
+
+  useEffect(() => {
+    loadWorkOrders();
+  }, [debouncedSearch, page, handlerTeamFilter, statusFilter]);
+
+  const handleFilterChange = (setter: (val: string) => void, val: string) => {
+    setter(val);
     setPage(1);
-  }, [search, handlerTeamFilter, statusFilter]);
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -371,7 +384,7 @@ export const WorkOrdersPage: React.FC = () => {
             style={{ paddingLeft: '34px' }}
             placeholder="Tìm kiếm phiếu, mã thiết bị, kỹ thuật viên..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleFilterChange(setSearch, e.target.value)}
           />
         </div>
 
@@ -382,7 +395,7 @@ export const WorkOrdersPage: React.FC = () => {
             className="form-select" 
             style={{ flex: 1, height: '38px', fontSize: '13px', padding: '0 12px' }} 
             value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}
           >
             <option value="">-- Tất cả trạng thái --</option>
             <option value="PENDING">Chờ phân công</option>
@@ -404,7 +417,7 @@ export const WorkOrdersPage: React.FC = () => {
             className="form-select" 
             style={{ flex: 1, height: '38px', fontSize: '13px', padding: '0 12px' }} 
             value={handlerTeamFilter} 
-            onChange={(e) => setHandlerTeamFilter(e.target.value)}
+            onChange={(e) => handleFilterChange(setHandlerTeamFilter, e.target.value)}
           >
             <option value="">-- Tất cả bộ phận --</option>
             {departments.map((dept) => (

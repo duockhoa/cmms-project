@@ -69,6 +69,9 @@ model User {
   roleId                String?
   customRole            Role?                  @relation(fields: [roleId], references: [id], onDelete: SetNull)
   customPermissions     String?                @db.Text // JSON string of direct permissions override for this user
+
+  @@index([name])
+  @@index([role])
 }
 
 model Role {
@@ -111,6 +114,10 @@ model Equipment {
   technicalSpecs        EquipmentTechnicalSpec[]
   operationLogs         OperationLog[]
   functionalUnits       EquipmentFunctionalUnit[]
+
+  @@index([status])
+  @@index([category])
+  @@index([department])
 }
 
 model MaintenanceRequest {
@@ -142,6 +149,9 @@ model MaintenanceRequest {
   @@index([equipmentId])
   @@index([functionalUnitId])
   @@index([reporterId])
+  @@index([status, createdAt])
+  @@index([priority])
+  @@index([createdAt])
 }
 
 model WorkOrder {
@@ -197,6 +207,11 @@ model WorkOrder {
   @@unique([scheduleId, scheduledDueDate])
   @@index([scheduleId])
   @@index([functionalUnitId])
+  @@index([status, createdAt])
+  @@index([equipmentId])
+  @@index([assignedTechnicianId])
+  @@index([priority])
+  @@index([createdAt])
 }
 
 model WorkOrderItem {
