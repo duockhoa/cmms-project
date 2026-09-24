@@ -341,7 +341,7 @@ export const RequestsPage: React.FC = () => {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 800, color: 'var(--primary)' }}>{req.requestCode}</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{req.requestCode}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <StatusBadge status={req.status} />
                       {isReqLocked(req) ? (
@@ -421,14 +421,13 @@ export const RequestsPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {requests.map((req) => (
-                    <tr key={req.id}>
-                      <td>
-                        <button
-                          style={{ fontWeight: 800, color: 'var(--warning)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
-                          onClick={() => setSelectedDetailReqId(req.id)}
-                        >
-                          {req.requestCode}
-                        </button>
+                    <tr 
+                      key={req.id}
+                      onClick={() => setSelectedDetailReqId(req.id)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {req.requestCode}
                       </td>
                       <td style={{ fontWeight: 600 }}>
                         <div>{req.equipment?.name || '---'}</div>
@@ -464,7 +463,7 @@ export const RequestsPage: React.FC = () => {
                             type="button"
                             className="btn-icon"
                             title="Xem chi tiết"
-                            onClick={() => setSelectedDetailReqId(req.id)}
+                            onClick={(e) => { e.stopPropagation(); setSelectedDetailReqId(req.id); }}
                             style={{ padding: '6px', borderRadius: '6px', color: '#2563eb', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
                           >
                             <Eye size={15} />
@@ -482,7 +481,7 @@ export const RequestsPage: React.FC = () => {
                                   type="button"
                                   className="btn-icon"
                                   title="Xóa yêu cầu sự cố (Quản trị viên)"
-                                  onClick={() => openDeleteConfirm(req)}
+                                  onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
                                   style={{ padding: '6px', borderRadius: '6px', color: '#dc2626', border: '1px solid #fecaca', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
                                 >
                                   <Trash2 size={15} />
@@ -496,7 +495,7 @@ export const RequestsPage: React.FC = () => {
                                   type="button"
                                   className="btn-icon"
                                   title="Chỉnh sửa yêu cầu"
-                                  onClick={() => openEditModal(req)}
+                                  onClick={(e) => { e.stopPropagation(); openEditModal(req); }}
                                   style={{ padding: '6px', borderRadius: '6px', color: '#d97706', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
                                 >
                                   <Edit2 size={15} />
@@ -507,7 +506,7 @@ export const RequestsPage: React.FC = () => {
                                   type="button"
                                   className="btn-icon"
                                   title="Xóa yêu cầu sự cố"
-                                  onClick={() => openDeleteConfirm(req)}
+                                  onClick={(e) => { e.stopPropagation(); openDeleteConfirm(req); }}
                                   style={{ padding: '6px', borderRadius: '6px', color: '#dc2626', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', cursor: 'pointer' }}
                                 >
                                   <Trash2 size={15} />
