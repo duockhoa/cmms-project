@@ -103,6 +103,9 @@ export class UpdateScheduleDto {
   @IsOptional()
   notes?: string;
 
+  @IsOptional()
+  checklistJson?: any;
+
   @IsNumber()
   @IsNotEmpty({ message: 'expectedVersion là bắt buộc' })
   expectedVersion: number;
@@ -176,4 +179,8 @@ export class GenerateWorkOrderDto {
   @IsString()
   @IsOptional()
   dueDate?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  force?: boolean;
 }

@@ -453,6 +453,18 @@ body {
   margin-top: 24px;
 }
 
+.kpi-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.kpi-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
 @media (max-width: 1024px) {
   .sidebar {
     width: 200px;
@@ -465,6 +477,9 @@ body {
   }
   .responsive-kpi-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .kpi-grid-4, .kpi-grid-3 {
+    grid-template-columns: repeat(2, 1fr);
   }
   .grid-3 {
     grid-template-columns: repeat(2, 1fr);
@@ -496,11 +511,65 @@ body {
   .grid-2, .grid-3, .grid-4 {
     grid-template-columns: 1fr;
   }
-  .kpi-row {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  .kpi-row, .kpi-grid-4, .kpi-grid-3 {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
   }
   .top-navbar {
     padding: 0 12px;
+  }
+
+  /* Responsive Table: Ensure columns keep comfortable width and allow smooth horizontal swipe */
+  .table-wrapper .custom-table,
+  .table-responsive .custom-table {
+    min-width: 680px;
+  }
+  .custom-table th,
+  .custom-table td {
+    padding: 9px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  /* Modal responsiveness on mobile */
+  .modal-overlay {
+    padding: 10px;
+  }
+  .modal-container,
+  .modal-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 92vh !important;
+    border-radius: 12px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-row, .kpi-grid-4, .kpi-grid-3 {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+  .kpi-card {
+    padding: 10px !important;
+  }
+  .kpi-card-title {
+    font-size: 11px !important;
+  }
+  .kpi-card-value {
+    font-size: 18px !important;
+  }
+  .kpi-card-footer {
+    font-size: 10.5px !important;
+  }
+  .page-body {
+    padding: 10px 8px !important;
+  }
+  .page-title {
+    font-size: 18px !important;
+  }
+  .page-subtitle {
+    font-size: 11.5px !important;
   }
 }
 

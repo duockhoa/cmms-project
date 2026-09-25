@@ -293,6 +293,11 @@ export const api = {
   generateWorkOrderFromSchedule: (id: string, body: any) => request(`/maintenance-schedules/${id}/generate-work-order`, { method: 'POST', body: JSON.stringify(body) }),
   getScheduleHistory: (id: string) => request(`/maintenance-schedules/${id}/history`),
   deleteSchedule: (id: string) => request(`/maintenance-schedules/${id}`, { method: 'DELETE' }),
+  processDueSchedules: (actedById?: string) =>
+    request('/maintenance-schedules/process-due', {
+      method: 'POST',
+      body: JSON.stringify(actedById ? { actedById } : {}),
+    }),
 
   // Inventory
   getInventory: (params?: { category?: string; search?: string }) => {

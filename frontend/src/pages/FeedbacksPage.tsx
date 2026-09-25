@@ -70,7 +70,7 @@ export const FeedbacksPage: React.FC = () => {
       </div>
 
       {/* KPI Cards Row */}
-      <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '20px' }}>
+      <div className="kpi-row kpi-grid-4" style={{ marginBottom: '20px' }}>
         <div className="kpi-card" onClick={() => setStatusFilter('')} style={{ cursor: 'pointer' }}>
           <div className="flex-between">
             <span className="kpi-card-title">Tổng yêu cầu</span>

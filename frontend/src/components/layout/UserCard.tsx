@@ -64,7 +64,7 @@ export default function UserCard({ user }: { user: any }) {
           if (!isOpen) e.currentTarget.style.backgroundColor = 'transparent';
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right', lineHeight: 1.25 }}>
+        <div className="navbar-user-text" style={{ display: 'flex', flexDirection: 'column', textAlign: 'right', lineHeight: 1.25 }}>
           <span style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary, #0f172a)' }}>
             {user?.name || 'Đang tải...'}
           </span>

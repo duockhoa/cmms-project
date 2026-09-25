@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -18,8 +19,35 @@ import {
 import { SCHEDULE_STATUS, SCHEDULE_FREQUENCY_TYPE } from './schedules.constants';
 
 @Injectable()
-export class SchedulesService {
+export class SchedulesService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
+
+  async onModuleInit() {
+    // Non-blocking boot-time scan for due maintenance schedules
+    setImmediate(async () => {
+      try {
+        const summary = await this.processDueSchedules();
+        if (summary.generated > 0) {
+          console.log(`[AutoScheduler] Boot scan: generated ${summary.generated} work order(s) for due schedules.`);
+        }
+      } catch (err: any) {
+        console.warn(`[AutoScheduler] Boot scan notice: ${err.message}`);
+      }
+    });
+
+    // Periodic background check every 6 hours
+    const SIX_HOURS = 6 * 60 * 60 * 1000;
+    setInterval(async () => {
+      try {
+        const summary = await this.processDueSchedules();
+        if (summary.generated > 0) {
+          console.log(`[AutoScheduler] Periodic scan: generated ${summary.generated} work order(s) for due schedules.`);
+        }
+      } catch (err: any) {
+        console.warn(`[AutoScheduler] Periodic scan error: ${err.message}`);
+      }
+    }, SIX_HOURS);
+  }
 
   private async validateActedBy(tx: any, actedById?: string) {
     if (!actedById || actedById.trim() === '') {
@@ -614,13 +642,21 @@ export class SchedulesService {
       let generationKey = '';
 
       if (schedule.frequencyType === SCHEDULE_FREQUENCY_TYPE.OPERATING_HOURS) {
-        if (schedule.equipment.currentOperatingHours < (schedule.nextDueMeter || 0)) {
-          throw new BadRequestException(`Thiết bị chưa đạt số giờ vận hành đến hạn (${schedule.equipment.currentOperatingHours} / ${schedule.nextDueMeter})`);
+        if (!dto.force && schedule.equipment.currentOperatingHours < (schedule.nextDueMeter || 0)) {
+          throw new BadRequestException(`Thiết bị chưa đạt số giờ vận hành đến hạn (${schedule.equipment.currentOperatingHours} / ${schedule.nextDueMeter} giờ)`);
         }
-        const roundedMeter = Math.round(schedule.nextDueMeter || 0);
-        generationKey = `${id}:METER:${roundedMeter}`;
+        if (dto.force && schedule.equipment.currentOperatingHours < (schedule.nextDueMeter || 0)) {
+          generationKey = `${id}:METER_EARLY:${Date.now()}`;
+        } else {
+          const roundedMeter = Math.round(schedule.nextDueMeter || 0);
+          generationKey = `${id}:METER:${roundedMeter}`;
+        }
       } else {
-        generationKey = `${id}:DATE:${scheduledDueDate.toISOString()}`;
+        if (dto.force) {
+          generationKey = `${id}:DATE_EARLY:${Date.now()}`;
+        } else {
+          generationKey = `${id}:DATE:${scheduledDueDate.toISOString()}`;
+        }
       }
 
       // Check if Work Order with this generationKey already exists (IDEMPOTENCY HANDLING FOR RETRIES)
@@ -664,8 +700,14 @@ export class SchedulesService {
       let lastTriggerMeter = schedule.lastTriggerMeter;
 
       if (schedule.frequencyType === SCHEDULE_FREQUENCY_TYPE.OPERATING_HOURS) {
-        lastTriggerMeter = schedule.nextDueMeter;
-        nextDueMeter = (schedule.nextDueMeter || 0) + schedule.frequencyInterval;
+        const currentHours = schedule.equipment.currentOperatingHours || 0;
+        if (dto.force && currentHours < (schedule.nextDueMeter || 0)) {
+          lastTriggerMeter = currentHours;
+          nextDueMeter = currentHours + schedule.frequencyInterval;
+        } else {
+          lastTriggerMeter = schedule.nextDueMeter;
+          nextDueMeter = (schedule.nextDueMeter || 0) + schedule.frequencyInterval;
+        }
       } else {
         const baseDate = schedule.nextDueDate || scheduledDueDate;
         nextDueDate = this.calculateNextDueDate(baseDate, schedule.frequencyType, schedule.frequencyInterval, schedule.anchorDayOfMonth || undefined);

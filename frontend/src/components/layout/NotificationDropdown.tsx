@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, CheckCheck } from 'lucide-react';
 import { api } from '../../services/api';
+import { getAccessToken } from '../../utils/authStorage';
 import { io, Socket } from 'socket.io-client';
 
 interface NotificationDropdownProps {
@@ -13,17 +14,24 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ curr
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = async () => {
+    const token = getAccessToken();
+    if (!token) return;
+
     try {
       const res = await api.getNotifications();
       setNotifications(Array.isArray(res) ? res : []);
-    } catch (e) {
-      console.error('Failed to load notifications:', e);
+    } catch (e: any) {
+      if (e?.message !== 'Unauthorized') {
+        console.error('Failed to load notifications:', e);
+      }
     }
   };
 
   useEffect(() => {
-    fetchNotifications();
-  }, []);
+    if (currentUser?.id && getAccessToken()) {
+      fetchNotifications();
+    }
+  }, [currentUser?.id]);
 
   // WebSocket real-time listener
   useEffect(() => {

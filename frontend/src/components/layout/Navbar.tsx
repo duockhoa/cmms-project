@@ -129,7 +129,7 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, setTheme, toggleSidebar }
           }
         }
         @media (max-width: 640px) {
-          .navbar-search-wrapper {
+          .navbar-search-wrapper, .navbar-user-text {
             display: none !important;
           }
         }
