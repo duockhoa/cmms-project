@@ -10,7 +10,7 @@ import {
   Calendar, PieChart, AlertTriangle, Layers,
   Ban, XCircle, ShieldAlert, Activity, Filter, X,
   TrendingUp, TrendingDown, CalendarDays, ChevronLeft, ChevronRight,
-  Play, Square
+  Play, Square, CheckSquare
 } from 'lucide-react';
 import { formatVN } from '../utils/formatters';
 import { UtilityTrendChart } from '../components/utilities/UtilityTrendChart';
@@ -135,27 +135,44 @@ export const UtilitiesPage: React.FC = () => {
     }
   };
 
-  const handlePrintBatchPoints = () => {
-    const targetPoints = selectedPointIds.size > 0
-      ? points.filter(p => selectedPointIds.has(p.id))
-      : points;
+  const [isPrintingPoints, setIsPrintingPoints] = useState(false);
 
-    if (targetPoints.length === 0) {
-      toast.error('Không có điểm đo nào để in!');
-      return;
+  // In toàn bộ điểm đo (hoặc chỉ các điểm đo được tick chọn)
+  const handlePrintBatchPoints = async (onlySelected: boolean = false) => {
+    try {
+      const targetPoints = (onlySelected && selectedPointIds.size > 0)
+        ? points.filter(p => selectedPointIds.has(p.id))
+        : points;
+
+      if (targetPoints.length === 0) {
+        toast.error('Không có điểm đo nào để in!');
+        return;
+      }
+
+      setIsPrintingPoints(true);
+      toast.info('Đang chuẩn bị tem...', `Đang tạo ${targetPoints.length} tem mã QR điểm đo offline...`);
+
+      const printItems = targetPoints.map(p => ({
+        name: p.name,
+        code: p.code,
+        location: p.location || '',
+        qrPayload: p.code,
+      }));
+
+      await printBatchQRTags({
+        title: (onlySelected && selectedPointIds.size > 0)
+          ? `Danh sách Mã QR Điểm Đo Đã Chọn (${printItems.length} điểm đo)`
+          : `Danh sách Mã QR Toàn Bộ Điểm Đo Tiện Ích (${printItems.length} điểm đo)`,
+        items: printItems,
+        columns: 3,
+      });
+      toast.success('Đã mở cửa sổ in', `Sẵn sàng in ${printItems.length} tem điểm đo trên khổ A4.`);
+    } catch (err: any) {
+      console.error('Lỗi khi in tem điểm đo:', err);
+      toast.error('Lỗi in ấn', err?.message || 'Không thể tạo danh sách tem in.');
+    } finally {
+      setIsPrintingPoints(false);
     }
-
-    const printItems = targetPoints.map(p => ({
-      name: p.name,
-      code: p.code,
-      location: p.location || '',
-      qrPayload: p.code,
-    }));
-
-    printBatchQRTags({
-      title: 'Danh sách Mã QR Điểm Đo Tiện Ích',
-      items: printItems,
-    });
   };
 
   // Mốc thời gian thực để tính giờ chạy hệ thống phụ trợ (tự động nhảy theo thời gian thực)
@@ -1772,9 +1789,37 @@ export const UtilitiesPage: React.FC = () => {
                 </p>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Nút in tem các điểm đo được chọn */}
+                {selectedPointIds.size > 0 && (
+                  <button
+                    onClick={() => handlePrintBatchPoints(true)}
+                    disabled={isPrintingPoints}
+                    className="btn-secondary"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      borderRadius: '6px',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: '1px solid #2563eb',
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: '#2563eb'
+                    }}
+                    title="Chỉ in tem cho các điểm đo đang được tick chọn"
+                  >
+                    <CheckSquare size={15} />
+                    <span>In Đã Chọn ({selectedPointIds.size})</span>
+                  </button>
+                )}
+
+                {/* Nút In Toàn Bộ Tất Cả Điểm Đo */}
                 <button
-                  onClick={handlePrintBatchPoints}
+                  onClick={() => handlePrintBatchPoints(false)}
+                  disabled={isPrintingPoints || points.length === 0}
                   className="btn-secondary"
                   style={{
                     display: 'inline-flex',
@@ -1789,10 +1834,12 @@ export const UtilitiesPage: React.FC = () => {
                     backgroundColor: 'var(--bg-secondary)',
                     color: 'var(--text-primary)'
                   }}
-                  title="In nhiều tem QR trên khổ giấy A4"
+                  title="In mã QR cho TOÀN BỘ các điểm đo điện, nước và phụ trợ trên khổ giấy A4"
                 >
-                  <Printer size={15} />
-                  <span>In Tem QR Hàng Loạt {selectedPointIds.size > 0 ? `(${selectedPointIds.size})` : `(${points.length})`}</span>
+                  <Printer size={15} color="#2563eb" />
+                  <span>
+                    {isPrintingPoints ? 'Đang chuẩn bị tem...' : `In Tất Cả QR (${points.length} Điểm Đo)`}
+                  </span>
                 </button>
 
                 {can('utilities:manage_points') && (

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api, fetchWithAuth, API_HOST as API_BASE } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRight, Printer, CheckSquare } from 'lucide-react';
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
@@ -26,6 +26,8 @@ export const EquipmentPage: React.FC = () => {
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSelectAllTotal, setIsSelectAllTotal] = useState(false);
+  const [isPrintingAll, setIsPrintingAll] = useState(false);
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -173,6 +175,7 @@ export const EquipmentPage: React.FC = () => {
 
   const toggleSelectOne = (itemId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    setIsSelectAllTotal(false);
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(itemId)) next.delete(itemId);
@@ -183,20 +186,84 @@ export const EquipmentPage: React.FC = () => {
 
   const isAllPageSelected = equipment.length > 0 && equipment.every(item => selectedIds.has(item.id));
   const toggleSelectAll = () => {
-    if (isAllPageSelected) {
+    if (isAllPageSelected || isSelectAllTotal) {
       setSelectedIds(new Set());
+      setIsSelectAllTotal(false);
     } else {
       setSelectedIds(new Set(equipment.map(item => item.id)));
     }
   };
 
-  const handlePrintBatch = () => {
-    const targetItems = selectedIds.size > 0
-      ? equipment.filter(item => selectedIds.has(item.id))
-      : equipment;
+  // In toàn bộ thiết bị (có thể theo bộ lọc hiện tại hoặc toàn bộ 300+ thiết bị trong hệ thống)
+  const handlePrintAll = async (onlyCurrentFilter: boolean = false) => {
+    try {
+      setIsPrintingAll(true);
+      toast.info(
+        'Đang khởi tạo tem QR...',
+        `Đang tải toàn bộ dữ liệu thiết bị và tạo tem in A4 offline...`
+      );
 
+      const url = new URL(`${API_BASE}/api/v1/equipment`);
+      url.searchParams.append('page', '1');
+      url.searchParams.append('limit', '5000'); // Tải toàn bộ lên tới 5000 thiết bị
+
+      if (onlyCurrentFilter) {
+        if (debouncedSearch) url.searchParams.append('search', debouncedSearch);
+        if (categoryFilter) url.searchParams.append('category', categoryFilter);
+        if (departmentFilter) url.searchParams.append('department', departmentFilter);
+        if (statusFilter) url.searchParams.append('status', statusFilter);
+      }
+
+      const response = await fetchWithAuth(url.toString());
+      if (!response.ok) throw new Error('Không thể tải danh sách thiết bị');
+      const result = await response.json();
+      const allItems: any[] = (result && result.data && Array.isArray(result.data))
+        ? result.data
+        : Array.isArray(result)
+        ? result
+        : [];
+
+      if (allItems.length === 0) {
+        toast.error('Không tìm thấy thiết bị nào để in!');
+        return;
+      }
+
+      const printItems = allItems.map(item => {
+        const code = (item.code || item.id || '').trim();
+        const nameFormatted = (item.name || '').trim().replace(/\s+/g, '_');
+        return {
+          name: item.name,
+          code,
+          location: item.location || '',
+          qrPayload: nameFormatted ? `${code}$${nameFormatted}` : code,
+        };
+      });
+
+      await printBatchQRTags({
+        title: onlyCurrentFilter 
+          ? `Danh sách Mã QR Thiết Bị Theo Bộ Lọc (${printItems.length} thiết bị)`
+          : `Danh sách Mã QR Toàn Bộ Thiết Bị (${printItems.length} thiết bị)`,
+        items: printItems,
+        columns: 3, // Khổ A4 tiêu chuẩn 3 cột x 4 hàng = 12 tem/trang
+      });
+      toast.success('Đã mở cửa sổ in', `Sẵn sàng in ${printItems.length} tem QR trên khổ A4.`);
+    } catch (err: any) {
+      console.error('Lỗi khi in toàn bộ thiết bị:', err);
+      toast.error('Lỗi in ấn', err?.message || 'Có lỗi xảy ra khi tạo danh sách tem in.');
+    } finally {
+      setIsPrintingAll(false);
+    }
+  };
+
+  // In các thiết bị đang được tick chọn
+  const handlePrintSelected = async () => {
+    if (isSelectAllTotal) {
+      return handlePrintAll(true);
+    }
+
+    const targetItems = equipment.filter(item => selectedIds.has(item.id));
     if (targetItems.length === 0) {
-      toast.error('Không có thiết bị nào để in!');
+      toast.error('Chưa có thiết bị nào được chọn!');
       return;
     }
 
@@ -211,11 +278,14 @@ export const EquipmentPage: React.FC = () => {
       };
     });
 
-    printBatchQRTags({
-      title: 'Danh sách Mã QR Thiết bị',
+    await printBatchQRTags({
+      title: `Danh sách Mã QR Thiết Bị Đã Chọn (${printItems.length} thiết bị)`,
       items: printItems,
+      columns: 3,
     });
   };
+
+  const hasActiveFilter = Boolean(debouncedSearch || categoryFilter || departmentFilter || statusFilter);
 
   return (
     <div>
@@ -224,16 +294,56 @@ export const EquipmentPage: React.FC = () => {
           <h1 className="page-title">Quản lý thiết bị</h1>
           <p className="page-subtitle">Quản lý thông tin và tình trạng thiết bị</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Nút in các thiết bị được chọn (nếu có chọn) */}
+          {(selectedIds.size > 0 || isSelectAllTotal) && (
+            <button 
+              className="btn btn-secondary" 
+              onClick={handlePrintSelected}
+              disabled={isPrintingAll}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', borderColor: '#2563eb', color: '#2563eb', fontWeight: 600 }}
+              title="Chỉ in tem cho các thiết bị đang được đánh dấu chọn"
+            >
+              <CheckSquare size={15} />
+              <span>In Đã Chọn ({isSelectAllTotal ? total : selectedIds.size})</span>
+            </button>
+          )}
+
+          {/* Nút In Toàn Bộ Tất Cả Thiết Bị */}
           <button 
             className="btn btn-secondary" 
-            onClick={handlePrintBatch}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            title="In nhiều tem QR trên giấy A4 có đường cắt phân tách"
+            onClick={() => handlePrintAll(false)}
+            disabled={isPrintingAll || total === 0}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '6px',
+              backgroundColor: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              fontWeight: 600
+            }}
+            title="In mã QR cho TOÀN BỘ thiết bị trong cơ sở dữ liệu trên khổ giấy A4"
           >
-            <Printer size={15} />
-            <span>In tem QR hàng loạt {selectedIds.size > 0 ? `(${selectedIds.size})` : `(${equipment.length})`}</span>
+            <Printer size={15} color="#2563eb" />
+            <span>
+              {isPrintingAll ? 'Đang chuẩn bị tem...' : `In Tất Cả QR (${total} Thiết Bị)`}
+            </span>
           </button>
+
+          {/* Nếu có bộ lọc thì cho phép in toàn bộ theo kết quả lọc */}
+          {hasActiveFilter && (
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => handlePrintAll(true)}
+              disabled={isPrintingAll || total === 0}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}
+              title="In tất cả thiết bị khớp với kết quả tìm kiếm/bộ lọc hiện tại"
+            >
+              <Printer size={14} />
+              <span>In Kết Quả Lọc ({total})</span>
+            </button>
+          )}
+
           <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
             <Plus size={16} /> Thêm thiết bị
           </button>
@@ -279,6 +389,84 @@ export const EquipmentPage: React.FC = () => {
 
       {/* Table */}
       <div>
+        {/* Selection Banner: Chọn toàn bộ thiết bị qua nhiều trang */}
+        {isAllPageSelected && total > equipment.length && (
+          <div style={{
+            backgroundColor: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: '8px',
+            padding: '10px 16px',
+            marginBottom: '12px',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            color: '#1e40af',
+            boxShadow: '0 1px 3px rgba(37, 99, 235, 0.08)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span>Đang chọn <strong>{equipment.length}</strong> thiết bị trên trang {page}.</span>
+              {isSelectAllTotal ? (
+                <span style={{ color: '#16a34a', fontWeight: 700 }}>
+                  ✓ Đã chọn TOÀN BỘ {total} thiết bị trong hệ thống.
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsSelectAllTotal(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#2563eb',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: 0
+                  }}
+                >
+                  Chọn tất cả {total} thiết bị trong danh sách
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => handlePrintAll(hasActiveFilter)}
+                style={{
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '5px 12px',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+              >
+                <Printer size={13} />
+                In Tem QR Cho Tất Cả {total} Thiết Bị
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSelectedIds(new Set()); setIsSelectAllTotal(false); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  textDecoration: 'underline'
+                }}
+              >
+                Bỏ chọn
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="table-wrapper">
           <table className="custom-table">
             <thead>
