@@ -10,6 +10,7 @@ import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { useDebounce } from '../hooks/useDebounce';
 import { TableSkeleton } from '../components/common/Skeleton';
 import { printBatchQRTags, printSingleQRTag } from '../utils/qrPrintHelper';
+import { Pagination } from '../components/common/Pagination';
 
 export const EquipmentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -351,34 +352,34 @@ export const EquipmentPage: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="card mb-4" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+      <div className="card mb-4 filter-bar-responsive">
+        <div className="filter-search" style={{ position: 'relative' }}>
           <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
             className="form-input"
-            style={{ paddingLeft: '34px' }}
+            style={{ paddingLeft: '34px', width: '100%' }}
             placeholder="Tìm theo tên, số serial, vị trí..."
             value={search}
             onChange={(e) => handleFilterChange(setSearch, e.target.value)}
           />
         </div>
 
-        <select className="form-select" style={{ width: '160px' }} value={categoryFilter} onChange={(e) => handleFilterChange(setCategoryFilter, e.target.value)}>
+        <select className="form-select filter-item" value={categoryFilter} onChange={(e) => handleFilterChange(setCategoryFilter, e.target.value)}>
           <option value="">Tất cả loại</option>
           {categoriesList.map((cat: any) => (
             <option key={cat.id} value={cat.name}>{cat.name}</option>
           ))}
         </select>
 
-        <select className="form-select" style={{ width: '170px' }} value={departmentFilter} onChange={(e) => handleFilterChange(setDepartmentFilter, e.target.value)}>
+        <select className="form-select filter-item" value={departmentFilter} onChange={(e) => handleFilterChange(setDepartmentFilter, e.target.value)}>
           <option value="">Tất cả bộ phận</option>
           {departmentsList.map((dept: string) => (
             <option key={dept} value={dept}>{dept}</option>
           ))}
         </select>
 
-        <select className="form-select" style={{ width: '175px' }} value={statusFilter} onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}>
+        <select className="form-select filter-item" value={statusFilter} onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}>
           <option value="">Tất cả trạng thái</option>
           <option value="OPERATIONAL">Hoạt động tốt</option>
           <option value="INCIDENT">Sự cố / Hỏng</option>
@@ -594,61 +595,15 @@ export const EquipmentPage: React.FC = () => {
             </table>
           </div>
 
-          {/* Pagination Controls */}
-          {total > 0 && (
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              marginTop: '16px', 
-              padding: '12px 16px', 
-              border: '1px solid var(--border-color)', 
-              borderRadius: '8px', 
-              backgroundColor: 'var(--bg-secondary)' 
-            }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Hiển thị <strong>{startItem}-{endItem}</strong> trong tổng số <strong>{total}</strong> thiết bị
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  disabled={page === 1}
-                  onClick={() => setPage(page - 1)}
-                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
-                >
-                  <ChevronLeft size={14} /> Trang trước
-                </button>
-                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pNum) => (
-                  <button 
-                    key={pNum} 
-                    className={`btn btn-sm ${page === pNum ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setPage(pNum)}
-                    style={{ 
-                      minWidth: '32px', 
-                      height: '32px', 
-                      padding: 0, 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      backgroundColor: page === pNum ? '#2563eb' : 'transparent',
-                      color: page === pNum ? '#ffffff' : 'var(--text-primary)',
-                      border: page === pNum ? 'none' : '1px solid var(--border-color)'
-                    }}
-                  >
-                    {pNum}
-                  </button>
-                ))}
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  disabled={page === totalPages}
-                  onClick={() => setPage(page + 1)}
-                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
-                >
-                  Trang sau <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Responsive Pagination */}
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={total}
+            pageSize={limit}
+            itemName="thiết bị"
+            onPageChange={setPage}
+          />
         </div>
 
       {/* Modal Add/Edit Equipment */}

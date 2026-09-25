@@ -22,6 +22,7 @@ import {
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { TableSkeleton } from '../components/common/Skeleton';
 import { useDebounce } from '../hooks/useDebounce';
+import { Pagination } from '../components/common/Pagination';
 
 export const MaintenancePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'schedules' | 'history'>('schedules');
@@ -812,60 +813,15 @@ export const MaintenancePage: React.FC = () => {
             </table>
           </div>
 
-          {/* Pagination Controls */}
-          {total > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginTop: '16px',
-                padding: '12px 16px',
-                border: '1px solid var(--border-color)',
-                borderRadius: '8px',
-                backgroundColor: 'var(--bg-secondary)',
-              }}
-            >
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Hiển thị <strong>{startItem}-{endItem}</strong> trong tổng số <strong>{total}</strong> phiếu bảo trì hoàn thành
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  disabled={page === 1}
-                  onClick={() => setPage(page - 1)}
-                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
-                >
-                  <ChevronLeft size={14} /> Trang trước
-                </button>
-                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pNum) => (
-                  <button
-                    key={pNum}
-                    className={`btn btn-sm ${page === pNum ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setPage(pNum)}
-                    style={{
-                      minWidth: '32px',
-                      height: '32px',
-                      padding: 0,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {pNum}
-                  </button>
-                ))}
-                <button
-                  className="btn btn-secondary btn-sm"
-                  disabled={page === totalPages}
-                  onClick={() => setPage(page + 1)}
-                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
-                >
-                  Trang sau <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Responsive Pagination */}
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={total}
+            pageSize={limit}
+            itemName="phiếu bảo trì hoàn thành"
+            onPageChange={setPage}
+          />
         </div>
       )}
 

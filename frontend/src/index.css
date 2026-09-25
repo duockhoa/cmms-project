@@ -804,3 +804,170 @@ body {
   vertical-align: middle;
 }
 
+/* ==========================================================
+   RESPONSIVE PAGINATION & SMART ELLIPSIS
+   ========================================================== */
+.custom-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  background-color: var(--bg-secondary);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pagination-page-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background-color: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pagination-page-btn:hover:not(.active) {
+  background-color: var(--bg-card);
+  border-color: var(--primary, #2563eb);
+}
+
+.pagination-page-btn.active {
+  background-color: var(--primary, #2563eb) !important;
+  color: #ffffff !important;
+  border-color: var(--primary, #2563eb) !important;
+  font-weight: 700;
+}
+
+.pagination-ellipsis {
+  padding: 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 1px;
+  user-select: none;
+}
+
+.pagination-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.pagination-mobile-indicator {
+  display: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 0 8px;
+}
+
+@media (max-width: 768px) {
+  .custom-pagination {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .pagination-info {
+    font-size: 12.5px;
+    text-align: center;
+    width: 100%;
+    white-space: normal;
+  }
+
+  .pagination-controls {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .pagination-page-list {
+    display: none;
+  }
+
+  .pagination-mobile-indicator {
+    display: inline-block;
+  }
+
+  .pagination-btn-label {
+    display: none;
+  }
+
+  .pagination-nav-btn {
+    padding: 6px 10px;
+  }
+
+  /* Responsive Page Header */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px;
+  }
+
+  .page-header > div:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .page-header > div:last-child .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+/* ==========================================================
+   RESPONSIVE FILTER BARS
+   ========================================================== */
+.filter-bar-responsive {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-bar-responsive .filter-item {
+  flex: 1 1 140px;
+  min-width: 130px;
+}
+
+.filter-bar-responsive .filter-search {
+  flex: 2 1 200px;
+  min-width: 180px;
+}
+
