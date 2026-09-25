@@ -2,8 +2,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, Search, AlertCircle } from 'lucide-react';
+import { Plus, AlertCircle } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
+import { PageHeader, FilterBar, SearchInput, ExportButton } from '../components/common';
 
 export const SparePartsPage: React.FC = () => {
   const [inventory, setInventory] = useState<any[]>([]);
@@ -81,17 +82,39 @@ export const SparePartsPage: React.FC = () => {
     };
   }, [inventory]);
 
+  const handleExportInventory = () => {
+    return {
+      filename: `Kho_phu_tung_${new Date().toISOString().slice(0, 10)}.csv`,
+      headers: [
+        { key: 'itemCode', label: 'Mã phụ tùng' },
+        { key: 'name', label: 'Tên phụ tùng' },
+        { key: 'category', label: 'Nhóm vật tư' },
+        { key: 'location', label: 'Vị trí kho' },
+        { key: 'quantity', label: 'Tồn kho' },
+        { key: 'unit', label: 'Đơn vị' },
+        { key: 'unitPrice', label: 'Đơn giá (VNĐ)' },
+      ],
+      data: inventory,
+    };
+  };
+
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Kho phụ tùng</h1>
-          <p className="page-subtitle">Quản lý kho phụ tùng, vật tư bảo trì</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Thêm phụ tùng
-        </button>
-      </div>
+      <PageHeader
+        title="Kho phụ tùng"
+        subtitle="Quản lý kho phụ tùng, vật tư bảo trì"
+        actions={
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <ExportButton
+              onExport={handleExportInventory}
+              label="Xuất danh sách"
+            />
+            <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
+              <Plus size={16} /> Thêm phụ tùng
+            </button>
+          </div>
+        }
+      />
 
       {/* KPI Row */}
       <div className="kpi-row">
@@ -126,19 +149,25 @@ export const SparePartsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Search */}
-      <div className="card mb-4" style={{ display: 'flex', gap: '12px' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input
-            type="text" className="form-input" style={{ paddingLeft: '34px' }}
+      {/* Filter & Search */}
+      <FilterBar
+        hasActiveFilters={Boolean(search)}
+        onReset={() => setSearch('')}
+      >
+        <div className="filter-search">
+          <SearchInput
             placeholder="Tìm theo mã, tên phụ tùng, thiết bị..."
-            value={search} onChange={(e) => setSearch(e.target.value)}
+            value={search}
+            onChange={setSearch}
           />
         </div>
-        <select className="form-select" style={{ width: '160px' }}><option>Tất cả nhóm</option></select>
-        <select className="form-select" style={{ width: '160px' }}><option>Tất cả vị trí</option></select>
-      </div>
+        <div className="filter-item">
+          <select className="form-select"><option>Tất cả nhóm</option></select>
+        </div>
+        <div className="filter-item">
+          <select className="form-select"><option>Tất cả vị trí</option></select>
+        </div>
+      </FilterBar>
 
       {/* Table */}
       {loading ? (
