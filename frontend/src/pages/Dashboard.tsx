@@ -230,9 +230,13 @@ export const Dashboard: React.FC = () => {
               <tbody>
                 {urgentWorkOrders.map((w: any) => (
                   <tr key={w.id}>
-                    <td style={{ fontWeight: 600 }}>{w.equipment?.name || 'Haas VF-2'}</td>
+                    <td style={{ fontWeight: 600 }}>{w.equipment?.name || '---'}</td>
                     <td>{w.title}</td>
-                    <td style={{ color: 'var(--warning)', fontWeight: 600 }}>2026-08-20</td>
+                    <td style={{ color: 'var(--warning)', fontWeight: 600 }}>
+                      {w.scheduledDueDate
+                        ? new Date(w.scheduledDueDate).toLocaleDateString('vi-VN')
+                        : (w.createdAt ? new Date(w.createdAt).toLocaleDateString('vi-VN') : '---')}
+                    </td>
                   </tr>
                 ))}
               </tbody>

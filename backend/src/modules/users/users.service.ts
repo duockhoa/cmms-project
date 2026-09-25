@@ -387,7 +387,17 @@ export class UsersService {
       // Thay vì gửi N x DB queries tuần tự, preload toàn bộ Users và defaultRole trong 1 câu SQL
       const [allDbUsers, defaultUserRole] = await Promise.all([
         this.prisma.user.findMany({ orderBy: { createdAt: 'asc' } }),
-        this.prisma.role.findFirst({ where: { name: 'Người dùng' } }),
+        this.prisma.role.findFirst({
+          where: {
+            OR: [
+              { name: 'Người dùng' },
+              { name: { contains: 'Người dùng' } },
+              { name: { contains: 'Nhân viên' } },
+              { name: 'OPERATOR' },
+              { name: 'USER' },
+            ],
+          },
+        }),
       ]);
 
       const idMap = new Map<string, any>();

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
-import { api, fetchWithAuth } from '../../services/api';
-
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+import { api, fetchWithAuth, API_HOST as API_BASE } from '../../services/api';
 
 interface EquipmentFormModalProps {
   isOpen: boolean;

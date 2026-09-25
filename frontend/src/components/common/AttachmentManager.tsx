@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../../services/api';
+import { api, API_HOST as API_BASE } from '../../services/api';
 import { Paperclip, Download, Trash2, Upload, AlertCircle, RefreshCw, FileText, Image } from 'lucide-react';
 import { useToast, useConfirmDialog } from './Toast';
-
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
 interface AttachmentManagerProps {
   entityType: string;

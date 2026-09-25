@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { api, fetchWithAuth } from '../services/api';
+import { api, fetchWithAuth, API_HOST as API_BASE } from '../services/api';
 import { Modal } from '../components/common/Modal';
 import { Plus, AlertCircle, ArrowUpRight, ArrowDownRight, Trash2, History, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { TableSkeleton } from '../components/common/Skeleton';
 import { useDebounce } from '../hooks/useDebounce';
-
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
 export const InventoryPage: React.FC = () => {
   const [inventory, setInventory] = useState<any[]>([]);

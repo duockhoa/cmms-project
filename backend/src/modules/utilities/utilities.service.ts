@@ -198,7 +198,7 @@ export class UtilitiesService {
           previousValue: val,
           consumption: 0,
           notes: data.notes || 'Chỉ số đầu kỳ khởi tạo từ Cài đặt hệ thống',
-          recordedById: actor?.id || 'system',
+          recordedById: actor?.id || null,
           recordedByName: actor?.name || actor?.email || 'Quản trị viên',
         },
       });
@@ -220,7 +220,7 @@ export class UtilitiesService {
           previousValue: val,
           consumption: 0,
           notes: data.notes || 'Hiệu chỉnh chỉ số mốc từ Cài đặt hệ thống',
-          recordedById: actor?.id || 'system',
+          recordedById: actor?.id || null,
           recordedByName: actor?.name || actor?.email || 'Quản trị viên',
         },
       });
@@ -442,7 +442,7 @@ export class UtilitiesService {
           previousValue: val,
           consumption: 0,
           notes: data.notes || `Chỉ số chốt đầu kỳ tính toán Tháng ${month}/${year} (${cycle.cycleDescription})`,
-          recordedById: actor?.id || 'admin',
+          recordedById: actor?.id || null,
           recordedByName: actor?.name || actor?.email || 'Quản trị viên',
         },
       });
@@ -499,7 +499,7 @@ export class UtilitiesService {
             previousValue: val,
             consumption: consumption,
             notes: `Chỉ số cập nhật đến ngày hiện tại (Kỳ Tháng ${month}/${year})`,
-            recordedById: actor?.id || 'admin',
+            recordedById: actor?.id || null,
             recordedByName: actor?.name || actor?.email || 'Quản trị viên',
           },
         });
@@ -693,7 +693,7 @@ export class UtilitiesService {
         imageUrl: data.imageUrl,
         notes: data.notes,
         isAbnormal: isAbnormal,
-        recordedById: actor?.id || 'system',
+        recordedById: actor?.id || null,
         recordedByName: actor?.name || actor?.email || 'Kỹ thuật viên',
       },
     });
@@ -742,7 +742,7 @@ export class UtilitiesService {
     const recorderId =
       actor?.id && actor.id !== 'system-evn-bot'
         ? actor.id
-        : systemUser?.id || 'admin';
+        : systemUser?.id || null;
     const recorderName = 'EVN Auto-Sync Bot';
 
     const results = [];
@@ -914,7 +914,7 @@ export class UtilitiesService {
         isVoided: true,
         voidReason,
         voidedAt: new Date(),
-        voidedById: actor?.id || 'system',
+        voidedById: actor?.id || null,
         voidedByName: actor?.name || actor?.email || 'Người vận hành',
       },
     });
@@ -1353,7 +1353,7 @@ export class UtilitiesService {
         runningDelta: runningDelta,
         reason: data.reason,
         parametersJson: data.parametersJson,
-        recordedById: actor?.id || 'system',
+        recordedById: actor?.id || null,
         recordedByName: actor?.name || actor?.email || 'Kỹ thuật viên',
       },
     });

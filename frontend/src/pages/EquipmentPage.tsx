@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api, fetchWithAuth } from '../services/api';
+import { api, fetchWithAuth, API_HOST as API_BASE } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -9,8 +9,6 @@ import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { useDebounce } from '../hooks/useDebounce';
 import { TableSkeleton } from '../components/common/Skeleton';
-
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
 export const EquipmentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

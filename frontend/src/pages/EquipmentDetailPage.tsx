@@ -15,9 +15,7 @@ import { OperationParametersTab } from '../components/equipment/OperationParamet
 import { EquipmentOperationLogsTab } from '../components/equipment/EquipmentOperationLogsTab';
 import { FunctionalUnitsTab } from '../components/equipment/FunctionalUnitsTab';
 
-import { api } from '../services/api';
-
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
+import { api, API_HOST as API_BASE } from '../services/api';
 
 interface EquipmentDetailPageProps {
   item: any;

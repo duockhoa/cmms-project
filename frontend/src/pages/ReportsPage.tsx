@@ -97,7 +97,7 @@ export const ReportsPage: React.FC = () => {
         <div className="kpi-card">
           <div className="kpi-card-title">Tổng Work Order</div>
           <div className="kpi-card-value">{totalWorkOrders}</div>
-          <div className="kpi-card-footer" style={{ color: 'var(--success)' }}>+100% so với kỳ trước</div>
+          <div className="kpi-card-footer" style={{ color: 'var(--text-muted)' }}>{dashboardData?.kpi?.completedWorkOrders || 0} đã hoàn thành</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-card-title">Hoàn thành đúng hạn</div>

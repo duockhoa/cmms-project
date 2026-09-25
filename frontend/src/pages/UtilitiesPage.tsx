@@ -52,6 +52,12 @@ export const UtilitiesPage: React.FC = () => {
   const [trendDisplayType, setTrendDisplayType] = useState<'TABLE' | 'CHART'>('TABLE');
   const trendTableContainerRef = useRef<HTMLDivElement>(null);
 
+  // Mảng năm động tự động theo năm hiện tại (không hardcode)
+  const dynamicYears = useMemo(() => {
+    const cur = new Date().getFullYear();
+    return Array.from({ length: 7 }, (_, i) => cur - 3 + i);
+  }, []);
+
   const scrollTrendTable = (offset: number) => {
     if (trendTableContainerRef.current) {
       trendTableContainerRef.current.scrollBy({ left: offset, behavior: 'smooth' });
@@ -2009,7 +2015,7 @@ export const UtilitiesPage: React.FC = () => {
                     className="modal-select"
                     style={{ width: '90px', height: '36px', padding: '0 8px', fontSize: '13px' }}
                   >
-                    {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                    {dynamicYears.map((y) => (
                       <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
@@ -2587,7 +2593,7 @@ export const UtilitiesPage: React.FC = () => {
                       className="filter-select trend-select"
                       title="Chọn năm"
                     >
-                      {[2024, 2025, 2026, 2027].map((y) => (
+                      {dynamicYears.map((y) => (
                         <option key={y} value={y}>Năm {y}</option>
                       ))}
                     </select>
@@ -2610,7 +2616,7 @@ export const UtilitiesPage: React.FC = () => {
                       onChange={(e) => setTrendYear(parseInt(e.target.value, 10))}
                       className="filter-select trend-select"
                     >
-                      {[2024, 2025, 2026, 2027].map((y) => (
+                      {dynamicYears.map((y) => (
                         <option key={y} value={y}>Năm {y}</option>
                       ))}
                     </select>
@@ -2624,7 +2630,7 @@ export const UtilitiesPage: React.FC = () => {
                       onChange={(e) => setTrendYear(parseInt(e.target.value, 10))}
                       className="filter-select trend-select"
                     >
-                      {[2024, 2025, 2026, 2027].map((y) => (
+                      {dynamicYears.map((y) => (
                         <option key={y} value={y}>Năm {y}</option>
                       ))}
                     </select>
@@ -2639,7 +2645,7 @@ export const UtilitiesPage: React.FC = () => {
                       onChange={(e) => setTrendStartYear(parseInt(e.target.value, 10))}
                       className="filter-select trend-select"
                     >
-                      {[2021, 2022, 2023, 2024].map((y) => (
+                      {dynamicYears.map((y) => (
                         <option key={y} value={y}>{y}</option>
                       ))}
                     </select>
@@ -2649,7 +2655,7 @@ export const UtilitiesPage: React.FC = () => {
                       onChange={(e) => setTrendEndYear(parseInt(e.target.value, 10))}
                       className="filter-select trend-select"
                     >
-                      {[2024, 2025, 2026, 2027].map((y) => (
+                      {dynamicYears.map((y) => (
                         <option key={y} value={y}>{y}</option>
                       ))}
                     </select>
