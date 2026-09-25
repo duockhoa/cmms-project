@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { TableSkeleton } from '../components/common/Skeleton';
+import { useDebounce } from '../hooks/useDebounce';
 
 export const SchedulesPage: React.FC = () => {
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -29,6 +30,7 @@ export const SchedulesPage: React.FC = () => {
 
   // Filters & Search
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState('');
   const [freqFilter, setFreqFilter] = useState('');
   const [overdueFilter, setOverdueFilter] = useState(false);
@@ -64,22 +66,35 @@ export const SchedulesPage: React.FC = () => {
     notes: '',
   });
 
-  const loadData = async () => {
+  // Load static catalogs (equipment, users) ONCE on mount
+  const loadCatalogs = async () => {
     try {
-      setLoading(true);
-      const [schRes, eqRes, techRes, userRes] = await Promise.all([
-        api.getSchedules({ search, status: statusFilter, frequencyType: freqFilter, overdue: overdueFilter }),
+      const [eqRes, userRes] = await Promise.all([
         api.getEquipment(),
-        api.getUsers({ role: 'TECHNICIAN' }),
         api.getUsers().catch(() => []),
       ]);
-      setSchedules(schRes.data || schRes || []);
       setEquipmentList(eqRes);
-      setTechnicians(techRes);
       setUsers(userRes);
+      setTechnicians(userRes.filter((u: any) => u.role === 'TECHNICIAN'));
       if (eqRes.length > 0 && !formData.equipmentId) {
         setFormData((prev) => ({ ...prev, equipmentId: eqRes[0].id }));
       }
+    } catch (err) {
+      console.error('Failed to load catalogs in SchedulesPage:', err);
+    }
+  };
+
+  // Load schedules list
+  const loadSchedules = async () => {
+    try {
+      setLoading(true);
+      const schRes = await api.getSchedules({
+        search: debouncedSearch,
+        status: statusFilter,
+        frequencyType: freqFilter,
+        overdue: overdueFilter,
+      });
+      setSchedules(schRes.data || schRes || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -87,9 +102,15 @@ export const SchedulesPage: React.FC = () => {
     }
   };
 
+  const loadData = () => loadSchedules();
+
   useEffect(() => {
-    loadData();
-  }, [search, statusFilter, freqFilter, overdueFilter]);
+    loadCatalogs();
+  }, []);
+
+  useEffect(() => {
+    loadSchedules();
+  }, [debouncedSearch, statusFilter, freqFilter, overdueFilter]);
 
   const getActiveUserId = () => {
     const active = users.find((u: any) => u.isActive);

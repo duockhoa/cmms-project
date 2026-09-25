@@ -4,6 +4,7 @@ import { Modal } from '../components/common/Modal';
 import { Plus, AlertCircle, ArrowUpRight, ArrowDownRight, Trash2, History, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { TableSkeleton } from '../components/common/Skeleton';
+import { useDebounce } from '../hooks/useDebounce';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
@@ -12,6 +13,7 @@ export const InventoryPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const toast = useToast();
 
   // Pagination states
@@ -47,18 +49,28 @@ export const InventoryPage: React.FC = () => {
     location: '',
   });
 
-  const loadData = async () => {
+  // Load static catalogs (users, categories) ONCE on mount
+  const loadCatalogs = async () => {
+    try {
+      const [userRes, catsRes] = await Promise.all([
+        api.getUsers().catch(() => []),
+        api.getEquipmentCategories().catch(() => []),
+      ]);
+      setUsers(userRes);
+      setCategoriesList(catsRes || []);
+    } catch (err) {
+      console.error('Failed to load catalogs in InventoryPage:', err);
+    }
+  };
+
+  // Fetch Inventory with pagination params
+  const loadInventory = async () => {
     try {
       setLoading(true);
-
-      const userRes = await api.getUsers().catch(() => []);
-      setUsers(userRes);
-
-      // Fetch Inventory with pagination params
       const url = new URL(`${API_BASE}/api/v1/inventory`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
-      if (search) url.searchParams.append('search', search);
+      if (debouncedSearch) url.searchParams.append('search', debouncedSearch);
 
       const response = await fetchWithAuth(url.toString());
       if (!response.ok) throw new Error('Không thể tải danh sách vật tư');
@@ -80,16 +92,20 @@ export const InventoryPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    loadData();
-    api.getEquipmentCategories()
-      .then(cats => setCategoriesList(cats || []))
-      .catch(() => []);
-  }, [search, page]);
+  const loadData = () => loadInventory();
 
   useEffect(() => {
+    loadCatalogs();
+  }, []);
+
+  useEffect(() => {
+    loadInventory();
+  }, [debouncedSearch, page]);
+
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
     setPage(1);
-  }, [search]);
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,7 +227,7 @@ export const InventoryPage: React.FC = () => {
             style={{ paddingLeft: '34px' }}
             placeholder="Tìm theo tên vật tư, mã SKU..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
       </div>
