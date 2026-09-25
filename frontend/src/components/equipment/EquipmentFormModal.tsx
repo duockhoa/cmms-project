@@ -205,8 +205,9 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
               onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             >
               <option value="OPERATIONAL">Hoạt động tốt</option>
-              <option value="UNDER_MAINTENANCE">Đang bảo trì</option>
               <option value="INCIDENT">Sự cố hỏng hóc</option>
+              <option value="UNDER_MAINTENANCE">Đang bảo trì / Sửa chữa</option>
+              <option value="DISCOMMISSIONED">Ngừng sử dụng / Thanh lý</option>
             </select>
           </div>
         </div>

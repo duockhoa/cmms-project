@@ -25,6 +25,12 @@ export class EquipmentController {
     return this.equipmentService.findAll({ search, category, department, status, location, page, limit });
   }
 
+  @ApiStandardResponse({ summary: 'Đồng bộ chuẩn hóa trạng thái toàn bộ thiết bị', method: 'POST', path: '/equipment/sync-statuses' })
+  @Post('sync-statuses')
+  syncStatuses() {
+    return this.equipmentService.syncStatuses();
+  }
+
   @ApiStandardResponse({ summary: 'Lấy chi tiết thiết bị theo ID', method: 'GET', path: '/equipment/{id}' })
   @Get(':id')
   findOne(@Param('id') id: string) {

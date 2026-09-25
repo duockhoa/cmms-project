@@ -609,6 +609,9 @@ export class RequestsService {
           },
         });
 
+        // Recalculate Equipment status
+        await this.equipmentStatus.calculateAndSetStatus(request.equipmentId, tx);
+
         return updated;
       } catch (err: any) {
         if (err.code === 'P2025') {
@@ -682,6 +685,9 @@ export class RequestsService {
           },
         });
 
+        // Recalculate Equipment status
+        await this.equipmentStatus.calculateAndSetStatus(request.equipmentId, tx);
+
         return updated;
       } catch (err: any) {
         if (err.code === 'P2025') {
@@ -748,6 +754,9 @@ export class RequestsService {
             requestVersionAfter: body.expectedVersion + 1,
           },
         });
+
+        // Recalculate Equipment status
+        await this.equipmentStatus.calculateAndSetStatus(request.equipmentId, tx);
 
         return updated;
       } catch (err: any) {
@@ -822,6 +831,12 @@ export class RequestsService {
       });
     } catch (e) {
       console.warn('Lỗi ghi workflow history khi update request:', e);
+    }
+
+    // Recalculate Equipment status
+    await this.equipmentStatus.calculateAndSetStatus(updated.equipmentId);
+    if (existing.equipmentId !== updated.equipmentId) {
+      await this.equipmentStatus.calculateAndSetStatus(existing.equipmentId);
     }
 
     return updated;
@@ -941,6 +956,9 @@ export class RequestsService {
       await tx.maintenanceRequest.delete({
         where: { id },
       });
+
+      // 6. Recalculate Equipment status
+      await this.equipmentStatus.calculateAndSetStatus(existing.equipmentId, tx);
 
       return { success: true, message: `Đã xóa yêu cầu báo hỏng ${existing.requestCode} thành công.` };
     });

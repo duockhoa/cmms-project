@@ -2,19 +2,38 @@ import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateEquipmentDto } from './dto/equipment.dto';
 
+import { EquipmentStatusService } from './equipment-status.service';
+
 @Injectable()
 export class EquipmentService implements OnModuleInit {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private equipmentStatus: EquipmentStatusService,
+  ) {}
 
   async onModuleInit() {
     try {
-      // Chuẩn hóa dữ liệu cũ: chuyển các giá trị accountingCode là chuỗi rỗng '' thành null để không bị kẹt unique constraint
+      // 1. Chuẩn hóa dữ liệu cũ: chuyển các giá trị accountingCode là chuỗi rỗng '' thành null để không bị kẹt unique constraint
       await this.prisma.$executeRawUnsafe(
         "UPDATE `Equipment` SET `accountingCode` = NULL WHERE `accountingCode` = ''"
       );
     } catch (err) {
       // Bỏ qua nếu bảng chưa tồn tại hoặc DB chưa migrate
     }
+
+    try {
+      // 2. Tự động đồng bộ chuẩn hóa trạng thái thiết bị theo sự cố và phiếu sửa chữa thực tế
+      const result = await this.equipmentStatus.syncAllEquipmentStatuses();
+      if (result.updated > 0) {
+        console.log(`[EQUIPMENT_SYNC] Đã tự động chuẩn hóa trạng thái cho ${result.updated}/${result.total} thiết bị.`);
+      }
+    } catch (err) {
+      console.warn('[EQUIPMENT_SYNC] Lỗi đồng bộ trạng thái thiết bị:', err);
+    }
+  }
+
+  async syncStatuses() {
+    return this.equipmentStatus.syncAllEquipmentStatuses();
   }
 
   async findAll(query?: { search?: string; category?: string; department?: string; status?: string; location?: string; page?: string; limit?: string }) {

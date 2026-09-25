@@ -570,8 +570,6 @@ export class WorkOrdersService implements OnModuleInit {
         });
       }
 
-      await this.equipmentStatus.calculateAndSetStatus(wo.equipmentId, tx);
-
       // ─── ĐỒNG BỘ TRẠNG THÁI YÊU CẦU SỰ CỐ LIÊN KẾT ───
       if (wo.requestId) {
         if (targetStatus === 'VERIFIED' || targetStatus === 'CLOSED' || actionName === 'VERIFY' || actionName === 'QA_VERIFY' || actionName === 'CLOSE') {
@@ -620,6 +618,9 @@ export class WorkOrdersService implements OnModuleInit {
           }
         }
       }
+
+      // ─── TÍNH TOÁN LẠI TRẠNG THÁI THIẾT BỊ (SAU KHI ĐỒNG BỘ YÊU CẦU SỰ CỐ) ───
+      await this.equipmentStatus.calculateAndSetStatus(wo.equipmentId, tx);
 
       await tx.workflowHistory.create({
         data: {
@@ -1169,6 +1170,9 @@ export class WorkOrdersService implements OnModuleInit {
 
       // H. Xóa chính bản ghi WorkOrder
       await tx.workOrder.delete({ where: { id } });
+
+      // I. Tính toán lại trạng thái thiết bị
+      await this.equipmentStatus.calculateAndSetStatus(wo.equipmentId, tx);
 
       return { success: true, message: `Đã xóa phiếu bảo trì ${wo.orderCode} thành công.` };
     });

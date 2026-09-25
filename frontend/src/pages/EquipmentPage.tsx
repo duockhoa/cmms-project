@@ -378,12 +378,12 @@ export const EquipmentPage: React.FC = () => {
           ))}
         </select>
 
-        <select className="form-select" style={{ width: '160px' }} value={statusFilter} onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}>
+        <select className="form-select" style={{ width: '175px' }} value={statusFilter} onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}>
           <option value="">Tất cả trạng thái</option>
-          <option value="OPERATIONAL">Hoạt động</option>
-          <option value="REPAIRING">Đang sửa chữa</option>
-          <option value="UNDER_MAINTENANCE">Cảnh báo</option>
-          <option value="INCIDENT">Nguy hiểm</option>
+          <option value="OPERATIONAL">Hoạt động tốt</option>
+          <option value="INCIDENT">Sự cố / Hỏng</option>
+          <option value="UNDER_MAINTENANCE">Đang bảo trì / Sửa chữa</option>
+          <option value="DISCOMMISSIONED">Ngừng sử dụng</option>
         </select>
       </div>
 
