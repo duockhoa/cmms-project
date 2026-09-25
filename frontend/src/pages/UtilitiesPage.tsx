@@ -3205,7 +3205,59 @@ export const UtilitiesPage: React.FC = () => {
                 Đóng
               </button>
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  if (!printPoint) return;
+                  const printWindow = window.open('', '_blank', 'width=600,height=650');
+                  if (!printWindow) {
+                    alert('Vui lòng cho phép mở popup để in nhãn!');
+                    return;
+                  }
+                  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(printPoint.code)}`;
+                  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>In tem QR - ${printPoint.code}</title>
+  <style>
+    @page { size: auto; margin: 0mm; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; margin: 0 !important; padding: 0 !important;
+      background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      overflow: hidden !important; display: flex; align-items: center; justify-content: center;
+    }
+    .print-box {
+      border: 2px solid #000; border-radius: 8px; padding: 12px 16px;
+      width: 250px; text-align: center; page-break-inside: avoid; break-inside: avoid;
+    }
+    .brand { font-size: 10px; font-weight: 800; letter-spacing: 1px; color: #b91c1c; border-bottom: 1.5px solid #000; padding-bottom: 4px; margin-bottom: 8px; }
+    .name { font-size: 13px; font-weight: 800; color: #000; margin-bottom: 6px; }
+    .qr { width: 140px; height: 140px; display: block; margin: 0 auto 6px auto; }
+    .code { font-family: monospace; font-size: 14px; font-weight: 900; color: #000; margin-bottom: 2px; }
+    .loc { font-size: 11px; color: #475569; font-weight: 600; }
+    @media print { html, body { height: 100% !important; overflow: hidden !important; } }
+  </style>
+</head>
+<body>
+  <div class="print-box">
+    <div class="brand">DK PHARMA CMMS</div>
+    <div class="name">${printPoint.name || ''}</div>
+    <img id="qr-img" class="qr" src="${qrUrl}" alt="QR" />
+    <div class="code">[ ${printPoint.code || ''} ]</div>
+    ${printPoint.location ? `<div class="loc">📍 ${printPoint.location}</div>` : ''}
+  </div>
+  <script>
+    const img = document.getElementById('qr-img');
+    const doPrint = () => { window.focus(); window.print(); setTimeout(() => { window.close(); }, 500); };
+    if (img.complete && img.naturalWidth > 0) doPrint();
+    else { img.onload = doPrint; img.onerror = doPrint; }
+  </script>
+</body>
+</html>`;
+                  printWindow.document.open();
+                  printWindow.document.write(html);
+                  printWindow.document.close();
+                }}
                 className="btn-modal-submit print-btn"
               >
                 <Printer size={16} />
