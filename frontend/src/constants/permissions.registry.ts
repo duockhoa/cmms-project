@@ -12,6 +12,17 @@ export interface ModulePermissions {
 
 export const PERMISSIONS_REGISTRY: ModulePermissions[] = [
   {
+    id: 'dashboard',
+    name: 'Tổng quan (Dashboard)',
+    permissions: [
+      {
+        code: 'dashboard:view',
+        name: 'Xem Bảng điều khiển (Tổng quan)',
+        description: 'Xem các chỉ số KPI, sự cố khẩn cấp và biểu đồ thống kê bảo trì',
+      },
+    ],
+  },
+  {
     id: 'utilities',
     name: 'Điện, Nước & Tiện ích',
     permissions: [
