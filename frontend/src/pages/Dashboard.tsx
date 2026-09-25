@@ -14,31 +14,7 @@ export const Dashboard: React.FC = () => {
     api.getDashboard().then(setData).finally(() => setLoading(false));
   }, []);
 
-  if (loading || !data) {
-    return (
-      <div>
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">Tổng quan</h1>
-            <p className="page-subtitle">Theo dõi tình hình bảo trì và vận hành thiết bị</p>
-          </div>
-        </div>
-        <DashboardSkeleton />
-      </div>
-    );
-  }
-
-  const { kpi, recentRequests, urgentWorkOrders } = data;
-
-  const completionRate = kpi.completedWorkOrders + kpi.activeWorkOrders > 0
-    ? Math.round((kpi.completedWorkOrders / (kpi.completedWorkOrders + kpi.activeWorkOrders)) * 100)
-    : 0;
-
-  const operationalRate = kpi.totalEquipment > 0
-    ? Math.round((kpi.operationalEquipment / kpi.totalEquipment) * 100)
-    : 0;
-
-  const offlineEquipment = Math.max(0, kpi.totalEquipment - kpi.operationalEquipment - kpi.underMaintenanceEquipment - kpi.incidentEquipment);
+  const recentRequests = data?.recentRequests;
 
   // THUẬT TOÁN TỐI ƯU HÓA: Single-Pass Vector Reduction O(N)
   // Gom 5 lần duyệt mảng độc lập về 1 vòng lặp duy nhất và ghi nhớ kết quả qua useMemo
@@ -59,6 +35,32 @@ export const Dashboard: React.FC = () => {
 
     return { urgentCount, pendingCount, approvedCount, rejectedCount, returnedCount };
   }, [recentRequests]);
+
+  if (loading || !data) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Tổng quan</h1>
+            <p className="page-subtitle">Theo dõi tình hình bảo trì và vận hành thiết bị</p>
+          </div>
+        </div>
+        <DashboardSkeleton />
+      </div>
+    );
+  }
+
+  const { kpi, urgentWorkOrders } = data;
+
+  const completionRate = kpi.completedWorkOrders + kpi.activeWorkOrders > 0
+    ? Math.round((kpi.completedWorkOrders / (kpi.completedWorkOrders + kpi.activeWorkOrders)) * 100)
+    : 0;
+
+  const operationalRate = kpi.totalEquipment > 0
+    ? Math.round((kpi.operationalEquipment / kpi.totalEquipment) * 100)
+    : 0;
+
+  const offlineEquipment = Math.max(0, kpi.totalEquipment - kpi.operationalEquipment - kpi.underMaintenanceEquipment - kpi.incidentEquipment);
 
   return (
     <div>
