@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Cpu, AlertTriangle, Calendar, CheckCircle2, ArrowUpRight, BellRing } from 'lucide-react';
@@ -40,7 +40,25 @@ export const Dashboard: React.FC = () => {
 
   const offlineEquipment = Math.max(0, kpi.totalEquipment - kpi.operationalEquipment - kpi.underMaintenanceEquipment - kpi.incidentEquipment);
 
-  const pendingUrgentRequestsCount = recentRequests.filter((r: any) => r.priority === 'URGENT' || r.priority === 'HIGH').length;
+  // THUẬT TOÁN TỐI ƯU HÓA: Single-Pass Vector Reduction O(N)
+  // Gom 5 lần duyệt mảng độc lập về 1 vòng lặp duy nhất và ghi nhớ kết quả qua useMemo
+  const requestStats = useMemo(() => {
+    let urgentCount = 0;
+    let pendingCount = 0;
+    let approvedCount = 0;
+    let rejectedCount = 0;
+    let returnedCount = 0;
+
+    for (const r of recentRequests || []) {
+      if (r.priority === 'URGENT' || r.priority === 'HIGH') urgentCount++;
+      if (r.status === 'PENDING') pendingCount++;
+      else if (r.status === 'APPROVED') approvedCount++;
+      else if (r.status === 'REJECTED' || r.status === 'CANCELLED') rejectedCount++;
+      else if (r.status === 'RETURNED') returnedCount++;
+    }
+
+    return { urgentCount, pendingCount, approvedCount, rejectedCount, returnedCount };
+  }, [recentRequests]);
 
   return (
     <div>
@@ -69,7 +87,7 @@ export const Dashboard: React.FC = () => {
             <AlertTriangle size={16} color="var(--warning)" />
           </div>
           <div className="kpi-card-value">{kpi.pendingRequests}</div>
-          <div className="kpi-card-footer" style={{ color: 'var(--danger)' }}>{pendingUrgentRequestsCount} khẩn cấp</div>
+          <div className="kpi-card-footer" style={{ color: 'var(--danger)' }}>{requestStats.urgentCount} khẩn cấp</div>
         </div>
 
         <div className="kpi-card">
@@ -99,19 +117,19 @@ export const Dashboard: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div className="flex-between" style={{ fontSize: '13px' }}>
               <span>Chờ phê duyệt</span>
-              <span className="badge badge-warning">{recentRequests.filter((r: any) => r.status === 'PENDING').length}</span>
+              <span className="badge badge-warning">{requestStats.pendingCount}</span>
             </div>
             <div className="flex-between" style={{ fontSize: '13px' }}>
               <span>Đã phê duyệt</span>
-              <span className="badge badge-info">{recentRequests.filter((r: any) => r.status === 'APPROVED').length}</span>
+              <span className="badge badge-info">{requestStats.approvedCount}</span>
             </div>
             <div className="flex-between" style={{ fontSize: '13px' }}>
               <span>Từ chối / Hủy</span>
-              <span className="badge badge-danger">{recentRequests.filter((r: any) => r.status === 'REJECTED' || r.status === 'CANCELLED').length}</span>
+              <span className="badge badge-danger">{requestStats.rejectedCount}</span>
             </div>
             <div className="flex-between" style={{ fontSize: '13px' }}>
               <span>Yêu cầu sửa lại</span>
-              <span className="badge badge-neutral">{recentRequests.filter((r: any) => r.status === 'RETURNED').length}</span>
+              <span className="badge badge-neutral">{requestStats.returnedCount}</span>
             </div>
           </div>
         </div>

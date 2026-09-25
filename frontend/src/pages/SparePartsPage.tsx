@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
@@ -50,13 +50,36 @@ export const SparePartsPage: React.FC = () => {
     }
   };
 
-  const totalItems = inventory.length;
-  const lowStockItems = inventory.filter((item: any) => item.quantity > 0 && item.quantity <= (item.minQuantity || 5));
-  const outOfStockItems = inventory.filter((item: any) => item.quantity === 0);
-  const totalValue = inventory.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0);
-  
-  // Total low/out stock for banner
-  const bannerWarnings = inventory.filter((item: any) => item.quantity <= (item.minQuantity || 5));
+  // THUẬT TOÁN TỐI ƯU HÓA: Single-Pass Vector Reduction O(N)
+  const { totalItems, lowStockItems, outOfStockItems, totalValue, bannerWarnings } = useMemo(() => {
+    const lowStock: any[] = [];
+    const outOfStock: any[] = [];
+    const warnings: any[] = [];
+    let sumValue = 0;
+
+    for (const item of inventory || []) {
+      const minQty = item.minQuantity || 5;
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unitPrice) || 0;
+      sumValue += qty * price;
+
+      if (qty === 0) {
+        outOfStock.push(item);
+        warnings.push(item);
+      } else if (qty <= minQty) {
+        lowStock.push(item);
+        warnings.push(item);
+      }
+    }
+
+    return {
+      totalItems: inventory.length,
+      lowStockItems: lowStock,
+      outOfStockItems: outOfStock,
+      totalValue: sumValue,
+      bannerWarnings: warnings,
+    };
+  }, [inventory]);
 
   return (
     <div>

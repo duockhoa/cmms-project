@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { api } from '../services/api';
 import { Modal } from '../components/common/Modal';
 import {
@@ -322,14 +322,28 @@ export const SchedulesPage: React.FC = () => {
     }
   };
 
-  // Summary Metrics
-  const activeCount = schedules.filter((s) => s.status === 'ACTIVE').length;
-  const pausedCount = schedules.filter((s) => s.status === 'PAUSED').length;
-  const draftCount = schedules.filter((s) => s.status === 'DRAFT').length;
-  const overdueCount = schedules.filter((s) => {
-    if (s.status !== 'ACTIVE' || !s.nextDueDate) return false;
-    return new Date(s.nextDueDate) < new Date();
-  }).length;
+  // THUẬT TOÁN TỐI ƯU HÓA: Single-Pass Vector Reduction O(N)
+  const { activeCount, pausedCount, draftCount, overdueCount } = useMemo(() => {
+    let active = 0;
+    let paused = 0;
+    let draft = 0;
+    let overdue = 0;
+    const now = new Date();
+
+    for (const s of schedules || []) {
+      if (s.status === 'ACTIVE') {
+        active++;
+        if (s.nextDueDate && new Date(s.nextDueDate) < now) {
+          overdue++;
+        }
+      } else if (s.status === 'PAUSED') {
+        paused++;
+      } else if (s.status === 'DRAFT') {
+        draft++;
+      }
+    }
+    return { activeCount: active, pausedCount: paused, draftCount: draft, overdueCount: overdue };
+  }, [schedules]);
 
   return (
     <div>

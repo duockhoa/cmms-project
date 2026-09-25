@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { api, fetchWithAuth, API_HOST } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
@@ -41,6 +41,21 @@ export const WorkOrdersPage: React.FC = () => {
   const [selectedMaterialWO, setSelectedMaterialWO] = useState<any | null>(null);
   const [woTransactions, setWoTransactions] = useState<any[]>([]);
   const [materialLoading, setMaterialLoading] = useState(false);
+
+  // THUẬT TOÁN TỐI ƯU HÓA: Precomputed Hash Map O(T)
+  // Thay vì quét toàn bộ mảng woTransactions lặp đi lặp lại với O(M x T),
+  // tính toán trước bảng tổng hợp xuất/trả với O(T) cho phép tra cứu tức thì O(1)
+  const txSummaryByItemId = useMemo(() => {
+    const map = new Map<string, { issued: number; returned: number }>();
+    for (const t of woTransactions) {
+      if (!t.workOrderItemId) continue;
+      const cur = map.get(t.workOrderItemId) || { issued: 0, returned: 0 };
+      if (t.transactionType === 'ISSUE') cur.issued += Number(t.quantity) || 0;
+      if (t.transactionType === 'RETURN') cur.returned += Number(t.quantity) || 0;
+      map.set(t.workOrderItemId, cur);
+    }
+    return map;
+  }, [woTransactions]);
 
   // Return Item Form Modal
   const [returnItemTarget, setReturnItemTarget] = useState<any | null>(null);
@@ -187,15 +202,9 @@ export const WorkOrdersPage: React.FC = () => {
   };
 
   const handleReturnClick = (woItem: any) => {
-    const txs = woTransactions;
-    const totalIssued = txs
-      .filter((t) => t.transactionType === 'ISSUE' && t.workOrderItemId === woItem.id)
-      .reduce((sum, t) => sum + t.quantity, 0);
-
-    const totalReturned = txs
-      .filter((t) => t.transactionType === 'RETURN' && t.workOrderItemId === woItem.id)
-      .reduce((sum, t) => sum + t.quantity, 0);
-
+    const summary = txSummaryByItemId.get(woItem.id) || { issued: 0, returned: 0 };
+    const totalIssued = summary.issued;
+    const totalReturned = summary.returned;
     const returnableQty = totalIssued - totalReturned;
 
     if (totalIssued === 0) {
@@ -255,14 +264,14 @@ export const WorkOrdersPage: React.FC = () => {
         cleanCode = cleanCode.split('$')[0].trim();
       }
       const res = await api.getWorkOrdersByEquipmentQr(cleanCode, method);
-      
+
       toast.success('Nhận diện thiết bị', `Thiết bị: ${res.equipment.name} (${res.equipment.code})`);
-      
+
       if (res.workOrders.length === 0) {
         toast.warning('Không có công việc', 'Thiết bị này không có công việc đang được phân công cho bạn.');
         return;
       }
-      
+
       if (res.workOrders.length === 1) {
         setSelectedDetailWoId(res.workOrders[0].id);
       } else {
@@ -360,285 +369,285 @@ export const WorkOrdersPage: React.FC = () => {
       {!selectedDetailWoId ? (
         <>
           <div className="page-header">
-        <div>
-          <h1 className="page-title">Phiếu sửa chữa</h1>
-          <p className="page-subtitle">Quản lý lệnh sửa chữa và vật tư liên quan</p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-warning" onClick={() => setIsQrScannerOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}>
-            <Camera size={16} /> Quét mã thiết bị
-          </button>
-          <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-            <Plus size={16} /> Tạo phiếu mới
-          </button>
-        </div>
-      </div>
+            <div>
+              <h1 className="page-title">Phiếu sửa chữa</h1>
+              <p className="page-subtitle">Quản lý lệnh sửa chữa và vật tư liên quan</p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-warning" onClick={() => setIsQrScannerOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}>
+                <Camera size={16} /> Quét mã thiết bị
+              </button>
+              <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
+                <Plus size={16} /> Tạo phiếu mới
+              </button>
+            </div>
+          </div>
 
-      {/* Filter Bar */}
-      <div className="card mb-4" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
-          <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input
-            type="text"
-            className="form-input"
-            style={{ paddingLeft: '34px' }}
-            placeholder="Tìm kiếm phiếu, mã thiết bị, kỹ thuật viên..."
-            value={search}
-            onChange={(e) => handleFilterChange(setSearch, e.target.value)}
-          />
-        </div>
+          {/* Filter Bar */}
+          <div className="card mb-4" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+              <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                className="form-input"
+                style={{ paddingLeft: '34px' }}
+                placeholder="Tìm kiếm phiếu, mã thiết bị, kỹ thuật viên..."
+                value={search}
+                onChange={(e) => handleFilterChange(setSearch, e.target.value)}
+              />
+            </div>
 
-        {/* Trạng thái Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '240px' }}>
-          <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Trạng thái:</label>
-          <select 
-            className="form-select" 
-            style={{ flex: 1, height: '38px', fontSize: '13px', padding: '0 12px' }} 
-            value={statusFilter} 
-            onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}
-          >
-            <option value="">-- Tất cả trạng thái --</option>
-            <option value="PENDING">Chờ phân công</option>
-            <option value="ASSIGNED">Đã phân công</option>
-            <option value="IN_PROGRESS">Đang thực hiện</option>
-            <option value="ON_HOLD">Tạm dừng</option>
-            <option value="COMPLETED">Chờ xưởng nghiệm thu</option>
-            <option value="INSPECTION">Chờ QA nghiệm thu</option>
-            <option value="VERIFIED">Đã nghiệm thu (QA)</option>
-            <option value="CLOSED">Đã đóng</option>
-            <option value="CANCELLED">Đã hủy</option>
-          </select>
-        </div>
+            {/* Trạng thái Filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '240px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Trạng thái:</label>
+              <select
+                className="form-select"
+                style={{ flex: 1, height: '38px', fontSize: '13px', padding: '0 12px' }}
+                value={statusFilter}
+                onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}
+              >
+                <option value="">-- Tất cả trạng thái --</option>
+                <option value="PENDING">Chờ phân công</option>
+                <option value="ASSIGNED">Đã phân công</option>
+                <option value="IN_PROGRESS">Đang thực hiện</option>
+                <option value="ON_HOLD">Tạm dừng</option>
+                <option value="COMPLETED">Chờ xưởng nghiệm thu</option>
+                <option value="INSPECTION">Chờ QA nghiệm thu</option>
+                <option value="VERIFIED">Đã nghiệm thu (QA)</option>
+                <option value="CLOSED">Đã đóng</option>
+                <option value="CANCELLED">Đã hủy</option>
+              </select>
+            </div>
 
-        {/* Bộ phận phụ trách Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '280px' }}>
-          <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Bộ phận phụ trách:</label>
-          <select 
-            className="form-select" 
-            style={{ flex: 1, height: '38px', fontSize: '13px', padding: '0 12px' }} 
-            value={handlerTeamFilter} 
-            onChange={(e) => handleFilterChange(setHandlerTeamFilter, e.target.value)}
-          >
-            <option value="">-- Tất cả bộ phận --</option>
-            {departments.map((dept) => (
-              <option key={dept} value={dept}>{dept}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+            {/* Bộ phận phụ trách Filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '280px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Bộ phận phụ trách:</label>
+              <select
+                className="form-select"
+                style={{ flex: 1, height: '38px', fontSize: '13px', padding: '0 12px' }}
+                value={handlerTeamFilter}
+                onChange={(e) => handleFilterChange(setHandlerTeamFilter, e.target.value)}
+              >
+                <option value="">-- Tất cả bộ phận --</option>
+                {departments.map((dept) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-      {/* Table */}
-      <div>
-        <div className="table-wrapper">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Mã phiếu</th>
-                <th>Tiêu đề bảo trì</th>
-                <th>Thiết bị</th>
-                <th>Trạng thái</th>
-                <th>Độ ưu tiên</th>
-                <th>Kỹ thuật viên</th>
-                <th style={{ textAlign: 'center' }}>Vật tư</th>
-                <th style={{ textAlign: 'center' }}>Checklist</th>
-                <th style={{ textAlign: 'center', minWidth: '130px' }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <TableSkeleton columns={9} rows={6} />
-              ) : workOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
-                    Không có phiếu sửa chữa nào được tìm thấy
-                  </td>
-                </tr>
-              ) : workOrders.map((wo) => (
-                  <tr key={wo.id}>
-                    <td 
-                      style={{ fontWeight: 700, color: '#2563eb', cursor: 'pointer' }}
-                      onClick={() => setSelectedDetailWoId(wo.id)}
-                    >
-                      {wo.orderCode}
-                    </td>
-                    <td 
-                      style={{ fontWeight: 600, cursor: 'pointer' }}
-                      onClick={() => setSelectedDetailWoId(wo.id)}
-                    >
-                      {wo.title}
-                    </td>
-                    <td>{wo.equipment?.name || '---'}</td>
-                    <td>
-                      <StatusBadge status={wo.status} />
-                    </td>
-                    <td><span className={`badge badge-${wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'danger' : 'warning'}`}>{wo.priority}</span></td>
-                    <td>{wo.technicianName || 'Chưa phân công'}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <button 
-                        className="btn btn-secondary btn-sm" 
-                        title="Quản lý Vật tư"
-                        onClick={() => openMaterialModal(wo)}
+          {/* Table */}
+          <div>
+            <div className="table-wrapper">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>Mã phiếu</th>
+                    <th>Tiêu đề bảo trì</th>
+                    <th>Thiết bị</th>
+                    <th>Trạng thái</th>
+                    <th>Độ ưu tiên</th>
+                    <th>Kỹ thuật viên</th>
+                    <th style={{ textAlign: 'center' }}>Vật tư</th>
+                    <th style={{ textAlign: 'center' }}>Checklist</th>
+                    <th style={{ textAlign: 'center', minWidth: '130px' }}>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <TableSkeleton columns={9} rows={6} />
+                  ) : workOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
+                        Không có phiếu sửa chữa nào được tìm thấy
+                      </td>
+                    </tr>
+                  ) : workOrders.map((wo) => (
+                    <tr key={wo.id}>
+                      <td
+                        style={{ fontWeight: 700, color: '#2563eb', cursor: 'pointer' }}
+                        onClick={() => setSelectedDetailWoId(wo.id)}
                       >
-                        <Package size={14} /> ({wo.items?.length || 0})
-                      </button>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <button 
-                        className="btn btn-secondary btn-sm" 
-                        title="Thực thi Checklist"
-                        onClick={() => {
-                          setSelectedChecklistWO(wo);
-                          setIsChecklistOpen(true);
-                        }}
+                        {wo.orderCode}
+                      </td>
+                      <td
+                        style={{ fontWeight: 600, cursor: 'pointer' }}
+                        onClick={() => setSelectedDetailWoId(wo.id)}
                       >
-                        Checklist
-                      </button>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-                        {['PENDING', 'ASSIGNED'].includes(wo.status) && (
-                          <button
-                            className="btn btn-success btn-sm"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
-                            title="Bắt đầu thực hiện công việc"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickStart(wo);
-                            }}
-                          >
-                            <Play size={12} /> Bắt đầu
-                          </button>
-                        )}
-
-                        {wo.status === 'IN_PROGRESS' && (
-                          <>
-                            <button
-                              className="btn btn-warning btn-sm"
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
-                              title="Tạm dừng công việc"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickPause(wo);
-                              }}
-                            >
-                              <Pause size={12} /> Tạm dừng
-                            </button>
+                        {wo.title}
+                      </td>
+                      <td>{wo.equipment?.name || '---'}</td>
+                      <td>
+                        <StatusBadge status={wo.status} />
+                      </td>
+                      <td><span className={`badge badge-${wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'danger' : 'warning'}`}>{wo.priority}</span></td>
+                      <td>{wo.technicianName || 'Chưa phân công'}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          title="Quản lý Vật tư"
+                          onClick={() => openMaterialModal(wo)}
+                        >
+                          <Package size={14} /> ({wo.items?.length || 0})
+                        </button>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          title="Thực thi Checklist"
+                          onClick={() => {
+                            setSelectedChecklistWO(wo);
+                            setIsChecklistOpen(true);
+                          }}
+                        >
+                          Checklist
+                        </button>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                          {['PENDING', 'ASSIGNED'].includes(wo.status) && (
                             <button
                               className="btn btn-success btn-sm"
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
-                              title="Xem chi tiết để hoàn thành / bàn giao"
-                              onClick={() => setSelectedDetailWoId(wo.id)}
+                              title="Bắt đầu thực hiện công việc"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickStart(wo);
+                              }}
                             >
-                              <CheckCircle2 size={12} /> Hoàn thành
+                              <Play size={12} /> Bắt đầu
                             </button>
-                          </>
-                        )}
+                          )}
 
-                        {wo.status === 'ON_HOLD' && (
+                          {wo.status === 'IN_PROGRESS' && (
+                            <>
+                              <button
+                                className="btn btn-warning btn-sm"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
+                                title="Tạm dừng công việc"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuickPause(wo);
+                                }}
+                              >
+                                <Pause size={12} /> Tạm dừng
+                              </button>
+                              <button
+                                className="btn btn-success btn-sm"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
+                                title="Xem chi tiết để hoàn thành / bàn giao"
+                                onClick={() => setSelectedDetailWoId(wo.id)}
+                              >
+                                <CheckCircle2 size={12} /> Hoàn thành
+                              </button>
+                            </>
+                          )}
+
+                          {wo.status === 'ON_HOLD' && (
+                            <button
+                              className="btn btn-success btn-sm"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
+                              title="Tiếp tục thực hiện"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickResume(wo);
+                              }}
+                            >
+                              <Play size={12} /> Tiếp tục
+                            </button>
+                          )}
+
                           <button
-                            className="btn btn-success btn-sm"
+                            className="btn btn-secondary btn-sm"
                             style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
-                            title="Tiếp tục thực hiện"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickResume(wo);
-                            }}
+                            title="Xem chi tiết & xử lý"
+                            onClick={() => setSelectedDetailWoId(wo.id)}
                           >
-                            <Play size={12} /> Tiếp tục
+                            <Eye size={13} /> Chi tiết
                           </button>
-                        )}
-
-                        <button 
-                          className="btn btn-secondary btn-sm"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', fontSize: '12px', fontWeight: 600 }}
-                          title="Xem chi tiết & xử lý"
-                          onClick={() => setSelectedDetailWoId(wo.id)}
-                        >
-                          <Eye size={13} /> Chi tiết
-                        </button>
-                        {canDeleteWo && (
-                          <button 
-                            className="btn btn-outline-danger btn-sm"
-                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px', color: '#dc2626', borderColor: '#fca5a5' }}
-                            title="Xóa phiếu sửa chữa (Quản trị viên)"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteWo(wo);
-                            }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Controls */}
-          {total > 0 && (
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              marginTop: '16px', 
-              padding: '12px 16px', 
-              border: '1px solid var(--border-color)', 
-              borderRadius: '8px', 
-              backgroundColor: 'var(--bg-secondary)' 
-            }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Hiển thị <strong>{startItem}-{endItem}</strong> trong tổng số <strong>{total}</strong> phiếu sửa chữa
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  disabled={page === 1}
-                  onClick={() => setPage(page - 1)}
-                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
-                >
-                  <ChevronLeft size={14} /> Trang trước
-                </button>
-                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pNum) => (
-                  <button 
-                    key={pNum} 
-                    className={`btn btn-sm ${page === pNum ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setPage(pNum)}
-                    style={{ 
-                      minWidth: '32px', 
-                      height: '32px', 
-                      padding: 0, 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      backgroundColor: page === pNum ? '#2563eb' : 'transparent',
-                      color: page === pNum ? '#ffffff' : 'var(--text-primary)',
-                      border: page === pNum ? 'none' : '1px solid var(--border-color)'
-                    }}
-                  >
-                    {pNum}
-                  </button>
-                ))}
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  disabled={page === totalPages}
-                  onClick={() => setPage(page + 1)}
-                  style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
-                >
-                  Trang sau <ChevronRight size={14} />
-                </button>
-              </div>
+                          {canDeleteWo && (
+                            <button
+                              className="btn btn-outline-danger btn-sm"
+                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px', color: '#dc2626', borderColor: '#fca5a5' }}
+                              title="Xóa phiếu sửa chữa (Quản trị viên)"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteWo(wo);
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
-      </>
+
+            {/* Pagination Controls */}
+            {total > 0 && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: '16px',
+                padding: '12px 16px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-secondary)'
+              }}>
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Hiển thị <strong>{startItem}-{endItem}</strong> trong tổng số <strong>{total}</strong> phiếu sửa chữa
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={page === 1}
+                    onClick={() => setPage(page - 1)}
+                    style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
+                  >
+                    <ChevronLeft size={14} /> Trang trước
+                  </button>
+                  {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pNum) => (
+                    <button
+                      key={pNum}
+                      className={`btn btn-sm ${page === pNum ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setPage(pNum)}
+                      style={{
+                        minWidth: '32px',
+                        height: '32px',
+                        padding: 0,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: page === pNum ? '#2563eb' : 'transparent',
+                        color: page === pNum ? '#ffffff' : 'var(--text-primary)',
+                        border: page === pNum ? 'none' : '1px solid var(--border-color)'
+                      }}
+                    >
+                      {pNum}
+                    </button>
+                  ))}
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={page === totalPages}
+                    onClick={() => setPage(page + 1)}
+                    style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', gap: '4px' }}
+                  >
+                    Trang sau <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       ) : (
         <div className="master-detail-container">
-        
-        {/* Master List Pane */}
-        <div className={`master-pane ${selectedDetailWoId ? 'has-selection' : ''}`}>    
+
+          {/* Master List Pane */}
+          <div className={`master-pane ${selectedDetailWoId ? 'has-selection' : ''}`}>
             {/* Header Left */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -661,12 +670,12 @@ export const WorkOrdersPage: React.FC = () => {
                     Không có phiếu bảo trì nào
                   </div>
                 ) : workOrders.map((wo) => (
-                  <div 
+                  <div
                     key={wo.id}
                     onClick={() => setSelectedDetailWoId(wo.id)}
-                    style={{ 
-                      padding: '16px', 
-                      borderRadius: '8px', 
+                    style={{
+                      padding: '16px',
+                      borderRadius: '8px',
                       border: selectedDetailWoId === wo.id ? '2px solid #2563eb' : '1px solid var(--border-color)',
                       backgroundColor: selectedDetailWoId === wo.id ? '#eff6ff' : 'var(--bg-card)',
                       cursor: 'pointer',
@@ -710,18 +719,18 @@ export const WorkOrdersPage: React.FC = () => {
                 ))}
               </div>
             )}
-            
+
             {/* Pagination */}
             {total > 0 && (
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                paddingTop: '12px', 
-                borderTop: '1px solid var(--border-color)' 
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingTop: '12px',
+                borderTop: '1px solid var(--border-color)'
               }}>
-                <button 
-                  className="btn btn-secondary btn-sm" 
+                <button
+                  className="btn btn-secondary btn-sm"
                   disabled={page === 1}
                   onClick={() => setPage(page - 1)}
                   style={{ padding: '4px 8px' }}
@@ -731,8 +740,8 @@ export const WorkOrdersPage: React.FC = () => {
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   Trang {page} / {totalPages}
                 </span>
-                <button 
-                  className="btn btn-secondary btn-sm" 
+                <button
+                  className="btn btn-secondary btn-sm"
                   disabled={page === totalPages}
                   onClick={() => setPage(page + 1)}
                   style={{ padding: '4px 8px' }}
@@ -760,23 +769,23 @@ export const WorkOrdersPage: React.FC = () => {
         <form onSubmit={handleCreate}>
           <div className="form-group">
             <label className="form-label">Tiêu đề công việc *</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              required 
-              placeholder="Mô tả ngắn gọn công việc (VD: Thay vòng bi trục chính, Sửa rò rỉ khí nén...)" 
-              value={formData.title} 
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })} 
+            <input
+              type="text"
+              className="form-input"
+              required
+              placeholder="Mô tả ngắn gọn công việc (VD: Thay vòng bi trục chính, Sửa rò rỉ khí nén...)"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             />
           </div>
 
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label">Thiết bị *</label>
-              <select 
-                className="form-select" 
-                required 
-                value={formData.equipmentId} 
+              <select
+                className="form-select"
+                required
+                value={formData.equipmentId}
                 onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value })}
               >
                 {equipmentList.map((eq) => (
@@ -786,9 +795,9 @@ export const WorkOrdersPage: React.FC = () => {
             </div>
             <div className="form-group">
               <label className="form-label">Loại công việc</label>
-              <select 
-                className="form-select" 
-                value={formData.workOrderType} 
+              <select
+                className="form-select"
+                value={formData.workOrderType}
                 onChange={(e) => setFormData({ ...formData, workOrderType: e.target.value })}
               >
                 <option value="Sửa chữa">Sửa chữa</option>
@@ -801,9 +810,9 @@ export const WorkOrdersPage: React.FC = () => {
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label">Mức ưu tiên</label>
-              <select 
-                className="form-select" 
-                value={formData.priority} 
+              <select
+                className="form-select"
+                value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
               >
                 <option value="LOW">Thấp</option>
@@ -831,13 +840,13 @@ export const WorkOrdersPage: React.FC = () => {
 
           <div className="form-group">
             <label className="form-label">Mô tả sự cố / nội dung công việc *</label>
-            <textarea 
-              className="form-textarea" 
-              rows={3} 
-              required 
-              placeholder="Mô tả chi tiết vấn đề hoặc các hạng mục cần thao tác xử lý..." 
-              value={formData.description} 
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
+            <textarea
+              className="form-textarea"
+              rows={3}
+              required
+              placeholder="Mô tả chi tiết vấn đề hoặc các hạng mục cần thao tác xử lý..."
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
           </div>
 
@@ -852,9 +861,9 @@ export const WorkOrdersPage: React.FC = () => {
 
       {/* Checklist execution Modal */}
       {isChecklistOpen && selectedChecklistWO && (
-        <Modal 
-          isOpen={isChecklistOpen} 
-          onClose={() => setIsChecklistOpen(false)} 
+        <Modal
+          isOpen={isChecklistOpen}
+          onClose={() => setIsChecklistOpen(false)}
           title={`Thực thi checklist: ${selectedChecklistWO.orderCode}`}
         >
           <ChecklistManager workOrderId={selectedChecklistWO.id} workOrderStatus={selectedChecklistWO.status} />
@@ -891,7 +900,7 @@ export const WorkOrdersPage: React.FC = () => {
                           <td>{item.quantity}</td>
                           <td>{item.unitPrice ? item.unitPrice.toLocaleString('vi-VN') + ' ₫' : '---'}</td>
                           <td style={{ textAlign: 'center' }}>
-                            <button 
+                            <button
                               className="btn btn-warning btn-sm"
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', fontSize: '12px' }}
                               onClick={() => handleReturnClick(item)}
@@ -1007,7 +1016,7 @@ export const WorkOrdersPage: React.FC = () => {
               }}
               onClose={() => setIsQrScannerOpen(false)}
             />
-            
+
             <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
               <label className="form-label" style={{ fontWeight: 700 }}>Nhập mã thiết bị thủ công</label>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -1100,7 +1109,7 @@ export const WorkOrdersPage: React.FC = () => {
               <p style={{ fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>
                 Vui lòng cung cấp lý do tạm dừng thực hiện công việc bảo trì cho thiết bị <strong>{woToPause.equipment?.name || '---'}</strong>:
               </p>
-              
+
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                 {[
                   'Chờ phụ tùng',
@@ -1170,14 +1179,14 @@ export const WorkOrdersPage: React.FC = () => {
           maxWidth="460px"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'flex-start', 
-              gap: '12px', 
-              padding: '12px', 
-              backgroundColor: 'rgba(239, 68, 68, 0.08)', 
-              border: '1px solid rgba(239, 68, 68, 0.2)', 
-              borderRadius: '8px' 
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              padding: '12px',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '8px'
             }}>
               <AlertTriangle size={24} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
               <div style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.5 }}>

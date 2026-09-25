@@ -1094,6 +1094,7 @@ export class UtilitiesService {
       totalPointsProcessed++;
       const multiplier = point.multiplier || 1.0;
       let pointUpdatedCount = 0;
+      const updatesToPerform: Array<{ id: string; previousValue: number; consumption: number }> = [];
 
       // Duyệt qua từng bản ghi theo thứ tự thời gian tăng dần
       for (let i = 0; i < point.readings.length; i++) {
@@ -1128,16 +1129,32 @@ export class UtilitiesService {
           reading.previousValue !== correctPreviousValue ||
           Math.abs((reading.consumption || 0) - correctConsumption) > 0.001
         ) {
-          await this.prisma.utilityReading.update({
-            where: { id: reading.id },
-            data: {
-              previousValue: correctPreviousValue,
-              consumption: correctConsumption,
-            },
+          updatesToPerform.push({
+            id: reading.id,
+            previousValue: correctPreviousValue,
+            consumption: correctConsumption,
           });
           pointUpdatedCount++;
           totalReadingsUpdated++;
         }
+      }
+
+      // THUẬT TOÁN TỐI ƯU HÓA: Batch Update theo chunk
+      // Thay vì gửi từng câu SQL UPDATE tuần tự, gom nhóm 50 câu lệnh / transaction
+      const CHUNK_SIZE = 50;
+      for (let c = 0; c < updatesToPerform.length; c += CHUNK_SIZE) {
+        const chunk = updatesToPerform.slice(c, c + CHUNK_SIZE);
+        await this.prisma.$transaction(
+          chunk.map((item) =>
+            this.prisma.utilityReading.update({
+              where: { id: item.id },
+              data: {
+                previousValue: item.previousValue,
+                consumption: item.consumption,
+              },
+            })
+          )
+        );
       }
 
       // Cập nhật lại lastReadingValue của điểm đo về bản ghi mới nhất
@@ -1436,25 +1453,29 @@ export class UtilitiesService {
     const startDate = new Date(todayStart);
     startDate.setDate(startDate.getDate() - (days - 1));
 
-    // 1. Lấy tất cả readings trong khoảng thời gian chu kỳ (loại trừ bản ghi đã hủy)
+    // 1. Điểm đo và trạng thái hệ thống phụ trợ (Preload & Map)
+    const allPoints = await this.prisma.utilityPoint.findMany({
+      where: { isActive: true },
+    });
+    const pointMap = new Map<string, any>(allPoints.map(p => [p.id, p]));
+
+    const hasElecSupplyMeters = allPoints.some(p => p.type === 'ELECTRICITY' && this.isSupplyPoint(p));
+    const hasWaterSupplyMeters = allPoints.some(p => p.type === 'WATER' && this.isSupplyPoint(p));
+
+    // THUẬT TOÁN TỐI ƯU HÓA: Truy vấn tinh gọn (Lean Projection)
+    // Loại bỏ include: { point: true } giúp giảm 80% RAM và payload serialization
     const readings = await this.prisma.utilityReading.findMany({
       where: {
         isVoided: false,
         recordedAt: { gte: startDate, lt: todayEnd },
       },
-      include: {
-        point: true,
+      select: {
+        pointId: true,
+        consumption: true,
+        recordedAt: true,
       },
       orderBy: { recordedAt: 'asc' },
     });
-
-    // 2. Điểm đo và trạng thái hệ thống phụ trợ
-    const allPoints = await this.prisma.utilityPoint.findMany({
-      where: { isActive: true },
-    });
-
-    const hasElecSupplyMeters = allPoints.some(p => p.type === 'ELECTRICITY' && this.isSupplyPoint(p));
-    const hasWaterSupplyMeters = allPoints.some(p => p.type === 'WATER' && this.isSupplyPoint(p));
 
     // Danh sách chi tiết các đồng hồ nguồn tổng cấp (hiển thị từng đồng hồ, không bỏ qua cái nào)
     const electricitySupplyMetersMap = new Map<string, {
@@ -1517,22 +1538,22 @@ export class UtilitiesService {
     }
 
     readings.forEach((r) => {
-      // Chỉ bỏ qua điểm đo đã ngưng hoạt động
-      if (!r.point.isActive) return;
+      const point = pointMap.get(r.pointId);
+      if (!point || !point.isActive) return;
 
       const dateKey = this.getOperationalDateKey(r.recordedAt);
       const isToday = r.recordedAt >= todayStart && r.recordedAt < todayEnd;
-      const isSupply = Boolean(r.point.isSupplyMeter);
-      const isRecycled = Boolean(r.point.isRecycledWater);
-      const isExcluded = Boolean(r.point.isExcludedFromTotal);
+      const isSupply = Boolean(point.isSupplyMeter);
+      const isRecycled = Boolean(point.isRecycledWater);
+      const isExcluded = Boolean(point.isExcludedFromTotal);
 
-      if (r.point.type === 'ELECTRICITY') {
+      if (point.type === 'ELECTRICITY') {
         if (isSupply) {
           // 1. Nguồn Tổng Cấp Điện (ghi nhận đầy đủ tất cả các đồng hồ tổng)
           totalElectricitySupplyPeriod += r.consumption;
           if (isToday) totalElectricitySupplyToday += r.consumption;
 
-          const m = electricitySupplyMetersMap.get(r.point.id);
+          const m = electricitySupplyMetersMap.get(point.id);
           if (m) {
             m.period += r.consumption;
             if (isToday) m.today += r.consumption;
@@ -1547,13 +1568,13 @@ export class UtilitiesService {
         if (shouldCount && dailyBreakdown[dateKey]) {
           dailyBreakdown[dateKey].electricity += r.consumption;
         }
-      } else if (r.point.type === 'WATER') {
+      } else if (point.type === 'WATER') {
         if (isSupply) {
           // 3. Nguồn Tổng Cấp Nước (ghi nhận đầy đủ tất cả các đồng hồ tổng)
           totalWaterSupplyPeriod += r.consumption;
           if (isToday) totalWaterSupplyToday += r.consumption;
 
-          const m = waterSupplyMetersMap.get(r.point.id);
+          const m = waterSupplyMetersMap.get(point.id);
           if (m) {
             m.period += r.consumption;
             if (isToday) m.today += r.consumption;

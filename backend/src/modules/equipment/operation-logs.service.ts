@@ -77,9 +77,17 @@ export class OperationLogsService {
       };
     });
 
-    return this.prisma.$transaction(
-      createData.map(data => this.prisma.operationLog.create({ data, include: { parameter: true } }))
-    );
+    // THUẬT TOÁN TỐI ƯU HÓA: Vectorized Bulk Insert (O(1) Roundtrip)
+    // Thay vì gửi K câu lệnh INSERT đơn lẻ trong $transaction, thực hiện 1 câu INSERT hàng loạt duy nhất
+    await this.prisma.operationLog.createMany({
+      data: createData,
+    });
+
+    return {
+      success: true,
+      count: createData.length,
+      message: `Đã lưu thành công ${createData.length} thông số vận hành.`,
+    };
   }
 
   async voidSessionLogs(equipmentId: string, userId: string, dto: VoidOperationLogSessionDto) {

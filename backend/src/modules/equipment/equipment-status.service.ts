@@ -13,61 +13,60 @@ export class EquipmentStatusService {
       throw new NotFoundException('Không tìm thấy thiết bị');
     }
 
-    // 1. Active HIGH or URGENT Work Orders -> INCIDENT
-    const activeUrgentWOs = await db.workOrder.findMany({
+    // THUẬT TOÁN TỐI ƯU HÓA: Short-Circuit State Machine & Idempotent Guard
+    // 1. Kiểm tra Work Order khẩn cấp / cao đang hoạt động -> INCIDENT
+    const activeUrgentWO = await db.workOrder.findFirst({
       where: {
         equipmentId,
         status: { in: ['IN_PROGRESS', 'ON_HOLD', 'ASSIGNED', 'PENDING'] },
         priority: { in: ['HIGH', 'URGENT'] },
       },
+      select: { id: true },
     });
-
-    if (activeUrgentWOs.length > 0) {
-      await db.equipment.update({
-        where: { id: equipmentId },
-        data: { status: 'INCIDENT' },
-      });
-      return 'INCIDENT';
+    if (activeUrgentWO) {
+      return this.applyStatus(db, equipmentId, eq.status, 'INCIDENT');
     }
 
-    // 2. Any active Work Orders -> UNDER_MAINTENANCE
-    const activeWOs = await db.workOrder.findMany({
+    // 2. Kiểm tra bất kỳ Work Order nào đang hoạt động -> UNDER_MAINTENANCE
+    const activeWO = await db.workOrder.findFirst({
       where: {
         equipmentId,
         status: { in: ['IN_PROGRESS', 'ON_HOLD', 'ASSIGNED', 'PENDING'] },
       },
+      select: { id: true },
     });
-
-    if (activeWOs.length > 0) {
-      await db.equipment.update({
-        where: { id: equipmentId },
-        data: { status: 'UNDER_MAINTENANCE' },
-      });
-      return 'UNDER_MAINTENANCE';
+    if (activeWO) {
+      return this.applyStatus(db, equipmentId, eq.status, 'UNDER_MAINTENANCE');
     }
 
-    // 3. Pending HIGH or URGENT Requests -> INCIDENT
-    const pendingUrgentRequests = await db.maintenanceRequest.findMany({
+    // 3. Kiểm tra yêu cầu bảo trì khẩn cấp đang chờ duyệt -> INCIDENT
+    const pendingUrgentRequest = await db.maintenanceRequest.findFirst({
       where: {
         equipmentId,
         status: 'PENDING',
         priority: { in: ['HIGH', 'URGENT'] },
       },
+      select: { id: true },
     });
-
-    if (pendingUrgentRequests.length > 0) {
-      await db.equipment.update({
-        where: { id: equipmentId },
-        data: { status: 'INCIDENT' },
-      });
-      return 'INCIDENT';
+    if (pendingUrgentRequest) {
+      return this.applyStatus(db, equipmentId, eq.status, 'INCIDENT');
     }
 
-    // 4. Otherwise -> OPERATIONAL
+    // 4. Nếu không có điều kiện nào ở trên -> OPERATIONAL
+    return this.applyStatus(db, equipmentId, eq.status, 'OPERATIONAL');
+  }
+
+  /**
+   * Idempotent Write Guard: Chỉ cập nhật DB nếu trạng thái mới thực sự thay đổi
+   */
+  private async applyStatus(db: any, equipmentId: string, currentStatus: string, targetStatus: string): Promise<string> {
+    if (currentStatus === targetStatus) {
+      return targetStatus;
+    }
     await db.equipment.update({
       where: { id: equipmentId },
-      data: { status: 'OPERATIONAL' },
+      data: { status: targetStatus },
     });
-    return 'OPERATIONAL';
+    return targetStatus;
   }
 }

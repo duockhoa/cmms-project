@@ -79,6 +79,57 @@ export class SchedulesService {
     return next;
   }
 
+  /**
+   * THUẬT TOÁN TỐI ƯU HÓA: Closed-Form Modular Jump
+   * Tịnh tiến ngày tới mốc tương lai gần nhất trong O(1) thay vì duyệt từng bước O(K)
+   */
+  public projectNextFutureDueDate(
+    startDate: Date,
+    frequencyType: string,
+    frequencyInterval: number,
+    anchorDayOfMonth?: number,
+    targetNow: Date = new Date(),
+  ): Date {
+    let date = new Date(startDate.getTime());
+    if (date >= targetNow) return date;
+
+    const interval = Math.max(1, frequencyInterval);
+    const msDiff = targetNow.getTime() - date.getTime();
+
+    if (frequencyType === SCHEDULE_FREQUENCY_TYPE.DAILY) {
+      const stepMs = interval * 86400000;
+      const jumps = Math.ceil(msDiff / stepMs);
+      date.setUTCDate(date.getUTCDate() + jumps * interval);
+    } else if (frequencyType === SCHEDULE_FREQUENCY_TYPE.WEEKLY) {
+      const stepMs = interval * 7 * 86400000;
+      const jumps = Math.ceil(msDiff / stepMs);
+      date.setUTCDate(date.getUTCDate() + jumps * interval * 7);
+    } else if (
+      frequencyType === SCHEDULE_FREQUENCY_TYPE.MONTHLY ||
+      frequencyType === SCHEDULE_FREQUENCY_TYPE.QUARTERLY ||
+      frequencyType === SCHEDULE_FREQUENCY_TYPE.YEARLY
+    ) {
+      let monthsPerStep = interval;
+      if (frequencyType === SCHEDULE_FREQUENCY_TYPE.QUARTERLY) monthsPerStep = interval * 3;
+      if (frequencyType === SCHEDULE_FREQUENCY_TYPE.YEARLY) monthsPerStep = interval * 12;
+
+      const approxMonthsDiff = (targetNow.getUTCFullYear() - date.getUTCFullYear()) * 12 + (targetNow.getUTCMonth() - date.getUTCMonth());
+      const jumps = Math.max(0, Math.floor(approxMonthsDiff / monthsPerStep));
+      if (jumps > 0) {
+        date = this.calculateNextDueDate(date, frequencyType, jumps * interval, anchorDayOfMonth);
+      }
+      while (date < targetNow) {
+        date = this.calculateNextDueDate(date, frequencyType, interval, anchorDayOfMonth);
+      }
+    } else {
+      while (date < targetNow) {
+        date = this.calculateNextDueDate(date, frequencyType, interval, anchorDayOfMonth);
+      }
+    }
+
+    return date;
+  }
+
   // ─── CREATE SCHEDULE ───
   async create(dto: CreateScheduleDto) {
     if (!dto.title || dto.title.trim() === '') {
@@ -203,16 +254,23 @@ export class SchedulesService {
           const eq = await tx.equipment.findUnique({ where: { id: schedule.equipmentId } });
           nextDueMeter = (eq?.currentOperatingHours || 0) + schedule.frequencyInterval;
         } else {
-          nextDueDate = schedule.startDate;
-          while (nextDueDate && nextDueDate < now) {
-            nextDueDate = this.calculateNextDueDate(nextDueDate, schedule.frequencyType, schedule.frequencyInterval, schedule.anchorDayOfMonth || undefined);
-          }
+          nextDueDate = this.projectNextFutureDueDate(
+            schedule.startDate,
+            schedule.frequencyType,
+            schedule.frequencyInterval,
+            schedule.anchorDayOfMonth || undefined,
+            now,
+          );
         }
       } else if (schedule.status === SCHEDULE_STATUS.PAUSED) {
         if (nextDueDate && nextDueDate < now && schedule.frequencyType !== SCHEDULE_FREQUENCY_TYPE.OPERATING_HOURS) {
-          while (nextDueDate < now) {
-            nextDueDate = this.calculateNextDueDate(nextDueDate, schedule.frequencyType, schedule.frequencyInterval, schedule.anchorDayOfMonth || undefined);
-          }
+          nextDueDate = this.projectNextFutureDueDate(
+            nextDueDate,
+            schedule.frequencyType,
+            schedule.frequencyInterval,
+            schedule.anchorDayOfMonth || undefined,
+            now,
+          );
         }
       }
 
