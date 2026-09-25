@@ -49,3 +49,65 @@ export const StatusBadge: React.FC<BadgeProps> = ({ status }) => {
 
   return <span className={`badge ${className}`}>{text}</span>;
 };
+
+interface PriorityBadgeProps {
+  priority: 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW' | string;
+  showIcon?: boolean;
+}
+
+export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, showIcon = true }) => {
+  const getStyle = (p: string) => {
+    switch (p?.toUpperCase()) {
+      case 'URGENT':
+        return { className: 'badge-danger', text: 'Khẩn cấp', dotColor: '#ef4444' };
+      case 'HIGH':
+        return { className: 'badge-warning', text: 'Cao', dotColor: '#f97316' };
+      case 'MEDIUM':
+        return { className: 'badge-info', text: 'Trung bình', dotColor: '#3b82f6' };
+      case 'LOW':
+        return { className: 'badge-neutral', text: 'Thấp', dotColor: '#94a3b8' };
+      default:
+        return { className: 'badge-neutral', text: p || 'Thường', dotColor: '#94a3b8' };
+    }
+  };
+
+  const { className, text, dotColor } = getStyle(priority);
+
+  return (
+    <span className={`badge ${className}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+      {showIcon && (
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            backgroundColor: dotColor,
+            display: 'inline-block',
+          }}
+        />
+      )}
+      {text}
+    </span>
+  );
+};
+
+interface FrequencyBadgeProps {
+  frequency: string;
+}
+
+export const FrequencyBadge: React.FC<FrequencyBadgeProps> = ({ frequency }) => {
+  const formatFreq = (freq: string) => {
+    switch (freq?.toUpperCase()) {
+      case 'DAILY': return 'Hàng ngày';
+      case 'WEEKLY': return 'Hàng tuần';
+      case 'MONTHLY': return 'Hàng tháng';
+      case 'QUARTERLY': return 'Hàng quý (3 tháng)';
+      case 'SEMI_ANNUALLY': return 'Nửa năm (6 tháng)';
+      case 'YEARLY': return 'Hàng năm';
+      default: return freq || 'Định kỳ';
+    }
+  };
+
+  return <span className="badge badge-info">{formatFreq(frequency)}</span>;
+};
+

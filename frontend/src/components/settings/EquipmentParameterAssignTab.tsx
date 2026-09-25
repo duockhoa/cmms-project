@@ -5,7 +5,7 @@ import {
   Save, CheckCircle2, QrCode, MapPin, BookOpen, Gauge, 
   CheckCheck, XSquare, Filter, AlertCircle, Sparkles
 } from 'lucide-react';
-import { useToast } from '../common/Toast';
+import { useToast, useConfirmDialog } from '../common/Toast';
 import { useNavigate } from 'react-router-dom';
 
 type SubTab = 'TECHNICAL_SPECS' | 'OPERATING_PARAMS';
@@ -63,6 +63,7 @@ export const EquipmentParameterAssignTab: React.FC = () => {
   const [opFilterStatus, setOpFilterStatus] = useState<FilterStatus>('ALL');
 
   const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const navigate = useNavigate();
 
   // 1. Initial Load
@@ -478,9 +479,14 @@ export const EquipmentParameterAssignTab: React.FC = () => {
                 return (
                   <div
                     key={eq.id}
-                    onClick={() => {
+                    onClick={async () => {
                       if (hasChanges) {
-                        if (!window.confirm('Bạn có thay đổi chưa lưu trên máy hiện tại. Chuyển sang máy khác?')) {
+                        const ok = await confirm(
+                          'Chưa lưu thay đổi',
+                          'Bạn có thay đổi chưa lưu trên máy hiện tại. Bạn có chắc chắn muốn chuyển sang máy khác không?',
+                          { confirmText: 'Chuyển máy', cancelText: 'Ở lại', type: 'warning' }
+                        );
+                        if (!ok) {
                           return;
                         }
                       }

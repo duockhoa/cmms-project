@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { StatusBadge } from '../common/Badge';
 import { api } from '../../services/api';
-import { useToast } from '../common/Toast';
+import { useToast, useConfirmDialog } from '../common/Toast';
 import { 
   CheckCircle2, Clock, User, Phone, Building, Calendar, 
   FileText, MessageSquare, AlertCircle, Upload, X, Loader2, Save, Trash2 
@@ -22,6 +22,7 @@ export const FeedbackDetailModal: React.FC<FeedbackDetailModalProps> = ({
   onUpdated,
 }) => {
   const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -126,7 +127,12 @@ export const FeedbackDetailModal: React.FC<FeedbackDetailModalProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa yêu cầu mã [${feedback.code}] không?`)) return;
+    const ok = await confirm(
+      'Xác nhận xóa yêu cầu',
+      `Bạn có chắc chắn muốn xóa vĩnh viễn yêu cầu mã [${feedback.code}] không?`,
+      { confirmText: 'Xóa yêu cầu', cancelText: 'Hủy', type: 'danger' }
+    );
+    if (!ok) return;
     try {
       await api.deleteFeedback(feedback.id);
       toast.success('Đã xóa', `Đã xóa yêu cầu [${feedback.code}]`);

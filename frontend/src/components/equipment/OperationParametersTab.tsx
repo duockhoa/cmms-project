@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Link as LinkIcon, X } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { api } from '../../services/api';
+import { useToast, useConfirmDialog } from '../common/Toast';
 
 interface OperationParametersTabProps {
   equipmentId: string;
 }
 
 export const OperationParametersTab: React.FC<OperationParametersTabProps> = ({ equipmentId }) => {
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const [parameters, setParameters] = useState<any[]>([]);
   const [standardParameters, setStandardParameters] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,26 +77,31 @@ export const OperationParametersTab: React.FC<OperationParametersTabProps> = ({ 
 
       if (editingParam) {
         await api.updateEquipmentParameter(equipmentId, editingParam.id, payload);
-        alert('Cập nhật thông số thành công');
+        toast.success('Thành công', 'Cập nhật thông số thành công');
       } else {
         await api.createEquipmentParameter(equipmentId, payload);
-        alert('Thêm thông số thành công');
+        toast.success('Thành công', 'Thêm thông số thành công');
       }
       setIsConfigModalVisible(false);
       fetchParameters();
-    } catch (error) {
-      alert('Có lỗi xảy ra khi lưu thông số');
+    } catch (error: any) {
+      toast.error('Lỗi', error.message || 'Có lỗi xảy ra khi lưu thông số');
     }
   };
 
   const handleDeleteConfig = async (id: string) => {
-    if (!window.confirm("Xóa thông số này?")) return;
+    const ok = await confirm('Xác nhận xóa', 'Bạn có chắc chắn muốn xóa thông số vận hành này?', {
+      confirmText: 'Xóa thông số',
+      cancelText: 'Hủy',
+      type: 'danger'
+    });
+    if (!ok) return;
     try {
       await api.deleteEquipmentParameter(equipmentId, id);
-      alert('Đã xóa thông số');
+      toast.success('Đã xóa', 'Đã xóa thông số vận hành');
       fetchParameters();
-    } catch (error) {
-      alert('Lỗi khi xóa thông số');
+    } catch (error: any) {
+      toast.error('Lỗi', error.message || 'Lỗi khi xóa thông số');
     }
   };
 
