@@ -15,6 +15,7 @@ import {
 import { formatVN } from '../utils/formatters';
 import { UtilityTrendChart } from '../components/utilities/UtilityTrendChart';
 import { usePermissions } from '../hooks/usePermissions';
+import { printBatchQRTags, printSingleQRTag } from '../utils/qrPrintHelper';
 
 export const UtilitiesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -113,6 +114,49 @@ export const UtilitiesPage: React.FC = () => {
 
   // Modal Xem & In mã QR
   const [printPoint, setPrintPoint] = useState<any | null>(null);
+  const [selectedPointIds, setSelectedPointIds] = useState<Set<string>>(new Set());
+
+  const toggleSelectOnePoint = (pointId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedPointIds(prev => {
+      const next = new Set(prev);
+      if (next.has(pointId)) next.delete(pointId);
+      else next.add(pointId);
+      return next;
+    });
+  };
+
+  const isAllPointsSelected = points.length > 0 && points.every(p => selectedPointIds.has(p.id));
+  const toggleSelectAllPoints = () => {
+    if (isAllPointsSelected) {
+      setSelectedPointIds(new Set());
+    } else {
+      setSelectedPointIds(new Set(points.map(p => p.id)));
+    }
+  };
+
+  const handlePrintBatchPoints = () => {
+    const targetPoints = selectedPointIds.size > 0
+      ? points.filter(p => selectedPointIds.has(p.id))
+      : points;
+
+    if (targetPoints.length === 0) {
+      toast.error('Không có điểm đo nào để in!');
+      return;
+    }
+
+    const printItems = targetPoints.map(p => ({
+      name: p.name,
+      code: p.code,
+      location: p.location || '',
+      qrPayload: p.code,
+    }));
+
+    printBatchQRTags({
+      title: 'Danh sách Mã QR Điểm Đo Tiện Ích',
+      items: printItems,
+    });
+  };
 
   // Mốc thời gian thực để tính giờ chạy hệ thống phụ trợ (tự động nhảy theo thời gian thực)
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
@@ -1728,15 +1772,39 @@ export const UtilitiesPage: React.FC = () => {
                 </p>
               </div>
 
-              {can('utilities:manage_points') && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <button
-                  onClick={handleOpenAddPoint}
-                  className="btn-add-point"
+                  onClick={handlePrintBatchPoints}
+                  className="btn-secondary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: '6px',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)'
+                  }}
+                  title="In nhiều tem QR trên khổ giấy A4"
                 >
-                  <Plus size={16} />
-                  <span>Thêm Điểm Đo</span>
+                  <Printer size={15} />
+                  <span>In Tem QR Hàng Loạt {selectedPointIds.size > 0 ? `(${selectedPointIds.size})` : `(${points.length})`}</span>
                 </button>
-              )}
+
+                {can('utilities:manage_points') && (
+                  <button
+                    onClick={handleOpenAddPoint}
+                    className="btn-add-point"
+                  >
+                    <Plus size={16} />
+                    <span>Thêm Điểm Đo</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Desktop Table View */}
@@ -1745,6 +1813,15 @@ export const UtilitiesPage: React.FC = () => {
                 <table className="custom-table">
                   <thead>
                     <tr>
+                      <th style={{ width: '40px', textAlign: 'center' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={isAllPointsSelected}
+                          onChange={toggleSelectAllPoints}
+                          style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                          title="Chọn tất cả điểm đo"
+                        />
+                      </th>
                       <th style={{ width: '120px' }}>Mã điểm đo</th>
                       <th>Tên đồng hồ / Hệ thống</th>
                       <th>Loại</th>
@@ -1758,6 +1835,14 @@ export const UtilitiesPage: React.FC = () => {
                   <tbody>
                     {points.map((p) => (
                       <tr key={p.id}>
+                        <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            checked={selectedPointIds.has(p.id)}
+                            onChange={(e) => toggleSelectOnePoint(p.id, e as any)}
+                            style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                          />
+                        </td>
                         <td style={{ fontWeight: 700, fontSize: '13px' }}>{p.code}</td>
                         <td style={{ fontWeight: 600, fontSize: '13px' }}>{p.name}</td>
                         <td>
@@ -3207,56 +3292,12 @@ export const UtilitiesPage: React.FC = () => {
               <button
                 onClick={() => {
                   if (!printPoint) return;
-                  const printWindow = window.open('', '_blank', 'width=600,height=650');
-                  if (!printWindow) {
-                    alert('Vui lòng cho phép mở popup để in nhãn!');
-                    return;
-                  }
-                  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(printPoint.code)}`;
-                  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>In tem QR - ${printPoint.code}</title>
-  <style>
-    @page { size: auto; margin: 0mm; }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
-      width: 100%; height: 100%; margin: 0 !important; padding: 0 !important;
-      background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      overflow: hidden !important; display: flex; align-items: center; justify-content: center;
-    }
-    .print-box {
-      border: 2px solid #000; border-radius: 8px; padding: 12px 16px;
-      width: 250px; text-align: center; page-break-inside: avoid; break-inside: avoid;
-    }
-    .brand { font-size: 10px; font-weight: 800; letter-spacing: 1px; color: #b91c1c; border-bottom: 1.5px solid #000; padding-bottom: 4px; margin-bottom: 8px; }
-    .name { font-size: 13px; font-weight: 800; color: #000; margin-bottom: 6px; }
-    .qr { width: 140px; height: 140px; display: block; margin: 0 auto 6px auto; }
-    .code { font-family: monospace; font-size: 14px; font-weight: 900; color: #000; margin-bottom: 2px; }
-    .loc { font-size: 11px; color: #475569; font-weight: 600; }
-    @media print { html, body { height: 100% !important; overflow: hidden !important; } }
-  </style>
-</head>
-<body>
-  <div class="print-box">
-    <div class="brand">DK PHARMA CMMS</div>
-    <div class="name">${printPoint.name || ''}</div>
-    <img id="qr-img" class="qr" src="${qrUrl}" alt="QR" />
-    <div class="code">[ ${printPoint.code || ''} ]</div>
-    ${printPoint.location ? `<div class="loc">📍 ${printPoint.location}</div>` : ''}
-  </div>
-  <script>
-    const img = document.getElementById('qr-img');
-    const doPrint = () => { window.focus(); window.print(); setTimeout(() => { window.close(); }, 500); };
-    if (img.complete && img.naturalWidth > 0) doPrint();
-    else { img.onload = doPrint; img.onerror = doPrint; }
-  </script>
-</body>
-</html>`;
-                  printWindow.document.open();
-                  printWindow.document.write(html);
-                  printWindow.document.close();
+                  printSingleQRTag({
+                    name: printPoint.name,
+                    code: printPoint.code,
+                    location: printPoint.location,
+                    qrPayload: printPoint.code,
+                  });
                 }}
                 className="btn-modal-submit print-btn"
               >

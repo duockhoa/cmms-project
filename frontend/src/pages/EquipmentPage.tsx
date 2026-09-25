@@ -3,12 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api, fetchWithAuth, API_HOST as API_BASE } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { useDebounce } from '../hooks/useDebounce';
 import { TableSkeleton } from '../components/common/Skeleton';
+import { printBatchQRTags, printSingleQRTag } from '../utils/qrPrintHelper';
 
 export const EquipmentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +25,7 @@ export const EquipmentPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -169,6 +171,52 @@ export const EquipmentPage: React.FC = () => {
   const startItem = (page - 1) * limit + 1;
   const endItem = Math.min(page * limit, total);
 
+  const toggleSelectOne = (itemId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const isAllPageSelected = equipment.length > 0 && equipment.every(item => selectedIds.has(item.id));
+  const toggleSelectAll = () => {
+    if (isAllPageSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(equipment.map(item => item.id)));
+    }
+  };
+
+  const handlePrintBatch = () => {
+    const targetItems = selectedIds.size > 0
+      ? equipment.filter(item => selectedIds.has(item.id))
+      : equipment;
+
+    if (targetItems.length === 0) {
+      toast.error('Không có thiết bị nào để in!');
+      return;
+    }
+
+    const printItems = targetItems.map(item => {
+      const code = (item.code || item.id || '').trim();
+      const nameFormatted = (item.name || '').trim().replace(/\s+/g, '_');
+      return {
+        name: item.name,
+        code,
+        location: item.location || '',
+        qrPayload: nameFormatted ? `${code}$${nameFormatted}` : code,
+      };
+    });
+
+    printBatchQRTags({
+      title: 'Danh sách Mã QR Thiết bị',
+      items: printItems,
+    });
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -176,9 +224,20 @@ export const EquipmentPage: React.FC = () => {
           <h1 className="page-title">Quản lý thiết bị</h1>
           <p className="page-subtitle">Quản lý thông tin và tình trạng thiết bị</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Thêm thiết bị
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button 
+            className="btn btn-secondary" 
+            onClick={handlePrintBatch}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            title="In nhiều tem QR trên giấy A4 có đường cắt phân tách"
+          >
+            <Printer size={15} />
+            <span>In tem QR hàng loạt {selectedIds.size > 0 ? `(${selectedIds.size})` : `(${equipment.length})`}</span>
+          </button>
+          <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
+            <Plus size={16} /> Thêm thiết bị
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -224,6 +283,15 @@ export const EquipmentPage: React.FC = () => {
           <table className="custom-table">
             <thead>
               <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={isAllPageSelected}
+                    onChange={toggleSelectAll}
+                    style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                    title="Chọn tất cả thiết bị trên trang này"
+                  />
+                </th>
                 <th>Mã</th>
                 <th>Tên thiết bị</th>
                 <th>Loại</th>
@@ -236,10 +304,10 @@ export const EquipmentPage: React.FC = () => {
             </thead>
             <tbody>
               {loading ? (
-                <TableSkeleton columns={8} rows={6} />
+                <TableSkeleton columns={9} rows={6} />
               ) : equipment.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
                     Không có thiết bị nào phù hợp với bộ lọc
                   </td>
                 </tr>
@@ -251,6 +319,14 @@ export const EquipmentPage: React.FC = () => {
                     onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
                     onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
+                    <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.has(item.id)}
+                        onChange={(e) => toggleSelectOne(item.id, e as any)}
+                        style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                      />
+                    </td>
                     <td>
                       <div style={{ fontWeight: 700 }}>{item.code}</div>
                       {item.accountingCode && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.accountingCode}</div>}
@@ -285,13 +361,29 @@ export const EquipmentPage: React.FC = () => {
                           position: 'absolute', right: '10px', top: '35px',
                           backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
                           borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-md)',
-                          zIndex: 100, display: 'flex', flexDirection: 'column', width: '130px', padding: '4px 0'
+                          zIndex: 100, display: 'flex', flexDirection: 'column', width: '140px', padding: '4px 0'
                         }}>
                           <button 
                             onClick={() => { navigate(`/equipment/${item.id}`); setActiveActionMenu(null); }}
                             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
                           >
                             <Eye size={12} /> Xem chi tiết
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const code = (item.code || item.id || '').trim();
+                              const nameFormatted = (item.name || '').trim().replace(/\s+/g, '_');
+                              printSingleQRTag({
+                                name: item.name,
+                                code,
+                                location: item.location,
+                                qrPayload: nameFormatted ? `${code}$${nameFormatted}` : code,
+                              });
+                              setActiveActionMenu(null);
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
+                          >
+                            <Printer size={12} /> In tem QR
                           </button>
                           <button 
                             onClick={() => { setEditItem(item); setIsAddOpen(true); setActiveActionMenu(null); }}
