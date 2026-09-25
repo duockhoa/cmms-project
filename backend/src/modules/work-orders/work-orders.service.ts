@@ -26,6 +26,31 @@ export class WorkOrdersService implements OnModuleInit {
     private notifications: NotificationsService,
   ) {}
 
+  // In-memory cache for department users (5 minutes TTL)
+  private deptUsersCache = new Map<string, { data: { ids: string[]; names: string[] }; expiresAt: number }>();
+
+  private async getUsersByDepartment(dept: string): Promise<{ ids: string[]; names: string[] }> {
+    const now = Date.now();
+    const cached = this.deptUsersCache.get(dept);
+    if (cached && cached.expiresAt > now) {
+      return cached.data;
+    }
+
+    const isLegacy = dept === 'CO_DIEN';
+    const users = await this.prisma.user.findMany({
+      where: isLegacy ? { department: { contains: 'Cơ điện' } } : { department: dept },
+      select: { id: true, name: true },
+    });
+
+    const data = {
+      ids: users.map((u) => u.id),
+      names: users.map((u) => u.name),
+    };
+
+    this.deptUsersCache.set(dept, { data, expiresAt: now + 5 * 60 * 1000 });
+    return data;
+  }
+
   async onModuleInit() {
     try {
       const workOrders = await this.prisma.workOrder.findMany({
@@ -68,14 +93,9 @@ export class WorkOrdersService implements OnModuleInit {
 
     if (query?.handlerTeam) {
       const dept = query.handlerTeam.trim();
+      const { ids: userIds, names } = await this.getUsersByDepartment(dept);
+
       if (dept === 'CO_DIEN') {
-        // Backward compatibility for legacy frontend callers
-        const users = await this.prisma.user.findMany({
-          where: { department: { contains: 'Cơ điện' } },
-          select: { id: true, name: true }
-        });
-        const names = users.map((u) => u.name);
-        const userIds = users.map((u) => u.id);
         andConditions.push({
           OR: [
             { assignedTechnicianId: { in: userIds } },
@@ -85,13 +105,6 @@ export class WorkOrdersService implements OnModuleInit {
           ]
         });
       } else {
-        // Dynamic department from HRM
-        const users = await this.prisma.user.findMany({
-          where: { department: dept },
-          select: { id: true, name: true }
-        });
-        const names = users.map((u) => u.name);
-        const userIds = users.map((u) => u.id);
         andConditions.push({
           OR: [
             ...(userIds.length > 0 ? [{ assignedTechnicianId: { in: userIds } }] : []),

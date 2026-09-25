@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { 
@@ -23,7 +23,10 @@ export const OperationLogsPage: React.FC = () => {
 
   const navigate = useNavigate();
 
-  const selectedEquipment = equipmentList.find((eq) => eq.id === selectedEqId);
+  const selectedEquipment = useMemo(
+    () => equipmentList.find((eq) => eq.id === selectedEqId),
+    [equipmentList, selectedEqId]
+  );
 
   const fetchData = async () => {
     try {
@@ -136,16 +139,20 @@ export const OperationLogsPage: React.FC = () => {
     }
   }, [showScanner, equipmentList, navigate]);
 
-  // Filtered Equipment
-  const filteredEquipment = equipmentList.filter((eq) => {
-    const matchLoc = selectedLocation === 'ALL' || eq.location === selectedLocation;
-    const matchSearch =
-      !search.trim() ||
-      eq.code?.toLowerCase().includes(search.toLowerCase()) ||
-      eq.name?.toLowerCase().includes(search.toLowerCase()) ||
-      eq.category?.toLowerCase().includes(search.toLowerCase());
-    return matchLoc && matchSearch;
-  });
+  // THUẬT TOÁN TỐI ƯU HÓA: Memoized Search Filter O(N)
+  const filteredEquipment = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return equipmentList.filter((eq) => {
+      const matchLoc = selectedLocation === 'ALL' || eq.location === selectedLocation;
+      if (!matchLoc) return false;
+      if (!term) return true;
+      return (
+        eq.code?.toLowerCase().includes(term) ||
+        eq.name?.toLowerCase().includes(term) ||
+        eq.category?.toLowerCase().includes(term)
+      );
+    });
+  }, [equipmentList, selectedLocation, search]);
 
   return (
     <div className="op-logs-container">
