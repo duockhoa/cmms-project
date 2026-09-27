@@ -33,7 +33,7 @@
 ## 1. TỔNG QUAN KIẾN TRÚC & QUY CHUẨN CHUNG
 
 - **Phiên bản API (Versioning)**: Mọi endpoint nghiệp vụ được đặt dưới tiền tố toàn cục `/api/v1`.
-- **Cấu hình Port & CORS**: Mặc định chạy tại port `3001`. Cấu hình qua biến môi trường `PORT` và `CORS_ORIGIN` (mặc định cho phép `http://localhost:5173`).
+- **Cấu hình Port & CORS**: Mặc định chạy tại port `3001` và có thể cấu hình qua biến môi trường `PORT`. CORS cho phép yêu cầu từ tất cả các origin.
 - **Validation**: Tích hợp toàn diện `ValidationPipe` với cơ chế `{ whitelist: true, forbidNonWhitelisted: true, transform: true }`, tự động ép kiểu và từ chối các trường lạ nằm ngoài DTO.
 - **Tài liệu Swagger tương tác**: Thiết lập sẵn tại đường dẫn `/docs` (chuẩn OpenAPI 3.0), cho phép kiểm thử và mô tả schema của từng API.
 
