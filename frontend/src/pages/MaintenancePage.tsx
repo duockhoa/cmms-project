@@ -21,9 +21,8 @@ import {
 } from 'lucide-react';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { TableSkeleton } from '../components/common/Skeleton';
-import { useDebounce } from '../hooks/useDebounce';
 import { Pagination } from '../components/common/Pagination';
-import { EmptyState } from '../components/common';
+import { EmptyState, FilterBar, PageHeader, SearchInput } from '../components/common';
 import { FrequencyBadge } from '../components/common/Badge';
 
 export const MaintenancePage: React.FC = () => {
@@ -40,7 +39,6 @@ export const MaintenancePage: React.FC = () => {
 
   // Filters & Search for Schedules
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState('');
   const [freqFilter, setFreqFilter] = useState('');
   const [overdueFilter, setOverdueFilter] = useState(false);
@@ -113,7 +111,7 @@ export const MaintenancePage: React.FC = () => {
     try {
       setLoadingSchedules(true);
       const res = await api.getSchedules({
-        search: debouncedSearch,
+        search,
         status: statusFilter,
         frequencyType: freqFilter,
         overdue: overdueFilter,
@@ -164,7 +162,7 @@ export const MaintenancePage: React.FC = () => {
 
   useEffect(() => {
     loadSchedules();
-  }, [debouncedSearch, statusFilter, freqFilter, overdueFilter]);
+  }, [search, statusFilter, freqFilter, overdueFilter]);
 
   useEffect(() => {
     if (activeTab === 'history') {
@@ -439,12 +437,10 @@ export const MaintenancePage: React.FC = () => {
 
   return (
     <div>
-      <div className="page-header" style={{ marginBottom: '16px' }}>
-        <div>
-          <h1 className="page-title">Kế hoạch Bảo trì & Lịch sử</h1>
-          <p className="page-subtitle">Quản lý kế hoạch bảo dưỡng phòng ngừa định kỳ (PM) và tra cứu lịch sử thực hiện</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Kế hoạch Bảo trì & Lịch sử"
+        subtitle="Quản lý kế hoạch bảo dưỡng phòng ngừa định kỳ (PM) và tra cứu lịch sử thực hiện"
+      />
 
       {/* Tabs Switcher */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
@@ -488,28 +484,20 @@ export const MaintenancePage: React.FC = () => {
           </div>
 
           {/* Action Toolbar & Filters */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '12px',
-              marginBottom: '16px',
-              padding: '12px 16px',
-              backgroundColor: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
+          <FilterBar
+            hasActiveFilters={Boolean(search || statusFilter || freqFilter || overdueFilter)}
+            onReset={() => {
+              setSearch('');
+              setStatusFilter('');
+              setFreqFilter('');
+              setOverdueFilter(false);
             }}
           >
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', flex: 1, alignItems: 'center' }}>
-              <input
-                type="text"
-                className="form-input"
-                style={{ width: '220px' }}
+              <SearchInput
                 placeholder="Tìm mã lịch, tên máy..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={setSearch}
               />
 
               <select
@@ -584,7 +572,7 @@ export const MaintenancePage: React.FC = () => {
                 <Plus size={15} /> Lập Kế hoạch mới
               </button>
             </div>
-          </div>
+          </FilterBar>
 
           {/* Schedules Table */}
           <div className="table-wrapper">

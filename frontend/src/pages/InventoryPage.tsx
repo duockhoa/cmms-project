@@ -4,7 +4,6 @@ import { Modal } from '../components/common/Modal';
 import { Plus, AlertCircle, ArrowUpRight, ArrowDownRight, Trash2, History, RefreshCw } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { TableSkeleton } from '../components/common/Skeleton';
-import { useDebounce } from '../hooks/useDebounce';
 import { Pagination } from '../components/common/Pagination';
 import { EmptyState, FilterBar, PageHeader, SearchInput } from '../components/common';
 import { useModal } from '../hooks/useModal';
@@ -14,7 +13,6 @@ export const InventoryPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 300);
   const toast = useToast();
 
   // Pagination states
@@ -71,7 +69,7 @@ export const InventoryPage: React.FC = () => {
       const url = new URL(`${API_BASE}/api/v1/inventory`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
-      if (debouncedSearch) url.searchParams.append('search', debouncedSearch);
+      if (search) url.searchParams.append('search', search);
 
       const response = await fetchWithAuth(url.toString());
       if (!response.ok) throw new Error('Không thể tải danh sách vật tư');
@@ -101,7 +99,7 @@ export const InventoryPage: React.FC = () => {
 
   useEffect(() => {
     loadInventory();
-  }, [debouncedSearch, page]);
+  }, [search, page]);
 
   const handleSearchChange = (val: string) => {
     setSearch(val);

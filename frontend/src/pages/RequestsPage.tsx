@@ -8,7 +8,7 @@ import { QRScanner } from '../components/common/QRScanner';
 import { RequestDetailView } from '../components/common/RequestDetailView';
 import { usePermissions } from '../hooks/usePermissions';
 import { TableSkeleton, CardListSkeleton } from '../components/common/Skeleton';
-import { EmptyState } from '../components/common';
+import { EmptyState, FilterBar, PageHeader } from '../components/common';
 
 export const RequestsPage: React.FC = () => {
   const { can } = usePermissions();
@@ -293,20 +293,18 @@ export const RequestsPage: React.FC = () => {
 
   return (
     <div>
-      <div className="flex-between mb-4">
-        <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Yêu cầu Sửa chữa & Báo Sự cố</h1>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-            Tiếp nhận báo hỏng từ nhân viên vận hành xưởng, phê duyệt và tự động tạo phiếu bảo trì.
-          </p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Gửi yêu cầu báo sự cố mới
-        </button>
-      </div>
+      <PageHeader
+        title="Yêu cầu Sửa chữa & Báo Sự cố"
+        subtitle="Tiếp nhận báo hỏng từ nhân viên vận hành xưởng, phê duyệt và tự động tạo phiếu bảo trì."
+        actions={(
+          <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
+            <Plus size={16} /> Gửi yêu cầu báo sự cố mới
+          </button>
+        )}
+      />
 
       {/* Filter Bar */}
-      <div className="card mb-4">
+      <FilterBar hasActiveFilters={Boolean(statusFilter)} onReset={() => setStatusFilter('')}>
         <select className="form-select" style={{ width: '250px' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">-- Tất cả Trạng thái --</option>
           <option value="PENDING">Chờ xử lý (Phê duyệt)</option>
@@ -316,7 +314,7 @@ export const RequestsPage: React.FC = () => {
           <option value="RETURNED">Đã trả lại</option>
           <option value="CANCELLED">Đã hủy</option>
         </select>
-      </div>
+      </FilterBar>
 
       {/* Main Content Area */}
       <div className="master-detail-container">

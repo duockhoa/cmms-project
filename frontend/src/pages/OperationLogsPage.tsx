@@ -8,6 +8,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { EquipmentOperationDetailView } from '../components/common/OperationLogDetailView';
+import { PageHeader } from '../components/common';
 
 export const OperationLogsPage: React.FC = () => {
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
@@ -281,17 +282,11 @@ export const OperationLogsPage: React.FC = () => {
       `}</style>
 
       {/* Top Page Header */}
-      <div className="op-logs-header">
-        <div>
-          <h1 className="page-title op-logs-header-title" style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-            Sổ Vận Hành & Nhật Ký Giám Sát Thiết Bị
-          </h1>
-          <p className="page-subtitle op-logs-header-subtitle" style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '2px', margin: 0 }}>
-            Quản lý và tra cứu bảng nhật ký thông số vận hành theo từng phiên ghi nhận / ca làm việc.
-          </p>
-        </div>
-
-        <div className="op-logs-header-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <PageHeader
+        title="Sổ Vận Hành & Nhật Ký Giám Sát Thiết Bị"
+        subtitle="Quản lý và tra cứu bảng nhật ký thông số vận hành theo từng phiên ghi nhận / ca làm việc."
+        actions={(
+          <>
           <button
             className="btn btn-secondary btn-sm"
             onClick={fetchData}
@@ -308,8 +303,9 @@ export const OperationLogsPage: React.FC = () => {
           >
             <Camera size={15} /> Quét mã QR (Nhập ca)
           </button>
-        </div>
-      </div>
+          </>
+        )}
+      />
 
 
 

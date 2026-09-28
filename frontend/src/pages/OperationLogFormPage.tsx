@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import { PageHeader } from '../components/common';
 
 interface EquipmentParam {
   id: string;
@@ -389,35 +390,20 @@ export function OperationLogFormPage() {
           </div>
 
           {/* Title Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-            <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <PageHeader
+            title="Ghi nhận Thông số Vận hành"
+            subtitle={`Thời điểm ghi nhận: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date().toLocaleDateString('vi-VN')}`}
+            badge={(
+              <>
                 <ClipboardCheck size={22} style={{ color: 'var(--accent-blue, #2563eb)' }} />
-                Ghi nhận Thông số Vận hành
-              </h2>
-              <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Thời điểm ghi nhận: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date().toLocaleDateString('vi-VN')}
-              </div>
-            </div>
-
-            {parameters.length > 0 && (
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  padding: '4px 10px',
-                  borderRadius: '20px',
-                  backgroundColor: 'rgba(37, 99, 235, 0.08)',
-                  color: 'var(--accent-blue, #2563eb)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                }}
-              >
-                <Sliders size={13} /> {parameters.length} thông số theo dõi
-              </span>
+                {parameters.length > 0 && (
+                  <span className="badge badge-info">
+                    <Sliders size={13} /> {parameters.length} thông số theo dõi
+                  </span>
+                )}
+              </>
             )}
-          </div>
+          />
 
           {/* Equipment Badge Summary */}
           <div
@@ -627,4 +613,3 @@ export function OperationLogFormPage() {
     </div>
   );
 }
-

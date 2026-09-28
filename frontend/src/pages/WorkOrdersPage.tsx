@@ -3,15 +3,14 @@ import { api, fetchWithAuth, API_HOST } from '../services/api';
 import { PriorityBadge, StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { ChecklistManager } from '../components/common/ChecklistManager';
-import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight, Camera, Eye, Trash2, Play, Pause, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Plus, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight, Camera, Eye, Trash2, Play, Pause, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { QRScanner } from '../components/common/QRScanner';
 import { WorkOrderDetailView } from '../components/common/WorkOrderDetailView';
 import { usePermissions } from '../hooks/usePermissions';
 import { TableSkeleton, CardListSkeleton } from '../components/common/Skeleton';
-import { useDebounce } from '../hooks/useDebounce';
 import { Pagination } from '../components/common/Pagination';
-import { EmptyState } from '../components/common';
+import { EmptyState, ExportButton, FilterBar, PageHeader, SearchInput } from '../components/common';
 
 const API_BASE = API_HOST;
 
@@ -22,7 +21,6 @@ export const WorkOrdersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState('');
   const [handlerTeamFilter, setHandlerTeamFilter] = useState('');
   const [departments, setDepartments] = useState<string[]>([]);
@@ -132,7 +130,7 @@ export const WorkOrdersPage: React.FC = () => {
       const url = new URL(`${API_BASE}/api/v1/work-orders`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
-      if (debouncedSearch) url.searchParams.append('search', debouncedSearch);
+      if (search) url.searchParams.append('search', search);
       if (handlerTeamFilter) url.searchParams.append('handlerTeam', handlerTeamFilter);
       if (statusFilter) url.searchParams.append('status', statusFilter);
 
@@ -158,13 +156,51 @@ export const WorkOrdersPage: React.FC = () => {
 
   const loadData = () => loadWorkOrders();
 
+  const exportWorkOrders = async () => {
+    const url = new URL(`${API_BASE}/api/v1/work-orders`);
+    url.searchParams.append('page', '1');
+    url.searchParams.append('limit', '10000');
+    if (search) url.searchParams.append('search', search);
+    if (handlerTeamFilter) url.searchParams.append('handlerTeam', handlerTeamFilter);
+    if (statusFilter) url.searchParams.append('status', statusFilter);
+
+    const response = await fetchWithAuth(url.toString());
+    if (!response.ok) throw new Error('Không thể tải dữ liệu phiếu sửa chữa để xuất');
+    const result = await response.json();
+    const rows = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
+
+    return {
+      filename: `Phieu_sua_chua_${new Date().toISOString().slice(0, 10)}.csv`,
+      headers: [
+        { key: 'orderCode', label: 'Mã phiếu' },
+        { key: 'title', label: 'Tiêu đề' },
+        { key: 'equipmentCode', label: 'Mã thiết bị' },
+        { key: 'equipmentName', label: 'Tên thiết bị' },
+        { key: 'status', label: 'Trạng thái' },
+        { key: 'priority', label: 'Ưu tiên' },
+        { key: 'technicianName', label: 'Kỹ thuật viên' },
+        { key: 'createdAt', label: 'Ngày tạo' },
+      ],
+      data: rows.map((item: any) => ({
+        orderCode: item.orderCode,
+        title: item.title,
+        equipmentCode: item.equipment?.code || '',
+        equipmentName: item.equipment?.name || '',
+        status: item.status,
+        priority: item.priority,
+        technicianName: item.technicianName || '',
+        createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString('vi-VN') : '',
+      })),
+    };
+  };
+
   useEffect(() => {
     loadCatalogs();
   }, []);
 
   useEffect(() => {
     loadWorkOrders();
-  }, [debouncedSearch, page, handlerTeamFilter, statusFilter]);
+  }, [search, page, handlerTeamFilter, statusFilter]);
 
   const handleFilterChange = (setter: (val: string) => void, val: string) => {
     setter(val);
@@ -370,32 +406,41 @@ export const WorkOrdersPage: React.FC = () => {
     <div>
       {!selectedDetailWoId ? (
         <>
-          <div className="page-header">
-            <div>
-              <h1 className="page-title">Phiếu sửa chữa</h1>
-              <p className="page-subtitle">Quản lý lệnh sửa chữa và vật tư liên quan</p>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
+          <PageHeader
+            title="Phiếu sửa chữa"
+            subtitle="Quản lý lệnh sửa chữa và vật tư liên quan"
+            actions={(
+              <>
+              <ExportButton
+                onExport={exportWorkOrders}
+                filename={`Phieu_sua_chua_${new Date().toISOString().slice(0, 10)}.csv`}
+                label="Xuất Excel"
+              />
               <button className="btn btn-warning" onClick={() => setIsQrScannerOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}>
                 <Camera size={16} /> Quét mã thiết bị
               </button>
               <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
                 <Plus size={16} /> Tạo phiếu mới
               </button>
-            </div>
-          </div>
+              </>
+            )}
+          />
 
           {/* Filter Bar */}
-          <div className="card mb-4 filter-bar-responsive">
-            <div className="filter-search" style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                className="form-input"
-                style={{ paddingLeft: '34px', width: '100%' }}
+          <FilterBar
+            hasActiveFilters={Boolean(search || statusFilter || handlerTeamFilter)}
+            onReset={() => {
+              setSearch('');
+              setStatusFilter('');
+              setHandlerTeamFilter('');
+              setPage(1);
+            }}
+          >
+            <div className="filter-search">
+              <SearchInput
                 placeholder="Tìm kiếm phiếu, mã thiết bị, kỹ thuật viên..."
                 value={search}
-                onChange={(e) => handleFilterChange(setSearch, e.target.value)}
+                onChange={(value) => handleFilterChange(setSearch, value)}
               />
             </div>
 
@@ -436,7 +481,7 @@ export const WorkOrdersPage: React.FC = () => {
                 ))}
               </select>
             </div>
-          </div>
+          </FilterBar>
 
           {/* Table */}
           <div>

@@ -17,7 +17,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   value,
   onChange,
   placeholder = 'Tìm kiếm...',
-  debounceMs = 0,
+  debounceMs = 300,
   onClear,
   width,
   className = '',
@@ -65,7 +65,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         position: 'relative',
         display: 'inline-flex',
         alignItems: 'center',
-        width: width || undefined,
+        width: width || '280px',
         minWidth: '220px',
       }}
     >

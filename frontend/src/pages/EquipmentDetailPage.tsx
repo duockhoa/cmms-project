@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBadge } from '../components/common/Badge';
 import { 
-  ArrowLeft, Cpu, Edit, Plus, Wrench, Settings, FileText, BookOpen, Clock, Activity, MessageSquare, Calendar, X, Eye, Download 
+  Cpu, Edit, Plus, Wrench, Settings, FileText, BookOpen, Clock, Activity, MessageSquare, Calendar, X, Eye, Download
 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { OverviewTab } from '../components/equipment/OverviewTab';
@@ -16,6 +16,7 @@ import { EquipmentOperationLogsTab } from '../components/equipment/EquipmentOper
 import { FunctionalUnitsTab } from '../components/equipment/FunctionalUnitsTab';
 
 import { api, API_HOST as API_BASE } from '../services/api';
+import { PageHeader } from '../components/common';
 
 interface EquipmentDetailPageProps {
   item: any;
@@ -163,47 +164,17 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
 
   return (
     <div>
-      {/* Breadcrumbs / Back button */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-        <button 
-          onClick={onBack}
-          style={{ 
-            background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px',
-            color: 'var(--text-secondary)', padding: '4px 8px', borderRadius: '4px'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-        >
-          <ArrowLeft size={14} /> Thiết bị
-        </button>
-        <span>&gt;</span>
-        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{data.code}</span>
-      </div>
-
-      {/* Main Title Block */}
-      <div className="flex-between" style={{ marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{
-            width: '48px', height: '48px', borderRadius: '12px',
-            backgroundColor: '#eff6ff', color: '#2563eb',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <Cpu size={24} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{data.name}</h1>
-              <StatusBadge status={data.status} />
-            </div>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-              Mã: <strong>{data.code}</strong> 
-              {data.accountingCode && <><span style={{ margin: '0 8px' }}>|</span> Phụ (KT): <strong>{data.accountingCode}</strong></>}
-              <span style={{ margin: '0 8px' }}>|</span> 
-              Số Serial: <strong>{data.serialNumber || '---'}</strong>
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title={data.name}
+        subtitle={`Mã: ${data.code}${data.accountingCode ? ` | Phụ (KT): ${data.accountingCode}` : ''} | Số Serial: ${data.serialNumber || '---'}`}
+        breadcrumb={[{ label: 'Thiết bị', path: '/equipment' }, { label: data.code }]}
+        badge={(
+          <>
+            <span style={{ display: 'inline-flex', color: '#2563eb' }}><Cpu size={22} /></span>
+            <StatusBadge status={data.status} />
+          </>
+        )}
+      />
 
       {/* Quick Info Grid */}
       <div className="kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '24px' }}>

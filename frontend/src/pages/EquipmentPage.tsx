@@ -7,11 +7,10 @@ import { Plus, MoreHorizontal, Eye, Trash2, Edit, Printer, CheckSquare } from 'l
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
-import { useDebounce } from '../hooks/useDebounce';
 import { TableSkeleton } from '../components/common/Skeleton';
 import { printBatchQRTags, printSingleQRTag } from '../utils/qrPrintHelper';
 import { Pagination } from '../components/common/Pagination';
-import { EmptyState, FilterBar, PageHeader, SearchInput } from '../components/common';
+import { EmptyState, ExportButton, FilterBar, PageHeader, SearchInput } from '../components/common';
 import { useModal } from '../hooks/useModal';
 
 export const EquipmentPage: React.FC = () => {
@@ -22,7 +21,6 @@ export const EquipmentPage: React.FC = () => {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 300);
   const [categoryFilter, setCategoryFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -48,7 +46,7 @@ export const EquipmentPage: React.FC = () => {
       const url = new URL(`${API_BASE}/api/v1/equipment`);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
-      if (debouncedSearch) url.searchParams.append('search', debouncedSearch);
+      if (search) url.searchParams.append('search', search);
       if (categoryFilter) url.searchParams.append('category', categoryFilter);
       if (departmentFilter) url.searchParams.append('department', departmentFilter);
       if (statusFilter) url.searchParams.append('status', statusFilter);
@@ -75,7 +73,7 @@ export const EquipmentPage: React.FC = () => {
 
   useEffect(() => {
     loadEquipment();
-  }, [debouncedSearch, categoryFilter, departmentFilter, statusFilter, page]);
+  }, [search, categoryFilter, departmentFilter, statusFilter, page]);
 
   useEffect(() => {
     // Fetch categories and departments for filter dropdown on mount
@@ -94,6 +92,35 @@ export const EquipmentPage: React.FC = () => {
   const handleFilterChange = (setter: (val: string) => void, val: string) => {
     setter(val);
     setPage(1);
+  };
+
+  const exportEquipment = async () => {
+    const url = new URL(`${API_BASE}/api/v1/equipment`);
+    url.searchParams.append('page', '1');
+    url.searchParams.append('limit', '10000');
+    if (search) url.searchParams.append('search', search);
+    if (categoryFilter) url.searchParams.append('category', categoryFilter);
+    if (departmentFilter) url.searchParams.append('department', departmentFilter);
+    if (statusFilter) url.searchParams.append('status', statusFilter);
+
+    const response = await fetchWithAuth(url.toString());
+    if (!response.ok) throw new Error('Không thể tải dữ liệu thiết bị để xuất');
+    const result = await response.json();
+    const rows = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
+
+    return {
+      filename: `Danh_sach_thiet_bi_${new Date().toISOString().slice(0, 10)}.csv`,
+      headers: [
+        { key: 'code', label: 'Mã thiết bị' },
+        { key: 'name', label: 'Tên thiết bị' },
+        { key: 'category', label: 'Loại' },
+        { key: 'department', label: 'Bộ phận' },
+        { key: 'location', label: 'Vị trí' },
+        { key: 'serialNumber', label: 'Số serial' },
+        { key: 'status', label: 'Trạng thái' },
+      ],
+      data: rows,
+    };
   };
 
   const handleFormSubmit = async (finalFormData: any) => {
@@ -209,7 +236,7 @@ export const EquipmentPage: React.FC = () => {
       url.searchParams.append('limit', '5000'); // Tải toàn bộ lên tới 5000 thiết bị
 
       if (onlyCurrentFilter) {
-        if (debouncedSearch) url.searchParams.append('search', debouncedSearch);
+        if (search) url.searchParams.append('search', search);
         if (categoryFilter) url.searchParams.append('category', categoryFilter);
         if (departmentFilter) url.searchParams.append('department', departmentFilter);
         if (statusFilter) url.searchParams.append('status', statusFilter);
@@ -286,7 +313,7 @@ export const EquipmentPage: React.FC = () => {
     });
   };
 
-  const hasActiveFilter = Boolean(debouncedSearch || categoryFilter || departmentFilter || statusFilter);
+  const hasActiveFilter = Boolean(search || categoryFilter || departmentFilter || statusFilter);
 
   return (
     <div>
@@ -295,6 +322,11 @@ export const EquipmentPage: React.FC = () => {
         subtitle="Quản lý thông tin và tình trạng thiết bị"
         actions={
           <>
+          <ExportButton
+            onExport={exportEquipment}
+            filename={`Danh_sach_thiet_bi_${new Date().toISOString().slice(0, 10)}.csv`}
+            label="Xuất Excel"
+          />
           {/* Nút in các thiết bị được chọn (nếu có chọn) */}
           {(selectedIds.size > 0 || isSelectAllTotal) && (
             <button 

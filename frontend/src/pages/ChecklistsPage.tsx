@@ -5,7 +5,7 @@ import { Modal } from '../components/common/Modal';
 import { Plus, Search, Eye, PlayCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { useNavigate } from 'react-router-dom';
-import { EmptyState } from '../components/common';
+import { EmptyState, PageHeader } from '../components/common';
 
 export const ChecklistsPage: React.FC = () => {
   const [templates, setTemplates] = useState<any[]>([]);
@@ -59,15 +59,15 @@ export const ChecklistsPage: React.FC = () => {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Checklist bảo trì</h1>
-          <p className="page-subtitle">Quản lý checklist kiểm tra và bảo trì thiết bị</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Tạo checklist
-        </button>
-      </div>
+      <PageHeader
+        title="Checklist bảo trì"
+        subtitle="Quản lý checklist kiểm tra và bảo trì thiết bị"
+        actions={(
+          <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
+            <Plus size={16} /> Tạo checklist
+          </button>
+        )}
+      />
 
       {/* KPI Summary Row */}
       <div className="kpi-row">

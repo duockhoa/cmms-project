@@ -971,3 +971,14 @@ body {
   min-width: 180px;
 }
 
+.filter-bar-responsive .filter-search .search-input-wrapper {
+  width: 100% !important;
+}
+
+@media (max-width: 768px) {
+  .search-input-wrapper {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+

@@ -5,7 +5,7 @@ import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { 
   Zap, Droplets, Cpu, QrCode, BarChart3, BarChart2,
   RefreshCw, Plus, Edit2, Trash2, 
-  Printer, Download, Search, CheckCircle2, 
+  Printer, Search, CheckCircle2,
   Clock, Settings, FileText, ArrowRight,
   Calendar, PieChart, AlertTriangle, Layers,
   Ban, XCircle, ShieldAlert, Activity, Filter, X,
@@ -16,6 +16,7 @@ import { formatVN } from '../utils/formatters';
 import { UtilityTrendChart } from '../components/utilities/UtilityTrendChart';
 import { usePermissions } from '../hooks/usePermissions';
 import { printBatchQRTags, printSingleQRTag } from '../utils/qrPrintHelper';
+import { ExportButton, PageHeader } from '../components/common';
 
 export const UtilitiesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -310,8 +311,7 @@ export const UtilitiesPage: React.FC = () => {
   // Xuất file CSV báo cáo ma trận xu hướng
   const handleExportTrendCSV = () => {
     if (!trendData || !trendData.timeColumns || trendData.timeColumns.length === 0) {
-      toast.error('Chưa có dữ liệu', 'Không có dữ liệu ma trận để xuất file.');
-      return;
+      throw new Error('Không có dữ liệu ma trận để xuất file.');
     }
     const unit = trendData.unit || (cumulativeType === 'ELECTRICITY' ? 'kWh' : 'm³');
     const cols = trendData.timeColumns;
@@ -353,22 +353,16 @@ export const UtilitiesPage: React.FC = () => {
       csv += rowData.join(';') + '\n';
     });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `Ma_tran_xu_huong_${trendData.type.toLowerCase()}_${trendViewMode.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Xuất file thành công', 'Đã tải xuống file CSV báo cáo ma trận xu hướng.');
+    return {
+      rawCsv: csv,
+      filename: `Ma_tran_xu_huong_${trendData.type.toLowerCase()}_${trendViewMode.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`,
+    };
   };
 
   // Xuất file CSV báo cáo tích lũy
   const handleExportCumulativeCSV = () => {
     if (!cumulativeData) {
-      toast.error('Chưa có dữ liệu', 'Vui lòng chờ tải dữ liệu báo cáo xong.');
-      return;
+      throw new Error('Vui lòng chờ tải dữ liệu báo cáo xong.');
     }
     const { summary, supplyMeters, consumptionMeters, recycledMeters, excludedMeters, cycleDescription, type, month, year } = cumulativeData;
     const unit = summary?.unit || '';
@@ -420,15 +414,10 @@ export const UtilitiesPage: React.FC = () => {
       });
     }
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `Bao_cao_tich_luy_${type.toLowerCase()}_ky_${month}_${year}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Xuất file thành công', `Đã tải xuống file CSV báo cáo kỳ ${month}/${year}.`);
+    return {
+      rawCsv: csv,
+      filename: `Bao_cao_tich_luy_${type.toLowerCase()}_ky_${month}_${year}.csv`,
+    };
   };
 
   // Mở modal thêm điểm đo
@@ -548,8 +537,7 @@ export const UtilitiesPage: React.FC = () => {
   // Xuất file CSV danh sách ghi số
   const handleExportReadingsCSV = () => {
     if (filteredReadings.length === 0) {
-      toast.warning('Chưa có dữ liệu', 'Không có bản ghi nào để xuất file.');
-      return;
+      throw new Error('Không có bản ghi nào để xuất file.');
     }
 
     const headers = [
@@ -581,15 +569,10 @@ export const UtilitiesPage: React.FC = () => {
     ]);
 
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `So_ghi_dien_nuoc_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Xuất file thành công', 'Đã tải xuống file CSV danh sách ghi chỉ số.');
+    return {
+      rawCsv: csvContent,
+      filename: `So_ghi_dien_nuoc_${new Date().toISOString().slice(0, 10)}.csv`,
+    };
   };
 
   // Danh sách các điểm đo tương ứng với bộ lọc 1 (Loại / Nhóm)
@@ -775,18 +758,13 @@ export const UtilitiesPage: React.FC = () => {
   return (
     <div className="util-page-root">
       {/* 1. Header Trang & Nút Quét QR */}
-      <div className="util-page-header">
-        <div className="util-header-title-box">
-          <h1 className="util-header-title">
-            <Zap size={22} color="#eab308" className="util-title-icon" />
-            <span>TIỆN ÍCH & NĂNG LƯỢNG</span>
-          </h1>
-          <p className="util-header-subtitle">
-            Theo dõi Điện, Nước và Giám sát Bật/Tắt hệ thống phụ trợ.
-          </p>
-        </div>
-
-        <div className="util-header-actions">
+      <PageHeader
+        className="util-page-header"
+        title="TIỆN ÍCH & NĂNG LƯỢNG"
+        subtitle="Theo dõi Điện, Nước và Giám sát Bật/Tắt hệ thống phụ trợ."
+        badge={<Zap size={22} color="#eab308" className="util-title-icon" />}
+        actions={(
+          <>
           {/* Nút Quét QR Lớn Nổi Bật cho Nhân Viên */}
           <button
             onClick={() => navigate('/utilities/scan')}
@@ -803,8 +781,9 @@ export const UtilitiesPage: React.FC = () => {
           >
             <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
           </button>
-        </div>
-      </div>
+          </>
+        )}
+      />
 
       {/* 2. Thanh Tabs Điều Hướng */}
       <div className="util-tabs-wrapper">
@@ -1331,13 +1310,11 @@ export const UtilitiesPage: React.FC = () => {
             )}
 
             {can('utilities:export') && (
-              <button
-                onClick={handleExportReadingsCSV}
+              <ExportButton
+                onExport={handleExportReadingsCSV}
                 className="btn-export-csv"
-              >
-                <Download size={15} />
-                <span>Xuất Excel / CSV</span>
-              </button>
+                label="Xuất Excel / CSV"
+              />
             )}
           </div>
 
@@ -2166,15 +2143,12 @@ export const UtilitiesPage: React.FC = () => {
                   <span>{cumulativeLoading ? 'Đang tính...' : 'Tính Lại'}</span>
                 </button>
 
-                <button
-                  onClick={handleExportCumulativeCSV}
+                <ExportButton
+                  onExport={handleExportCumulativeCSV}
                   className="btn-action-outline"
                   style={{ backgroundColor: '#10b981', color: '#ffffff', borderColor: '#10b981' }}
-                  title="Xuất file CSV"
-                >
-                  <Download size={15} />
-                  <span>Xuất Báo Cáo (CSV)</span>
-                </button>
+                  label="Xuất Báo Cáo (CSV)"
+                />
               </div>
             </div>
 
@@ -2834,15 +2808,11 @@ export const UtilitiesPage: React.FC = () => {
 
 
                 {/* 5. Nút xuất CSV cho ma trận */}
-                <button
-                  type="button"
-                  onClick={handleExportTrendCSV}
+                <ExportButton
+                  onExport={handleExportTrendCSV}
                   className="btn-export-csv trend-export-btn"
-                  title="Tải xuống file CSV ma trận theo thời gian"
-                >
-                  <Download size={13} />
-                  <span>Xuất CSV</span>
-                </button>
+                  label="Xuất CSV"
+                />
               </div>
             </div>
 

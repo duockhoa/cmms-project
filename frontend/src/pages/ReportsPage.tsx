@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, Download, RefreshCw } from 'lucide-react';
+import { BarChart3, RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
 import { DashboardSkeleton } from '../components/common/Skeleton';
+import { ExportButton, PageHeader } from '../components/common';
 
 export const ReportsPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState('Tháng này');
@@ -39,12 +40,10 @@ export const ReportsPage: React.FC = () => {
   if (loading) {
     return (
       <div>
-        <div className="page-header" style={{ marginBottom: '24px' }}>
-          <div>
-            <h1 className="page-title">Báo cáo & Phân tích</h1>
-            <p className="page-subtitle">Chỉ số KPI, hiệu suất và phân tích thời gian dừng máy MTTR/MTBF</p>
-          </div>
-        </div>
+        <PageHeader
+          title="Báo cáo & Phân tích"
+          subtitle="Chỉ số KPI, hiệu suất và phân tích thời gian dừng máy MTTR/MTBF"
+        />
         <DashboardSkeleton />
       </div>
     );
@@ -66,18 +65,35 @@ export const ReportsPage: React.FC = () => {
   const mtbfUnit = kpiData?.mtbf?.unit || 'giờ';
   const formattedMtbf = mtbfVal !== undefined && mtbfVal !== null ? `${Math.round(mtbfVal * 10) / 10} ${mtbfUnit}` : '---';
 
+  const exportReport = () => ({
+    filename: `Bao_cao_bao_tri_${new Date().toISOString().slice(0, 10)}.csv`,
+    headers: [
+      { key: 'metric', label: 'Chỉ số' },
+      { key: 'value', label: 'Giá trị' },
+      { key: 'period', label: 'Kỳ báo cáo' },
+    ],
+    data: [
+      { metric: 'Tổng Work Order', value: totalWorkOrders, period: timeRange },
+      { metric: 'Work Order hoàn thành', value: kpi.completedWorkOrders || 0, period: timeRange },
+      { metric: 'Hoàn thành đúng hạn', value: formattedOnTimeRate, period: timeRange },
+      { metric: 'MTTR', value: formattedMttr, period: timeRange },
+      { metric: 'MTBF', value: formattedMtbf, period: timeRange },
+      { metric: 'Tổng chi phí bảo trì', value: kpi.totalCost || 0, period: timeRange },
+    ],
+  });
+
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Báo cáo & Phân tích bảo trì</h1>
-          <p className="page-subtitle">Phân tích hiệu quả bảo trì, chi phí và hiệu suất thiết bị</p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+      <PageHeader
+        title="Báo cáo & Phân tích bảo trì"
+        subtitle="Phân tích hiệu quả bảo trì, chi phí và hiệu suất thiết bị"
+        actions={(
+          <>
           <button className="btn btn-secondary" onClick={loadReportData}><RefreshCw size={14} /> Làm mới</button>
-          <button className="btn btn-primary"><Download size={14} /> Xuất báo cáo</button>
-        </div>
-      </div>
+          <ExportButton onExport={exportReport} label="Xuất báo cáo" variant="primary" />
+          </>
+        )}
+      />
 
       {/* Time Filters */}
       <div className="card mb-4" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>

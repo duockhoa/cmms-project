@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { Modal } from '../components/common/Modal';
-import { ArrowLeft, Plus, Save, Trash2, GripVertical, CheckSquare } from 'lucide-react';
-import { EmptyState } from '../components/common';
+import { Plus, Save, Trash2, GripVertical, CheckSquare } from 'lucide-react';
+import { EmptyState, PageHeader } from '../components/common';
 
 export const ChecklistDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -100,21 +100,19 @@ export const ChecklistDetailPage: React.FC = () => {
 
   return (
     <div>
-      <div className="page-header" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-        <button className="btn-icon" onClick={() => navigate('/checklists')}>
-          <ArrowLeft size={20} />
-        </button>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
+      <PageHeader
+        title={template.name}
+        subtitle={template.description}
+        breadcrumb={[{ label: 'Checklist bảo trì', path: '/checklists' }, { label: template.name }]}
+        badge={(
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <span className="badge badge-primary">{template.code}</span>
             <span className={`badge badge-${template.isActive ? 'success' : 'neutral'}`}>
               {template.isActive ? 'Đang dùng' : 'Tạm dừng'}
             </span>
           </div>
-          <h1 className="page-title">{template.name}</h1>
-          {template.description && <p className="page-subtitle">{template.description}</p>}
-        </div>
-      </div>
+        )}
+      />
 
       <div className="card">
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

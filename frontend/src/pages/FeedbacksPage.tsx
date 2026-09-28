@@ -4,11 +4,11 @@ import { StatusBadge } from '../components/common/Badge';
 import { FeedbackModal } from '../components/feedback/FeedbackModal';
 import { FeedbackDetailModal } from '../components/feedback/FeedbackDetailModal';
 import { 
-  MessageSquarePlus, Search, RefreshCw, Filter, 
+  MessageSquarePlus, RefreshCw, Filter,
   Bug, Sparkles, CheckCircle2, Clock, Eye, Image as ImageIcon 
 } from 'lucide-react';
 import { TableSkeleton } from '../components/common/Skeleton';
-import { EmptyState } from '../components/common';
+import { EmptyState, FilterBar, PageHeader, SearchInput } from '../components/common';
 
 export const FeedbacksPage: React.FC = () => {
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
@@ -40,12 +40,7 @@ export const FeedbacksPage: React.FC = () => {
 
   useEffect(() => {
     fetchFeedbacks();
-  }, [statusFilter, typeFilter]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchFeedbacks();
-  };
+  }, [statusFilter, typeFilter, searchTerm]);
 
   // Status stats
   const totalCount = feedbacks.length;
@@ -56,19 +51,15 @@ export const FeedbacksPage: React.FC = () => {
   return (
     <div>
       {/* Page Header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Yêu cầu Chỉnh sửa & Báo lỗi App</h1>
-          <p className="page-subtitle">Theo dõi, phản hồi và cập nhật tiến độ xử lý các góp ý và lỗi hệ thống DK.QLTB</p>
-        </div>
-        <button 
-          className="btn btn-primary"
-          onClick={() => setIsCreateModalOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-        >
-          <MessageSquarePlus size={16} /> Gửi Góp ý / Báo lỗi
-        </button>
-      </div>
+      <PageHeader
+        title="Yêu cầu Chỉnh sửa & Báo lỗi App"
+        subtitle="Theo dõi, phản hồi và cập nhật tiến độ xử lý các góp ý và lỗi hệ thống DK.QLTB"
+        actions={(
+          <button className="btn btn-primary" onClick={() => setIsCreateModalOpen(true)}>
+            <MessageSquarePlus size={16} /> Gửi Góp ý / Báo lỗi
+          </button>
+        )}
+      />
 
       {/* KPI Cards Row */}
       <div className="kpi-row kpi-grid-4" style={{ marginBottom: '20px' }}>
@@ -110,8 +101,14 @@ export const FeedbacksPage: React.FC = () => {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="card mb-4" style={{ padding: '16px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+      <FilterBar
+        hasActiveFilters={Boolean(statusFilter || typeFilter || searchTerm)}
+        onReset={() => {
+          setStatusFilter('');
+          setTypeFilter('');
+          setSearchTerm('');
+        }}
+      >
           
           {/* Status Tabs */}
           <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
@@ -149,28 +146,18 @@ export const FeedbacksPage: React.FC = () => {
               <option value="OTHER">Khác</option>
             </select>
 
-            <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '6px' }}>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Tìm mã, nội dung, người gửi..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{ width: '220px', height: '34px', fontSize: '12.5px', paddingRight: '30px' }}
-                />
-                <button type="submit" style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                  <Search size={14} />
-                </button>
-              </div>
-            </form>
+            <SearchInput
+              placeholder="Tìm mã, nội dung, người gửi..."
+              value={searchTerm}
+              onChange={setSearchTerm}
+              width="220px"
+            />
 
             <button className="btn btn-secondary btn-sm" onClick={fetchFeedbacks} title="Làm mới">
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
           </div>
-        </div>
-      </div>
+      </FilterBar>
 
       {/* Main Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>

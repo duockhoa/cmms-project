@@ -19,6 +19,7 @@ import { UsersSettingsTab } from '../components/settings/UsersSettingsTab';
 import { TechniciansSettingsTab } from '../components/settings/TechniciansSettingsTab';
 import { EquipmentParameterAssignTab } from '../components/settings/EquipmentParameterAssignTab';
 import { FunctionalUnitLibraryTab } from '../components/settings/FunctionalUnitLibraryTab';
+import { PageHeader } from '../components/common';
 
 export type SettingsTabId =
   | 'categories'
@@ -210,17 +211,11 @@ export const SettingsPage: React.FC = () => {
   return (
     <div style={{ padding: '0 0 24px 0' }}>
       {/* Page Header */}
-      <div className="page-header" style={{ marginBottom: '20px' }}>
-        <div>
-          <h1 className="page-title" style={{ fontSize: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Settings size={22} style={{ color: 'var(--accent-blue, #2563eb)' }} />
-            Cài đặt & Cấu hình hệ thống
-          </h1>
-          <p className="page-subtitle" style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Quản lý danh mục cơ sở, thông số vận hành, thư viện checklist và phân quyền người dùng.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Cài đặt & Cấu hình hệ thống"
+        subtitle="Quản lý danh mục cơ sở, thông số vận hành, thư viện checklist và phân quyền người dùng."
+        badge={<Settings size={22} style={{ color: 'var(--accent-blue, #2563eb)' }} />}
+      />
 
       {/* Main Grid: Left Nav + Right Content */}
       <div
