@@ -16,7 +16,7 @@ import { EquipmentOperationLogsTab } from '../components/equipment/EquipmentOper
 import { FunctionalUnitsTab } from '../components/equipment/FunctionalUnitsTab';
 
 import { api, API_HOST as API_BASE } from '../services/api';
-import { PageHeader } from '../components/common';
+import { PageHeader, Tabs } from '../components/common';
 
 interface EquipmentDetailPageProps {
   item: any;
@@ -194,27 +194,11 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
 
       {/* Tabs Row */}
       <div className="card mb-4" style={{ padding: '0 20px' }}>
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', gap: '16px', overflowX: 'auto' }}>
-          {subTabs.map((t) => (
-            <button
-              key={t}
-              onClick={() => setActiveSubTab(t)}
-              style={{
-                padding: '14px 12px',
-                border: 'none',
-                background: 'none',
-                borderBottom: activeSubTab === t ? '2px solid var(--text-primary)' : '2px solid transparent',
-                color: activeSubTab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontWeight: activeSubTab === t ? 700 : 500,
-                cursor: 'pointer',
-                fontSize: '13px',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          items={subTabs.map((tab) => ({ key: tab, label: tab }))}
+          activeKey={activeSubTab}
+          onChange={setActiveSubTab}
+        />
 
         {/* Tab content */}
         {activeSubTab === 'Tổng quan' && (

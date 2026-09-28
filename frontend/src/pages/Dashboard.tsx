@@ -4,6 +4,7 @@ import { StatusBadge } from '../components/common/Badge';
 import { Cpu, AlertTriangle, Calendar, CheckCircle2, ArrowUpRight, BellRing } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardSkeleton } from '../components/common/Skeleton';
+import { KpiCard, PageHeader } from '../components/common';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -39,12 +40,7 @@ export const Dashboard: React.FC = () => {
   if (loading || !data) {
     return (
       <div>
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">Tổng quan</h1>
-            <p className="page-subtitle">Theo dõi tình hình bảo trì và vận hành thiết bị</p>
-          </div>
-        </div>
+        <PageHeader title="Tổng quan" subtitle="Theo dõi tình hình bảo trì và vận hành thiết bị" />
         <DashboardSkeleton />
       </div>
     );
@@ -65,50 +61,14 @@ export const Dashboard: React.FC = () => {
   return (
     <div>
       {/* Title */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Tổng quan</h1>
-          <p className="page-subtitle">Theo dõi tình hình bảo trì và vận hành thiết bị</p>
-        </div>
-      </div>
+      <PageHeader title="Tổng quan" subtitle="Theo dõi tình hình bảo trì và vận hành thiết bị" />
 
       {/* KPI Cards Row */}
       <div className="kpi-row">
-        <div className="kpi-card">
-          <div className="flex-between">
-            <span className="kpi-card-title">Tổng thiết bị</span>
-            <Cpu size={16} color="var(--text-muted)" />
-          </div>
-          <div className="kpi-card-value">{kpi.totalEquipment}</div>
-          <div className="kpi-card-footer">{kpi.operationalEquipment} hoạt động</div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="flex-between">
-            <span className="kpi-card-title">Yêu cầu chờ duyệt</span>
-            <AlertTriangle size={16} color="var(--warning)" />
-          </div>
-          <div className="kpi-card-value">{kpi.pendingRequests}</div>
-          <div className="kpi-card-footer" style={{ color: 'var(--danger)' }}>{requestStats.urgentCount} khẩn cấp</div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="flex-between">
-            <span className="kpi-card-title">Work Order đang mở</span>
-            <Calendar size={16} color="var(--info)" />
-          </div>
-          <div className="kpi-card-value">{kpi.activeWorkOrders}</div>
-          <div className="kpi-card-footer" style={{ color: 'var(--warning)' }}>{kpi.lowStockItems} phụ tùng sắp hết</div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="flex-between">
-            <span className="kpi-card-title">Tỷ lệ hoàn thành</span>
-            <CheckCircle2 size={16} color="var(--success)" />
-          </div>
-          <div className="kpi-card-value">{completionRate}%</div>
-          <div className="kpi-card-footer">{kpi.completedWorkOrders} đã hoàn thành</div>
-        </div>
+        <KpiCard title="Tổng thiết bị" value={kpi.totalEquipment} icon={Cpu} variant="primary" footer={`${kpi.operationalEquipment} hoạt động`} />
+        <KpiCard title="Yêu cầu chờ duyệt" value={kpi.pendingRequests} icon={AlertTriangle} variant="warning" footer={`${requestStats.urgentCount} khẩn cấp`} />
+        <KpiCard title="Work Order đang mở" value={kpi.activeWorkOrders} icon={Calendar} variant="info" footer={`${kpi.lowStockItems} phụ tùng sắp hết`} />
+        <KpiCard title="Tỷ lệ hoàn thành" value={`${completionRate}%`} icon={CheckCircle2} variant="success" footer={`${kpi.completedWorkOrders} đã hoàn thành`} />
       </div>
 
       {/* Charts & Status Section */}

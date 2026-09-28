@@ -19,7 +19,7 @@ import { UsersSettingsTab } from '../components/settings/UsersSettingsTab';
 import { TechniciansSettingsTab } from '../components/settings/TechniciansSettingsTab';
 import { EquipmentParameterAssignTab } from '../components/settings/EquipmentParameterAssignTab';
 import { FunctionalUnitLibraryTab } from '../components/settings/FunctionalUnitLibraryTab';
-import { PageHeader } from '../components/common';
+import { PageHeader, Tabs } from '../components/common';
 
 export type SettingsTabId =
   | 'categories'
@@ -253,72 +253,19 @@ export const SettingsPage: React.FC = () => {
                 {group.title}
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveTab(item.id)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '9px 12px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        backgroundColor: isActive ? 'var(--bg-hover, #f1f5f9)' : 'transparent',
-                        color: isActive ? 'var(--accent-blue, #2563eb)' : 'var(--text-primary, #0f172a)',
-                        borderLeft: isActive ? '3px solid var(--accent-blue, #2563eb)' : '3px solid transparent',
-                        width: '100%',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f8fafc)';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      <Icon
-                        size={17}
-                        style={{
-                          color: isActive ? 'var(--accent-blue, #2563eb)' : 'var(--text-secondary, #64748b)',
-                          flexShrink: 0,
-                        }}
-                      />
-                      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <span
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: isActive ? 700 : 600,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-secondary, #64748b)',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            marginTop: '1px',
-                          }}
-                        >
-                          {item.description}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              <Tabs
+                orientation="vertical"
+                variant="segmented"
+                activeKey={activeTab}
+                onChange={(key) => setActiveTab(key as SettingsTabId)}
+                items={group.items.map((item) => ({
+                  key: item.id,
+                  label: item.label,
+                  description: item.description,
+                  icon: item.icon,
+                }))}
+                style={{ padding: 0, background: 'transparent' }}
+              />
             </div>
           ))}
         </div>

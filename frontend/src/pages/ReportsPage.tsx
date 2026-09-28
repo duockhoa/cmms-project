@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, RefreshCw } from 'lucide-react';
+import { BarChart3, RefreshCw, ClipboardList, CheckCircle2, Wrench, Activity, WalletCards } from 'lucide-react';
 import { api } from '../services/api';
 import { DashboardSkeleton } from '../components/common/Skeleton';
-import { ExportButton, PageHeader } from '../components/common';
+import { ExportButton, KpiCard, PageHeader, Tabs } from '../components/common';
 
 export const ReportsPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState('Tháng này');
@@ -110,51 +110,21 @@ export const ReportsPage: React.FC = () => {
 
       {/* KPI Metrics */}
       <div className="kpi-row">
-        <div className="kpi-card">
-          <div className="kpi-card-title">Tổng Work Order</div>
-          <div className="kpi-card-value">{totalWorkOrders}</div>
-          <div className="kpi-card-footer" style={{ color: 'var(--text-muted)' }}>{dashboardData?.kpi?.completedWorkOrders || 0} đã hoàn thành</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Hoàn thành đúng hạn</div>
-          <div className="kpi-card-value" style={{ color: 'var(--success)' }}>{formattedOnTimeRate}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">MTTR (Thời gian sửa TB)</div>
-          <div className="kpi-card-value">{formattedMttr}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">MTBF (Thời gian chạy TB)</div>
-          <div className="kpi-card-value">{formattedMtbf}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Tổng chi phí bảo trì</div>
-          <div className="kpi-card-value" style={{ color: 'var(--success)' }}>{(kpi.totalCost || 0).toLocaleString('vi-VN')} ₫</div>
-        </div>
+        <KpiCard title="Tổng Work Order" value={totalWorkOrders} icon={ClipboardList} variant="primary" footer={`${dashboardData?.kpi?.completedWorkOrders || 0} đã hoàn thành`} />
+        <KpiCard title="Hoàn thành đúng hạn" value={formattedOnTimeRate} icon={CheckCircle2} variant="success" />
+        <KpiCard title="MTTR (Thời gian sửa TB)" value={formattedMttr} icon={Wrench} variant="warning" />
+        <KpiCard title="MTBF (Thời gian chạy TB)" value={formattedMtbf} icon={Activity} variant="info" />
+        <KpiCard title="Tổng chi phí bảo trì" value={`${(kpi.totalCost || 0).toLocaleString('vi-VN')} ₫`} icon={WalletCards} variant="purple" />
       </div>
 
       {/* Analytical Tabs */}
       <div className="card mb-4">
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', gap: '16px', marginBottom: '20px' }}>
-          {tabs.map((t) => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              style={{
-                padding: '8px 12px',
-                border: 'none',
-                background: 'none',
-                borderBottom: activeTab === t ? '2px solid var(--text-primary)' : '2px solid transparent',
-                color: activeTab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontWeight: activeTab === t ? 700 : 500,
-                cursor: 'pointer',
-                fontSize: '13px',
-              }}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          items={tabs.map((tab) => ({ key: tab, label: tab }))}
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          style={{ marginBottom: '20px' }}
+        />
 
         {activeTab === 'Sổ vận hành' ? (
           <div style={{ padding: '20px' }}>

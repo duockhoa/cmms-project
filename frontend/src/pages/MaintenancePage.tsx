@@ -4,26 +4,13 @@ import { Modal } from '../components/common/Modal';
 import {
   Calendar,
   History,
-  Plus,
-  PlayCircle,
-  PauseCircle,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Clock,
-  RefreshCw,
-  Edit2,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  Wrench,
-  CheckSquare,
 } from 'lucide-react';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
-import { TableSkeleton } from '../components/common/Skeleton';
-import { Pagination } from '../components/common/Pagination';
-import { EmptyState, FilterBar, PageHeader, SearchInput } from '../components/common';
-import { FrequencyBadge } from '../components/common/Badge';
+import { PageHeader, Tabs } from '../components/common';
+import { CreateScheduleModal } from '../components/maintenance/CreateScheduleModal';
+import { MaintenanceHistoryTab } from '../components/maintenance/MaintenanceHistoryTab';
+import { MaintenanceScheduleTab } from '../components/maintenance/MaintenanceScheduleTab';
+import { ScheduleLogModal } from '../components/maintenance/ScheduleLogModal';
 
 export const MaintenancePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'schedules' | 'history'>('schedules');
@@ -378,23 +365,29 @@ export const MaintenancePage: React.FC = () => {
     });
   };
 
-  const getFrequencyLabel = (type: string, interval: number) => {
-    switch (type) {
-      case 'DAILY':
-        return interval === 1 ? 'Hàng ngày' : `Mỗi ${interval} ngày`;
-      case 'WEEKLY':
-        return interval === 1 ? 'Hàng tuần' : `Mỗi ${interval} tuần`;
-      case 'MONTHLY':
-        return interval === 1 ? 'Hàng tháng' : `Mỗi ${interval} tháng`;
-      case 'QUARTERLY':
-        return interval === 1 ? 'Hàng quý' : `Mỗi ${interval} quý`;
-      case 'YEARLY':
-        return interval === 1 ? 'Hàng năm' : `Mỗi ${interval} năm`;
-      case 'OPERATING_HOURS':
-        return `Mỗi ${interval} giờ vận hành`;
-      default:
-        return `${type} (${interval})`;
-    }
+  const openCreateModal = () => {
+    setEditTarget(null);
+    setFormData({
+      title: '',
+      description: '',
+      equipmentId: equipmentList[0]?.id || '',
+      frequencyType: 'MONTHLY',
+      frequencyInterval: 1,
+      startDate: new Date().toISOString().split('T')[0],
+      estimatedDurationMinutes: 120,
+      defaultPriority: 'MEDIUM',
+      assignedTechnicianId: '',
+      autoGenerate: true,
+      leadTimeDays: 3,
+      notes: '',
+      checklistJson: '',
+    });
+    setIsAddOpen(true);
+  };
+
+  const closeScheduleModal = () => {
+    setIsAddOpen(false);
+    setEditTarget(null);
   };
 
   // Single-pass reduction for KPI
@@ -432,9 +425,6 @@ export const MaintenancePage: React.FC = () => {
     }, 0);
   }, [history]);
 
-  const startItem = (page - 1) * limit + 1;
-  const endItem = Math.min(page * limit, total);
-
   return (
     <div>
       <PageHeader
@@ -443,589 +433,78 @@ export const MaintenancePage: React.FC = () => {
       />
 
       {/* Tabs Switcher */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-        <button
-          className={`btn ${activeTab === 'schedules' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('schedules')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-        >
-          <Calendar size={15} /> Kế hoạch Bảo trì ({schedules.length})
-        </button>
-        <button
-          className={`btn ${activeTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('history')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-        >
-          <History size={15} /> Lịch sử thực hiện & Chi phí ({total})
-        </button>
-      </div>
+      <Tabs
+        variant="pills"
+        activeKey={activeTab}
+        onChange={(key) => setActiveTab(key as 'schedules' | 'history')}
+        items={[
+          { key: 'schedules', label: 'Kế hoạch Bảo trì', shortLabel: 'Kế hoạch', icon: Calendar, count: schedules.length },
+          { key: 'history', label: 'Lịch sử thực hiện & Chi phí', shortLabel: 'Lịch sử', icon: History, count: total },
+        ]}
+        style={{ marginBottom: '20px' }}
+      />
 
-      {/* ===================== TAB 1: SCHEDULES ===================== */}
       {activeTab === 'schedules' && (
-        <div>
-          {/* Top KPI row */}
-          <div className="kpi-row kpi-grid-4" style={{ marginBottom: '16px' }}>
-            <div className="kpi-card">
-              <div className="kpi-card-title">Đang chạy (ACTIVE)</div>
-              <div className="kpi-card-value" style={{ color: 'var(--success, #16a34a)' }}>{activeCount}</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-card-title">Cảnh báo Quá hạn</div>
-              <div className="kpi-card-value" style={{ color: 'var(--danger, #dc2626)' }}>{overdueCount}</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-card-title">Tạm dừng (PAUSED)</div>
-              <div className="kpi-card-value" style={{ color: 'var(--warning, #d97706)' }}>{pausedCount}</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-card-title">Bản nháp (DRAFT)</div>
-              <div className="kpi-card-value">{draftCount}</div>
-            </div>
-          </div>
-
-          {/* Action Toolbar & Filters */}
-          <FilterBar
-            hasActiveFilters={Boolean(search || statusFilter || freqFilter || overdueFilter)}
-            onReset={() => {
-              setSearch('');
-              setStatusFilter('');
-              setFreqFilter('');
-              setOverdueFilter(false);
-            }}
-          >
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', flex: 1, alignItems: 'center' }}>
-              <SearchInput
-                placeholder="Tìm mã lịch, tên máy..."
-                value={search}
-                onChange={setSearch}
-              />
-
-              <select
-                className="form-select"
-                style={{ width: '150px' }}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="">Tất cả trạng thái</option>
-                <option value="ACTIVE">Đang chạy (ACTIVE)</option>
-                <option value="PAUSED">Tạm dừng (PAUSED)</option>
-                <option value="DRAFT">Bản nháp (DRAFT)</option>
-                <option value="COMPLETED">Đã hoàn thành</option>
-                <option value="CANCELLED">Đã hủy</option>
-              </select>
-
-              <select
-                className="form-select"
-                style={{ width: '150px' }}
-                value={freqFilter}
-                onChange={(e) => setFreqFilter(e.target.value)}
-              >
-                <option value="">Tất cả chu kỳ</option>
-                <option value="DAILY">Hàng ngày</option>
-                <option value="WEEKLY">Hàng tuần</option>
-                <option value="MONTHLY">Hàng tháng</option>
-                <option value="QUARTERLY">Hàng quý</option>
-                <option value="YEARLY">Hàng năm</option>
-                <option value="OPERATING_HOURS">Giờ vận hành</option>
-              </select>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                <input type="checkbox" checked={overdueFilter} onChange={(e) => setOverdueFilter(e.target.checked)} />
-                Chỉ xem Quá hạn
-              </label>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                className="btn btn-secondary"
-                disabled={processingDue}
-                onClick={handleProcessDue}
-                title="Quét toàn bộ lịch bảo trì đến hạn và tự động sinh phiếu bảo trì"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              >
-                <RefreshCw size={14} className={processingDue ? 'spin' : ''} />
-                {processingDue ? 'Đang quét...' : 'Quét lịch đến hạn'}
-              </button>
-
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setFormData({
-                    title: '',
-                    description: '',
-                    equipmentId: equipmentList[0]?.id || '',
-                    frequencyType: 'MONTHLY',
-                    frequencyInterval: 1,
-                    startDate: new Date().toISOString().split('T')[0],
-                    estimatedDurationMinutes: 120,
-                    defaultPriority: 'MEDIUM',
-                    assignedTechnicianId: '',
-                    autoGenerate: true,
-                    leadTimeDays: 3,
-                    notes: '',
-                    checklistJson: '',
-                  });
-                  setIsAddOpen(true);
-                }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Plus size={15} /> Lập Kế hoạch mới
-              </button>
-            </div>
-          </FilterBar>
-
-          {/* Schedules Table */}
-          <div className="table-wrapper">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Mã Lịch</th>
-                  <th>Thiết bị</th>
-                  <th>Công việc bảo dưỡng</th>
-                  <th>Chu kỳ</th>
-                  <th>Hạn tiếp theo</th>
-                  <th>Kỹ thuật viên</th>
-                  <th>Trạng thái</th>
-                  <th style={{ textAlign: 'center' }}>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingSchedules ? (
-                  <TableSkeleton columns={8} rows={5} />
-                ) : schedules.length === 0 ? (
-                  <EmptyState
-                    colSpan={8}
-                    compact
-                    minHeight={170}
-                    title="Chưa có kế hoạch bảo trì"
-                    description="Lập kế hoạch định kỳ để chủ động theo dõi lịch bảo dưỡng thiết bị."
-                    action={{ label: 'Lập kế hoạch mới', onClick: () => setIsAddOpen(true), icon: Plus }}
-                  />
-                ) : (
-                  schedules.map((sch) => {
-                    const now = new Date();
-                    const nextDate = sch.nextDueDate ? new Date(sch.nextDueDate) : null;
-                    const leadMs = (sch.leadTimeDays || 0) * 24 * 60 * 60 * 1000;
-                    const isOverdue = sch.status === 'ACTIVE' && nextDate && nextDate < now;
-                    const isDueSoon = sch.status === 'ACTIVE' && nextDate && nextDate >= now && nextDate.getTime() <= now.getTime() + leadMs;
-
-                    return (
-                      <tr key={sch.id}>
-                        <td style={{ fontWeight: 700, color: 'var(--primary, #2563eb)' }}>{sch.scheduleCode}</td>
-                        <td style={{ fontWeight: 600 }}>{sch.equipment?.name || sch.equipmentId}</td>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{sch.title}</div>
-                          {sch.description && <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{sch.description}</div>}
-                        </td>
-                        <td>
-                          <FrequencyBadge frequency={sch.frequencyType} interval={sch.frequencyInterval} />
-                        </td>
-                        <td style={{ fontWeight: 600 }}>
-                          {sch.frequencyType === 'OPERATING_HOURS'
-                            ? `${sch.nextDueMeter} giờ (Hiện tại: ${sch.equipment?.currentOperatingHours || 0})`
-                            : sch.nextDueDate
-                            ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span style={{ color: isOverdue ? 'var(--danger, #dc2626)' : 'inherit' }}>
-                                    {new Date(sch.nextDueDate).toLocaleDateString('vi-VN')}
-                                  </span>
-                                  {isOverdue && (
-                                    <span className="badge badge-danger" style={{ fontSize: '10px', padding: '2px 5px' }}>
-                                      Quá hạn
-                                    </span>
-                                  )}
-                                  {isDueSoon && (
-                                    <span className="badge badge-warning" style={{ fontSize: '10px', padding: '2px 5px' }}>
-                                      Sắp đến
-                                    </span>
-                                  )}
-                                </div>
-                              )
-                            : '---'}
-                        </td>
-                        <td>{sch.assignedTechnician?.name || <span style={{ color: 'var(--text-muted)' }}>Chưa phân công</span>}</td>
-                        <td>
-                          <span
-                            className={`badge ${
-                              sch.status === 'ACTIVE'
-                                ? 'badge-success'
-                                : sch.status === 'PAUSED'
-                                ? 'badge-warning'
-                                : sch.status === 'DRAFT'
-                                ? 'badge-secondary'
-                                : 'badge-danger'
-                            }`}
-                          >
-                            {sch.status === 'ACTIVE'
-                              ? 'Đang chạy'
-                              : sch.status === 'PAUSED'
-                              ? 'Tạm dừng'
-                              : sch.status === 'DRAFT'
-                              ? 'Bản nháp'
-                              : sch.status === 'COMPLETED'
-                              ? 'Hoàn thành'
-                              : 'Đã hủy'}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                            {sch.status === 'DRAFT' && (
-                              <>
-                                <button className="btn btn-secondary btn-sm" title="Chỉnh sửa" onClick={() => openEditModal(sch)}>
-                                  <Edit2 size={13} />
-                                </button>
-                                <button className="btn btn-success btn-sm" title="Kích hoạt lịch" onClick={() => handleActivate(sch)}>
-                                  <PlayCircle size={13} /> Kích hoạt
-                                </button>
-                              </>
-                            )}
-
-                            {sch.status === 'ACTIVE' && (
-                              <>
-                                <button
-                                  className="btn btn-primary btn-sm"
-                                  title="Phát sinh ngay 1 Phiếu Bảo trì (Work Order)"
-                                  onClick={() => handleGenerateWO(sch)}
-                                >
-                                  <Wrench size={13} /> Sinh phiếu
-                                </button>
-                                <button
-                                  className="btn btn-warning btn-sm"
-                                  title="Tạm dừng kế hoạch"
-                                  onClick={() => {
-                                    setPauseTarget(sch);
-                                    setActionReason('');
-                                  }}
-                                >
-                                  <PauseCircle size={13} />
-                                </button>
-                                <button
-                                  className="btn btn-secondary btn-sm"
-                                  title="Chỉnh sửa"
-                                  onClick={() => openEditModal(sch)}
-                                >
-                                  <Edit2 size={13} />
-                                </button>
-                              </>
-                            )}
-
-                            {sch.status === 'PAUSED' && (
-                              <>
-                                <button className="btn btn-success btn-sm" title="Tiếp tục chạy" onClick={() => handleActivate(sch)}>
-                                  <PlayCircle size={13} /> Tiếp tục
-                                </button>
-                                <button className="btn btn-secondary btn-sm" title="Chỉnh sửa" onClick={() => openEditModal(sch)}>
-                                  <Edit2 size={13} />
-                                </button>
-                              </>
-                            )}
-
-                            <button className="btn btn-secondary btn-sm" title="Xem lịch sử thay đổi" onClick={() => openHistory(sch)}>
-                              <History size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <MaintenanceScheduleTab
+          schedules={schedules}
+          loading={loadingSchedules}
+          processingDue={processingDue}
+          search={search}
+          statusFilter={statusFilter}
+          frequencyFilter={freqFilter}
+          overdueOnly={overdueFilter}
+          counts={{ active: activeCount, overdue: overdueCount, paused: pausedCount, draft: draftCount }}
+          onSearchChange={setSearch}
+          onStatusChange={setStatusFilter}
+          onFrequencyChange={setFreqFilter}
+          onOverdueChange={setOverdueFilter}
+          onResetFilters={() => {
+            setSearch('');
+            setStatusFilter('');
+            setFreqFilter('');
+            setOverdueFilter(false);
+          }}
+          onProcessDue={handleProcessDue}
+          onCreate={openCreateModal}
+          onEdit={openEditModal}
+          onActivate={handleActivate}
+          onGenerateWorkOrder={handleGenerateWO}
+          onPause={(schedule) => {
+            setPauseTarget(schedule);
+            setActionReason('');
+          }}
+          onViewHistory={openHistory}
+        />
       )}
 
-      {/* ===================== TAB 2: COMPLETED WORK ORDERS HISTORY ===================== */}
       {activeTab === 'history' && (
-        <div>
-          {/* History KPIs */}
-          <div className="kpi-row kpi-grid-3" style={{ marginBottom: '16px' }}>
-            <div className="kpi-card">
-              <div className="kpi-card-title">Tổng chi phí bảo trì</div>
-              <div className="kpi-card-value" style={{ color: 'var(--success, #16a34a)' }}>
-                {totalCost.toLocaleString('vi-VN')} ₫
-              </div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-card-title">Tổng thời gian bảo trì</div>
-              <div className="kpi-card-value">{Math.round(totalHours * 10) / 10} giờ</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-card-title">Số lần bảo trì hoàn thành</div>
-              <div className="kpi-card-value">{total}</div>
-            </div>
-          </div>
-
-          {/* History Table */}
-          <div className="table-wrapper">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Ngày hoàn thành</th>
-                  <th>Mã phiếu</th>
-                  <th>Thiết bị</th>
-                  <th>Nội dung công việc</th>
-                  <th>Kỹ thuật viên</th>
-                  <th>Thời gian</th>
-                  <th>Chi phí</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingHistory ? (
-                  <TableSkeleton columns={7} rows={5} />
-                ) : history.length === 0 ? (
-                  <EmptyState colSpan={7} compact minHeight={160} title="Chưa có lịch sử bảo trì hoàn thành" />
-                ) : (
-                  history.map((wo) => (
-                    <tr key={wo.id}>
-                      <td>
-                        {wo.completedAt
-                          ? new Date(wo.completedAt).toLocaleDateString('vi-VN')
-                          : new Date(wo.updatedAt).toLocaleDateString('vi-VN')}
-                      </td>
-                      <td style={{ fontWeight: 700, color: 'var(--primary, #2563eb)' }}>{wo.orderCode}</td>
-                      <td style={{ fontWeight: 600 }}>{wo.equipment?.name || '---'}</td>
-                      <td>{wo.title}</td>
-                      <td>{wo.technicianName || '---'}</td>
-                      <td>
-                        {wo.actualEndDate && wo.actualStartDate
-                          ? `${Math.round(((new Date(wo.actualEndDate).getTime() - new Date(wo.actualStartDate).getTime()) / (1000 * 60 * 60)) * 10) / 10} giờ`
-                          : '2 giờ'}
-                      </td>
-                      <td style={{ color: 'var(--success, #16a34a)', fontWeight: 600 }}>
-                        {(wo.totalCost || 0).toLocaleString('vi-VN')} ₫
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Responsive Pagination */}
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            totalItems={total}
-            pageSize={limit}
-            itemName="phiếu bảo trì hoàn thành"
-            onPageChange={setPage}
-          />
-        </div>
+        <MaintenanceHistoryTab
+          history={history}
+          loading={loadingHistory}
+          page={page}
+          pageSize={limit}
+          total={total}
+          totalPages={totalPages}
+          totalCost={totalCost}
+          totalHours={totalHours}
+          onPageChange={setPage}
+        />
       )}
 
       {/* ===================== MODALS ===================== */}
 
-      {/* Modal Add / Edit Schedule */}
-      {(isAddOpen || editTarget) && (
-        <Modal
-          isOpen={isAddOpen || !!editTarget}
-          onClose={() => {
-            setIsAddOpen(false);
-            setEditTarget(null);
-          }}
-          title={editTarget ? `Chỉnh sửa kế hoạch: ${editTarget.scheduleCode}` : 'Lập Kế hoạch Bảo trì Định kỳ mới'}
-        >
-          <form onSubmit={editTarget ? handleUpdate : handleCreate}>
-            <div className="form-group">
-              <label className="form-label">Tên Kế hoạch Bảo trì *</label>
-              <input
-                type="text"
-                className="form-input"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Ví dụ: Bảo dưỡng định kỳ máy dập viên hàng tháng..."
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Mô tả quy trình bảo dưỡng</label>
-              <textarea
-                className="form-textarea"
-                rows={2}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Mô tả các hạng mục kiểm tra, bôi trơn, siết ốc, vệ sinh..."
-              />
-            </div>
-
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Thiết bị áp dụng *</label>
-                <select
-                  className="form-select"
-                  required
-                  disabled={!!editTarget && editTarget.status !== 'DRAFT'}
-                  value={formData.equipmentId}
-                  onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value })}
-                >
-                  {equipmentList.map((eq) => (
-                    <option key={eq.id} value={eq.id}>
-                      [{eq.code}] {eq.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Loại Chu kỳ *</label>
-                <select
-                  className="form-select"
-                  value={formData.frequencyType}
-                  onChange={(e) => setFormData({ ...formData, frequencyType: e.target.value })}
-                >
-                  <option value="DAILY">Hàng ngày</option>
-                  <option value="WEEKLY">Hàng tuần</option>
-                  <option value="MONTHLY">Hàng tháng</option>
-                  <option value="QUARTERLY">Hàng quý (3 tháng)</option>
-                  <option value="YEARLY">Hàng năm</option>
-                  <option value="OPERATING_HOURS">Theo giờ vận hành máy</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Khoảng lặp (Interval) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  className="form-input"
-                  required
-                  value={formData.frequencyInterval}
-                  onChange={(e) => setFormData({ ...formData, frequencyInterval: Math.max(1, Number(e.target.value)) })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Ngày bắt đầu áp dụng *</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  required
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Mẫu Checklist đính kèm</label>
-                <select
-                  className="form-select"
-                  value={formData.checklistJson}
-                  onChange={(e) => setFormData({ ...formData, checklistJson: e.target.value })}
-                >
-                  <option value="">-- Không đính kèm checklist --</option>
-                  {checklistTemplates.map((chk: any) => (
-                    <option key={chk.id} value={chk.id}>
-                      [{chk.code}] {chk.name} ({chk.items?.length || 0} mục kiểm tra)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Kỹ thuật viên phụ trách</label>
-                <select
-                  className="form-select"
-                  value={formData.assignedTechnicianId}
-                  onChange={(e) => setFormData({ ...formData, assignedTechnicianId: e.target.value })}
-                >
-                  <option value="">-- Chưa phân công --</option>
-                  {technicians.map((tech) => (
-                    <option key={tech.id} value={tech.id}>
-                      {tech.name} ({tech.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Tự động sinh phiếu (Auto Generate)</label>
-                <select
-                  className="form-select"
-                  value={formData.autoGenerate ? 'true' : 'false'}
-                  onChange={(e) => setFormData({ ...formData, autoGenerate: e.target.value === 'true' })}
-                >
-                  <option value="true">Có (Tự động sinh Work Order khi đến hạn)</option>
-                  <option value="false">Không (Chỉ sinh Work Order khi bấm thủ công)</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Báo trước ngày đến hạn (Lead Time - ngày)</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="form-input"
-                  value={formData.leadTimeDays}
-                  onChange={(e) => setFormData({ ...formData, leadTimeDays: Math.max(0, Number(e.target.value)) })}
-                />
-              </div>
-            </div>
-
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Thời gian dự kiến (phút)</label>
-                <input
-                  type="number"
-                  min="15"
-                  step="15"
-                  className="form-input"
-                  value={formData.estimatedDurationMinutes}
-                  onChange={(e) => setFormData({ ...formData, estimatedDurationMinutes: Number(e.target.value) })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Mức ưu tiên mặc định</label>
-                <select
-                  className="form-select"
-                  value={formData.defaultPriority}
-                  onChange={(e) => setFormData({ ...formData, defaultPriority: e.target.value })}
-                >
-                  <option value="LOW">Thấp</option>
-                  <option value="MEDIUM">Trung bình</option>
-                  <option value="HIGH">Cao</option>
-                  <option value="URGENT">Khẩn cấp</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Ghi chú lưu ý khi thực hiện</label>
-              <input
-                type="text"
-                className="form-input"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Lưu ý an toàn điện, ngắt nguồn máy, mang bảo hộ lao động..."
-              />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setIsAddOpen(false);
-                  setEditTarget(null);
-                }}
-              >
-                Hủy
-              </button>
-              <button type="submit" className="btn btn-primary">
-                {editTarget ? 'Lưu thay đổi' : 'Tạo Kế hoạch'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      <CreateScheduleModal
+        isOpen={isAddOpen || Boolean(editTarget)}
+        editTarget={editTarget}
+        formData={formData}
+        equipmentList={equipmentList}
+        checklistTemplates={checklistTemplates}
+        technicians={technicians}
+        onChange={setFormData}
+        onClose={closeScheduleModal}
+        onCreate={handleCreate}
+        onUpdate={handleUpdate}
+      />
 
       {/* Modal Pause Schedule */}
       {pauseTarget && (
@@ -1058,51 +537,12 @@ export const MaintenancePage: React.FC = () => {
         </Modal>
       )}
 
-      {/* Modal History Timeline */}
-      {historyTarget && (
-        <Modal
-          isOpen={!!historyTarget}
-          onClose={() => setHistoryTarget(null)}
-          title={`Lịch sử kế hoạch: ${historyTarget.scheduleCode}`}
-        >
-          <div style={{ maxHeight: '420px', overflowY: 'auto' }}>
-            {historyLoading ? (
-              <div style={{ textAlign: 'center', padding: '24px' }}>Đang tải dòng thời gian...</div>
-            ) : historyTimeline.length === 0 ? (
-              <EmptyState compact minHeight={130} title="Chưa có nhật ký hoạt động" />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {historyTimeline.map((h: any) => (
-                  <div
-                    key={h.id}
-                    style={{
-                      padding: '10px 12px',
-                      backgroundColor: 'var(--bg-secondary)',
-                      borderRadius: '6px',
-                      borderLeft: '3px solid var(--primary, #2563eb)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ fontWeight: 700, fontSize: '13px' }}>{h.action}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {new Date(h.createdAt).toLocaleString('vi-VN')}
-                      </span>
-                    </div>
-                    {h.reason && (
-                      <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                        {h.reason}
-                      </div>
-                    )}
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      Người thực hiện: {h.actedBy?.name || 'Hệ thống'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
+      <ScheduleLogModal
+        schedule={historyTarget}
+        timeline={historyTimeline}
+        loading={historyLoading}
+        onClose={() => setHistoryTarget(null)}
+      />
     </div>
   );
 };

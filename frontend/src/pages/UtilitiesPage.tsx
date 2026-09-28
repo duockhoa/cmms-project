@@ -16,7 +16,7 @@ import { formatVN } from '../utils/formatters';
 import { UtilityTrendChart } from '../components/utilities/UtilityTrendChart';
 import { usePermissions } from '../hooks/usePermissions';
 import { printBatchQRTags, printSingleQRTag } from '../utils/qrPrintHelper';
-import { ExportButton, PageHeader } from '../components/common';
+import { ExportButton, KpiCard, PageHeader, Tabs } from '../components/common';
 
 export const UtilitiesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -786,31 +786,18 @@ export const UtilitiesPage: React.FC = () => {
       />
 
       {/* 2. Thanh Tabs Điều Hướng */}
-      <div className="util-tabs-wrapper">
-        <div className="util-tabs-bar">
-          {[
-            { key: 'overview', label: 'Tổng Quan', fullLabel: 'Tổng Quan & Giám Sát', icon: BarChart3 },
-            { key: 'readings', label: `Sổ Ghi (${filteredReadings.length})`, fullLabel: `Sổ Ghi Điện & Nước (${filteredReadings.length})`, icon: FileText },
-            { key: 'statusLogs', label: `Bật / Tắt (${statusLogs.length})`, fullLabel: `Lịch Sử Bật / Tắt (${statusLogs.length})`, icon: Cpu },
-            { key: 'points', label: `Điểm Đo (${points.length})`, fullLabel: `Danh Mục Điểm Đo & Tem (${points.length})`, icon: Settings },
-            { key: 'cumulative', label: 'Báo Cáo Kỳ', fullLabel: 'Báo Cáo Tích Lũy Điện / Nước', icon: Calendar },
-          ].map((t) => {
-            const Icon = t.icon;
-            const isActive = activeTab === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setActiveTab(t.key as any)}
-                className={`util-tab-btn ${isActive ? 'active' : ''}`}
-              >
-                <Icon size={15} />
-                <span className="tab-label-short">{t.label}</span>
-                <span className="tab-label-full">{t.fullLabel}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <Tabs
+        className="util-tabs-wrapper"
+        activeKey={activeTab}
+        onChange={(key) => setActiveTab(key as typeof activeTab)}
+        items={[
+          { key: 'overview', label: 'Tổng Quan & Giám Sát', shortLabel: 'Tổng Quan', icon: BarChart3 },
+          { key: 'readings', label: 'Sổ Ghi Điện & Nước', shortLabel: 'Sổ Ghi', icon: FileText, count: filteredReadings.length },
+          { key: 'statusLogs', label: 'Lịch Sử Bật / Tắt', shortLabel: 'Bật / Tắt', icon: Cpu, count: statusLogs.length },
+          { key: 'points', label: 'Danh Mục Điểm Đo & Tem', shortLabel: 'Điểm Đo', icon: Settings, count: points.length },
+          { key: 'cumulative', label: 'Báo Cáo Tích Lũy Điện / Nước', shortLabel: 'Báo Cáo Kỳ', icon: Calendar },
+        ]}
+      />
 
       {/* 3. NỘI DUNG THEO TAB */}
 
@@ -819,135 +806,12 @@ export const UtilitiesPage: React.FC = () => {
         <div className="util-tab-content">
           {/* 6 Thẻ KPI Cards Thu Gọn (Điện Cấp, Điện Dùng, Nước Cấp, Nước Dùng, Phụ Trợ, Điểm Đo) */}
           <div className="util-kpi-grid">
-            {/* Card 1: Điện cấp hôm nay */}
-            <div className="card util-kpi-card kpi-elec-supply" title="Tổng sản lượng điện nguồn cấp vào nhà máy trong ngày (00h00 - 23h59)">
-              <div className="kpi-top">
-                <span className="kpi-label">
-                  ĐIỆN CẤP HÔM NAY
-                  {analytics?.summary?.electricitySupplyMeters?.length > 1 && (
-                    <span className="kpi-count-tag">{analytics.summary.electricitySupplyMeters.length} ĐH</span>
-                  )}
-                </span>
-                <div className="kpi-icon-box" style={{ backgroundColor: '#fef9c3', color: '#854d0e' }}>
-                  <Zap size={13} />
-                </div>
-              </div>
-              <div className="kpi-val">
-                {analytics?.summary?.electricitySupplyToday?.toLocaleString() || 0} <span className="kpi-unit">kWh</span>
-              </div>
-              {analytics?.summary?.electricitySupplyMeters && analytics.summary.electricitySupplyMeters.length > 1 ? (
-                <div className="kpi-meter-list">
-                  {analytics.summary.electricitySupplyMeters.map((m: any) => (
-                    <div key={m.id} className="kpi-meter-row" title={`${m.code} - ${m.name}: Hôm nay: ${m.today?.toLocaleString()} kWh | 7 ngày: ${m.period?.toLocaleString()} kWh`}>
-                      <span className="kpi-meter-code">{m.code}:</span>
-                      <span className="kpi-meter-val">{m.today?.toLocaleString() || 0}</span>
-                      <span className="kpi-meter-sub">({m.period?.toLocaleString() || 0})</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="kpi-sub">
-                  7 ngày: <strong>{analytics?.summary?.electricitySupplyPeriod?.toLocaleString() || 0} kWh</strong>
-                </div>
-              )}
-            </div>
-
-            {/* Card 2: Đã dùng điện hôm nay */}
-            <div className="card util-kpi-card kpi-elec-cons" title="Tổng điện năng tiêu thụ thực tế tại các phân xưởng & phụ tải trong ngày (00h00 - 23h59)">
-              <div className="kpi-top">
-                <span className="kpi-label">ĐÃ DÙNG ĐIỆN</span>
-                <div className="kpi-icon-box" style={{ backgroundColor: '#ffedd5', color: '#c2410c' }}>
-                  <Activity size={13} />
-                </div>
-              </div>
-              <div className="kpi-val" style={{ color: '#c2410c' }}>
-                {analytics?.summary?.electricityConsumptionToday?.toLocaleString() || 0} <span className="kpi-unit">kWh</span>
-              </div>
-              <div className="kpi-sub">
-                7 ngày: <strong>{analytics?.summary?.electricityConsumptionPeriod?.toLocaleString() || 0} kWh</strong>
-              </div>
-            </div>
-
-            {/* Card 3: Nước cấp hôm nay */}
-            <div className="card util-kpi-card kpi-water-supply" title="Tổng lượng nước nguồn cấp vào nhà máy trong ngày (00h00 - 23h59)">
-              <div className="kpi-top">
-                <span className="kpi-label">
-                  NƯỚC CẤP HÔM NAY
-                  {analytics?.summary?.waterSupplyMeters?.length > 1 && (
-                    <span className="kpi-count-tag">{analytics.summary.waterSupplyMeters.length} ĐH</span>
-                  )}
-                </span>
-                <div className="kpi-icon-box" style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}>
-                  <Droplets size={13} />
-                </div>
-              </div>
-              <div className="kpi-val">
-                {analytics?.summary?.waterSupplyToday?.toLocaleString() || 0} <span className="kpi-unit">m³</span>
-              </div>
-              {analytics?.summary?.waterSupplyMeters && analytics.summary.waterSupplyMeters.length > 1 ? (
-                <div className="kpi-meter-list">
-                  {analytics.summary.waterSupplyMeters.map((m: any) => (
-                    <div key={m.id} className="kpi-meter-row" title={`${m.code} - ${m.name}: Hôm nay: ${m.today?.toLocaleString()} m³ | 7 ngày: ${m.period?.toLocaleString()} m³`}>
-                      <span className="kpi-meter-code">{m.code}:</span>
-                      <span className="kpi-meter-val">{m.today?.toLocaleString() || 0}</span>
-                      <span className="kpi-meter-sub">({m.period?.toLocaleString() || 0})</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="kpi-sub">
-                  7 ngày: <strong>{analytics?.summary?.waterSupplyPeriod?.toLocaleString() || 0} m³</strong>
-                </div>
-              )}
-            </div>
-
-            {/* Card 4: Đã dùng nước hôm nay */}
-            <div className="card util-kpi-card kpi-water-cons" title="Tổng lượng nước tiêu thụ tại các phân xưởng & dây chuyền nội bộ trong ngày (00h00 - 23h59)">
-              <div className="kpi-top">
-                <span className="kpi-label">ĐÃ DÙNG NƯỚC</span>
-                <div className="kpi-icon-box" style={{ backgroundColor: '#ecfeff', color: '#0e7490' }}>
-                  <Droplets size={13} />
-                </div>
-              </div>
-              <div className="kpi-val" style={{ color: '#0e7490' }}>
-                {analytics?.summary?.waterConsumptionToday?.toLocaleString() || 0} <span className="kpi-unit">m³</span>
-              </div>
-              <div className="kpi-sub">
-                7 ngày: <strong>{analytics?.summary?.waterConsumptionPeriod?.toLocaleString() || 0} m³</strong>
-              </div>
-            </div>
-
-            {/* Card 5: Hệ thống đang vận hành */}
-            <div className="card util-kpi-card kpi-aux" title="Số lượng máy và hệ thống phụ trợ đang chạy">
-              <div className="kpi-top">
-                <span className="kpi-label">HỆ THỐNG CHẠY</span>
-                <div className="kpi-icon-box" style={{ backgroundColor: '#f0fdf4', color: '#16a34a' }}>
-                  <Cpu size={13} />
-                </div>
-              </div>
-              <div className="kpi-val" style={{ color: '#16a34a' }}>
-                {analytics?.systemStatusCounts?.RUNNING || 0} / {analytics?.systemStatusCounts?.TOTAL || 0}
-              </div>
-              <div className="kpi-sub">
-                Tắt: {analytics?.systemStatusCounts?.OFF || 0} • Chờ: {analytics?.systemStatusCounts?.STANDBY || 0}
-              </div>
-            </div>
-
-            {/* Card 6: Tổng điểm đo */}
-            <div className="card util-kpi-card kpi-points" title="Tổng số đồng hồ đo điện, nước và thiết bị phụ trợ">
-              <div className="kpi-top">
-                <span className="kpi-label">TỔNG ĐIỂM ĐO</span>
-                <div className="kpi-icon-box" style={{ backgroundColor: '#f3e8ff', color: '#6b21a8' }}>
-                  <QrCode size={13} />
-                </div>
-              </div>
-              <div className="kpi-val">
-                {points.length} <span className="kpi-unit">Điểm</span>
-              </div>
-              <div className="kpi-sub">
-                Điện: {analytics?.metersCount?.electricity || 0} • Nước: {analytics?.metersCount?.water || 0}
-              </div>
-            </div>
+            <KpiCard title="Điện cấp hôm nay" value={`${analytics?.summary?.electricitySupplyToday?.toLocaleString() || 0} kWh`} icon={Zap} variant="warning" footer={`7 ngày: ${analytics?.summary?.electricitySupplyPeriod?.toLocaleString() || 0} kWh`} />
+            <KpiCard title="Đã dùng điện" value={`${analytics?.summary?.electricityConsumptionToday?.toLocaleString() || 0} kWh`} icon={Activity} variant="danger" footer={`7 ngày: ${analytics?.summary?.electricityConsumptionPeriod?.toLocaleString() || 0} kWh`} />
+            <KpiCard title="Nước cấp hôm nay" value={`${analytics?.summary?.waterSupplyToday?.toLocaleString() || 0} m³`} icon={Droplets} variant="primary" footer={`7 ngày: ${analytics?.summary?.waterSupplyPeriod?.toLocaleString() || 0} m³`} />
+            <KpiCard title="Đã dùng nước" value={`${analytics?.summary?.waterConsumptionToday?.toLocaleString() || 0} m³`} icon={Droplets} variant="info" footer={`7 ngày: ${analytics?.summary?.waterConsumptionPeriod?.toLocaleString() || 0} m³`} />
+            <KpiCard title="Hệ thống chạy" value={`${analytics?.systemStatusCounts?.RUNNING || 0} / ${analytics?.systemStatusCounts?.TOTAL || 0}`} icon={Cpu} variant="success" footer={`Tắt: ${analytics?.systemStatusCounts?.OFF || 0} • Chờ: ${analytics?.systemStatusCounts?.STANDBY || 0}`} />
+            <KpiCard title="Tổng điểm đo" value={`${points.length} điểm`} icon={QrCode} variant="purple" footer={`Điện: ${analytics?.metersCount?.electricity || 0} • Nước: ${analytics?.metersCount?.water || 0}`} />
           </div>
 
           {/* Ma trận Giám sát Realtime Hệ thống Phụ trợ */}

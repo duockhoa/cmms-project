@@ -980,5 +980,23 @@ body {
     width: 100% !important;
     min-width: 0 !important;
   }
+
+  .tabs-nav-container .tab-label-full {
+    display: none;
+  }
+
+  .tabs-nav-container .tab-label-short {
+    display: inline;
+  }
+}
+
+.tabs-nav-container .tab-label-short {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .tabs-nav-container .tab-label-short {
+    display: inline;
+  }
 }
 

@@ -2,9 +2,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, AlertCircle } from 'lucide-react';
+import { Plus, AlertCircle, Package, AlertTriangle, XCircle, WalletCards, ArrowUpRight } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
-import { EmptyState, PageHeader, FilterBar, SearchInput, ExportButton } from '../components/common';
+import { EmptyState, PageHeader, FilterBar, SearchInput, ExportButton, KpiCard } from '../components/common';
 
 export const SparePartsPage: React.FC = () => {
   const [inventory, setInventory] = useState<any[]>([]);
@@ -118,26 +118,11 @@ export const SparePartsPage: React.FC = () => {
 
       {/* KPI Row */}
       <div className="kpi-row">
-        <div className="kpi-card">
-          <div className="kpi-card-title">Tổng phụ tùng</div>
-          <div className="kpi-card-value">{totalItems}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Sắp hết hàng</div>
-          <div className="kpi-card-value" style={{ color: 'var(--warning)' }}>{lowStockItems.length}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Hết hàng</div>
-          <div className="kpi-card-value" style={{ color: 'var(--danger)' }}>{outOfStockItems.length}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Giá trị tồn kho</div>
-          <div className="kpi-card-value" style={{ color: 'var(--success)' }}>{totalValue.toLocaleString('vi-VN')} ₫</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Đã xuất tháng này</div>
-          <div className="kpi-card-value">0</div>
-        </div>
+        <KpiCard title="Tổng phụ tùng" value={totalItems} icon={Package} variant="primary" />
+        <KpiCard title="Sắp hết hàng" value={lowStockItems.length} icon={AlertTriangle} variant="warning" />
+        <KpiCard title="Hết hàng" value={outOfStockItems.length} icon={XCircle} variant="danger" />
+        <KpiCard title="Giá trị tồn kho" value={`${totalValue.toLocaleString('vi-VN')} ₫`} icon={WalletCards} variant="success" />
+        <KpiCard title="Đã xuất tháng này" value={0} icon={ArrowUpRight} variant="info" />
       </div>
 
       {/* Warnings Banner */}
