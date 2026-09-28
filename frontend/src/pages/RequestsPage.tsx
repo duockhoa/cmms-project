@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { StatusBadge } from '../components/common/Badge';
+import { PriorityBadge, StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode, Cpu, Edit2, Trash2, Eye, AlertTriangle, Lock } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
@@ -8,6 +8,7 @@ import { QRScanner } from '../components/common/QRScanner';
 import { RequestDetailView } from '../components/common/RequestDetailView';
 import { usePermissions } from '../hooks/usePermissions';
 import { TableSkeleton, CardListSkeleton } from '../components/common/Skeleton';
+import { EmptyState } from '../components/common';
 
 export const RequestsPage: React.FC = () => {
   const { can } = usePermissions();
@@ -328,9 +329,7 @@ export const RequestsPage: React.FC = () => {
               {loading ? (
                 <CardListSkeleton count={5} />
               ) : requests.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                  Không có yêu cầu sự cố nào
-                </div>
+                <EmptyState compact minHeight={160} title="Không có yêu cầu sự cố" />
               ) : (
                 requests.map(req => (
                   <div 
@@ -430,11 +429,7 @@ export const RequestsPage: React.FC = () => {
                   {loading ? (
                     <TableSkeleton columns={7} rows={6} />
                   ) : requests.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                        Không có yêu cầu sự cố nào phù hợp
-                      </td>
-                    </tr>
+                    <EmptyState colSpan={7} compact minHeight={160} title="Không có yêu cầu sự cố phù hợp" />
                   ) : (
                     requests.map((req) => (
                     <tr 
@@ -471,7 +466,7 @@ export const RequestsPage: React.FC = () => {
                         <div>{req.reporterName}</div>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{req.department}</div>
                       </td>
-                      <td><StatusBadge status={req.priority} /></td>
+                      <td><PriorityBadge priority={req.priority} /></td>
                       <td><StatusBadge status={req.status} /></td>
                       <td style={{ textAlign: 'center' }}>
                         <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>

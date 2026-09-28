@@ -8,6 +8,7 @@ import {
   Bug, Sparkles, CheckCircle2, Clock, Eye, Image as ImageIcon 
 } from 'lucide-react';
 import { TableSkeleton } from '../components/common/Skeleton';
+import { EmptyState } from '../components/common';
 
 export const FeedbacksPage: React.FC = () => {
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
@@ -199,11 +200,7 @@ export const FeedbacksPage: React.FC = () => {
               {loading ? (
                 <TableSkeleton columns={16} rows={6} />
               ) : feedbacks.length === 0 ? (
-                <tr>
-                  <td colSpan={16} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    Chưa có yêu cầu hoặc góp ý nào
-                  </td>
-                </tr>
+                <EmptyState colSpan={16} compact minHeight={160} title="Chưa có yêu cầu hoặc góp ý" />
               ) : (
                 feedbacks.map((fb, index) => {
                   let compImgs: string[] = [];

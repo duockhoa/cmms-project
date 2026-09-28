@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { api, fetchWithAuth, API_HOST } from '../services/api';
-import { StatusBadge } from '../components/common/Badge';
+import { PriorityBadge, StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { ChecklistManager } from '../components/common/ChecklistManager';
 import { Plus, Search, LayoutGrid, List, ChevronDown, Package, RotateCcw, RefreshCw, ChevronLeft, ChevronRight, Camera, Eye, Trash2, Play, Pause, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -11,6 +11,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { TableSkeleton, CardListSkeleton } from '../components/common/Skeleton';
 import { useDebounce } from '../hooks/useDebounce';
 import { Pagination } from '../components/common/Pagination';
+import { EmptyState } from '../components/common';
 
 const API_BASE = API_HOST;
 
@@ -458,11 +459,7 @@ export const WorkOrdersPage: React.FC = () => {
                   {loading ? (
                     <TableSkeleton columns={9} rows={6} />
                   ) : workOrders.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
-                        Không có phiếu sửa chữa nào được tìm thấy
-                      </td>
-                    </tr>
+                    <EmptyState colSpan={9} compact minHeight={150} title="Không có phiếu sửa chữa phù hợp" />
                   ) : workOrders.map((wo) => (
                     <tr key={wo.id}>
                       <td
@@ -481,7 +478,7 @@ export const WorkOrdersPage: React.FC = () => {
                       <td>
                         <StatusBadge status={wo.status} />
                       </td>
-                      <td><span className={`badge badge-${wo.priority === 'HIGH' || wo.priority === 'URGENT' ? 'danger' : 'warning'}`}>{wo.priority}</span></td>
+                      <td><PriorityBadge priority={wo.priority} /></td>
                       <td>{wo.technicianName || 'Chưa phân công'}</td>
                       <td style={{ textAlign: 'center' }}>
                         <button
@@ -621,9 +618,7 @@ export const WorkOrdersPage: React.FC = () => {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: '16px' }}>
                 {workOrders.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px', fontSize: '13px' }}>
-                    Không có phiếu bảo trì nào
-                  </div>
+                  <EmptyState compact minHeight={140} title="Không có phiếu bảo trì" />
                 ) : workOrders.map((wo) => (
                   <div
                     key={wo.id}
@@ -874,7 +869,7 @@ export const WorkOrdersPage: React.FC = () => {
             {/* History of ISSUE & RETURN for WO */}
             <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '10px' }}>Lịch sử Xuất / Trả vật tư:</h4>
             {woTransactions.length === 0 ? (
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Chưa có giao dịch xuất/trả vật tư nào.</div>
+              <EmptyState compact minHeight={110} title="Chưa có giao dịch xuất/trả vật tư" />
             ) : (
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                 <table className="custom-table" style={{ fontSize: '12px' }}>
@@ -1028,7 +1023,7 @@ export const WorkOrdersPage: React.FC = () => {
                     <tr key={item.id}>
                       <td style={{ fontWeight: 700 }}>{item.orderCode}</td>
                       <td>{item.title}</td>
-                      <td><span className={`badge badge-${item.priority === 'HIGH' || item.priority === 'URGENT' ? 'danger' : 'warning'}`}>{item.priority}</span></td>
+                      <td><PriorityBadge priority={item.priority} /></td>
                       <td><StatusBadge status={item.status} /></td>
                       <td>{new Date(item.createdAt).toLocaleDateString('vi-VN')}</td>
                       <td>

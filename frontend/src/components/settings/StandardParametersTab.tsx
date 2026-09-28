@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, RefreshCw, Gauge, CheckCircle2, XCircle } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { useToast, useConfirmDialog } from '../common/Toast';
+import { EmptyState } from '../common/EmptyState';
 
 interface StandardParamItem {
   id: string;
@@ -357,45 +358,13 @@ export const StandardParametersTab: React.FC = () => {
                     </tr>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan={7} style={{ padding: 0 }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '48px 24px',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '52px',
-                            height: '52px',
-                            borderRadius: '50%',
-                            backgroundColor: 'rgba(37, 99, 235, 0.08)',
-                            color: '#2563eb',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: '12px',
-                          }}
-                        >
-                          <Gauge size={26} />
-                        </div>
-                        <h4 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
-                          Chưa có thông số chuẩn nào
-                        </h4>
-                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                          Khai báo các thông số vận hành tiêu chuẩn để áp dụng cho thiết bị trong sổ vận hành.
-                        </p>
-                        <button className="btn btn-primary" onClick={handleOpenAdd}>
-                          <Plus size={15} /> Thêm thông số đầu tiên
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <EmptyState
+                    colSpan={7}
+                    icon={Gauge}
+                    title="Chưa có thông số chuẩn"
+                    description="Khai báo thông số vận hành chuẩn để áp dụng thống nhất cho thiết bị."
+                    action={{ label: 'Thêm thông số đầu tiên', onClick: handleOpenAdd, icon: Plus }}
+                  />
                 )}
               </tbody>
             </table>

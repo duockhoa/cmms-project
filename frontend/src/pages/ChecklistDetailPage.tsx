@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { Modal } from '../components/common/Modal';
 import { ArrowLeft, Plus, Save, Trash2, GripVertical, CheckSquare } from 'lucide-react';
+import { EmptyState } from '../components/common';
 
 export const ChecklistDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -133,11 +134,12 @@ export const ChecklistDetailPage: React.FC = () => {
 
         <div className="card-body">
           {template.items?.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-secondary)' }}>
-              <CheckSquare size={40} style={{ opacity: 0.2, margin: '0 auto 12px' }} />
-              <p>Chưa có hạng mục nào trong mẫu checklist này.</p>
-              <p style={{ fontSize: '13px' }}>Hãy thêm thủ công hoặc chọn các mẫu có sẵn từ Thư viện hệ thống.</p>
-            </div>
+            <EmptyState
+              icon={CheckSquare}
+              title="Chưa có hạng mục checklist"
+              description="Hãy thêm thủ công hoặc chọn hạng mục có sẵn từ thư viện hệ thống."
+              action={{ label: 'Mở thư viện', onClick: () => setIsLibraryOpen(true), icon: Plus }}
+            />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {template.items?.map((item: any, index: number) => (

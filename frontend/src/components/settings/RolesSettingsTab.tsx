@@ -8,6 +8,7 @@ import {
   Zap, Cpu, AlertTriangle, ClipboardList, BookOpen, Package, Calendar, Settings, MessageSquare, Layers
 } from 'lucide-react';
 import { PERMISSIONS_REGISTRY, ALL_PERMISSION_CODES } from '../../constants/permissions.registry';
+import { EmptyState } from '../common/EmptyState';
 
 const MODULE_ICONS: Record<string, React.FC<any>> = {
   utilities: Zap,
@@ -231,11 +232,7 @@ export const RolesSettingsTab: React.FC = () => {
               );
             })}
             {roles.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                  Chưa có nhóm quyền nào được tạo
-                </td>
-              </tr>
+              <EmptyState colSpan={5} compact minHeight={150} icon={Shield} title="Chưa có nhóm quyền" />
             )}
           </tbody>
         </table>

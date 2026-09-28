@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, RefreshCw, Layers, Tag } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { useToast, useConfirmDialog } from '../common/Toast';
+import { EmptyState } from '../common/EmptyState';
 
 interface ProductionLineItem {
   id: string;
@@ -302,45 +303,13 @@ export const ProductionLinesSettingsTab: React.FC = () => {
                     </tr>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan={5} style={{ padding: 0 }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '48px 24px',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '52px',
-                            height: '52px',
-                            borderRadius: '50%',
-                            backgroundColor: 'rgba(147, 51, 234, 0.08)',
-                            color: '#9333ea',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: '12px',
-                          }}
-                        >
-                          <Layers size={26} />
-                        </div>
-                        <h4 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
-                          Chưa có dây chuyền nào
-                        </h4>
-                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                          Khai báo các line sản xuất để liên kết máy móc và theo dõi bảo trì.
-                        </p>
-                        <button className="btn btn-primary" onClick={handleOpenAdd}>
-                          <Plus size={15} /> Thêm dây chuyền đầu tiên
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <EmptyState
+                    colSpan={5}
+                    icon={Layers}
+                    title="Chưa có dây chuyền"
+                    description="Khai báo dây chuyền sản xuất để liên kết máy móc và lịch bảo trì."
+                    action={{ label: 'Thêm dây chuyền đầu tiên', onClick: handleOpenAdd, icon: Plus }}
+                  />
                 )}
               </tbody>
             </table>

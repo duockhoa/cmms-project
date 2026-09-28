@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, RefreshCw, Cpu, Layers, Tag, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { useToast } from '../common/Toast';
+import { EmptyState } from '../common/EmptyState';
 
 interface FunctionalUnitLibraryItem {
   id: string;
@@ -284,11 +285,7 @@ export const FunctionalUnitLibraryTab: React.FC = () => {
               </thead>
               <tbody>
                 {filteredItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                      Không tìm thấy cụm chức năng nào phù hợp với bộ lọc.
-                    </td>
-                  </tr>
+                  <EmptyState colSpan={7} compact minHeight={150} icon={Layers} title="Không tìm thấy cụm chức năng phù hợp" />
                 ) : (
                   filteredItems.map((item, idx) => (
                     <tr key={item.id}>

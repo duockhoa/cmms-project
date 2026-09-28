@@ -4,7 +4,7 @@ import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { Plus, AlertCircle } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
-import { PageHeader, FilterBar, SearchInput, ExportButton } from '../components/common';
+import { EmptyState, PageHeader, FilterBar, SearchInput, ExportButton } from '../components/common';
 
 export const SparePartsPage: React.FC = () => {
   const [inventory, setInventory] = useState<any[]>([]);
@@ -187,6 +187,9 @@ export const SparePartsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
+              {inventory.length === 0 && (
+                <EmptyState colSpan={7} compact minHeight={150} title="Không có phụ tùng phù hợp" />
+              )}
               {inventory.map((item) => (
                 <tr key={item.id}>
                   <td style={{ fontWeight: 700 }}>{item.itemCode}</td>

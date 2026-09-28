@@ -5,6 +5,7 @@ import { Modal } from '../components/common/Modal';
 import { Plus, Search, Eye, PlayCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { useNavigate } from 'react-router-dom';
+import { EmptyState } from '../components/common';
 
 export const ChecklistsPage: React.FC = () => {
   const [templates, setTemplates] = useState<any[]>([]);
@@ -131,9 +132,7 @@ export const ChecklistsPage: React.FC = () => {
               </tr>
             ))}
             {templates.length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '30px' }}>Chưa có mẫu Checklist nào.</td>
-              </tr>
+              <EmptyState colSpan={7} compact minHeight={150} title="Chưa có mẫu checklist" />
             )}
           </tbody>
         </table>

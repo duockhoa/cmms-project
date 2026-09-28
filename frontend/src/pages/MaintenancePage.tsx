@@ -23,6 +23,8 @@ import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { TableSkeleton } from '../components/common/Skeleton';
 import { useDebounce } from '../hooks/useDebounce';
 import { Pagination } from '../components/common/Pagination';
+import { EmptyState } from '../components/common';
+import { FrequencyBadge } from '../components/common/Badge';
 
 export const MaintenancePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'schedules' | 'history'>('schedules');
@@ -603,11 +605,14 @@ export const MaintenancePage: React.FC = () => {
                 {loadingSchedules ? (
                   <TableSkeleton columns={8} rows={5} />
                 ) : schedules.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '36px' }}>
-                      Chưa có kế hoạch bảo trì nào. Nhấn <strong>"Lập Kế hoạch mới"</strong> để thiết lập lịch bảo dưỡng định kỳ cho thiết bị.
-                    </td>
-                  </tr>
+                  <EmptyState
+                    colSpan={8}
+                    compact
+                    minHeight={170}
+                    title="Chưa có kế hoạch bảo trì"
+                    description="Lập kế hoạch định kỳ để chủ động theo dõi lịch bảo dưỡng thiết bị."
+                    action={{ label: 'Lập kế hoạch mới', onClick: () => setIsAddOpen(true), icon: Plus }}
+                  />
                 ) : (
                   schedules.map((sch) => {
                     const now = new Date();
@@ -625,7 +630,7 @@ export const MaintenancePage: React.FC = () => {
                           {sch.description && <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{sch.description}</div>}
                         </td>
                         <td>
-                          <span className="badge badge-info">{getFrequencyLabel(sch.frequencyType, sch.frequencyInterval)}</span>
+                          <FrequencyBadge frequency={sch.frequencyType} interval={sch.frequencyInterval} />
                         </td>
                         <td style={{ fontWeight: 600 }}>
                           {sch.frequencyType === 'OPERATING_HOURS'
@@ -781,11 +786,7 @@ export const MaintenancePage: React.FC = () => {
                 {loadingHistory ? (
                   <TableSkeleton columns={7} rows={5} />
                 ) : history.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '36px' }}>
-                      Chưa có lịch sử bảo trì hoàn thành nào.
-                    </td>
-                  </tr>
+                  <EmptyState colSpan={7} compact minHeight={160} title="Chưa có lịch sử bảo trì hoàn thành" />
                 ) : (
                   history.map((wo) => (
                     <tr key={wo.id}>
@@ -1080,9 +1081,7 @@ export const MaintenancePage: React.FC = () => {
             {historyLoading ? (
               <div style={{ textAlign: 'center', padding: '24px' }}>Đang tải dòng thời gian...</div>
             ) : historyTimeline.length === 0 ? (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
-                Chưa có nhật ký hoạt động nào cho kế hoạch này.
-              </div>
+              <EmptyState compact minHeight={130} title="Chưa có nhật ký hoạt động" />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {historyTimeline.map((h: any) => (

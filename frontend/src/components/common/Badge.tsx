@@ -92,22 +92,25 @@ export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, showIcon
 };
 
 interface FrequencyBadgeProps {
-  frequency: string;
+  frequency: string | number;
+  interval?: number;
 }
 
-export const FrequencyBadge: React.FC<FrequencyBadgeProps> = ({ frequency }) => {
-  const formatFreq = (freq: string) => {
+export const FrequencyBadge: React.FC<FrequencyBadgeProps> = ({ frequency, interval = 1 }) => {
+  const formatFreq = (freq: string | number) => {
+    if (typeof freq === 'number') return `Mỗi ${freq} ngày`;
+
     switch (freq?.toUpperCase()) {
-      case 'DAILY': return 'Hàng ngày';
-      case 'WEEKLY': return 'Hàng tuần';
-      case 'MONTHLY': return 'Hàng tháng';
-      case 'QUARTERLY': return 'Hàng quý (3 tháng)';
-      case 'SEMI_ANNUALLY': return 'Nửa năm (6 tháng)';
-      case 'YEARLY': return 'Hàng năm';
+      case 'DAILY': return interval === 1 ? 'Hàng ngày' : `Mỗi ${interval} ngày`;
+      case 'WEEKLY': return interval === 1 ? 'Hàng tuần' : `Mỗi ${interval} tuần`;
+      case 'MONTHLY': return interval === 1 ? 'Hàng tháng' : `Mỗi ${interval} tháng`;
+      case 'QUARTERLY': return interval === 1 ? 'Hàng quý' : `Mỗi ${interval} quý`;
+      case 'SEMI_ANNUALLY': return interval === 1 ? 'Nửa năm' : `Mỗi ${interval * 6} tháng`;
+      case 'YEARLY': return interval === 1 ? 'Hàng năm' : `Mỗi ${interval} năm`;
+      case 'OPERATING_HOURS': return `Mỗi ${interval} giờ chạy`;
       default: return freq || 'Định kỳ';
     }
   };
 
   return <span className="badge badge-info">{formatFreq(frequency)}</span>;
 };
-

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api, fetchWithAuth, API_HOST as API_BASE } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, Search, MoreHorizontal, Eye, Trash2, Edit, ChevronLeft, ChevronRight, Printer, CheckSquare } from 'lucide-react';
+import { Plus, MoreHorizontal, Eye, Trash2, Edit, Printer, CheckSquare } from 'lucide-react';
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
@@ -11,6 +11,8 @@ import { useDebounce } from '../hooks/useDebounce';
 import { TableSkeleton } from '../components/common/Skeleton';
 import { printBatchQRTags, printSingleQRTag } from '../utils/qrPrintHelper';
 import { Pagination } from '../components/common/Pagination';
+import { EmptyState, FilterBar, PageHeader, SearchInput } from '../components/common';
+import { useModal } from '../hooks/useModal';
 
 export const EquipmentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,8 +39,7 @@ export const EquipmentPage: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
 
   // Modals
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [editItem, setEditItem] = useState<any>(null);
+  const equipmentModal = useModal<any>();
   const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
 
   const loadEquipment = async () => {
@@ -97,9 +98,9 @@ export const EquipmentPage: React.FC = () => {
 
   const handleFormSubmit = async (finalFormData: any) => {
     try {
-      if (editItem) {
+      if (equipmentModal.data) {
         // Edit mode: PATCH
-        const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment/${editItem.id}`, {
+        const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment/${equipmentModal.data.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
             name: finalFormData.name,
@@ -111,7 +112,7 @@ export const EquipmentPage: React.FC = () => {
             specs: finalFormData.specs,
             accountingCode: finalFormData.accountingCode || undefined,
             functionalUnit: finalFormData.functionalUnit || undefined,
-            expectedVersion: editItem.version,
+            expectedVersion: equipmentModal.data.version,
           })
         });
         if (!res.ok) {
@@ -145,8 +146,7 @@ export const EquipmentPage: React.FC = () => {
   };
 
   const handleCloseModal = () => {
-    setIsAddOpen(false);
-    setEditItem(null);
+    equipmentModal.close();
   };
 
   const handleDelete = async (eqId: string) => {
@@ -290,12 +290,11 @@ export const EquipmentPage: React.FC = () => {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Quản lý thiết bị</h1>
-          <p className="page-subtitle">Quản lý thông tin và tình trạng thiết bị</p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <PageHeader
+        title="Quản lý thiết bị"
+        subtitle="Quản lý thông tin và tình trạng thiết bị"
+        actions={
+          <>
           {/* Nút in các thiết bị được chọn (nếu có chọn) */}
           {(selectedIds.size > 0 || isSelectAllTotal) && (
             <button 
@@ -345,23 +344,29 @@ export const EquipmentPage: React.FC = () => {
             </button>
           )}
 
-          <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
+          <button className="btn btn-primary" onClick={() => equipmentModal.open()}>
             <Plus size={16} /> Thêm thiết bị
           </button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Filter Bar */}
-      <div className="card mb-4 filter-bar-responsive">
-        <div className="filter-search" style={{ position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input
-            type="text"
-            className="form-input"
-            style={{ paddingLeft: '34px', width: '100%' }}
+      <FilterBar
+        hasActiveFilters={Boolean(search || categoryFilter || departmentFilter || statusFilter)}
+        onReset={() => {
+          setSearch('');
+          setCategoryFilter('');
+          setDepartmentFilter('');
+          setStatusFilter('');
+          setPage(1);
+        }}
+      >
+        <div className="filter-search">
+          <SearchInput
             placeholder="Tìm theo tên, số serial, vị trí..."
             value={search}
-            onChange={(e) => handleFilterChange(setSearch, e.target.value)}
+            onChange={(value) => handleFilterChange(setSearch, value)}
           />
         </div>
 
@@ -386,7 +391,7 @@ export const EquipmentPage: React.FC = () => {
           <option value="UNDER_MAINTENANCE">Đang bảo trì / Sửa chữa</option>
           <option value="DISCOMMISSIONED">Ngừng sử dụng</option>
         </select>
-      </div>
+      </FilterBar>
 
       {/* Table */}
       <div>
@@ -495,11 +500,14 @@ export const EquipmentPage: React.FC = () => {
               {loading ? (
                 <TableSkeleton columns={9} rows={6} />
               ) : equipment.length === 0 ? (
-                <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
-                    Không có thiết bị nào phù hợp với bộ lọc
-                  </td>
-                </tr>
+                <EmptyState
+                  colSpan={9}
+                  compact
+                  minHeight={150}
+                  title="Không có thiết bị phù hợp"
+                  description="Thử thay đổi từ khóa hoặc đặt lại bộ lọc để xem thêm kết quả."
+                  action={{ label: 'Thêm thiết bị', onClick: () => equipmentModal.open(), icon: Plus }}
+                />
               ) : equipment.map((item) => (
                   <tr 
                     key={item.id} 
@@ -575,7 +583,7 @@ export const EquipmentPage: React.FC = () => {
                             <Printer size={12} /> In tem QR
                           </button>
                           <button 
-                            onClick={() => { setEditItem(item); setIsAddOpen(true); setActiveActionMenu(null); }}
+                            onClick={() => { equipmentModal.open(item); setActiveActionMenu(null); }}
                             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
                           >
                             <Edit size={12} /> Chỉnh sửa
@@ -608,10 +616,10 @@ export const EquipmentPage: React.FC = () => {
 
       {/* Modal Add/Edit Equipment */}
       <EquipmentFormModal 
-        isOpen={isAddOpen} 
+        isOpen={equipmentModal.isOpen}
         onClose={handleCloseModal} 
         onSubmit={handleFormSubmit} 
-        initialData={editItem}
+        initialData={equipmentModal.data}
       />
     </div>
   );

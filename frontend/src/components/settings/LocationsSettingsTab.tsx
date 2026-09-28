@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, RefreshCw, MapPin, UserCheck } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { useToast, useConfirmDialog } from '../common/Toast';
+import { EmptyState } from '../common/EmptyState';
 
 interface LocationItem {
   id: string;
@@ -343,45 +344,13 @@ export const LocationsSettingsTab: React.FC = () => {
                     </tr>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 0 }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '48px 24px',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '52px',
-                            height: '52px',
-                            borderRadius: '50%',
-                            backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                            color: '#059669',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: '12px',
-                          }}
-                        >
-                          <MapPin size={26} />
-                        </div>
-                        <h4 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
-                          Chưa có vị trí nào
-                        </h4>
-                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                          Thêm các phân xưởng như Xưởng Cơ điện, Xưởng Mắt mũi, Xưởng TUDL...
-                        </p>
-                        <button className="btn btn-primary" onClick={handleOpenAdd}>
-                          <Plus size={15} /> Thêm vị trí đầu tiên
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <EmptyState
+                    colSpan={6}
+                    icon={MapPin}
+                    title="Chưa có vị trí"
+                    description="Thêm phân xưởng hoặc khu vực để gắn thiết bị và người phụ trách."
+                    action={{ label: 'Thêm vị trí đầu tiên', onClick: handleOpenAdd, icon: Plus }}
+                  />
                 )}
               </tbody>
             </table>
