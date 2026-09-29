@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { api, API_HOST } from '../../services/api';
-import { Modal } from './Modal';
 import { useToast } from './Toast';
-import { Play, Pause, CheckCircle2, FileText, Camera, Upload, Plus, AlertTriangle, Eye, Loader2, ArrowRightLeft, ShieldCheck, XOctagon, Lock } from 'lucide-react';
+import { Play, Pause, CheckCircle2, FileText, Plus, AlertTriangle, Eye, ArrowRightLeft, ShieldCheck, XOctagon, Lock } from 'lucide-react';
 import { DetailViewSkeleton } from './Skeleton';
+import { WorkOrderExecutionModals } from '../work-orders/detail/WorkOrderExecutionModals';
+import { WorkOrderDispatchModals } from '../work-orders/detail/WorkOrderDispatchModals';
+import { WorkOrderAcceptanceModals } from '../work-orders/detail/WorkOrderAcceptanceModals';
 
 interface WorkOrderDetailViewProps {
   workOrderId: string;
@@ -952,509 +954,101 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         </div>
       </div>
 
-      {/* 1. Modal Thêm ghi nhận sửa chữa */}
-      {isLogFormOpen && (
-        <Modal isOpen={isLogFormOpen} onClose={() => setIsLogFormOpen(false)} title={logAdjustTargetId ? "Điều chỉnh ghi nhận sửa chữa" : "Ghi nhận thao tác xử lý & Ảnh chụp"}>
-          <form onSubmit={handleLogSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            
-            {logAdjustTargetId && (
-              <div className="form-group">
-                <label className="form-label" style={{ color: '#ef4444', fontWeight: 700 }}>Lý do điều chỉnh *</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  required 
-                  placeholder="Ghi sai số đo, nhầm lẫn linh kiện..." 
-                  value={logAdjustReason} 
-                  onChange={(e) => setLogAdjustReason(e.target.value)} 
-                />
-              </div>
-            )}
-
-            <div className="form-group">
-              <label className="form-label">Nội dung thao tác xử lý *</label>
-              <textarea 
-                className="form-input" 
-                rows={3} 
-                required 
-                placeholder="Ví dụ: Kiểm tra điện áp và đo đạc thông số dòng..." 
-                value={logContent} 
-                onChange={(e) => setLogContent(e.target.value)} 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Kết quả sau thao tác (Tùy chọn)</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Ví dụ: Điện áp ổn định ở mức 220V..." 
-                value={logResult} 
-                onChange={(e) => setLogResult(e.target.value)} 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Ghi chú thêm (Tùy chọn)</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Các lưu ý hoặc thông số kỹ thuật khác..." 
-                value={logNotes} 
-                onChange={(e) => setLogNotes(e.target.value)} 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Chọn phân loại ảnh đính kèm</label>
-              <select className="form-select" value={logPhotoCategory} onChange={(e) => setLogPhotoCategory(e.target.value as any)}>
-                <option value="BEFORE">Ảnh trước sửa chữa (BEFORE)</option>
-                <option value="DURING">Ảnh trong quá trình (DURING)</option>
-                <option value="AFTER">Ảnh sau sửa chữa (AFTER)</option>
-                <option value="OTHER">Ảnh khác (OTHER)</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <Camera size={18} /> Chụp / Chọn ảnh đính kèm (Có thể chọn nhiều)
-              </label>
-              <input 
-                type="file" 
-                multiple 
-                accept="image/*" 
-                className="form-input" 
-                onChange={(e) => setLogPhotos(e.target.files)} 
-              />
-              {logPhotos && logPhotos.length > 0 && (
-                <div style={{ fontSize: '12px', color: 'var(--text-success)', marginTop: '4px', fontWeight: 600 }}>
-                  Đã chọn {logPhotos.length} file ảnh.
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsLogFormOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-primary" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Lưu ghi nhận"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* 2. Modal Tạm dừng sửa chữa */}
-      {isPauseFormOpen && (
-        <Modal isOpen={isPauseFormOpen} onClose={() => setIsPauseFormOpen(false)} title="Xác nhận Tạm dừng sửa chữa">
-          <form onSubmit={handlePauseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group">
-              <label className="form-label">Chọn lý do tạm dừng sửa chữa *</label>
-              <select className="form-select" value={pauseReason} onChange={(e) => setPauseReason(e.target.value)}>
-                <option value="Chờ phụ tùng">Chờ phụ tùng</option>
-                <option value="Chờ sản xuất bàn giao thiết bị">Chờ sản xuất bàn giao thiết bị</option>
-                <option value="Chờ hỗ trợ kỹ thuật">Chờ hỗ trợ kỹ thuật</option>
-                <option value="Chờ phê duyệt">Chờ phê duyệt</option>
-                <option value="Hết ca">Hết ca</option>
-                <option value="Lý do khác">Lý do khác</option>
-              </select>
-            </div>
-
-            {pauseReason === 'Lý do khác' && (
-              <div className="form-group">
-                <label className="form-label">Nhập chi tiết lý do khác *</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  required 
-                  placeholder="Nhập lý do tạm dừng chi tiết..." 
-                  value={customPauseReason} 
-                  onChange={(e) => setCustomPauseReason(e.target.value)} 
-                />
-              </div>
-            )}
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsPauseFormOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-warning" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận tạm dừng"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* 3. Modal Hoàn thành sửa chữa / Đề nghị bàn giao */}
-      {isCompleteFormOpen && (
-        <Modal isOpen={isCompleteFormOpen} onClose={() => setIsCompleteFormOpen(false)} title={wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? "Đề nghị bàn giao kỹ thuật" : "Xác nhận hoàn thành sửa chữa"}>
-          <form onSubmit={handleCompleteSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto' }}>
-            
-            <div className="form-group">
-              <label className="form-label">Nội dung công việc sửa chữa đã thực hiện *</label>
-              <textarea 
-                className="form-input" 
-                rows={3} 
-                required 
-                placeholder="Ví dụ: Đã thay thế cầu chì nguồn và hiệu chỉnh cảm biến tiệm cận..." 
-                value={completeWorkDone} 
-                onChange={(e) => setCompleteWorkDone(e.target.value)} 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Tình trạng thiết bị sau sửa chữa *</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                required 
-                placeholder="Ví dụ: Thiết bị hoạt động ổn định, đủ áp lực khí..." 
-                value={completeEquipmentStatus} 
-                onChange={(e) => setCompleteEquipmentStatus(e.target.value)} 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Kết quả chạy thử / Kiểm tra test tải *</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                required 
-                placeholder="Ví dụ: Chạy thử liên tục 15 phút, không phát sinh nhiệt cao hay lỗi báo động..." 
-                value={completeTestResult} 
-                onChange={(e) => setCompleteTestResult(e.target.value)} 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Kết luận nghiệm thu kỹ thuật *</label>
-              <select className="form-select" value={completeConclusion} onChange={(e) => setCompleteConclusion(e.target.value)}>
-                <option value="Hoạt động bình thường">Hoạt động bình thường</option>
-                <option value="Hoạt động có điều kiện">Hoạt động có điều kiện</option>
-                <option value="Chưa khắc phục hoàn toàn">Chưa khắc phục hoàn toàn</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Khuyến nghị hoặc các công việc tiếp theo (Tùy chọn)</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Ví dụ: Cần theo dõi thêm bộ phận motor sau 1 tuần chạy..." 
-                value={completeRecommendation} 
-                onChange={(e) => setCompleteRecommendation(e.target.value)} 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <Camera size={18} /> Ảnh chụp sau sửa chữa / Nghiệm thu (Tùy chọn)
-              </label>
-              <input 
-                type="file" 
-                multiple 
-                accept="image/*" 
-                className="form-input" 
-                onChange={(e) => setCompletePhotos(e.target.files)} 
-              />
-              {completePhotos && completePhotos.length > 0 && (
-                <div style={{ fontSize: '12px', color: 'var(--text-success)', marginTop: '4px', fontWeight: 600 }}>
-                  Đã chọn {completePhotos.length} file ảnh AFTER.
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsCompleteFormOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-success" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : (wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? "Gửi đề nghị bàn giao" : "Xác nhận hoàn thành")}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* 4. Modal Yêu cầu hỗ trợ kỹ thuật (Escalate) */}
-      {isEscalateOpen && (
-        <Modal isOpen={isEscalateOpen} onClose={() => setIsEscalateOpen(false)} title="Yêu cầu hỗ trợ kỹ thuật (Phòng Cơ điện)">
-          <form onSubmit={handleEscalateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group">
-              <label className="form-label">Lý do yêu cầu hỗ trợ kỹ thuật *</label>
-              <textarea
-                className="form-input"
-                rows={3}
-                required
-                placeholder="Ví dụ: Lỗi bo mạch điện tử phức tạp, cần máy móc kiểm tra chuyên sâu..."
-                value={escalateReason}
-                onChange={(e) => setEscalateReason(e.target.value)}
-              />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsEscalateOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-danger" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Gửi yêu cầu hỗ trợ"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* 5. Modal Phân loại sự cố (Classify) */}
-      {isClassifyOpen && (
-        <Modal isOpen={isClassifyOpen} onClose={() => setIsClassifyOpen(false)} title="Phân loại phương án xử lý sự cố">
-          <form onSubmit={handleClassifySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group">
-              <label className="form-label">Chọn phương án xử lý *</label>
-              <select className="form-select" value={classificationResult} onChange={(e) => setClassificationResult(e.target.value as any)}>
-                <option value="WORKSHOP_CONTINUE">Xưởng tiếp tục tự xử lý (WORKSHOP_CONTINUE)</option>
-                <option value="MAINTENANCE_REQUIRED">Yêu cầu Cơ điện sửa chữa chuyên nghiệp (MAINTENANCE_REQUIRED)</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Ghi chú nhận xét phân loại (Tùy chọn)</label>
-              <textarea
-                className="form-input"
-                rows={3}
-                placeholder="Ghi chú đánh giá tình trạng lỗi hoặc chỉ dẫn thực hiện..."
-                value={classificationNotes}
-                onChange={(e) => setClassificationNotes(e.target.value)}
-              />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsClassifyOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-primary" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận phân loại"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* 6. Modal Phân công nhân sự phụ trách */}
-      {isAssignExecutorOpen && (
-        <Modal 
-          isOpen={isAssignExecutorOpen} 
-          onClose={() => setIsAssignExecutorOpen(false)} 
-          title={`Phân công nhân sự (${targetDeptLabel})`}
-        >
-          <form onSubmit={handleAssignExecutorSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group">
-              <label className="form-label">Chọn nhân sự phụ trách *</label>
-              {assignableUsers.length > 0 ? (
-                <select 
-                  className="form-select" 
-                  value={assignedExecutorId} 
-                  onChange={(e) => setAssignedExecutorId(e.target.value)}
-                  required
-                >
-                  <option value="">-- Chọn nhân sự thực hiện --</option>
-                  {assignableUsers.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.specialty || t.role || 'Nhân sự'})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div style={{ fontSize: '13px', color: '#b45309', padding: '8px 10px', backgroundColor: '#fffbeb', borderRadius: '6px', border: '1px solid #fef3c7' }}>
-                  Không tìm thấy nhân sự thuộc bộ phận "{targetDeptLabel}".
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsAssignExecutorOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-primary" disabled={actionLoading || assignableUsers.length === 0}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận phân công"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* 7. Modal Từ chối nhận bàn giao */}
-      {isRejectHandoverOpen && (
-        <Modal isOpen={isRejectHandoverOpen} onClose={() => setIsRejectHandoverOpen(false)} title="Yêu cầu xử lý lại (Từ chối nghiệm thu)">
-          <form onSubmit={handleRejectHandoverSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group">
-              <label className="form-label">Lý do yêu cầu xử lý lại *</label>
-              <textarea
-                className="form-input"
-                rows={3}
-                required
-                placeholder="Ví dụ: Thiết bị chạy thử vẫn bị rung động mạnh, nhiệt độ chưa đạt mức cài đặt..."
-                value={rejectHandoverReason}
-                onChange={(e) => setRejectHandoverReason(e.target.value)}
-              />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsRejectHandoverOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-danger" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận gửi yêu cầu"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* 8. Modal Nghiệm thu Phân xưởng */}
-      {isWorkshopAcceptOpen && (
-        <Modal isOpen={isWorkshopAcceptOpen} onClose={() => setIsWorkshopAcceptOpen(false)} title="Biên bản Nghiệm thu Bàn giao (Phân xưởng)">
-          <form onSubmit={handleWorkshopAcceptSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '12px', backgroundColor: 'rgba(16, 185, 129, 0.08)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)', fontSize: '13px', color: '#065f46' }}>
-              <strong>Lưu ý GMP:</strong> Sau khi phân xưởng nghiệm thu đạt, phiếu sẽ được chuyển tiếp sang <strong>Bộ phận Đảm bảo chất lượng (QA)</strong> để thẩm định hồ sơ và cấp phép giải phóng chuyền (Line Clearance).
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Tình trạng chạy thử & kiểm tra vận hành *</label>
-              <select
-                className="form-select"
-                value={testRunResult}
-                onChange={(e) => setTestRunResult(e.target.value)}
-              >
-                <option value="Đạt yêu cầu vận hành, máy hoạt động ổn định, đủ thông số kỹ thuật">Đạt yêu cầu vận hành, máy hoạt động ổn định, đủ thông số kỹ thuật</option>
-                <option value="Đạt mức cơ bản, cần tiếp tục theo dõi thêm trong ca sản xuất">Đạt mức cơ bản, cần tiếp tục theo dõi thêm trong ca sản xuất</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Tình trạng vệ sinh 5S khu vực máy *</label>
-              <select
-                className="form-select"
-                value={cleanlinessResult}
-                onChange={(e) => setCleanlinessResult(e.target.value)}
-              >
-                <option value="Đạt tiêu chuẩn vệ sinh 5S / xưởng sạch sẽ, không rơi vãi đồ nghề">Đạt tiêu chuẩn vệ sinh 5S / xưởng sạch sẽ, không rơi vãi đồ nghề</option>
-                <option value="Đã vệ sinh sơ bộ, đang tiếp tục lau dọn khử trùng">Đã vệ sinh sơ bộ, đang tiếp tục lau dọn khử trùng</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Ý kiến / Nhận xét của Phân xưởng *</label>
-              <textarea
-                className="form-input"
-                rows={3}
-                required
-                placeholder="Nhập nhận xét cụ thể từ đại diện xưởng (ví dụ: Đã cho chạy thử 30 phút, máy chạy êm, áp suất đạt chuẩn...)"
-                value={workshopComment}
-                onChange={(e) => setWorkshopComment(e.target.value)}
-              />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <button 
-                type="button" 
-                className="btn btn-danger"
-                onClick={() => {
-                  setIsWorkshopAcceptOpen(false);
-                  setIsRejectHandoverOpen(true);
-                }}
-              >
-                Yêu cầu xử lý lại
-              </button>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setIsWorkshopAcceptOpen(false)}>Hủy</button>
-                <button type="submit" className="btn btn-success" disabled={actionLoading}>
-                  {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận Nghiệm thu & Chuyển QA"}
-                </button>
-              </div>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* 9. Modal QA Thẩm định & Nghiệm thu */}
-      {isQaAcceptOpen && (
-        <Modal isOpen={isQaAcceptOpen} onClose={() => setIsQaAcceptOpen(false)} title="Biên bản Thẩm định & Nghiệm thu (Đảm bảo chất lượng - QA)">
-          <form onSubmit={handleQaVerifySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '12px', backgroundColor: 'rgba(124, 58, 237, 0.08)', borderRadius: '8px', border: '1px solid rgba(124, 58, 237, 0.2)', fontSize: '13px', color: '#5b21b6' }}>
-              <strong>Phê duyệt QA (Cấp cuối):</strong> Sau khi QA phê duyệt, phiếu sửa chữa chính thức hoàn tất (VERIFIED). Hệ thống sẽ tự động đóng và khóa yêu cầu sự cố liên kết để bảo toàn hồ sơ bảo trì GMP.
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Đánh giá tác động chất lượng sản phẩm (GMP Impact) *</label>
-              <select
-                className="form-select"
-                value={gmpImpactAssessment}
-                onChange={(e) => setGmpImpactAssessment(e.target.value)}
-              >
-                <option value="Không ảnh hưởng đến chất lượng sản phẩm / Đạt tiêu chuẩn GMP">Không ảnh hưởng đến chất lượng sản phẩm / Đạt tiêu chuẩn GMP</option>
-                <option value="Ảnh hưởng thấp, đã lấy mẫu kiểm nghiệm theo dõi lô tiếp theo">Ảnh hưởng thấp, đã lấy mẫu kiểm nghiệm theo dõi lô tiếp theo</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Giải phóng chuyền & Cấp phép sản xuất (Line Clearance) *</label>
-              <select
-                className="form-select"
-                value={lineClearanceResult}
-                onChange={(e) => setLineClearanceResult(e.target.value)}
-              >
-                <option value="Đồng ý giải phóng chuyền, cho phép đưa thiết bị vào sản xuất trở lại">Đồng ý giải phóng chuyền, cho phép đưa thiết bị vào sản xuất trở lại</option>
-                <option value="Cho phép vận hành thử nghiệm có giám sát QA">Cho phép vận hành thử nghiệm có giám sát QA</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Kết luận / Đánh giá của QA *</label>
-              <textarea
-                className="form-input"
-                rows={3}
-                required
-                placeholder="Nhập kết luận thẩm định từ QA (ví dụ: Hồ sơ bảo trì đầy đủ, vật tư thay thế chính hãng có CO/CoA, máy móc đạt tiêu chuẩn GMP đưa vào sản xuất)..."
-                value={qaComment}
-                onChange={(e) => setQaComment(e.target.value)}
-              />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <button 
-                type="button" 
-                className="btn btn-danger"
-                onClick={() => {
-                  setIsQaAcceptOpen(false);
-                  setIsQaRejectOpen(true);
-                }}
-              >
-                QA Yêu cầu xử lý lại
-              </button>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setIsQaAcceptOpen(false)}>Hủy</button>
-                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#7c3aed', borderColor: '#7c3aed' }} disabled={actionLoading}>
-                  {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "QA Phê duyệt Nghiệm thu"}
-                </button>
-              </div>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* 10. Modal QA Yêu cầu xử lý lại */}
-      {isQaRejectOpen && (
-        <Modal isOpen={isQaRejectOpen} onClose={() => setIsQaRejectOpen(false)} title="QA Yêu cầu xử lý lại">
-          <form onSubmit={handleQaRejectSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group">
-              <label className="form-label">Lý do QA yêu cầu xử lý lại *</label>
-              <textarea
-                className="form-input"
-                rows={3}
-                required
-                placeholder="Nhập lý do chi tiết từ QA (ví dụ: Nhật ký chưa đầy đủ thông số chạy thử, phụ tùng thay thế chưa cập nhật số lô/CoA, vệ sinh chưa đạt chuẩn GMP...)"
-                value={qaRejectReason}
-                onChange={(e) => setQaRejectReason(e.target.value)}
-              />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsQaRejectOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-danger" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận gửi yêu cầu xử lý lại"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      <WorkOrderExecutionModals
+        actionLoading={actionLoading}
+        completeConclusion={completeConclusion}
+        completeEquipmentStatus={completeEquipmentStatus}
+        completePhotos={completePhotos}
+        completeRecommendation={completeRecommendation}
+        completeTestResult={completeTestResult}
+        completeWorkDone={completeWorkDone}
+        customPauseReason={customPauseReason}
+        handleCompleteSubmit={handleCompleteSubmit}
+        handleLogSubmit={handleLogSubmit}
+        handlePauseSubmit={handlePauseSubmit}
+        isCompleteFormOpen={isCompleteFormOpen}
+        isLogFormOpen={isLogFormOpen}
+        isPauseFormOpen={isPauseFormOpen}
+        logAdjustReason={logAdjustReason}
+        logAdjustTargetId={logAdjustTargetId}
+        logContent={logContent}
+        logNotes={logNotes}
+        logPhotoCategory={logPhotoCategory}
+        logPhotos={logPhotos}
+        logResult={logResult}
+        pauseReason={pauseReason}
+        setCompleteConclusion={setCompleteConclusion}
+        setCompleteEquipmentStatus={setCompleteEquipmentStatus}
+        setCompletePhotos={setCompletePhotos}
+        setCompleteRecommendation={setCompleteRecommendation}
+        setCompleteTestResult={setCompleteTestResult}
+        setCompleteWorkDone={setCompleteWorkDone}
+        setCustomPauseReason={setCustomPauseReason}
+        setIsCompleteFormOpen={setIsCompleteFormOpen}
+        setIsLogFormOpen={setIsLogFormOpen}
+        setIsPauseFormOpen={setIsPauseFormOpen}
+        setLogAdjustReason={setLogAdjustReason}
+        setLogContent={setLogContent}
+        setLogNotes={setLogNotes}
+        setLogPhotoCategory={setLogPhotoCategory}
+        setLogPhotos={setLogPhotos}
+        setLogResult={setLogResult}
+        setPauseReason={setPauseReason}
+        wo={wo}
+      />
+      <WorkOrderDispatchModals
+        actionLoading={actionLoading}
+        assignableUsers={assignableUsers}
+        assignedExecutorId={assignedExecutorId}
+        classificationNotes={classificationNotes}
+        classificationResult={classificationResult}
+        escalateReason={escalateReason}
+        handleAssignExecutorSubmit={handleAssignExecutorSubmit}
+        handleClassifySubmit={handleClassifySubmit}
+        handleEscalateSubmit={handleEscalateSubmit}
+        isAssignExecutorOpen={isAssignExecutorOpen}
+        isClassifyOpen={isClassifyOpen}
+        isEscalateOpen={isEscalateOpen}
+        setAssignedExecutorId={setAssignedExecutorId}
+        setClassificationNotes={setClassificationNotes}
+        setClassificationResult={setClassificationResult}
+        setEscalateReason={setEscalateReason}
+        setIsAssignExecutorOpen={setIsAssignExecutorOpen}
+        setIsClassifyOpen={setIsClassifyOpen}
+        setIsEscalateOpen={setIsEscalateOpen}
+        targetDeptLabel={targetDeptLabel}
+      />
+      <WorkOrderAcceptanceModals
+        actionLoading={actionLoading}
+        cleanlinessResult={cleanlinessResult}
+        gmpImpactAssessment={gmpImpactAssessment}
+        handleQaRejectSubmit={handleQaRejectSubmit}
+        handleQaVerifySubmit={handleQaVerifySubmit}
+        handleRejectHandoverSubmit={handleRejectHandoverSubmit}
+        handleWorkshopAcceptSubmit={handleWorkshopAcceptSubmit}
+        isQaAcceptOpen={isQaAcceptOpen}
+        isQaRejectOpen={isQaRejectOpen}
+        isRejectHandoverOpen={isRejectHandoverOpen}
+        isWorkshopAcceptOpen={isWorkshopAcceptOpen}
+        lineClearanceResult={lineClearanceResult}
+        qaComment={qaComment}
+        qaRejectReason={qaRejectReason}
+        rejectHandoverReason={rejectHandoverReason}
+        setCleanlinessResult={setCleanlinessResult}
+        setGmpImpactAssessment={setGmpImpactAssessment}
+        setIsQaAcceptOpen={setIsQaAcceptOpen}
+        setIsQaRejectOpen={setIsQaRejectOpen}
+        setIsRejectHandoverOpen={setIsRejectHandoverOpen}
+        setIsWorkshopAcceptOpen={setIsWorkshopAcceptOpen}
+        setLineClearanceResult={setLineClearanceResult}
+        setQaComment={setQaComment}
+        setQaRejectReason={setQaRejectReason}
+        setRejectHandoverReason={setRejectHandoverReason}
+        setTestRunResult={setTestRunResult}
+        setWorkshopComment={setWorkshopComment}
+        testRunResult={testRunResult}
+        workshopComment={workshopComment}
+      />
     </div>
   );
 };
