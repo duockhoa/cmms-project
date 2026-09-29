@@ -16,7 +16,7 @@ import { EquipmentOperationLogsTab } from '../components/equipment/EquipmentOper
 import { FunctionalUnitsTab } from '../components/equipment/FunctionalUnitsTab';
 
 import { api, API_HOST as API_BASE } from '../services/api';
-import { PageHeader, Tabs } from '../components/common';
+import { KpiCard, PageHeader, Tabs } from '../components/common';
 
 interface EquipmentDetailPageProps {
   item: any;
@@ -184,11 +184,8 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
           { label: 'Serial Number', value: data.serialNumber || '---' },
           { label: 'Vị trí', value: data.location || '---' },
           { label: 'Hạn bảo hành', value: data.warrantyPeriod || '---' },
-        ].map((info, idx) => (
-          <div key={idx} className="kpi-card" style={{ padding: '12px 16px', minWidth: 'unset', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>{info.label}</span>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', wordBreak: 'break-all' }}>{info.value}</span>
-          </div>
+        ].map((info) => (
+          <KpiCard key={info.label} title={info.label} value={info.value} />
         ))}
       </div>
 

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import { Phone, Mail, CheckCircle, Clock, UserCheck, Search, Edit2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Phone, Mail, CheckCircle, Clock, UserCheck, Edit2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { useToast } from '../common/Toast';
+import { FilterBar, KpiCard, SearchInput } from '../common';
 
 export const TechniciansSettingsTab: React.FC = () => {
   const [technicians, setTechnicians] = useState<any[]>([]);
@@ -143,33 +144,14 @@ export const TechniciansSettingsTab: React.FC = () => {
 
       {/* KPI Row */}
       <div className="kpi-row">
-        <div className="kpi-card">
-          <div className="kpi-card-title">Tổng kỹ thuật viên</div>
-          <div className="kpi-card-value">{activeCount}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Sẵn sàng</div>
-          <div className="kpi-card-value" style={{ color: 'var(--success)' }}>{availableCount}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Đang bận</div>
-          <div className="kpi-card-value" style={{ color: 'var(--warning)' }}>{busyCount}</div>
-        </div>
+        <KpiCard title="Tổng kỹ thuật viên" value={activeCount} icon={UserCheck} variant="primary" />
+        <KpiCard title="Sẵn sàng" value={availableCount} icon={CheckCircle} variant="success" />
+        <KpiCard title="Đang bận" value={busyCount} icon={Clock} variant="warning" />
       </div>
 
       {/* Filter bar */}
-      <div className="card mb-4" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-          <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input
-            type="text"
-            className="form-input"
-            style={{ paddingLeft: '34px' }}
-            placeholder="Tìm theo tên, email, chuyên môn..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+      <FilterBar className="mb-4" onReset={() => { setSearch(''); setStatusFilter('ALL'); setActiveFilter('ALL'); }}>
+        <SearchInput value={search} onChange={setSearch} placeholder="Tìm theo tên, email, chuyên môn..." width="100%" />
 
         <select
           className="form-select"
@@ -193,7 +175,7 @@ export const TechniciansSettingsTab: React.FC = () => {
           <option value="ACTIVE">Chỉ đang hoạt động</option>
           <option value="INACTIVE">Chỉ ngừng hoạt động</option>
         </select>
-      </div>
+      </FilterBar>
 
       {/* Cards Grid */}
       {filteredTechs.length === 0 ? (

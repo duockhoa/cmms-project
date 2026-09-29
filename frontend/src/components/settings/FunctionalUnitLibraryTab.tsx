@@ -4,6 +4,7 @@ import { Plus, Edit2, Trash2, Search, RefreshCw, Cpu, Layers, Tag, AlertTriangle
 import { Modal } from '../common/Modal';
 import { useToast } from '../common/Toast';
 import { EmptyState } from '../common/EmptyState';
+import { KpiCard } from '../common';
 
 interface FunctionalUnitLibraryItem {
   id: string;
@@ -172,35 +173,9 @@ export const FunctionalUnitLibraryTab: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header & KPI Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-        <div className="kpi-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'rgba(37, 99, 235, 0.1)', color: '#2563eb' }}>
-            <Cpu size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>TỔNG CỤM CHUẨN THƯ VIỆN</div>
-            <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>{totalCount}</div>
-          </div>
-        </div>
-
-        <div className="kpi-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-            <Layers size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>PHÂN NHÓM KỸ THUẬT</div>
-            <div style={{ fontSize: '20px', fontWeight: 800, color: '#10b981' }}>{categoriesCount} nhóm</div>
-          </div>
-        </div>
-
-        <div className="kpi-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
-            <CheckCircle2 size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>LƯỢT THIẾT BỊ ĐANG ÁP DỤNG</div>
-            <div style={{ fontSize: '20px', fontWeight: 800, color: '#d97706' }}>{totalEquipmentsUsing} lượt</div>
-          </div>
-        </div>
+        <KpiCard title="Tổng cụm chuẩn thư viện" value={totalCount} icon={Cpu} variant="primary" />
+        <KpiCard title="Phân nhóm kỹ thuật" value={`${categoriesCount} nhóm`} icon={Layers} variant="success" />
+        <KpiCard title="Lượt thiết bị đang áp dụng" value={`${totalEquipmentsUsing} lượt`} icon={CheckCircle2} variant="warning" />
       </div>
 
       {/* Main Table Card */}

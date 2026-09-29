@@ -6,6 +6,7 @@ import {
 import { Modal } from '../common/Modal';
 import { api } from '../../services/api';
 import { useToast } from '../common/Toast';
+import { KpiCard } from '../common';
 
 interface FunctionalUnitsTabProps {
   equipmentId: string;
@@ -406,45 +407,10 @@ export const FunctionalUnitsTab: React.FC<FunctionalUnitsTabProps> = ({
     <div style={{ padding: '24px 0' }}>
       {/* Thẻ KPI tổng kết nhanh */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-        <div className="kpi-card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '10px', borderRadius: '8px', backgroundColor: 'rgba(37, 99, 235, 0.1)', color: '#2563eb' }}>
-            <Cpu size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>TỔNG CỤM CHỨC NĂNG</div>
-            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>{totalCount}</div>
-          </div>
-        </div>
-
-        <div className="kpi-card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '10px', borderRadius: '8px', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-            <CheckCircle2 size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>HOẠT ĐỘNG TỐT</div>
-            <div style={{ fontSize: '18px', fontWeight: 800, color: '#10b981' }}>{operationalCount}</div>
-          </div>
-        </div>
-
-        <div className="kpi-card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '10px', borderRadius: '8px', backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
-            <AlertTriangle size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>CẦN THEO DÕI</div>
-            <div style={{ fontSize: '18px', fontWeight: 800, color: '#d97706' }}>{warningCount}</div>
-          </div>
-        </div>
-
-        <div className="kpi-card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '10px', borderRadius: '8px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-            <AlertCircle size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>SỰ CỐ / HỎNG</div>
-            <div style={{ fontSize: '18px', fontWeight: 800, color: '#dc2626' }}>{incidentCount}</div>
-          </div>
-        </div>
+        <KpiCard title="Tổng cụm chức năng" value={totalCount} icon={Cpu} variant="primary" />
+        <KpiCard title="Hoạt động tốt" value={operationalCount} icon={CheckCircle2} variant="success" />
+        <KpiCard title="Cần theo dõi" value={warningCount} icon={AlertTriangle} variant="warning" />
+        <KpiCard title="Sự cố / Hỏng" value={incidentCount} icon={AlertCircle} variant="danger" />
       </div>
 
       {/* Main Table Card */}
