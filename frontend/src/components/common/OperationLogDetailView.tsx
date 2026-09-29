@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import '../operation-logs/detail/OperationLogDetailView.css';
 import { OperationLogVoidModal } from '../operation-logs/detail/OperationLogVoidModal';
+import { OperationLogDetailHeader } from '../operation-logs/detail/OperationLogDetailHeader';
+import { OperationLogToolbar } from '../operation-logs/detail/OperationLogToolbar';
 import { useNavigate } from 'react-router-dom';
 import { 
   XOctagon, Activity, Clock, CheckCircle2, 
@@ -223,210 +225,28 @@ export const EquipmentOperationDetailView: React.FC<EquipmentOperationDetailView
     <div className="op-detail-container">
 
       {/* Sleek Compact Header */}
-      <div className="op-detail-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
-          {onToggleSidebar && (
-            <button
-              type="button"
-              onClick={onToggleSidebar}
-              className="btn btn-secondary btn-sm op-desktop-toggle"
-              title={isSidebarCollapsed ? "Hiện danh sách thiết bị" : "Thu gọn danh sách để mở rộng bảng"}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 8px', fontSize: '11.5px' }}
-            >
-              {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-              {isSidebarCollapsed ? 'Hiện danh sách máy' : 'Toàn màn hình'}
-            </button>
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            <span
-              style={{
-                fontWeight: 700,
-                fontSize: '11.5px',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                color: '#2563eb',
-                padding: '2px 8px',
-                borderRadius: '4px',
-              }}
-            >
-              {equipment.code}
-            </span>
-            <span style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
-              {equipment.name}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '11.5px', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
-            <span>Xưởng: <strong style={{ color: 'var(--text-primary)' }}>{equipment.location}</strong></span>
-            <span>Loại: <strong style={{ color: 'var(--text-primary)' }}>{equipment.category}</strong></span>
-            <StatusBadge status={equipment.status} />
-          </div>
-        </div>
-      </div>
+      <OperationLogDetailHeader
+        equipment={equipment}
+        isSidebarCollapsed={isSidebarCollapsed}
+        onToggleSidebar={onToggleSidebar}
+      />
 
       {/* Main Content Area */}
       <div className="op-detail-content">
-        {/* Logbook Matrix Table Toolbar */}
-        <div className="op-toolbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Clock size={15} style={{ color: 'var(--accent-blue, #2563eb)' }} />
-            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-              Nhật ký Sổ vận hành ({groupedSessions.length} phiên ghi)
-            </span>
-          </div>
-
-          <div className="op-toolbar-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Search */}
-            <div className="op-toolbar-search" style={{ position: 'relative', width: '160px' }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Tìm ngày, KTV..."
-                value={filterSearch}
-                onChange={(e) => setFilterSearch(e.target.value)}
-                style={{ paddingLeft: '28px', height: '30px', fontSize: '11.5px' }}
-              />
-              <Search size={12} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            </div>
-
-            {/* Isolate single parameter filter (for multi-parameter devices) */}
-            {parameters.length > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <select
-                  className="form-input"
-                  value={selectedParamFilter}
-                  onChange={(e) => setSelectedParamFilter(e.target.value)}
-                  style={{
-                    height: '30px',
-                    fontSize: '11.5px',
-                    padding: '2px 8px',
-                    maxWidth: '175px',
-                    backgroundColor: selectedParamFilter !== 'ALL' ? '#eff6ff' : '#ffffff',
-                    borderColor: selectedParamFilter !== 'ALL' ? '#93c5fd' : 'var(--border-color, #e2e8f0)',
-                    color: selectedParamFilter !== 'ALL' ? '#1e40af' : 'inherit',
-                    fontWeight: selectedParamFilter !== 'ALL' ? 700 : 'normal',
-                  }}
-                  title="Lọc xem riêng một thông số hoặc xem tất cả"
-                >
-                  <option value="ALL">📊 Tất cả ({parameters.length} thông số)</option>
-                  {parameters.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      🔍 {p.name} {p.unit ? `(${p.unit})` : ''}
-                    </option>
-                  ))}
-                </select>
-                {selectedParamFilter !== 'ALL' && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setSelectedParamFilter('ALL')}
-                    title="Bỏ lọc, hiện tất cả thông số"
-                    style={{ padding: '4px 6px', fontSize: '11px', height: '30px' }}
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Quick Status Filter Tabs */}
-            <div style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color, #e2e8f0)' }}>
-              <button
-                type="button"
-                onClick={() => setFilterStatus('ALL')}
-                style={{
-                  padding: '4px 8px',
-                  border: 'none',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  backgroundColor: filterStatus === 'ALL' ? 'var(--accent-blue, #2563eb)' : '#ffffff',
-                  color: filterStatus === 'ALL' ? '#ffffff' : 'var(--text-primary)',
-                }}
-              >
-                Tất cả ({groupedSessions.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterStatus('NORMAL')}
-                style={{
-                  padding: '4px 8px',
-                  border: 'none',
-                  borderLeft: '1px solid var(--border-color, #e2e8f0)',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  backgroundColor: filterStatus === 'NORMAL' ? '#16a34a' : '#ffffff',
-                  color: filterStatus === 'NORMAL' ? '#ffffff' : '#16a34a',
-                }}
-              >
-                ✅ Đạt ({groupedSessions.filter(s => !s.isVoided && s.outlierCount === 0).length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterStatus('OUTLIER')}
-                style={{
-                  padding: '4px 8px',
-                  border: 'none',
-                  borderLeft: '1px solid var(--border-color, #e2e8f0)',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  backgroundColor: filterStatus === 'OUTLIER' ? '#dc2626' : '#ffffff',
-                  color: filterStatus === 'OUTLIER' ? '#ffffff' : '#dc2626',
-                }}
-              >
-                ⚠️ Vượt ({groupedSessions.filter(s => !s.isVoided && s.outlierCount > 0).length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterStatus('VOIDED')}
-                style={{
-                  padding: '4px 8px',
-                  border: 'none',
-                  borderLeft: '1px solid var(--border-color, #e2e8f0)',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  backgroundColor: filterStatus === 'VOIDED' ? '#e11d48' : '#ffffff',
-                  color: filterStatus === 'VOIDED' ? '#ffffff' : '#e11d48',
-                }}
-              >
-                🚫 Đã hủy ({groupedSessions.filter(s => s.isVoided).length})
-              </button>
-            </div>
-
-            {/* View Mode Toggle: Cards vs Table */}
-            <div className="op-view-toggle">
-              <button
-                type="button"
-                className={viewMode === 'cards' ? 'active' : ''}
-                onClick={() => setViewMode('cards')}
-                title="Dạng thẻ (dễ đọc trên di động)"
-              >
-                <LayoutGrid size={13} />
-              </button>
-              <button
-                type="button"
-                className={viewMode === 'table' ? 'active' : ''}
-                onClick={() => setViewMode('table')}
-                title="Dạng bảng ma trận"
-              >
-                <List size={13} />
-              </button>
-            </div>
-
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={fetchData}
-              disabled={loading}
-              style={{ padding: '4px 8px', fontSize: '11.5px' }}
-              title="Làm mới"
-            >
-              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        </div>
+        <OperationLogToolbar
+          fetchData={fetchData}
+          filterSearch={filterSearch}
+          filterStatus={filterStatus}
+          groupedSessions={groupedSessions}
+          loading={loading}
+          parameters={parameters}
+          selectedParamFilter={selectedParamFilter}
+          setFilterSearch={setFilterSearch}
+          setFilterStatus={setFilterStatus}
+          setSelectedParamFilter={setSelectedParamFilter}
+          setViewMode={setViewMode}
+          viewMode={viewMode}
+        />
 
         {/* Main Logbook Display */}
         {filteredSessions.length === 0 ? (
