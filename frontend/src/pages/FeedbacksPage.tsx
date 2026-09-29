@@ -8,7 +8,7 @@ import {
   Bug, Sparkles, CheckCircle2, Clock, Eye, Image as ImageIcon 
 } from 'lucide-react';
 import { TableSkeleton } from '../components/common/Skeleton';
-import { EmptyState, FilterBar, PageHeader, SearchInput } from '../components/common';
+import { EmptyState, FilterBar, KpiCard, PageHeader, SearchInput } from '../components/common';
 
 export const FeedbacksPage: React.FC = () => {
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
@@ -63,41 +63,10 @@ export const FeedbacksPage: React.FC = () => {
 
       {/* KPI Cards Row */}
       <div className="kpi-row kpi-grid-4" style={{ marginBottom: '20px' }}>
-        <div className="kpi-card" onClick={() => setStatusFilter('')} style={{ cursor: 'pointer' }}>
-          <div className="flex-between">
-            <span className="kpi-card-title">Tổng yêu cầu</span>
-            <Filter size={16} color="var(--text-muted)" />
-          </div>
-          <div className="kpi-card-value">{totalCount}</div>
-          <div className="kpi-card-footer">Tất cả các loại</div>
-        </div>
-
-        <div className="kpi-card" onClick={() => setStatusFilter('PENDING')} style={{ cursor: 'pointer' }}>
-          <div className="flex-between">
-            <span className="kpi-card-title">Mới tiếp nhận / Chờ xử lý</span>
-            <Clock size={16} color="var(--warning)" />
-          </div>
-          <div className="kpi-card-value" style={{ color: 'var(--warning)' }}>{pendingCount}</div>
-          <div className="kpi-card-footer">Chưa được xử lý</div>
-        </div>
-
-        <div className="kpi-card" onClick={() => setStatusFilter('IN_PROGRESS')} style={{ cursor: 'pointer' }}>
-          <div className="flex-between">
-            <span className="kpi-card-title">Đang xử lý</span>
-            <RefreshCw size={16} color="var(--info)" />
-          </div>
-          <div className="kpi-card-value" style={{ color: 'var(--info)' }}>{inProgressCount}</div>
-          <div className="kpi-card-footer">Đang trong tiến trình</div>
-        </div>
-
-        <div className="kpi-card" onClick={() => setStatusFilter('RESOLVED')} style={{ cursor: 'pointer' }}>
-          <div className="flex-between">
-            <span className="kpi-card-title">Đã hoàn thành</span>
-            <CheckCircle2 size={16} color="var(--success)" />
-          </div>
-          <div className="kpi-card-value" style={{ color: 'var(--success)' }}>{resolvedCount}</div>
-          <div className="kpi-card-footer">Đã khắc phục / phát hành</div>
-        </div>
+        <KpiCard title="Tổng yêu cầu" value={totalCount} icon={Filter} footer="Tất cả các loại" onClick={() => setStatusFilter('')} />
+        <KpiCard title="Mới tiếp nhận / Chờ xử lý" value={pendingCount} icon={Clock} variant="warning" footer="Chưa được xử lý" onClick={() => setStatusFilter('PENDING')} />
+        <KpiCard title="Đang xử lý" value={inProgressCount} icon={RefreshCw} variant="info" footer="Đang trong tiến trình" onClick={() => setStatusFilter('IN_PROGRESS')} />
+        <KpiCard title="Đã hoàn thành" value={resolvedCount} icon={CheckCircle2} variant="success" footer="Đã khắc phục / phát hành" onClick={() => setStatusFilter('RESOLVED')} />
       </div>
 
       {/* Filter & Search Bar */}

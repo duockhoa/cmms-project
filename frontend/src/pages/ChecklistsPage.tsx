@@ -1,22 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
-import { StatusBadge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { Plus, Search, Eye, PlayCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { ClipboardCheck, Eye, ListChecks, Plus, ShieldCheck } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { useNavigate } from 'react-router-dom';
-import { EmptyState, PageHeader } from '../components/common';
+import { EmptyState, FilterBar, KpiCard, PageHeader, SearchInput } from '../components/common';
 
 export const ChecklistsPage: React.FC = () => {
   const [templates, setTemplates] = useState<any[]>([]);
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const toast = useToast();
   const navigate = useNavigate();
-
-  // Runner state
-  const [runnerResults, setRunnerResults] = useState<{ [key: number]: boolean }>({});
 
   const [formData, setFormData] = useState({
     name: '',
@@ -56,6 +55,15 @@ export const ChecklistsPage: React.FC = () => {
   const totalChecklists = templates.length;
   const activeCount = templates.filter((s: any) => s.isActive).length;
   const reviewCount = templates.filter((s: any) => !s.isActive).length;
+  const filteredTemplates = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return templates.filter((template) => {
+      const matchesSearch = !keyword || `${template.code} ${template.name}`.toLowerCase().includes(keyword);
+      const matchesStatus = !statusFilter || (statusFilter === 'ACTIVE' ? template.isActive : !template.isActive);
+      const matchesCategory = !categoryFilter || template.category === categoryFilter;
+      return matchesSearch && matchesStatus && matchesCategory;
+    });
+  }, [templates, search, statusFilter, categoryFilter]);
 
   return (
     <div>
@@ -70,30 +78,26 @@ export const ChecklistsPage: React.FC = () => {
       />
 
       {/* KPI Summary Row */}
-      <div className="kpi-row">
-        <div className="kpi-card">
-          <div className="kpi-card-title">Tổng mẫu Checklist</div>
-          <div className="kpi-card-value">{totalChecklists}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Đang áp dụng</div>
-          <div className="kpi-card-value" style={{ color: 'var(--success)' }}>{activeCount}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-title">Cần rà soát</div>
-          <div className="kpi-card-value" style={{ color: 'var(--warning)' }}>{reviewCount}</div>
-        </div>
+      <div className="kpi-row kpi-grid-3">
+        <KpiCard title="Tổng mẫu Checklist" value={totalChecklists} icon={ListChecks} variant="primary" />
+        <KpiCard title="Đang áp dụng" value={activeCount} icon={ShieldCheck} variant="success" />
+        <KpiCard title="Cần rà soát" value={reviewCount} icon={ClipboardCheck} variant="warning" />
       </div>
 
       {/* Filter */}
-      <div className="card mb-4" style={{ display: 'flex', gap: '12px' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input type="text" className="form-input" style={{ paddingLeft: '34px' }} placeholder="Tìm theo tên, mã checklist..." />
-        </div>
-        <select className="form-select" style={{ width: '160px' }}><option>Tất cả trạng thái</option></select>
-        <select className="form-select" style={{ width: '160px' }}><option>Tất cả nhóm</option></select>
-      </div>
+      <FilterBar
+        hasActiveFilters={Boolean(search || statusFilter || categoryFilter)}
+        onReset={() => { setSearch(''); setStatusFilter(''); setCategoryFilter(''); }}
+      >
+        <SearchInput value={search} onChange={setSearch} placeholder="Tìm theo tên, mã checklist..." />
+        <select className="form-select" style={{ width: '160px' }} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <option value="">Tất cả trạng thái</option><option value="ACTIVE">Đang dùng</option><option value="INACTIVE">Tạm dừng</option>
+        </select>
+        <select className="form-select" style={{ width: '180px' }} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          <option value="">Tất cả nhóm</option>
+          {categoriesList.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
+        </select>
+      </FilterBar>
 
       {/* Table */}
       <div className="table-wrapper">
@@ -110,7 +114,7 @@ export const ChecklistsPage: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {templates.map((tpl) => (
+            {filteredTemplates.map((tpl) => (
               <tr key={tpl.id}>
                 <td style={{ fontWeight: 700 }}>{tpl.code}</td>
                 <td style={{ fontWeight: 600 }}>{tpl.name}</td>
@@ -131,8 +135,8 @@ export const ChecklistsPage: React.FC = () => {
                 </td>
               </tr>
             ))}
-            {templates.length === 0 && (
-              <EmptyState colSpan={7} compact minHeight={150} title="Chưa có mẫu checklist" />
+            {filteredTemplates.length === 0 && (
+              <EmptyState colSpan={7} compact minHeight={150} title={templates.length === 0 ? 'Chưa có mẫu checklist' : 'Không tìm thấy checklist phù hợp'} />
             )}
           </tbody>
         </table>

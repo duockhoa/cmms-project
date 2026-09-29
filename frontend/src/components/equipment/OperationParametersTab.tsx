@@ -3,6 +3,7 @@ import { Plus, Edit, Trash2, Link as LinkIcon, X } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { api } from '../../services/api';
 import { useToast, useConfirmDialog } from '../common/Toast';
+import { EmptyState } from '../common';
 
 interface OperationParametersTabProps {
   equipmentId: string;
@@ -179,7 +180,14 @@ export const OperationParametersTab: React.FC<OperationParametersTabProps> = ({ 
                 </tr>
               ))}
               {parameters.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>Chưa có cấu hình thông số nào. Hãy bấm "Thêm thông số" để bắt đầu.</td></tr>
+                <EmptyState
+                  colSpan={6}
+                  compact
+                  minHeight={150}
+                  title="Chưa có cấu hình thông số vận hành"
+                  description="Thêm thông số để bắt đầu theo dõi giới hạn vận hành của thiết bị."
+                  action={{ label: 'Thêm thông số', onClick: () => setIsConfigModalVisible(true), icon: Plus }}
+                />
               )}
             </tbody>
           </table>
