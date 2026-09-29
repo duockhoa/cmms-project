@@ -16,7 +16,6 @@ import './UtilityTrendChart.css';
 
 export interface UtilityTrendChartProps {
   trendData: any;
-  trendViewMode: 'HOURLY' | 'DAILY' | 'MONTHLY' | 'YEARLY';
   trendFilter: string;
   unit?: string;
 }
@@ -38,7 +37,6 @@ const POINT_PALETTE = [
 
 export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   trendData,
-  trendViewMode,
   trendFilter,
   unit = 'kWh',
 }) => {
@@ -46,11 +44,10 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   const [showSupply, setShowSupply] = useState(true);
   const [showConsumption, setShowConsumption] = useState(true);
   const [showDelta, setShowDelta] = useState(true);
-  const [showRecycled, setShowRecycled] = useState(true);
-  const [showPointLines, setShowPointLines] = useState(true);
+  const showRecycled = true;
+  const showPointLines = true;
   const [pointVisibility, setPointVisibility] = useState<Record<string, boolean>>({});
   const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const timeColumns = trendData?.timeColumns || [];
   const summaryRows = trendData?.summaryRows || {};
@@ -99,15 +96,6 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
       ...prev,
       [pointId]: prev[pointId] === false ? true : false,
     }));
-  };
-
-  const toggleAllPoints = (visible: boolean) => {
-    const updated: Record<string, boolean> = {};
-    pointRows.forEach((p: any) => {
-      updated[p.pointId] = visible;
-    });
-    setPointVisibility(updated);
-    setShowPointLines(visible);
   };
 
   // Trích xuất mảng dữ liệu theo từng chuỗi thời gian
@@ -187,18 +175,6 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   const { maxVal: pointMaxVal, yTicks: pointYTicks } = useMemo(() => {
     return calculateNiceScale(pointRawMax, paddingTop, chartH);
   }, [pointRawMax, paddingTop, chartH]);
-
-  // Tìm đỉnh cao nhất & thấp nhất trong kỳ
-  const peakStats = useMemo(() => {
-    if (seriesData.length === 0) return null;
-    let peakSupply = { val: -1, label: '' };
-    let peakConsumption = { val: -1, label: '' };
-    seriesData.forEach((d: any) => {
-      if (d.supply > peakSupply.val) peakSupply = { val: d.supply, label: d.label };
-      if (d.consumption > peakConsumption.val) peakConsumption = { val: d.consumption, label: d.label };
-    });
-    return { peakSupply, peakConsumption };
-  }, [seriesData]);
 
   // Dữ liệu cho biểu đồ Donut (Tỷ trọng tiêu thụ của từng phân xưởng / điểm đo)
   const donutData = useMemo(() => {

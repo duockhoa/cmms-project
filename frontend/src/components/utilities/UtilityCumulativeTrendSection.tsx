@@ -18,7 +18,7 @@ export const UtilityCumulativeTrendSection: React.FC<UtilityCumulativeTrendSecti
     setTrendStartYear, trendEndYear, setTrendEndYear, trendFilter, setTrendFilter,
     trendData, trendLoading, trendDisplayType, setTrendDisplayType,
     trendTableContainerRef, dynamicYears, scrollTrendTable, scrollToPeriod,
-    handleExportTrendCSV, filteredPointsForSelect, displayedTrendRows,
+    handleExportTrendCSV, displayedTrendRows,
   } = model;
 
   return (
@@ -247,10 +247,9 @@ export const UtilityCumulativeTrendSection: React.FC<UtilityCumulativeTrendSecti
 
   {/* HIỂN THỊ DẠNG BIỂU ĐỒ HOẶC DẠNG BẢNG MA TRẬN (CHUYỂN ĐỔI THEO NÚT BẤM) */}
   {trendDisplayType === 'CHART' ? (
-    <UtilityTrendChart
-      trendData={trendData}
-      trendViewMode={trendViewMode}
-      trendFilter={trendFilter}
+      <UtilityTrendChart
+        trendData={trendData}
+        trendFilter={trendFilter}
       unit={cumulativeType === 'ELECTRICITY' ? 'kWh' : 'm³'}
     />
   ) : (

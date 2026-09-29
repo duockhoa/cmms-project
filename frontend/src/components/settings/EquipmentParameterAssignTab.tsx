@@ -1,12 +1,7 @@
 import React from 'react';
 import { useEquipmentParameterAssignment } from '../../hooks/useEquipmentParameterAssignment';
-import { 
-  Sliders, Search, RefreshCw, CheckSquare, Square, 
-  Save, CheckCircle2, QrCode, MapPin, BookOpen, Gauge, 
-  CheckCheck, XSquare, Filter, AlertCircle, Sparkles
-} from 'lucide-react';
+import { BookOpen, Gauge, RefreshCw, Save, Sliders } from 'lucide-react';
 import { useConfirmDialog } from '../common/Toast';
-import { useNavigate } from 'react-router-dom';
 import { EquipmentSelectorPanel } from './equipment-parameters/EquipmentSelectorPanel';
 import { OperatingParamsMatrix } from './equipment-parameters/OperatingParamsMatrix';
 import { TechnicalSpecsMatrix } from './equipment-parameters/TechnicalSpecsMatrix';
@@ -14,16 +9,9 @@ import { TechnicalSpecsMatrix } from './equipment-parameters/TechnicalSpecsMatri
 export const EquipmentParameterAssignTab: React.FC = () => {
   const assignment = useEquipmentParameterAssignment();
   const { confirm } = useConfirmDialog();
-  const navigate = useNavigate();
   const {
-    activeSubTab, dataLoading, eqSearch, filteredEquipment, filteredOpRows, filteredTechRows,
-    handleOpParamValueChange, handleSaveAll, handleSelectAllOp, handleSelectAllTech,
-    handleTechSpecValueChange, handleToggleOpParam, handleToggleTechSpec, hasChanges,
-    loadInitial, loading, locations, opFilterStatus, opParamRows, opSearch, saving,
-    selectedEqId, selectedEquipment, selectedLocation, selectedOpCount, selectedTechCount,
-    setActiveSubTab, setEqSearch, setOpFilterStatus, setOpSearch, setSelectedEqId,
-    setSelectedLocation, setTechFilterStatus, setTechSearch, techFilterStatus, techSearch,
-    techSpecRows,
+    activeSubTab, handleSaveAll, hasChanges, loadInitial, loading, opParamRows, saving,
+    selectedEquipment, selectedOpCount, selectedTechCount, setActiveSubTab, techSpecRows,
   } = assignment;
 
   return (

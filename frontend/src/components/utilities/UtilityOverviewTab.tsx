@@ -6,7 +6,6 @@ import {
   TrendingDown, CalendarDays, ChevronLeft, ChevronRight, Play, Square, CheckSquare,
 } from 'lucide-react';
 import { ExportButton, KpiCard } from '../common';
-import { UtilityTrendChart } from './UtilityTrendChart';
 import { formatVN } from '../../utils/formatters';
 
 interface UtilityTabProps {
