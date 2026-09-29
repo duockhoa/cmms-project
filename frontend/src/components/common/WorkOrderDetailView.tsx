@@ -8,6 +8,7 @@ import { WorkOrderAcceptanceModals } from '../work-orders/detail/WorkOrderAccept
 import { WorkOrderTimeline } from '../work-orders/detail/WorkOrderTimeline';
 import { WorkOrderMetadata } from '../work-orders/detail/WorkOrderMetadata';
 import { WorkOrderDetailHeader } from '../work-orders/detail/WorkOrderDetailHeader';
+import { getPerformerUnitType, getWorkOrderStatusColor, getWorkOrderStatusLabel } from '../work-orders/detail/workOrderDetail.utils';
 
 interface WorkOrderDetailViewProps {
   workOrderId: string;
@@ -86,18 +87,6 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
   // QA Reject Modal State
   const [isQaRejectOpen, setIsQaRejectOpen] = useState(false);
   const [qaRejectReason, setQaRejectReason] = useState('');
-
-  const getPerformerUnitType = (user: any): 'WORKSHOP' | 'TECHNICAL' | 'MAINTENANCE' => {
-    if (!user) return 'MAINTENANCE';
-    const dept = (user.department || '').toLowerCase();
-    if (dept.includes('cơ điện') || dept.includes('kỹ thuật') || dept.includes('technical') || user.role === 'ADMIN' || user.role === 'MANAGER') {
-      return 'TECHNICAL';
-    }
-    if (dept.includes('xưởng') || dept.includes('px') || dept.includes('workshop') || user.role === 'OPERATOR') {
-      return 'WORKSHOP';
-    }
-    return 'MAINTENANCE';
-  };
 
   const userUnitType = getPerformerUnitType(currentUser);
 
@@ -549,33 +538,6 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
     }
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'PENDING': return 'Chờ xử lý';
-      case 'ASSIGNED': return 'Đã phân công';
-      case 'IN_PROGRESS': return 'Đang sửa chữa';
-      case 'ON_HOLD': return 'Tạm dừng';
-      case 'COMPLETED': return 'Chờ nghiệm thu';
-      case 'VERIFIED': return 'Đã nghiệm thu';
-      case 'CLOSED': return 'Đã đóng';
-      case 'CANCELLED': return 'Đã hủy';
-      default: return status;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'ASSIGNED': return '#3b82f6';
-      case 'IN_PROGRESS': return '#f59e0b';
-      case 'ON_HOLD': return '#ef4444';
-      case 'COMPLETED': return '#10b981';
-      case 'VERIFIED': return '#059669';
-      case 'CLOSED': return '#6b7280';
-      case 'CANCELLED': return '#9ca3af';
-      default: return '#374151';
-    }
-  };
-
   return (
     <div className="work-order-detail-view" style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <WorkOrderDetailHeader
@@ -607,8 +569,8 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
 
         <WorkOrderMetadata
           allUsers={allUsers}
-          getStatusColor={getStatusColor}
-          getStatusLabel={getStatusLabel}
+          getStatusColor={getWorkOrderStatusColor}
+          getStatusLabel={getWorkOrderStatusLabel}
           wo={wo}
         />
 
