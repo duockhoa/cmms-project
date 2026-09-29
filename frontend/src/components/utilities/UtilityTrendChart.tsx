@@ -4,6 +4,14 @@ import {
   Eye, EyeOff, Calendar 
 } from 'lucide-react';
 import { formatVN } from '../../utils/formatters';
+import {
+  calculateNiceScale,
+  createAreaChartPath,
+  createSmoothChartPath,
+  formatChartTick,
+  getChartX,
+  getChartY,
+} from './utilityTrendChart.utils';
 import './UtilityTrendChart.css';
 
 export interface UtilityTrendChartProps {
@@ -144,48 +152,7 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   const chartW = svgWidth - paddingLeft - paddingRight;
   const chartH = svgHeight - paddingTop - paddingBottom;
   const n = seriesData.length;
-
-  // Helper tính thang đo chuẩn hóa (Nice Numbers Scale) với các mốc chia tròn đều, chuẩn xác
-  const calcNiceScale = (rawValMax: number) => {
-    if (rawValMax <= 0) {
-      const defaultMax = 100;
-      const ticks = [0, 25, 50, 75, 100].map(val => ({
-        val,
-        y: paddingTop + chartH - (val / defaultMax) * chartH,
-      }));
-      return { maxVal: defaultMax, yTicks: ticks };
-    }
-
-    // Đệm 6% để đỉnh cao nhất không chạm sát mép trên
-    const paddedMax = rawValMax * 1.06;
-    const targetIntervals = 5;
-    const roughStep = paddedMax / targetIntervals;
-
-    const exponent = Math.floor(Math.log10(roughStep));
-    const magnitude = Math.pow(10, exponent);
-    const fraction = roughStep / magnitude;
-
-    let niceFraction = 1;
-    if (fraction <= 1) niceFraction = 1;
-    else if (fraction <= 2) niceFraction = 2;
-    else if (fraction <= 2.5) niceFraction = 2.5;
-    else if (fraction <= 5) niceFraction = 5;
-    else niceFraction = 10;
-
-    const step = niceFraction * magnitude;
-    const niceMax = Math.ceil(paddedMax / step) * step;
-
-    const ticks: { val: number; y: number }[] = [];
-    for (let v = 0; v <= niceMax + step * 0.001; v += step) {
-      const roundedVal = Number(v.toFixed(4));
-      ticks.push({
-        val: roundedVal,
-        y: paddingTop + chartH - (roundedVal / niceMax) * chartH,
-      });
-    }
-
-    return { maxVal: niceMax, yTicks: ticks };
-  };
+  const geometry = { chartHeight: chartH, chartWidth: chartW, paddingLeft, paddingTop, pointCount: n };
 
   // 1. Thang đo cực đại riêng cho Biểu Đồ 1 (Tổng hợp Nguồn Cấp & Dùng Toàn Nhà Máy)
   const summaryRawMax = useMemo(() => {
@@ -200,7 +167,7 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   }, [seriesData, showSupply, showConsumption, showDelta, showRecycled]);
 
   const { maxVal: summaryMaxVal, yTicks: summaryYTicks } = useMemo(() => {
-    return calcNiceScale(summaryRawMax);
+    return calculateNiceScale(summaryRawMax, paddingTop, chartH);
   }, [summaryRawMax, paddingTop, chartH]);
 
   // 2. Thang đo cực đại riêng cho Biểu Đồ 2 (Từng vị trí / Phân xưởng con)
@@ -218,7 +185,7 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   }, [pointsWithColors, pointVisibility, timeColumns]);
 
   const { maxVal: pointMaxVal, yTicks: pointYTicks } = useMemo(() => {
-    return calcNiceScale(pointRawMax);
+    return calculateNiceScale(pointRawMax, paddingTop, chartH);
   }, [pointRawMax, paddingTop, chartH]);
 
   // Tìm đỉnh cao nhất & thấp nhất trong kỳ
@@ -273,75 +240,24 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
   }
 
   // Helper tọa độ X
-  const getX = (idx: number) => {
-    if (n <= 1) return paddingLeft + chartW / 2;
-    return paddingLeft + (idx / (n - 1)) * chartW;
-  };
+  const getX = (index: number) => getChartX(index, geometry);
 
   // Tọa độ Y cho Biểu đồ 1 (Tổng)
-  const getSummaryY = (val: number) => {
-    return paddingTop + chartH - (Math.max(0, val) / summaryMaxVal) * chartH;
-  };
+  const getSummaryY = (value: number) => getChartY(value, summaryMaxVal, paddingTop, chartH);
 
   // Tọa độ Y cho Biểu đồ 2 (Chi tiết điểm đo)
-  const getPointY = (val: number) => {
-    return paddingTop + chartH - (Math.max(0, val) / pointMaxVal) * chartH;
-  };
+  const getPointY = (value: number) => getChartY(value, pointMaxVal, paddingTop, chartH);
 
   // Tạo đường cong Bezier mượt mà theo hàm lấy Y tương ứng
-  const createSmoothPath = (values: number[], getYFn: (val: number) => number) => {
-    if (values.length === 0) return '';
-    const bottomY = paddingTop + chartH;
-    const points = values.map((val, idx) => ({ x: getX(idx), y: Math.min(bottomY, getYFn(val)) }));
-    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-
-    let d = `M ${points[0].x},${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[i === 0 ? 0 : i - 1];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const p3 = points[i + 2 >= points.length ? points.length - 1 : i + 2];
-
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      let cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p3.x - p1.x) / 6;
-      let cp2y = p2.y - (p3.y - p1.y) / 6;
-
-      // Giữ đường cong nằm trên hoặc đúng mốc 0, không bị võng xuống dưới trục hoành
-      if (p1.y >= bottomY && p2.y >= bottomY) {
-        cp1y = bottomY;
-        cp2y = bottomY;
-      } else {
-        cp1y = Math.min(bottomY, cp1y);
-        cp2y = Math.min(bottomY, cp2y);
-      }
-
-      d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
-    }
-    return d;
-  };
+  const createSmoothPath = (values: number[], getY: (value: number) => number) =>
+    createSmoothChartPath(values, getY, geometry);
 
   // Tạo vùng phủ Gradient (Area)
-  const createAreaPath = (values: number[], getYFn: (val: number) => number) => {
-    const lineD = createSmoothPath(values, getYFn);
-    if (!lineD) return '';
-    const lastX = getX(values.length - 1);
-    const firstX = getX(0);
-    const bottomY = paddingTop + chartH;
-    return `${lineD} L ${lastX},${bottomY} L ${firstX},${bottomY} Z`;
-  };
+  const createAreaPath = (values: number[], getY: (value: number) => number) =>
+    createAreaChartPath(values, getY, geometry);
 
   // Định dạng nhãn trục Y
-  const formatTickLabel = (val: number, maxV: number) => {
-    if (val === 0) return '0';
-    if (maxV >= 10000) {
-      if (val % 1000 === 0) {
-        return `${val / 1000}k`;
-      }
-      return `${(val / 1000).toFixed(1)}k`;
-    }
-    return formatVN(val);
-  };
+  const formatTickLabel = formatChartTick;
 
   const [summaryHoverIndex, setSummaryHoverIndex] = useState<number | null>(null);
   const [pointHoverIndex, setPointHoverIndex] = useState<number | null>(null);
