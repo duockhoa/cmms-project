@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BarChart3, Calendar, Cpu, FileText, QrCode, RefreshCw, Settings, Zap } from 'lucide-react';
 import { PageHeader, Tabs } from '../components/common';
-import { UtilityCumulativeTab } from '../components/utilities/UtilityCumulativeTab';
 import { UtilityOverviewTab } from '../components/utilities/UtilityOverviewTab';
 import { UtilityPointsTab } from '../components/utilities/UtilityPointsTab';
 import { RecordReadingModal } from '../components/utilities/RecordReadingModal';
@@ -12,6 +11,8 @@ import { UtilityStatusLogsTab } from '../components/utilities/UtilityStatusLogsT
 import { VoidReadingModal } from '../components/utilities/VoidReadingModal';
 import { useUtilitiesPage } from '../hooks/useUtilitiesPage';
 import './utilities.css';
+
+const UtilityCumulativeTab = lazy(() => import('../components/utilities/UtilityCumulativeTab').then(module => ({ default: module.UtilityCumulativeTab })));
 
 export const UtilitiesPage: React.FC = () => {
   const {
@@ -88,7 +89,11 @@ export const UtilitiesPage: React.FC = () => {
       {activeTab === 'points' && <UtilityPointsTab model={utilityViewModel} />}
 
       {/* TAB 5: BÁO CÁO TÍCH LŨY THEO KỲ (ĐIỆN & NƯỚC) */}
-      {activeTab === 'cumulative' && <UtilityCumulativeTab model={utilityViewModel} />}
+      {activeTab === 'cumulative' && (
+        <Suspense fallback={<div className="util-loading">Đang tải báo cáo tích lũy...</div>}>
+          <UtilityCumulativeTab model={utilityViewModel} />
+        </Suspense>
+      )}
 
       {/* MODAL: THÊM / SỬA ĐIỂM ĐO */}
       {showPointModal && <UtilityPointModal model={utilityViewModel} />}

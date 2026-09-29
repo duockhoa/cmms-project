@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { 
   Settings, Layers, MapPin, Cpu, Shield, Users, 
@@ -6,20 +6,21 @@ import {
   LucideIcon, Sliders, BookOpen, Activity, Zap
 } from 'lucide-react';
 
-import { CategoriesSettingsTab } from '../components/settings/CategoriesSettingsTab';
-import { LocationsSettingsTab } from '../components/settings/LocationsSettingsTab';
-import { ProductionLinesSettingsTab } from '../components/settings/ProductionLinesSettingsTab';
-import { StandardTechnicalSpecsTab } from '../components/settings/StandardTechnicalSpecsTab';
-import { StandardParametersTab } from '../components/settings/StandardParametersTab';
-import { ChecklistLibraryTab } from '../components/settings/ChecklistLibraryTab';
-import { SystemSettingsTab } from '../components/settings/SystemSettingsTab';
-import { UtilitySettingsTab } from '../components/settings/UtilitySettingsTab';
-import { RolesSettingsTab } from '../components/settings/RolesSettingsTab';
-import { UsersSettingsTab } from '../components/settings/UsersSettingsTab';
-import { TechniciansSettingsTab } from '../components/settings/TechniciansSettingsTab';
-import { EquipmentParameterAssignTab } from '../components/settings/EquipmentParameterAssignTab';
-import { FunctionalUnitLibraryTab } from '../components/settings/FunctionalUnitLibraryTab';
 import { PageHeader, Tabs } from '../components/common';
+
+const CategoriesSettingsTab = lazy(() => import('../components/settings/CategoriesSettingsTab').then(module => ({ default: module.CategoriesSettingsTab })));
+const LocationsSettingsTab = lazy(() => import('../components/settings/LocationsSettingsTab').then(module => ({ default: module.LocationsSettingsTab })));
+const ProductionLinesSettingsTab = lazy(() => import('../components/settings/ProductionLinesSettingsTab').then(module => ({ default: module.ProductionLinesSettingsTab })));
+const StandardTechnicalSpecsTab = lazy(() => import('../components/settings/StandardTechnicalSpecsTab').then(module => ({ default: module.StandardTechnicalSpecsTab })));
+const StandardParametersTab = lazy(() => import('../components/settings/StandardParametersTab').then(module => ({ default: module.StandardParametersTab })));
+const ChecklistLibraryTab = lazy(() => import('../components/settings/ChecklistLibraryTab').then(module => ({ default: module.ChecklistLibraryTab })));
+const SystemSettingsTab = lazy(() => import('../components/settings/SystemSettingsTab').then(module => ({ default: module.SystemSettingsTab })));
+const UtilitySettingsTab = lazy(() => import('../components/settings/UtilitySettingsTab').then(module => ({ default: module.UtilitySettingsTab })));
+const RolesSettingsTab = lazy(() => import('../components/settings/RolesSettingsTab').then(module => ({ default: module.RolesSettingsTab })));
+const UsersSettingsTab = lazy(() => import('../components/settings/UsersSettingsTab').then(module => ({ default: module.UsersSettingsTab })));
+const TechniciansSettingsTab = lazy(() => import('../components/settings/TechniciansSettingsTab').then(module => ({ default: module.TechniciansSettingsTab })));
+const EquipmentParameterAssignTab = lazy(() => import('../components/settings/EquipmentParameterAssignTab').then(module => ({ default: module.EquipmentParameterAssignTab })));
+const FunctionalUnitLibraryTab = lazy(() => import('../components/settings/FunctionalUnitLibraryTab').then(module => ({ default: module.FunctionalUnitLibraryTab })));
 
 export type SettingsTabId =
   | 'categories'
@@ -283,19 +284,21 @@ export const SettingsPage: React.FC = () => {
             overflow: 'hidden',
           }}
         >
-          {activeTab === 'categories' && <CategoriesSettingsTab />}
-          {activeTab === 'locations' && <LocationsSettingsTab />}
-          {activeTab === 'production-lines' && <ProductionLinesSettingsTab />}
-          {activeTab === 'functional-unit-library' && <FunctionalUnitLibraryTab />}
-          {activeTab === 'standard-technical-specs' && <StandardTechnicalSpecsTab />}
-          {activeTab === 'standard-parameters' && <StandardParametersTab />}
-          {activeTab === 'equipment-parameters' && <EquipmentParameterAssignTab />}
-          {activeTab === 'checklist-library' && <ChecklistLibraryTab />}
-          {activeTab === 'utility-settings' && <UtilitySettingsTab />}
-          {activeTab === 'system-settings' && <SystemSettingsTab />}
-          {activeTab === 'users' && <UsersSettingsTab />}
-          {activeTab === 'roles' && <RolesSettingsTab />}
-          {activeTab === 'technicians' && <TechniciansSettingsTab />}
+          <Suspense fallback={<div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-secondary)' }}>Đang tải cấu hình...</div>}>
+            {activeTab === 'categories' && <CategoriesSettingsTab />}
+            {activeTab === 'locations' && <LocationsSettingsTab />}
+            {activeTab === 'production-lines' && <ProductionLinesSettingsTab />}
+            {activeTab === 'functional-unit-library' && <FunctionalUnitLibraryTab />}
+            {activeTab === 'standard-technical-specs' && <StandardTechnicalSpecsTab />}
+            {activeTab === 'standard-parameters' && <StandardParametersTab />}
+            {activeTab === 'equipment-parameters' && <EquipmentParameterAssignTab />}
+            {activeTab === 'checklist-library' && <ChecklistLibraryTab />}
+            {activeTab === 'utility-settings' && <UtilitySettingsTab />}
+            {activeTab === 'system-settings' && <SystemSettingsTab />}
+            {activeTab === 'users' && <UsersSettingsTab />}
+            {activeTab === 'roles' && <RolesSettingsTab />}
+            {activeTab === 'technicians' && <TechniciansSettingsTab />}
+          </Suspense>
         </div>
       </div>
     </div>
