@@ -1,13 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Plus, Edit, Trash2, Cpu, CheckCircle2, AlertTriangle, AlertCircle, 
-  RefreshCw, Copy, BookOpen
-} from 'lucide-react';
-import { api } from '../../services/api';
-import { useToast } from '../common/Toast';
-import { KpiCard } from '../common';
-import { FunctionalUnitDeleteModal } from './functional-units/FunctionalUnitDeleteModal';
+import React from 'react';
+import { AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useFunctionalUnits } from '../../hooks/useFunctionalUnits';
 import { FunctionalUnitCloneModal } from './functional-units/FunctionalUnitCloneModal';
+import { FunctionalUnitDeleteModal } from './functional-units/FunctionalUnitDeleteModal';
 import { FunctionalUnitFormModal } from './functional-units/FunctionalUnitFormModal';
 import { FunctionalUnitsList } from './functional-units/FunctionalUnitsList';
 
@@ -18,16 +13,20 @@ interface FunctionalUnitsTabProps {
   onUnitsUpdated?: () => void;
 }
 
-const BASE_CATEGORIES = [
-  'Tất cả',
-  'Cơ khí',
-  'Điện - Tự động hóa',
-  'Khí nén',
-  'Thủy lực',
-  'Nhiệt & Hơi',
-  'Cảm biến & Đo lường',
-  'Khác',
-];
+const renderStatusBadge = (status: string) => {
+  switch (status) {
+    case 'OPERATIONAL':
+      return <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckCircle2 size={12} /> Hoạt động tốt</span>;
+    case 'WARNING':
+      return <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12} /> Cần theo dõi</span>;
+    case 'INCIDENT':
+      return <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={12} /> Sự cố / Hỏng</span>;
+    case 'INACTIVE':
+      return <span className="badge" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>Ngừng hoạt động</span>;
+    default:
+      return <span className="badge">{status}</span>;
+  }
+};
 
 export const FunctionalUnitsTab: React.FC<FunctionalUnitsTabProps> = ({
   equipmentId,
@@ -35,445 +34,78 @@ export const FunctionalUnitsTab: React.FC<FunctionalUnitsTabProps> = ({
   equipmentName,
   onUnitsUpdated,
 }) => {
-  const toast = useToast();
-  const [units, setUnits] = useState<any[]>([]);
-  const [libraryList, setLibraryList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Add / Edit Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<'LIBRARY' | 'CUSTOM'>('LIBRARY');
-  const [editingUnit, setEditingUnit] = useState<any>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Library picker filter
-  const [libSearch, setLibSearch] = useState('');
-  const [libCategory, setLibCategory] = useState('Tất cả');
-  const [selectedLibItems, setSelectedLibItems] = useState<any[]>([]);
-
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    description: '',
-    status: 'OPERATIONAL',
-    category: 'Cơ khí',
-  });
-
-  // Delete Confirm Modal State
-  const [unitToDelete, setUnitToDelete] = useState<any>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  // Clone from other equipment State
-  const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
-  const [allEquipments, setAllEquipments] = useState<any[]>([]);
-  const [selectedSourceEqId, setSelectedSourceEqId] = useState('');
-  const [sourceUnits, setSourceUnits] = useState<any[]>([]);
-  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
-  const [loadingSourceUnits, setLoadingSourceUnits] = useState(false);
-  const [cloning, setCloning] = useState(false);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [resUnits, resLib] = await Promise.all([
-        api.getEquipmentFunctionalUnits(equipmentId),
-        api.getFunctionalUnitLibrary().catch(() => []),
-      ]);
-      setUnits(resUnits || []);
-      setLibraryList(resLib || []);
-    } catch (err: any) {
-      console.error('Lỗi tải danh sách cụm chức năng:', err);
-      toast.error('Lỗi', 'Không thể tải danh sách cụm chức năng');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [equipmentId]);
-
-  // Tự động tổng hợp tất cả phân nhóm kỹ thuật hiện có trong thư viện
-  const allCategories = useMemo(() => {
-    const custom = libraryList.map(i => i.category?.trim()).filter(Boolean) as string[];
-    return Array.from(new Set([...BASE_CATEGORIES, ...custom]));
-  }, [libraryList]);
-
-  // Lọc danh sách thư viện trong modal
-  const filteredLibrary = useMemo(() => {
-    return libraryList.filter(item => {
-      const matchSearch = !libSearch.trim() || 
-        item.name.toLowerCase().includes(libSearch.toLowerCase()) ||
-        (item.description && item.description.toLowerCase().includes(libSearch.toLowerCase()));
-      const matchCat = libCategory === 'Tất cả' || (item.category && item.category.toLowerCase() === libCategory.toLowerCase());
-      return matchSearch && matchCat;
-    });
-  }, [libraryList, libSearch, libCategory]);
-
-  const handleOpenAddModal = () => {
-    setEditingUnit(null);
-    setModalMode('LIBRARY');
-    setLibSearch('');
-    setLibCategory('Tất cả');
-    setSelectedLibItems([]);
-
-    const nextIndex = (units.length + 1).toString().padStart(2, '0');
-    setFormData({
-      name: '',
-      code: equipmentCode ? `${equipmentCode}-CU${nextIndex}` : `CU-${nextIndex}`,
-      description: '',
-      status: 'OPERATIONAL',
-      category: 'Cơ khí',
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEditModal = (unit: any) => {
-    setEditingUnit(unit);
-    setModalMode('CUSTOM'); // Chỉnh sửa trực tiếp
-    setSelectedLibItems([]);
-    setFormData({
-      name: unit.name || '',
-      code: unit.code || '',
-      description: unit.description || '',
-      status: unit.status || 'OPERATIONAL',
-      category: unit.libraryItem?.category || 'Cơ khí',
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleToggleLibraryItem = (libItem: any) => {
-    const isAlreadyOnMachine = units.some(u => u.name.toLowerCase().trim() === libItem.name.toLowerCase().trim());
-    if (isAlreadyOnMachine) return;
-
-    setSelectedLibItems(prev => {
-      const exists = prev.some(i => i.id === libItem.id);
-      const updated = exists ? prev.filter(i => i.id !== libItem.id) : [...prev, libItem];
-
-      if (updated.length === 1) {
-        const single = updated[0];
-        const nextIndex = (units.length + 1).toString().padStart(2, '0');
-        setFormData(f => ({
-          ...f,
-          name: single.name,
-          code: equipmentCode ? `${equipmentCode}-CU${nextIndex}` : `CU-${nextIndex}`,
-          description: single.description || '',
-          category: single.category || 'Cơ khí',
-        }));
-      } else if (updated.length === 0) {
-        setFormData(f => ({ ...f, name: '', code: '', description: '' }));
-      }
-      return updated;
-    });
-  };
-
-  const handleSelectAllFilteredLibrary = () => {
-    const currentNames = new Set(units.map(u => u.name.toLowerCase().trim()));
-    const availableItems = filteredLibrary.filter(item => !currentNames.has(item.name.toLowerCase().trim()));
-    setSelectedLibItems(availableItems);
-    if (availableItems.length === 1) {
-      const single = availableItems[0];
-      const nextIndex = (units.length + 1).toString().padStart(2, '0');
-      setFormData(f => ({
-        ...f,
-        name: single.name,
-        code: equipmentCode ? `${equipmentCode}-CU${nextIndex}` : `CU-${nextIndex}`,
-        description: single.description || '',
-        category: single.category || 'Cơ khí',
-      }));
-    }
-  };
-
-  const handleDeselectAllLibrary = () => {
-    setSelectedLibItems([]);
-    setFormData(f => ({ ...f, name: '', code: '', description: '' }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // 1. Gán từ Thư viện (1 hoặc nhiều cụm)
-    if (!editingUnit && modalMode === 'LIBRARY') {
-      if (selectedLibItems.length === 0) {
-        toast.error('Chưa chọn cụm', 'Vui lòng tích chọn ít nhất một cụm chức năng từ thư viện');
-        return;
-      }
-
-      try {
-        setSubmitting(true);
-        if (selectedLibItems.length === 1) {
-          const item = selectedLibItems[0];
-          await api.createEquipmentFunctionalUnit(equipmentId, {
-            name: item.name,
-            code: formData.code.trim() || undefined,
-            description: formData.description.trim() || item.description || undefined,
-            status: formData.status || 'OPERATIONAL',
-            category: formData.category || item.category || 'Cơ khí',
-          });
-          toast.success('Gán thành công', `Đã thêm cụm "${item.name}" vào thiết bị`);
-        } else {
-          // Nhiều cụm: tạo theo lô (batch)
-          const itemsToCreate = selectedLibItems.map((item, idx) => {
-            const nextIdx = (units.length + 1 + idx).toString().padStart(2, '0');
-            return {
-              name: item.name,
-              code: equipmentCode ? `${equipmentCode}-CU${nextIdx}` : `CU-${nextIdx}`,
-              description: item.description || '',
-              category: item.category || 'Cơ khí',
-              status: formData.status || 'OPERATIONAL',
-            };
-          });
-          const result = await api.createBatchEquipmentFunctionalUnits(equipmentId, itemsToCreate);
-          toast.success(
-            'Gán thành công',
-            result?.message || `Đã gán thành công ${result?.createdCount || selectedLibItems.length} cụm chức năng vào thiết bị`
-          );
-        }
-        setIsModalOpen(false);
-        await loadData();
-        if (onUnitsUpdated) onUnitsUpdated();
-      } catch (err: any) {
-        toast.error('Thao tác thất bại', err.message || 'Có lỗi xảy ra khi gán cụm chức năng');
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
-
-    // 2. Tạo cụm mới độc lập hoặc cập nhật
-    if (!formData.name.trim()) {
-      toast.error('Thiếu thông tin', 'Vui lòng nhập tên cụm chức năng');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      if (editingUnit) {
-        await api.updateEquipmentFunctionalUnit(equipmentId, editingUnit.id, {
-          name: formData.name.trim(),
-          code: formData.code.trim() || undefined,
-          description: formData.description.trim() || undefined,
-          status: formData.status,
-        });
-        toast.success('Cập nhật thành công', `Đã lưu thay đổi cho cụm "${formData.name}"`);
-      } else {
-        await api.createEquipmentFunctionalUnit(equipmentId, {
-          name: formData.name.trim(),
-          code: formData.code.trim() || undefined,
-          description: formData.description.trim() || undefined,
-          status: formData.status,
-          category: formData.category,
-        });
-        toast.success('Thêm thành công', `Đã thêm cụm "${formData.name}" vào thiết bị và thư viện`);
-      }
-      setIsModalOpen(false);
-      await loadData();
-      if (onUnitsUpdated) onUnitsUpdated();
-    } catch (err: any) {
-      toast.error('Thao tác thất bại', err.message || 'Có lỗi xảy ra khi lưu cụm chức năng');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!unitToDelete) return;
-    try {
-      setIsDeleting(true);
-      await api.deleteEquipmentFunctionalUnit(equipmentId, unitToDelete.id);
-      toast.success('Đã xóa', `Đã xóa cụm "${unitToDelete.name}" khỏi thiết bị`);
-      setUnitToDelete(null);
-      await loadData();
-      if (onUnitsUpdated) onUnitsUpdated();
-    } catch (err: any) {
-      toast.error('Xóa thất bại', err.message || 'Không thể xóa cụm chức năng');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  // ==========================================
-  // XỬ LÝ SAO CHÉP TỪ MÁY KHÁC (CLONE)
-  // ==========================================
-  const handleOpenCloneModal = async () => {
-    setIsCloneModalOpen(true);
-    setSelectedSourceEqId('');
-    setSourceUnits([]);
-    setSelectedUnitIds([]);
-    try {
-      // Tải danh sách thiết bị khác
-      const eqs = await api.getEquipment();
-      const list = Array.isArray(eqs) ? eqs : (eqs?.data || []);
-      // Loại trừ thiết bị hiện tại
-      setAllEquipments(list.filter((eq: any) => eq.id !== equipmentId));
-    } catch (err) {
-      console.error('Lỗi tải danh sách thiết bị:', err);
-    }
-  };
-
-  const handleSelectSourceEquipment = async (sourceId: string) => {
-    setSelectedSourceEqId(sourceId);
-    if (!sourceId) {
-      setSourceUnits([]);
-      setSelectedUnitIds([]);
-      return;
-    }
-
-    try {
-      setLoadingSourceUnits(true);
-      const res = await api.getEquipmentFunctionalUnits(sourceId);
-      const unitsList = Array.isArray(res) ? res : [];
-      setSourceUnits(unitsList);
-
-      // Mặc định chọn những cụm chưa tồn tại trên máy hiện tại
-      const currentNames = new Set(units.map(u => u.name.toLowerCase().trim()));
-      const availableIds = unitsList
-        .filter(u => !currentNames.has(u.name.toLowerCase().trim()))
-        .map(u => u.id);
-      setSelectedUnitIds(availableIds);
-    } catch (err) {
-      toast.error('Lỗi', 'Không thể tải danh sách cụm của thiết bị đã chọn');
-      setSourceUnits([]);
-      setSelectedUnitIds([]);
-    } finally {
-      setLoadingSourceUnits(false);
-    }
-  };
-
-  const handleToggleUnitSelect = (id: string) => {
-    setSelectedUnitIds(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAllUnits = () => {
-    const currentNames = new Set(units.map(u => u.name.toLowerCase().trim()));
-    const selectable = sourceUnits
-      .filter(u => !currentNames.has(u.name.toLowerCase().trim()))
-      .map(u => u.id);
-    setSelectedUnitIds(selectable);
-  };
-
-  const handleDeselectAllUnits = () => {
-    setSelectedUnitIds([]);
-  };
-
-  const handleExecuteClone = async () => {
-    if (!selectedSourceEqId || selectedUnitIds.length === 0) {
-      toast.error('Chưa chọn cụm', 'Vui lòng chọn ít nhất một cụm chức năng để sao chép');
-      return;
-    }
-
-    try {
-      setCloning(true);
-      const result = await api.cloneEquipmentFunctionalUnits(equipmentId, {
-        sourceEquipmentId: selectedSourceEqId,
-        unitIds: selectedUnitIds,
-      });
-
-      toast.success(
-        'Sao chép thành công',
-        result.message || `Đã sao chép ${result.clonedCount || selectedUnitIds.length} cụm chức năng!`
-      );
-      setIsCloneModalOpen(false);
-      await loadData();
-      if (onUnitsUpdated) onUnitsUpdated();
-    } catch (err: any) {
-      toast.error('Sao chép thất bại', err.message || 'Có lỗi xảy ra khi sao chép');
-    } finally {
-      setCloning(false);
-    }
-  };
-
-  // Thống kê nhanh
-  const totalCount = units.length;
-  const operationalCount = units.filter(u => u.status === 'OPERATIONAL').length;
-  const warningCount = units.filter(u => u.status === 'WARNING').length;
-  const incidentCount = units.filter(u => u.status === 'INCIDENT').length;
-
-  const renderStatusBadge = (status: string) => {
-    switch (status) {
-      case 'OPERATIONAL':
-        return <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckCircle2 size={12} /> Hoạt động tốt</span>;
-      case 'WARNING':
-        return <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12} /> Cần theo dõi</span>;
-      case 'INCIDENT':
-        return <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={12} /> Sự cố / Hỏng</span>;
-      case 'INACTIVE':
-        return <span className="badge" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>Ngừng hoạt động</span>;
-      default:
-        return <span className="badge">{status}</span>;
-    }
-  };
+  const functionalUnits = useFunctionalUnits({ equipmentId, equipmentCode, onUnitsUpdated });
+  const operationalCount = functionalUnits.units.filter(unit => unit.status === 'OPERATIONAL').length;
+  const warningCount = functionalUnits.units.filter(unit => unit.status === 'WARNING').length;
+  const incidentCount = functionalUnits.units.filter(unit => unit.status === 'INCIDENT').length;
 
   return (
     <div style={{ padding: '24px 0' }}>
       <FunctionalUnitsList
-        handleOpenAddModal={handleOpenAddModal}
-        handleOpenCloneModal={handleOpenCloneModal}
-        handleOpenEditModal={handleOpenEditModal}
+        handleOpenAddModal={functionalUnits.handleOpenAddModal}
+        handleOpenCloneModal={functionalUnits.handleOpenCloneModal}
+        handleOpenEditModal={functionalUnits.handleOpenEditModal}
         incidentCount={incidentCount}
-        loadData={loadData}
-        loading={loading}
+        loadData={functionalUnits.loadData}
+        loading={functionalUnits.loading}
         operationalCount={operationalCount}
         renderStatusBadge={renderStatusBadge}
-        setUnitToDelete={setUnitToDelete}
-        totalCount={totalCount}
-        units={units}
+        setUnitToDelete={functionalUnits.setUnitToDelete}
+        totalCount={functionalUnits.units.length}
+        units={functionalUnits.units}
         warningCount={warningCount}
       />
 
       <FunctionalUnitFormModal
-        allCategories={allCategories}
-        editingUnit={editingUnit}
+        allCategories={functionalUnits.allCategories}
+        editingUnit={functionalUnits.editingUnit}
         equipmentCode={equipmentCode}
-        filteredLibrary={filteredLibrary}
-        formData={formData}
-        handleDeselectAllLibrary={handleDeselectAllLibrary}
-        handleSelectAllFilteredLibrary={handleSelectAllFilteredLibrary}
-        handleSubmit={handleSubmit}
-        handleToggleLibraryItem={handleToggleLibraryItem}
-        isModalOpen={isModalOpen}
-        libCategory={libCategory}
-        libSearch={libSearch}
-        libraryList={libraryList}
-        modalMode={modalMode}
-        selectedLibItems={selectedLibItems}
-        setFormData={setFormData}
-        setIsModalOpen={setIsModalOpen}
-        setLibCategory={setLibCategory}
-        setLibSearch={setLibSearch}
-        setModalMode={setModalMode}
-        setSelectedLibItems={setSelectedLibItems}
-        submitting={submitting}
-        units={units}
+        filteredLibrary={functionalUnits.filteredLibrary}
+        formData={functionalUnits.formData}
+        handleDeselectAllLibrary={functionalUnits.handleDeselectAllLibrary}
+        handleSelectAllFilteredLibrary={functionalUnits.handleSelectAllFilteredLibrary}
+        handleSubmit={functionalUnits.handleSubmit}
+        handleToggleLibraryItem={functionalUnits.handleToggleLibraryItem}
+        isModalOpen={functionalUnits.isModalOpen}
+        libCategory={functionalUnits.libCategory}
+        libSearch={functionalUnits.libSearch}
+        libraryList={functionalUnits.libraryList}
+        modalMode={functionalUnits.modalMode}
+        selectedLibItems={functionalUnits.selectedLibItems}
+        setFormData={functionalUnits.setFormData}
+        setIsModalOpen={functionalUnits.setIsModalOpen}
+        setLibCategory={functionalUnits.setLibCategory}
+        setLibSearch={functionalUnits.setLibSearch}
+        setModalMode={functionalUnits.setModalMode}
+        setSelectedLibItems={functionalUnits.setSelectedLibItems}
+        submitting={functionalUnits.submitting}
+        units={functionalUnits.units}
       />
 
       <FunctionalUnitCloneModal
-        allEquipments={allEquipments}
-        cloning={cloning}
+        allEquipments={functionalUnits.allEquipments}
+        cloning={functionalUnits.cloning}
         equipmentCode={equipmentCode}
         equipmentName={equipmentName}
-        handleDeselectAllUnits={handleDeselectAllUnits}
-        handleExecuteClone={handleExecuteClone}
-        handleSelectAllUnits={handleSelectAllUnits}
-        handleSelectSourceEquipment={handleSelectSourceEquipment}
-        handleToggleUnitSelect={handleToggleUnitSelect}
-        isCloneModalOpen={isCloneModalOpen}
-        loadingSourceUnits={loadingSourceUnits}
-        selectedSourceEqId={selectedSourceEqId}
-        selectedUnitIds={selectedUnitIds}
-        setIsCloneModalOpen={setIsCloneModalOpen}
-        sourceUnits={sourceUnits}
-        units={units}
+        handleDeselectAllUnits={functionalUnits.handleDeselectAllUnits}
+        handleExecuteClone={functionalUnits.handleExecuteClone}
+        handleSelectAllUnits={functionalUnits.handleSelectAllUnits}
+        handleSelectSourceEquipment={functionalUnits.handleSelectSourceEquipment}
+        handleToggleUnitSelect={functionalUnits.handleToggleUnitSelect}
+        isCloneModalOpen={functionalUnits.isCloneModalOpen}
+        loadingSourceUnits={functionalUnits.loadingSourceUnits}
+        selectedSourceEqId={functionalUnits.selectedSourceEqId}
+        selectedUnitIds={functionalUnits.selectedUnitIds}
+        setIsCloneModalOpen={functionalUnits.setIsCloneModalOpen}
+        sourceUnits={functionalUnits.sourceUnits}
+        units={functionalUnits.units}
       />
 
-      {/* ==================================================== */}
       <FunctionalUnitDeleteModal
-        handleConfirmDelete={handleConfirmDelete}
-        isDeleting={isDeleting}
-        setUnitToDelete={setUnitToDelete}
-        unitToDelete={unitToDelete}
+        handleConfirmDelete={functionalUnits.handleConfirmDelete}
+        isDeleting={functionalUnits.isDeleting}
+        setUnitToDelete={functionalUnits.setUnitToDelete}
+        unitToDelete={functionalUnits.unitToDelete}
       />
     </div>
   );
