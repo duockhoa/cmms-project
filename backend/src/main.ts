@@ -15,10 +15,10 @@ async function bootstrap() {
   // Enable HTTP response compression (Gzip/Deflate) to minimize payload transfer size
   app.use(compression());
 
-  // Enable CORS based on environment configuration
-  const corsOrigin = configService.get<string>('CORS_ORIGIN') || 'http://localhost:5173';
+  // Allow requests from every origin. Using `true` reflects the requesting
+  // origin, which remains compatible with credentialed browser requests.
   app.enableCors({
-    origin: corsOrigin.split(','),
+    origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
