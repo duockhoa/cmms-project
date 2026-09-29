@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { AttachmentManager } from './AttachmentManager';
-import { CheckCircle, AlertTriangle, XCircle, Play, AlertCircle, RefreshCw, Paperclip, FileText } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Play, AlertCircle, RefreshCw, FileText } from 'lucide-react';
 import { useToast, useConfirmDialog } from './Toast';
+import { Modal } from './Modal';
 
 interface ChecklistManagerProps {
   workOrderId: string;
@@ -28,6 +29,9 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
 
   // Active Draft Execution State
   const [activeExec, setActiveExec] = useState<any | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -156,22 +160,30 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancel = () => {
     if (!activeExec) return;
-    const reason = window.prompt('Vui lòng nhập lý do hủy lượt thực hiện Checklist:');
-    if (!reason || reason.trim() === '') return;
+    setCancelReason('');
+    setShowCancelModal(true);
+  };
 
+  const handleConfirmCancel = async () => {
+    if (!activeExec || !cancelReason.trim()) return;
     try {
+      setCancelling(true);
       await api.cancelChecklistExecution(activeExec.id, {
         expectedVersion: activeExec.version,
-        reason: reason.trim(),
+        reason: cancelReason.trim(),
       });
       toast.success('Thành công', 'Đã hủy lượt thực hiện checklist.');
+      setShowCancelModal(false);
+      setCancelReason('');
       loadData();
     } catch (err: any) {
       console.error(err);
       toast.error('Hủy thất bại', err.message || 'Lỗi xung đột phiên làm việc');
       loadData();
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -424,6 +436,36 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
           </div>
         </div>
       )}
+
+      <Modal
+        isOpen={showCancelModal}
+        onClose={() => !cancelling && setShowCancelModal(false)}
+        title="Hủy lượt thực hiện Checklist"
+        maxWidth="520px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label className="form-label">Lý do hủy <span style={{ color: 'var(--danger)' }}>*</span></label>
+            <textarea
+              className="form-input"
+              rows={4}
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              placeholder="Nhập lý do hủy lượt thực hiện checklist..."
+              autoFocus
+              disabled={cancelling}
+            />
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setShowCancelModal(false)} disabled={cancelling}>
+              Đóng
+            </button>
+            <button className="btn btn-danger" onClick={handleConfirmCancel} disabled={cancelling || !cancelReason.trim()}>
+              {cancelling ? 'Đang hủy...' : 'Xác nhận hủy'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
