@@ -4,21 +4,13 @@ import { api } from '../../services/api';
 import {
   Zap,
   Droplets,
-  Gauge,
   Save,
   RefreshCw,
-  AlertCircle,
-  CheckCircle2,
-  Search,
-  Filter,
-  Info,
-  Calendar,
   Layers,
-  ArrowUpRight,
-  Clock
+  ArrowUpRight
 } from 'lucide-react';
 import { formatVN } from '../../utils/formatters';
-import { useToast } from '../common/Toast';
+import { SearchInput, useToast } from '../common';
 
 interface PeriodMeterItem {
   pointId: string;
@@ -671,17 +663,12 @@ export const UtilitySettingsTab: React.FC = () => {
 
           {/* Search & Role Filter */}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', width: '220px' }}>
-              <Search size={15} style={{ position: 'absolute', left: '10px', top: '9px', color: '#94a3b8' }} />
-              <input
-                type="text"
-                placeholder="Tìm mã hoặc tên đồng hồ..."
-                className="form-input"
-                style={{ paddingLeft: '32px', fontSize: '12.5px', height: '34px' }}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Tìm mã hoặc tên đồng hồ..."
+              width="220px"
+            />
 
             <div style={{ display: 'flex', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
               <button
