@@ -17,7 +17,7 @@ export const FabricationDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const { confirm } = useConfirmDialog();
-  const { can, isAdmin } = usePermissions();
+  const { user, can, isAdmin } = usePermissions();
   const canDelete = isAdmin || can('fabrication:delete');
 
   const [job, setJob] = useState<any | null>(null);
@@ -37,6 +37,8 @@ export const FabricationDetailPage: React.FC = () => {
   const [resultNotes, setResultNotes] = useState<string>('');
   const [acceptanceRating, setAcceptanceRating] = useState<string>('GOOD');
   const [acceptedByName, setAcceptedByName] = useState<string>('');
+  const [acceptanceTab, setAcceptanceTab] = useState<'ACCEPT' | 'REWORK'>('ACCEPT');
+  const [reworkReason, setReworkReason] = useState<string>('');
   const [materials, setMaterials] = useState<any[]>([]);
 
   // Photos & Media states
@@ -73,6 +75,11 @@ export const FabricationDetailPage: React.FC = () => {
       setResultNotes(jobData.resultNotes || '');
       setAcceptanceRating(jobData.acceptanceRating || 'GOOD');
       setAcceptedByName(jobData.acceptedByName || '');
+      if (jobData.acceptanceRating === 'REWORK') {
+        setAcceptanceTab('REWORK');
+      } else {
+        setAcceptanceTab('ACCEPT');
+      }
       setMaterials(jobData.materials || []);
 
       if (jobData.actualStartDate) {
@@ -337,7 +344,126 @@ export const FabricationDetailPage: React.FC = () => {
     }
   };
 
-  // 4. ACTION: Xóa phiếu công việc
+  // 4. ACTION: Xử lý Đạt nghiệm thu & Bàn giao (Close & Handover)
+  const handleAcceptAndClose = async () => {
+    if (!job) return;
+    const recipient = acceptedByName.trim() || user?.name || 'Đại diện bộ phận tiếp nhận';
+
+    const ok = await confirm(
+      'Xác nhận nghiệm thu & bàn giao',
+      `Xác nhận sản phẩm đã ĐẠT tiêu chuẩn kỹ thuật và bàn giao cho "${recipient}". Trạng thái phiếu sẽ chuyển sang HOÀN TẤT?`,
+      {
+        confirmText: 'Xác nhận Bàn giao',
+        cancelText: 'Hủy',
+        type: 'info',
+      }
+    );
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      const finalRating = acceptanceRating === 'REWORK' ? 'GOOD' : acceptanceRating;
+      const updated = await api.updateFabricationOrder(job.id, {
+        status: 'CLOSED',
+        acceptanceRating: finalRating,
+        acceptedByName: recipient,
+      });
+
+      setJob(updated);
+      setStatus('CLOSED');
+      setAcceptedByName(recipient);
+      setAcceptanceRating(finalRating);
+      toast.success('Nghiệm thu thành công', `Đã nghiệm thu đạt chuẩn và bàn giao cho ${recipient}`);
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Lỗi', err.message || 'Không thể hoàn tất nghiệm thu');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 5. ACTION: Xử lý Không đạt / Yêu cầu sửa lại (Reject & Rework)
+  const handleRejectAndRework = async () => {
+    if (!job) return;
+    if (!reworkReason.trim()) {
+      toast.warning('Thiếu thông tin', 'Vui lòng nhập lý do không đạt và nội dung yêu cầu sửa lại chi tiết');
+      return;
+    }
+
+    const ok = await confirm(
+      'Yêu cầu sửa lại',
+      'Phiếu công việc sẽ được chuyển ngược lại trạng thái "Đang thực hiện" để kỹ thuật viên tiến hành sửa chữa. Bạn có chắc chắn không?',
+      {
+        confirmText: 'Yêu cầu sửa lại',
+        cancelText: 'Hủy',
+        type: 'warning',
+      }
+    );
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      const nowStr = new Date().toLocaleString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+      const inspector = user?.name || 'Bộ phận nghiệm thu';
+      const reworkEntry = `\n\n[⚠️ YÊU CẦU SỬA LẠI - ${nowStr} bởi ${inspector}]:\n${reworkReason.trim()}`;
+      const newResultNotes = resultNotes ? `${resultNotes}${reworkEntry}` : reworkEntry.trim();
+
+      const updated = await api.updateFabricationOrder(job.id, {
+        status: 'IN_PROGRESS',
+        acceptanceRating: 'REWORK',
+        resultNotes: newResultNotes,
+      });
+
+      setJob(updated);
+      setStatus('IN_PROGRESS');
+      setAcceptanceRating('REWORK');
+      setResultNotes(newResultNotes);
+      setReworkReason('');
+      toast.warning('Yêu cầu sửa lại', 'Đã chuyển phiếu về trạng thái Đang thực hiện cho kỹ thuật viên sửa chữa');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Lỗi', err.message || 'Không thể cập nhật yêu cầu sửa lại');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 6. ACTION: Mở lại phiếu nếu đã Closed mà phát sinh vấn đề
+  const handleReopenJob = async () => {
+    if (!job) return;
+    const ok = await confirm(
+      'Mở lại phiếu công việc',
+      'Bạn có chắc chắn muốn mở lại phiếu đã hoàn tất để tiếp tục điều chỉnh hoặc xử lý bổ sung?',
+      {
+        confirmText: 'Mở lại phiếu',
+        cancelText: 'Hủy',
+        type: 'warning',
+      }
+    );
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      const updated = await api.updateFabricationOrder(job.id, {
+        status: 'IN_PROGRESS',
+      });
+      setJob(updated);
+      setStatus('IN_PROGRESS');
+      toast.info('Đã mở lại phiếu', 'Phiếu đã chuyển về trạng thái Đang thực hiện');
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Không thể mở lại phiếu');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 7. ACTION: Xóa phiếu công việc
   const handleDeleteJob = async () => {
     if (!job) return;
     const ok = await confirm(
@@ -459,6 +585,22 @@ export const FabricationDetailPage: React.FC = () => {
       case 'INSTALLATION': return 'Lắp đặt / Di dời';
       case 'INFRASTRUCTURE': return 'Cơ sở hạ tầng';
       default: return 'Khác';
+    }
+  };
+
+  const getRatingLabel = (rating?: string) => {
+    switch (rating) {
+      case 'EXCELLENT':
+        return '⭐ Xuất sắc (Vượt tiến độ / Chuẩn xác cao)';
+      case 'GOOD':
+        return '✅ Đạt chuẩn chất lượng kỹ thuật';
+      case 'ACCEPTABLE':
+        return '🆗 Chấp nhận được';
+      case 'REWORK':
+      case 'POOR':
+        return '⚠️ Không đạt / Yêu cầu sửa chữa lại';
+      default:
+        return rating || 'Chưa đánh giá';
     }
   };
 
@@ -599,6 +741,24 @@ export const FabricationDetailPage: React.FC = () => {
               </span>
               <StatusBadge status={job.status} />
               <StatusBadge status={job.priority} />
+              {job.acceptanceRating === 'REWORK' && job.status === 'IN_PROGRESS' && (
+                <span
+                  style={{
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    backgroundColor: '#fff1f2',
+                    color: '#e11d48',
+                    borderRadius: '4px',
+                    border: '1px solid #fecdd3',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <RotateCcw size={12} /> Cần sửa lại theo nghiệm thu
+                </span>
+              )}
               <span
                 style={{
                   fontSize: '11.5px',
@@ -640,7 +800,7 @@ export const FabricationDetailPage: React.FC = () => {
           {/* Quick status progression buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
             <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 500 }}>Thao tác nhanh tiến độ:</span>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {status === 'ASSIGNED' && (
                 <button
                   type="button"
@@ -659,7 +819,7 @@ export const FabricationDetailPage: React.FC = () => {
                   onClick={handleCompleteWork}
                   disabled={saving || deleting}
                   style={{
-                    backgroundColor: '#16a34a',
+                    backgroundColor: acceptanceRating === 'REWORK' ? '#ea580c' : '#16a34a',
                     color: '#ffffff',
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -668,24 +828,73 @@ export const FabricationDetailPage: React.FC = () => {
                     fontWeight: 700,
                   }}
                 >
-                  <CheckCircle2 size={15} /> Báo cáo hoàn thành (Chốt giờ)
+                  <CheckCircle2 size={15} /> 
+                  {acceptanceRating === 'REWORK' ? 'Báo cáo hoàn thành lại (Gửi nghiệm thu lần 2)' : 'Báo cáo hoàn thành (Chốt giờ)'}
                 </button>
               )}
               {status === 'COMPLETED' && (
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => handleSave('CLOSED')}
-                  disabled={saving || deleting}
-                  style={{ backgroundColor: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', fontWeight: 600 }}
-                >
-                  Nghiệm thu bàn giao
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setAcceptanceTab('ACCEPT');
+                      document.getElementById('acceptance-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    disabled={saving || deleting}
+                    style={{
+                      backgroundColor: '#16a34a',
+                      color: '#ffffff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    <ShieldCheck size={15} /> Đạt nghiệm thu & Bàn giao
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setAcceptanceTab('REWORK');
+                      document.getElementById('acceptance-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    disabled={saving || deleting}
+                    style={{
+                      backgroundColor: '#fff1f2',
+                      color: '#e11d48',
+                      border: '1px solid #fecdd3',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <RotateCcw size={14} /> Không đạt / Sửa lại
+                  </button>
+                </>
               )}
               {status === 'CLOSED' && (
-                <span style={{ fontSize: '12.5px', color: '#16a34a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <ShieldCheck size={16} /> Đã hoàn tất & nghiệm thu
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12.5px', color: '#16a34a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <ShieldCheck size={16} /> Đã hoàn tất & nghiệm thu bàn giao
+                  </span>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleReopenJob}
+                      disabled={saving || deleting}
+                      title="Mở lại phiếu nếu có phát sinh"
+                      style={{ fontSize: '11.5px', color: '#64748b' }}
+                    >
+                      <RotateCcw size={12} style={{ marginRight: '4px' }} /> Mở lại
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -840,6 +1049,33 @@ export const FabricationDetailPage: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Cảnh báo yêu cầu sửa lại nếu trước đó bị nghiệm thu không đạt */}
+            {acceptanceRating === 'REWORK' && status === 'IN_PROGRESS' && (
+              <div
+                style={{
+                  backgroundColor: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  borderLeft: '4px solid #f59e0b',
+                  borderRadius: '8px',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  gap: '10px',
+                  alignItems: 'flex-start',
+                }}
+              >
+                <AlertCircle size={18} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#b45309' }}>
+                    Lưu ý kỹ thuật viên: Phiếu này đang cần sửa chữa lại theo yêu cầu nghiệm thu!
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#92400e', marginTop: '3px', lineHeight: 1.4 }}>
+                    Vui lòng kiểm tra kỹ yêu cầu sửa chữa trong phần ghi chú, tiến hành khắc phục, chụp ảnh kết quả mới và bấm <strong>"Báo cáo hoàn thành lại"</strong> để nghiệm thu lại.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Time Tracking Fields */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '14px' }}>
@@ -1344,13 +1580,15 @@ export const FabricationDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Nghiệm thu chất lượng */}
+          {/* 5. Nghiệm thu & Bàn giao sản phẩm */}
           <div
+            id="acceptance-section"
             style={{
               backgroundColor: '#ffffff',
               borderRadius: '12px',
-              border: '1px solid #e2e8f0',
+              border: status === 'COMPLETED' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
               padding: '18px 20px',
+              boxShadow: status === 'COMPLETED' ? '0 4px 12px rgba(59, 130, 246, 0.08)' : 'none',
             }}
           >
             <div
@@ -1362,53 +1600,282 @@ export const FabricationDetailPage: React.FC = () => {
                 textTransform: 'uppercase',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                justifyContent: 'space-between',
                 marginBottom: '12px',
                 borderBottom: '1px solid #f1f5f9',
                 paddingBottom: '8px',
               }}
             >
-              <Award size={15} /> Nghiệm thu chất lượng sản phẩm
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                  Đánh giá nghiệm thu:
-                </label>
-                <select
-                  className="form-input"
-                  value={acceptanceRating}
-                  onChange={(e) => setAcceptanceRating(e.target.value)}
-                  style={{ width: '100%', fontSize: '12.5px' }}
-                >
-                  <option value="EXCELLENT">Xuất sắc - Vượt tiến độ / Chuẩn xác cao</option>
-                  <option value="GOOD">Đạt chuẩn chất lượng kỹ thuật</option>
-                  <option value="ACCEPTABLE">Chấp nhận được (Cần lưu ý thêm)</option>
-                  <option value="POOR">Không đạt - Cần sửa chữa lại</option>
-                </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Award size={15} /> 5. Nghiệm thu & Bàn giao
               </div>
-
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                  Người đại diện nghiệm thu / tiếp nhận:
-                </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Nhập họ tên người tiếp nhận..."
-                  value={acceptedByName}
-                  onChange={(e) => setAcceptedByName(e.target.value)}
-                  style={{ width: '100%', fontSize: '12.5px' }}
-                />
-              </div>
-
-              {job.creator && (
-                <div style={{ fontSize: '11.5px', color: '#64748b', backgroundColor: '#f8fafc', padding: '8px 10px', borderRadius: '6px' }}>
-                  Người tạo phiếu: <strong>{job.creator.name}</strong> ({new Date(job.createdAt).toLocaleDateString('vi-VN')})
-                </div>
+              {status === 'COMPLETED' && (
+                <span style={{ fontSize: '11px', color: '#2563eb', backgroundColor: '#dbeafe', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
+                  Chờ nghiệm thu
+                </span>
               )}
             </div>
+
+            {/* TRƯỜNG HỢP 1: ĐÃ CLOSED (HOÀN TẤT & ĐÃ BÀN GIAO) */}
+            {status === 'CLOSED' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div
+                  style={{
+                    backgroundColor: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: '10px',
+                    padding: '14px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '42px', height: '42px', borderRadius: '50%', backgroundColor: '#dcfce7', color: '#16a34a', marginBottom: '8px' }}>
+                    <ShieldCheck size={24} />
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#15803d' }}>
+                    ĐÃ ĐẠT NGHIỆM THU & BÀN GIAO
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#166534', marginTop: '4px' }}>
+                    Đánh giá: <strong>{getRatingLabel(acceptanceRating || job.acceptanceRating)}</strong>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '12.5px', color: '#334155', backgroundColor: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div>
+                    Người tiếp nhận: <strong style={{ color: '#0f172a' }}>{acceptedByName || job.acceptedByName || '---'}</strong>
+                  </div>
+                  <div>
+                    Thời gian nghiệm thu: <strong style={{ color: '#0f172a' }}>{job.acceptedAt ? formatDateTimeDisplay(job.acceptedAt) : 'Đã nghiệm thu'}</strong>
+                  </div>
+                  {job.creator && (
+                    <div style={{ fontSize: '11.5px', color: '#64748b', borderTop: '1px dashed #e2e8f0', paddingTop: '6px', marginTop: '2px' }}>
+                      Người tạo phiếu: {job.creator.name}
+                    </div>
+                  )}
+                </div>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleReopenJob}
+                    disabled={saving}
+                    style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px' }}
+                  >
+                    <RotateCcw size={13} /> Mở lại phiếu nếu phát sinh vấn đề
+                  </button>
+                )}
+              </div>
+            ) : status === 'COMPLETED' ? (
+              /* TRƯỜNG HỢP 2: COMPLETED (THỢ ĐÃ BÁO CÁO XONG -> TIẾN HÀNH NGHIỆM THU) */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* 2 Tabs: Đạt & Bàn giao VS Không đạt (Yêu cầu sửa lại) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAcceptanceTab('ACCEPT')}
+                    style={{
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 10px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      backgroundColor: acceptanceTab === 'ACCEPT' ? '#16a34a' : 'transparent',
+                      color: acceptanceTab === 'ACCEPT' ? '#ffffff' : '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <CheckCircle2 size={14} /> Đạt nghiệm thu
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAcceptanceTab('REWORK')}
+                    style={{
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 10px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      backgroundColor: acceptanceTab === 'REWORK' ? '#e11d48' : 'transparent',
+                      color: acceptanceTab === 'REWORK' ? '#ffffff' : '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <RotateCcw size={14} /> Yêu cầu sửa lại
+                  </button>
+                </div>
+
+                {acceptanceTab === 'ACCEPT' ? (
+                  /* TAB 1: ĐẠT NGHIỆM THU & BÀN GIAO */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '4px' }}>
+                        Xếp loại chất lượng:
+                      </label>
+                      <select
+                        className="form-input"
+                        value={acceptanceRating}
+                        onChange={(e) => setAcceptanceRating(e.target.value)}
+                        style={{ width: '100%', fontSize: '12.5px' }}
+                      >
+                        <option value="EXCELLENT">⭐ Xuất sắc (Vượt tiến độ / Chuẩn xác cao)</option>
+                        <option value="GOOD">✅ Đạt chuẩn chất lượng kỹ thuật</option>
+                        <option value="ACCEPTABLE">🆗 Chấp nhận được (Cần lưu ý thêm)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '4px' }}>
+                        Người đại diện nhận bàn giao:
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Nhập họ tên người tiếp nhận..."
+                        value={acceptedByName}
+                        onChange={(e) => setAcceptedByName(e.target.value)}
+                        style={{ width: '100%', fontSize: '12.5px' }}
+                      />
+                      <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                        (Đại diện xưởng/phòng ban nhận bàn giao thiết bị hoặc sản phẩm hoàn thiện)
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleAcceptAndClose}
+                      disabled={saving}
+                      style={{
+                        backgroundColor: '#16a34a',
+                        borderColor: '#16a34a',
+                        color: '#ffffff',
+                        width: '100%',
+                        padding: '10px',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        marginTop: '4px',
+                      }}
+                    >
+                      <ShieldCheck size={16} /> Xác nhận Đạt & Bàn giao
+                    </button>
+                  </div>
+                ) : (
+                  /* TAB 2: KHÔNG ĐẠT / YÊU CẦU SỬA LẠI */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div
+                      style={{
+                        backgroundColor: '#fff1f2',
+                        border: '1px solid #fecdd3',
+                        borderRadius: '8px',
+                        padding: '10px 12px',
+                        fontSize: '12px',
+                        color: '#9f1239',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Phiếu sẽ chuyển ngược lại trạng thái <strong>"ĐANG THỰC HIỆN"</strong> để kỹ thuật viên tiến hành khắc phục các lỗi trước khi nghiệm thu lại.
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#e11d48', display: 'block', marginBottom: '4px' }}>
+                        Lý do không đạt & Yêu cầu sửa chi tiết (*):
+                      </label>
+                      <textarea
+                        className="form-input"
+                        rows={4}
+                        placeholder="Ghi rõ chi tiết cần sửa (VD: Kích thước bản mã lệch 3mm, mối hàn chân đế chưa ngấu, bề mặt chưa mài phẳng...)"
+                        value={reworkReason}
+                        onChange={(e) => setReworkReason(e.target.value)}
+                        style={{ width: '100%', fontSize: '12.5px', borderColor: '#fda4af' }}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={handleRejectAndRework}
+                      disabled={saving || !reworkReason.trim()}
+                      style={{
+                        backgroundColor: '#e11d48',
+                        color: '#ffffff',
+                        width: '100%',
+                        padding: '10px',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <RotateCcw size={16} /> Gửi yêu cầu thợ sửa lại
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* TRƯỜNG HỢP 3: ASSIGNED HOẶC IN_PROGRESS */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {acceptanceRating === 'REWORK' && status === 'IN_PROGRESS' ? (
+                  <div
+                    style={{
+                      backgroundColor: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      borderRadius: '8px',
+                      padding: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: 700, color: '#b45309', marginBottom: '4px' }}>
+                      <AlertCircle size={15} color="#d97706" /> Đang trong quy trình sửa lại
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#92400e', lineHeight: 1.4 }}>
+                      Phiếu bị nghiệm thu chưa đạt yêu cầu. Kỹ thuật viên đang tiến hành sửa chữa theo nội dung ghi chú.
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      backgroundColor: '#f8fafc',
+                      border: '1px dashed #cbd5e1',
+                      borderRadius: '8px',
+                      padding: '16px 12px',
+                      textAlign: 'center',
+                      color: '#64748b',
+                    }}
+                  >
+                    <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                      Chưa tới bước nghiệm thu
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                      {status === 'ASSIGNED' 
+                        ? 'Công việc chưa bắt đầu thực hiện.' 
+                        : 'Kỹ thuật viên đang gia công chế tạo. Sau khi bấm "Báo cáo hoàn thành", phần nghiệm thu sẽ kích hoạt.'}
+                    </div>
+                  </div>
+                )}
+
+                {job.creator && (
+                  <div style={{ fontSize: '11.5px', color: '#64748b', backgroundColor: '#f8fafc', padding: '8px 10px', borderRadius: '6px' }}>
+                    Người tạo phiếu: <strong>{job.creator.name}</strong> ({new Date(job.createdAt).toLocaleDateString('vi-VN')})
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1537,6 +2004,14 @@ export const FabricationDetailPage: React.FC = () => {
             <tr>
               <td style={{ padding: '4px 0' }}><strong>Ghi chú kết quả:</strong></td>
               <td>{resultNotes || 'Đã hoàn thành theo quy cách'}</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '4px 0' }}><strong>Đánh giá nghiệm thu:</strong></td>
+              <td>
+                <strong>{getRatingLabel(job.acceptanceRating || acceptanceRating)}</strong>
+                {acceptedByName && ` — Bàn giao cho: ${acceptedByName}`}
+                {job.acceptedAt && ` (Ngày: ${formatDateTimeDisplay(job.acceptedAt)})`}
+              </td>
             </tr>
           </tbody>
         </table>

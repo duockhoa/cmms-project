@@ -187,8 +187,12 @@ export class FabricationService {
     // Status transition helpers
     if (dto.status !== undefined) {
       updateData.status = dto.status;
-      if (dto.status === 'IN_PROGRESS' && !existing.actualStartDate && !dto.actualStartDate) {
-        updateData.actualStartDate = new Date();
+      if (dto.status === 'IN_PROGRESS') {
+        if (!existing.actualStartDate && !dto.actualStartDate) {
+          updateData.actualStartDate = new Date();
+        }
+        updateData.acceptedAt = null;
+        updateData.acceptedById = null;
       }
       if (dto.status === 'COMPLETED') {
         if (!existing.actualEndDate && !dto.actualEndDate) {
