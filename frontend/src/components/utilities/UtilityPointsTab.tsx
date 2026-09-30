@@ -1,13 +1,6 @@
 import React from 'react';
 import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
-import {
-  Zap, Droplets, Cpu, QrCode, BarChart3, BarChart2, RefreshCw, Plus, Edit2, Trash2,
-  Printer, Search, CheckCircle2, Clock, Settings, FileText, ArrowRight, Calendar, PieChart,
-  AlertTriangle, Layers, Ban, XCircle, ShieldAlert, Activity, Filter, X, TrendingUp,
-  TrendingDown, CalendarDays, ChevronLeft, ChevronRight, Play, Square, CheckSquare,
-} from 'lucide-react';
-import { ExportButton, KpiCard } from '../common';
-import { formatVN } from '../../utils/formatters';
+import { CheckSquare, Edit2, Plus, Printer, QrCode, Settings, Trash2 } from 'lucide-react';
 
 interface UtilityTabProps {
   model: UtilitiesPageViewModel;
@@ -15,24 +8,9 @@ interface UtilityTabProps {
 
 export const UtilityPointsTab: React.FC<UtilityTabProps> = ({ model }) => {
   const {
-    navigate, toast, can, isAdmin, loading, points, readings, setReadings, statusLogs, analytics,
-    cumulativeType, setCumulativeType, cumulativeMonth, setCumulativeMonth,
-    cumulativeYear, setCumulativeYear, cumulativeData, cumulativeLoading,
-    cumulativeFilter, setCumulativeFilter, trendViewMode, setTrendViewMode,
-    trendDay, setTrendDay, trendMonth, setTrendMonth, trendYear, setTrendYear,
-    trendStartYear, setTrendStartYear, trendEndYear, setTrendEndYear,
-    trendFilter, setTrendFilter, trendData, trendLoading, trendDisplayType,
-    setTrendDisplayType, trendTableContainerRef, dynamicYears, scrollTrendTable,
-    scrollToPeriod, filterCategory, setFilterCategory, filterPointId, setFilterPointId, filterSearch,
-    setFilterSearch, filterStatus, setFilterStatus, recalculating, setVoidModalReading,
-    setVoidReason, setEditModalReading, setPrintPoint, selectedPointIds,
-    toggleSelectOnePoint, isAllPointsSelected, toggleSelectAllPoints, isPrintingPoints,
-    handlePrintBatchPoints, getLiveHourMeter, loadCumulativeReport, handleExportTrendCSV,
-    handleExportCumulativeCSV, handleOpenAddPoint, handleOpenEditPoint,
-    handleDeletePoint, handleQuickToggleStatus, handleRecalculateAll,
-    handleExportReadingsCSV, filteredPointsForSelect, handleCategoryChange,
-    filteredReadings, displayedCumulativeMeters, displayedTrendRows,
-    handleOpenEditReading,
+    can, points, setPrintPoint, selectedPointIds, toggleSelectOnePoint,
+    isAllPointsSelected, toggleSelectAllPoints, isPrintingPoints, handlePrintBatchPoints, getLiveHourMeter,
+    handleOpenAddPoint, handleOpenEditPoint, handleDeletePoint,
   } = model;
 
   return (

@@ -1,13 +1,7 @@
 import React from 'react';
 import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
-import {
-  Zap, Droplets, Cpu, QrCode, BarChart3, BarChart2, RefreshCw, Plus, Edit2, Trash2,
-  Printer, Search, CheckCircle2, Clock, Settings, FileText, ArrowRight, Calendar, PieChart,
-  AlertTriangle, Layers, Ban, XCircle, ShieldAlert, Activity, Filter, X, TrendingUp,
-  TrendingDown, CalendarDays, ChevronLeft, ChevronRight, Play, Square, CheckSquare,
-} from 'lucide-react';
-import { ExportButton, KpiCard } from '../common';
-import { formatVN } from '../../utils/formatters';
+import { ArrowRight, Ban, Droplets, Edit2, RefreshCw, Search, X, Zap } from 'lucide-react';
+import { ExportButton } from '../common';
 import { api } from '../../services/api';
 
 interface UtilityTabProps {
@@ -16,23 +10,10 @@ interface UtilityTabProps {
 
 export const UtilityReadingsTab: React.FC<UtilityTabProps> = ({ model }) => {
   const {
-    navigate, toast, can, isAdmin, loading, points, readings, setReadings, statusLogs, analytics,
-    cumulativeType, setCumulativeType, cumulativeMonth, setCumulativeMonth,
-    cumulativeYear, setCumulativeYear, cumulativeData, cumulativeLoading,
-    cumulativeFilter, setCumulativeFilter, trendViewMode, setTrendViewMode,
-    trendDay, setTrendDay, trendMonth, setTrendMonth, trendYear, setTrendYear,
-    trendStartYear, setTrendStartYear, trendEndYear, setTrendEndYear,
-    trendFilter, setTrendFilter, trendData, trendLoading, trendDisplayType,
-    setTrendDisplayType, trendTableContainerRef, dynamicYears, scrollTrendTable,
-    scrollToPeriod, filterCategory, setFilterCategory, filterPointId, setFilterPointId, filterSearch,
-    setFilterSearch, filterStatus, setFilterStatus, recalculating, setVoidModalReading,
-    setVoidReason, setEditModalReading, setPrintPoint, selectedPointIds,
-    toggleSelectOnePoint, isAllPointsSelected, toggleSelectAllPoints, isPrintingPoints,
-    handlePrintBatchPoints, getLiveHourMeter, loadCumulativeReport, handleExportTrendCSV,
-    handleExportCumulativeCSV, handleOpenAddPoint, handleOpenEditPoint,
-    handleDeletePoint, handleQuickToggleStatus, handleRecalculateAll,
-    handleExportReadingsCSV, filteredPointsForSelect, handleCategoryChange,
-    filteredReadings, displayedCumulativeMeters, displayedTrendRows,
+    toast, can, points, setReadings, filterCategory,
+    setFilterCategory, filterPointId, setFilterPointId, filterSearch, setFilterSearch,
+    filterStatus, setFilterStatus, recalculating, setVoidModalReading, setVoidReason,
+    handleRecalculateAll, handleExportReadingsCSV, filteredPointsForSelect, handleCategoryChange, filteredReadings,
     handleOpenEditReading,
   } = model;
 
