@@ -1,0 +1,116 @@
+.op-logs-container {
+  padding: 0 0 20px 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.op-logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.op-logs-workspace {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  flex: 1;
+  min-height: 600px;
+}
+
+.op-logs-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background-color: var(--bg-secondary, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 170px);
+}
+
+.op-logs-sidebar-toggle {
+  width: 32px;
+  flex-shrink: 0;
+  background-color: var(--bg-secondary, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 12px 0;
+  transition: background-color 0.15s ease;
+}
+
+.op-logs-detail-pane {
+  flex: 1;
+  min-width: 0;
+  background-color: var(--bg-secondary, #ffffff);
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* RESPONSIVE STYLES FOR TABLET & MOBILE (<= 768px) */
+@media (max-width: 768px) {
+  .op-logs-container {
+    padding: 0 0 16px 0;
+  }
+
+  .op-logs-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .op-logs-header-title {
+    font-size: 16px !important;
+  }
+
+  .op-logs-header-subtitle {
+    display: none !important;
+  }
+
+  .op-logs-header-actions {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .op-logs-header-actions .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 9px 10px;
+    font-size: 12.5px;
+  }
+
+  /* Hide desktop sidebar on mobile */
+  .op-logs-sidebar,
+  .op-logs-sidebar-toggle {
+    display: none !important;
+  }
+
+  .op-logs-workspace {
+    flex-direction: column;
+    gap: 10px;
+    min-height: auto;
+  }
+
+  .op-logs-detail-pane {
+    border-radius: 8px;
+  }
+}
