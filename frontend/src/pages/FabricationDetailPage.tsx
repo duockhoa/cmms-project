@@ -8,7 +8,7 @@ import {
   Timer
 } from 'lucide-react';
 import { api, API_HOST as API_BASE } from '../services/api';
-import { useToast } from '../components/common/Toast';
+import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { StatusBadge } from '../components/common/Badge';
 import { usePermissions } from '../hooks/usePermissions';
 
@@ -16,6 +16,7 @@ export const FabricationDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const { can, isAdmin } = usePermissions();
   const canDelete = isAdmin || can('fabrication:delete');
 
@@ -339,9 +340,17 @@ export const FabricationDetailPage: React.FC = () => {
   // 4. ACTION: Xóa phiếu công việc
   const handleDeleteJob = async () => {
     if (!job) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa phiếu [${job.orderCode}] "${job.title}" không? Dữ liệu đã xóa sẽ không thể phục hồi.`)) {
-      return;
-    }
+    const ok = await confirm(
+      'Xác nhận xóa phiếu',
+      `Bạn có chắc chắn muốn xóa phiếu [${job.orderCode}] "${job.title}" không? Dữ liệu đã xóa sẽ không thể phục hồi.`,
+      {
+        confirmText: 'Xóa phiếu',
+        cancelText: 'Hủy',
+        type: 'danger',
+      }
+    );
+    if (!ok) return;
+
     setDeleting(true);
     try {
       await api.deleteFabricationOrder(job.id);

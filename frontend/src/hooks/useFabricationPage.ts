@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
-import { useToast } from '../components/common/Toast';
+import { useToast, useConfirmDialog } from '../components/common/Toast';
 
 export interface FabricationJobItem {
   id: string;
@@ -70,6 +70,7 @@ export function useFabricationPage() {
   });
 
   const toast = useToast();
+  const { confirm } = useConfirmDialog();
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -158,7 +159,17 @@ export function useFabricationPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa phiếu gia công/chế tạo này không?')) return;
+    const ok = await confirm(
+      'Xác nhận xóa phiếu',
+      'Bạn có chắc chắn muốn xóa phiếu gia công/chế tạo này không? Hành động này không thể hoàn tác.',
+      {
+        confirmText: 'Xóa phiếu',
+        cancelText: 'Hủy',
+        type: 'danger',
+      }
+    );
+    if (!ok) return;
+
     try {
       await api.deleteFabricationOrder(id);
       toast.success('Đã xóa', 'Phiếu công việc đã được xóa thành công');
@@ -168,6 +179,7 @@ export function useFabricationPage() {
       fetchJobs();
       fetchStats();
     } catch (err: any) {
+      console.error(err);
       toast.error('Lỗi', err.message || 'Không thể xóa phiếu công việc');
     }
   };
