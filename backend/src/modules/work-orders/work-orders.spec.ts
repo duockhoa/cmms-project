@@ -454,12 +454,23 @@ describe('Work Orders Module', () => {
       );
 
       // 4. Workshop accepts handover -> goes to INSPECTION (Chờ QA nghiệm thu)
+      const longWorkshopComment = 'Xưởng đã kiểm tra vận hành ổn định, không phát hiện bất thường. '.repeat(5);
       const acceptedWo = await workOrdersService.acceptHandover(
         wo.id,
-        { expectedVersion: handoverWo2!.version, comment: 'Xưởng chạy thử đạt yêu cầu' },
+        {
+          expectedVersion: handoverWo2!.version,
+          comment: longWorkshopComment,
+          testRunResult: 'Thiết bị chạy ổn định đủ tải và không phát sinh cảnh báo.',
+          cleanlinessResult: 'Thiết bị và khu vực xung quanh đã được vệ sinh đầy đủ.',
+        },
         { id: workshopUser!.id, role: 'TECHNICIAN' }
       );
       expect(acceptedWo?.status).toBe('INSPECTION');
+      const acceptHistory = await prisma.workflowHistory.findFirst({
+        where: { entityId: wo.id, action: 'HANDOVER_ACCEPT' },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(acceptHistory?.comment).toContain(longWorkshopComment);
 
       // 5. QA verifies -> goes to VERIFIED
       const qaVerifiedWo = await workOrdersService.qaVerify(

@@ -320,9 +320,9 @@ model WorkflowHistory {
   performedById        String?
   actedById            String?
   actedBy              User?    @relation("WorkflowActedBy", fields: [actedById], references: [id], onDelete: SetNull)
-  comment              String?
-  reason               String?
-  metadata             String?
+  comment              String?  @db.Text
+  reason               String?  @db.Text
+  metadata             String?  @db.Text
   requestVersionBefore Int?
   requestVersionAfter  Int?
   createdAt            DateTime @default(now())
@@ -789,5 +789,4 @@ model UtilitySystemStatusLog {
   recordedByName  String?
   recordedByUser  User?               @relation("UserUtilityStatusLogs", fields: [recordedById], references: [id], onDelete: Restrict)
 }
-
 
