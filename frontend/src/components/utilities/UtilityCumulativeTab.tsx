@@ -1,11 +1,12 @@
 import React from 'react';
+import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
 import { UtilityCumulativeHeader } from './UtilityCumulativeHeader';
 import { UtilityCumulativeMetersTable } from './UtilityCumulativeMetersTable';
 import { UtilityCumulativeSummary } from './UtilityCumulativeSummary';
 import { UtilityCumulativeTrendSection } from './UtilityCumulativeTrendSection';
 
 interface UtilityTabProps {
-  model: Record<string, any>;
+  model: UtilitiesPageViewModel;
 }
 
 export const UtilityCumulativeTab: React.FC<UtilityTabProps> = ({ model }) => (

@@ -773,3 +773,5 @@ export const useUtilitiesPage = () => {
     voidModalReading, editModalReading,
   };
 };
+
+export type UtilitiesPageViewModel = ReturnType<typeof useUtilitiesPage>['utilityViewModel'];

@@ -1,8 +1,9 @@
 import React from 'react';
+import type { EquipmentParameterAssignmentModel } from '../../../hooks/useEquipmentParameterAssignment';
 import { MapPin, Search } from 'lucide-react';
 
 interface EquipmentSelectorPanelProps {
-  model: Record<string, any>;
+  model: EquipmentParameterAssignmentModel;
   confirm: (
     title: string,
     message: string,

@@ -1,4 +1,5 @@
 import React from 'react';
+import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
 import {
   Zap, Droplets, Cpu, QrCode, BarChart3, BarChart2, RefreshCw, Plus, Edit2, Trash2,
   Printer, Search, CheckCircle2, Clock, Settings, FileText, ArrowRight, Calendar, PieChart,
@@ -9,7 +10,7 @@ import { ExportButton, KpiCard } from '../common';
 import { formatVN } from '../../utils/formatters';
 
 interface UtilityTabProps {
-  model: Record<string, any>;
+  model: UtilitiesPageViewModel;
 }
 
 export const UtilityOverviewTab: React.FC<UtilityTabProps> = ({ model }) => {

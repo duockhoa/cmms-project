@@ -1,9 +1,10 @@
 import React from 'react';
+import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
 import { Ban, CheckCircle2, FileText, Filter, Layers, RefreshCw, X } from 'lucide-react';
 import { formatVN } from '../../utils/formatters';
 
 interface UtilityCumulativeMetersTableProps {
-  model: Record<string, any>;
+  model: UtilitiesPageViewModel;
 }
 
 export const UtilityCumulativeMetersTable: React.FC<UtilityCumulativeMetersTableProps> = ({ model }) => {

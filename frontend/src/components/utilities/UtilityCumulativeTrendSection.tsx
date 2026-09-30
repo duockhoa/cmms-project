@@ -1,4 +1,5 @@
 import React from 'react';
+import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
 import {
   BarChart2, BarChart3, Calendar, CalendarDays, ChevronLeft, ChevronRight,
   Clock, FileText, Filter, TrendingDown, TrendingUp, X,
@@ -8,7 +9,7 @@ import { formatVN } from '../../utils/formatters';
 import { UtilityTrendChart } from './UtilityTrendChart';
 
 interface UtilityCumulativeTrendSectionProps {
-  model: Record<string, any>;
+  model: UtilitiesPageViewModel;
 }
 
 export const UtilityCumulativeTrendSection: React.FC<UtilityCumulativeTrendSectionProps> = ({ model }) => {

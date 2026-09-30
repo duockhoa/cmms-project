@@ -1,9 +1,10 @@
 import React from 'react';
+import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
 import { AlertTriangle, Droplets, Layers, PieChart, RefreshCw, Zap } from 'lucide-react';
 import { KpiCard } from '../common';
 
 interface UtilityCumulativeSummaryProps {
-  model: Record<string, any>;
+  model: UtilitiesPageViewModel;
 }
 
 export const UtilityCumulativeSummary: React.FC<UtilityCumulativeSummaryProps> = ({ model }) => {

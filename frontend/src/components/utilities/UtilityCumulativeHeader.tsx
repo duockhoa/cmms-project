@@ -1,9 +1,10 @@
 import React from 'react';
+import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
 import { Calendar, Droplets, RefreshCw, Zap } from 'lucide-react';
 import { ExportButton } from '../common';
 
 interface UtilityCumulativeHeaderProps {
-  model: Record<string, any>;
+  model: UtilitiesPageViewModel;
 }
 
 export const UtilityCumulativeHeader: React.FC<UtilityCumulativeHeaderProps> = ({ model }) => {

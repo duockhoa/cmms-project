@@ -351,3 +351,5 @@ export const useEquipmentParameterAssignment = () => {
     techSpecRows,
   };
 };
+
+export type EquipmentParameterAssignmentModel = ReturnType<typeof useEquipmentParameterAssignment>;

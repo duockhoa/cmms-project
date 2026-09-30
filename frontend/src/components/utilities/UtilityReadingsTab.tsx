@@ -1,4 +1,5 @@
 import React from 'react';
+import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
 import {
   Zap, Droplets, Cpu, QrCode, BarChart3, BarChart2, RefreshCw, Plus, Edit2, Trash2,
   Printer, Search, CheckCircle2, Clock, Settings, FileText, ArrowRight, Calendar, PieChart,
@@ -10,7 +11,7 @@ import { formatVN } from '../../utils/formatters';
 import { api } from '../../services/api';
 
 interface UtilityTabProps {
-  model: Record<string, any>;
+  model: UtilitiesPageViewModel;
 }
 
 export const UtilityReadingsTab: React.FC<UtilityTabProps> = ({ model }) => {

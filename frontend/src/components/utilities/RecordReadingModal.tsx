@@ -1,9 +1,10 @@
 import React from 'react';
+import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
 import { Ban, Edit2, Printer, RefreshCw, ShieldAlert, X } from 'lucide-react';
 import { printSingleQRTag } from '../../utils/qrPrintHelper';
 
 interface UtilityModalProps {
-  model: Record<string, any>;
+  model: UtilitiesPageViewModel;
 }
 
 export const RecordReadingModal: React.FC<UtilityModalProps> = ({ model }) => {

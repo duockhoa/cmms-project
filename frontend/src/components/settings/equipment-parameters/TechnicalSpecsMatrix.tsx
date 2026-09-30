@@ -1,8 +1,9 @@
 import React from 'react';
+import type { EquipmentParameterAssignmentModel } from '../../../hooks/useEquipmentParameterAssignment';
 import { CheckCheck, RefreshCw, Search, XSquare } from 'lucide-react';
 
 interface TechnicalSpecsMatrixProps {
-  model: Record<string, any>;
+  model: EquipmentParameterAssignmentModel;
 }
 
 export const TechnicalSpecsMatrix: React.FC<TechnicalSpecsMatrixProps> = ({ model }) => {
