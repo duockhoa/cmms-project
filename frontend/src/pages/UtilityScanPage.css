@@ -1,0 +1,396 @@
+.utility-scan-container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+  min-height: 85vh;
+}
+
+.utility-scan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+.scan-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 0;
+}
+
+.scan-other-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.scan-card {
+  padding: 24px 20px;
+  border-radius: 12px;
+  text-align: center;
+  background-color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.scan-icon-circle {
+  display: inline-flex;
+  padding: 12px;
+  border-radius: 50%;
+  background-color: #eff6ff;
+  color: #2563eb;
+  margin-bottom: 12px;
+}
+
+.scan-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  color: #0f172a;
+}
+
+.scan-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 16px 0;
+  line-height: 1.4;
+}
+
+.scanner-viewport-wrapper {
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px dashed #94a3b8;
+  background-color: #f8fafc;
+}
+
+.scan-compliance-notice {
+  margin-top: 24px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  text-align: left;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.scan-compliance-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  background-color: #dcfce7;
+  color: #15803d;
+  flex-shrink: 0;
+}
+
+.scan-compliance-body {
+  flex: 1;
+}
+
+.scan-compliance-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #14532d;
+  margin-bottom: 4px;
+}
+
+.scan-compliance-desc {
+  font-size: 12px;
+  color: #166534;
+  line-height: 1.5;
+}
+
+.scan-form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scan-selected-card {
+  padding: 16px 18px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.selected-point-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: #0f172a;
+}
+
+.selected-point-loc {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.last-reading-box {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.last-reading-value {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.scan-input-card {
+  padding: 18px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.form-card-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  margin: 0 0 14px 0;
+  color: #0f172a;
+}
+
+.form-label-scan {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #334155;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.shift-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.shift-btn {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #475569;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.shift-btn.active {
+  border: 2px solid #2563eb;
+  background-color: #eff6ff;
+  color: #1e40af;
+}
+
+.scan-number-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 2px solid #cbd5e1;
+  outline: none;
+  box-sizing: border-box;
+  background-color: #ffffff;
+  transition: border-color 0.15s ease;
+}
+
+.scan-number-input:focus {
+  border-color: #2563eb;
+}
+
+.scan-number-input.error {
+  border-color: #dc2626;
+}
+
+.consumption-box {
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.consumption-box.normal {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.consumption-box.outlier {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.consumption-number {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.consumption-box.normal .consumption-number {
+  color: #15803d;
+}
+
+.consumption-box.outlier .consumption-number {
+  color: #dc2626;
+}
+
+.consumption-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.three-phase-box {
+  padding: 12px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 14px;
+}
+
+.three-phase-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.three-phase-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.three-phase-grid label {
+  font-size: 11px;
+  color: #64748b;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.three-phase-grid input {
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  box-sizing: border-box;
+}
+
+.status-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.status-btn {
+  padding: 12px 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-weight: 700;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: center;
+  touch-action: manipulation;
+  transition: all 0.15s ease;
+}
+
+.scan-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.scan-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  box-sizing: border-box;
+  outline: none;
+  font-family: inherit;
+}
+
+.scan-submit-btn {
+  width: 100%;
+  padding: 14px;
+  background-color: #0f172a;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  touch-action: manipulation;
+}
+
+.scan-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 480px) {
+  .utility-scan-container {
+    padding: 10px 8px;
+  }
+  .scan-card, .scan-input-card, .scan-selected-card {
+    padding: 14px 12px;
+  }
+  .three-phase-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .status-buttons-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .status-btn {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+}
