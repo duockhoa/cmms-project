@@ -43,7 +43,7 @@ export class FabricationService {
       };
     });
 
-    return this.prisma.fabricationOrder.create({
+    const order = await this.prisma.fabricationOrder.create({
       data: {
         orderCode,
         title: dto.title,
@@ -81,6 +81,32 @@ export class FabricationService {
         materials: true,
       },
     });
+
+    // Record audit trail in WorkflowHistory
+    try {
+      await this.prisma.workflowHistory.create({
+        data: {
+          entityType: 'FabricationOrder',
+          entityId: order.id,
+          action: 'CREATE',
+          fromStatus: null,
+          toStatus: order.status,
+          actedById: user?.id || null,
+          performedById: user?.id || null,
+          comment: `Khởi tạo phiếu công việc [${order.orderCode}]: ${order.title}`,
+          metadata: JSON.stringify({
+            orderCode: order.orderCode,
+            category: order.category,
+            priority: order.priority,
+            targetDepartment: order.targetDepartment,
+          }),
+        },
+      });
+    } catch (e) {
+      console.error('Failed to log audit trail on create fabrication order:', e);
+    }
+
+    return order;
   }
 
   async findAll(params?: {
@@ -238,7 +264,7 @@ export class FabricationService {
       updateData.totalCost = totalCost;
     }
 
-    return this.prisma.fabricationOrder.update({
+    const updated = await this.prisma.fabricationOrder.update({
       where: { id },
       data: updateData,
       include: {
@@ -254,6 +280,67 @@ export class FabricationService {
         materials: true,
       },
     });
+
+    // Record audit trail in WorkflowHistory
+    try {
+      let auditAction = 'UPDATE';
+      let auditComment = 'Cập nhật tiến độ & thông tin phiếu';
+      let auditReason: string | null = null;
+      let auditMetadata: any = {};
+
+      if (dto.status !== undefined && dto.status !== existing.status) {
+        if (dto.status === 'IN_PROGRESS' && existing.status === 'ASSIGNED') {
+          auditAction = 'START_WORK';
+          auditComment = 'Bắt đầu làm việc (Bật tính giờ công thực tế)';
+        } else if (dto.status === 'IN_PROGRESS' && dto.acceptanceRating === 'REWORK') {
+          auditAction = 'REJECT_REWORK';
+          auditComment = 'Nghiệm thu KHÔNG ĐẠT - Yêu cầu kỹ thuật viên sửa chữa lại';
+          auditReason = dto.resultNotes || 'Không đạt tiêu chuẩn nghiệm thu';
+        } else if (dto.status === 'IN_PROGRESS' && existing.status === 'CLOSED') {
+          auditAction = 'REOPEN';
+          auditComment = 'Mở lại phiếu công việc sau khi đã hoàn tất';
+        } else if (dto.status === 'COMPLETED') {
+          auditAction = 'COMPLETE_WORK';
+          const hrs = updateData.actualHours !== undefined ? updateData.actualHours : (existing.actualHours || 0);
+          auditComment = `Báo cáo hoàn thành công việc (Chốt giờ công thực tế: ${hrs} giờ)`;
+          auditMetadata.actualHours = hrs;
+        } else if (dto.status === 'CLOSED') {
+          auditAction = 'ACCEPT_HANDOVER';
+          const rating = dto.acceptanceRating || existing.acceptanceRating || 'GOOD';
+          const recipient = updateData.acceptedByName || 'Đại diện tiếp nhận';
+          auditComment = `Đạt nghiệm thu & Bàn giao sản phẩm cho: ${recipient} (Đánh giá: ${rating})`;
+          auditMetadata.rating = rating;
+          auditMetadata.acceptedByName = recipient;
+        }
+      } else if (dto.acceptanceRating === 'REWORK' && dto.status === 'IN_PROGRESS') {
+        auditAction = 'REJECT_REWORK';
+        auditComment = 'Nghiệm thu KHÔNG ĐẠT - Yêu cầu kỹ thuật viên sửa chữa lại';
+        auditReason = dto.resultNotes || 'Không đạt tiêu chuẩn nghiệm thu';
+      } else if (dto.materials && Array.isArray(dto.materials)) {
+        auditComment = `Cập nhật danh mục vật tư sử dụng (${dto.materials.length} loại vật tư)`;
+      } else if (dto.resultImages && Array.isArray(dto.resultImages)) {
+        auditComment = `Cập nhật hình ảnh kết quả (${dto.resultImages.length} ảnh)`;
+      }
+
+      await this.prisma.workflowHistory.create({
+        data: {
+          entityType: 'FabricationOrder',
+          entityId: id,
+          action: auditAction,
+          fromStatus: existing.status,
+          toStatus: updated.status,
+          actedById: user?.id || null,
+          performedById: user?.id || null,
+          comment: auditComment,
+          reason: auditReason,
+          metadata: Object.keys(auditMetadata).length > 0 ? JSON.stringify(auditMetadata) : null,
+        },
+      });
+    } catch (auditErr) {
+      console.error('Failed to log audit trail on update fabrication order:', auditErr);
+    }
+
+    return updated;
   }
 
   async remove(id: string) {
@@ -262,8 +349,28 @@ export class FabricationService {
     await this.prisma.attachment.deleteMany({
       where: { entityType: 'FabricationOrder', entityId: id },
     });
+    try {
+      await this.prisma.workflowHistory.deleteMany({
+        where: { entityType: 'FabricationOrder', entityId: id },
+      });
+    } catch (e) {}
     return this.prisma.fabricationOrder.delete({
       where: { id },
+    });
+  }
+
+  async getHistory(id: string) {
+    return this.prisma.workflowHistory.findMany({
+      where: {
+        entityType: 'FabricationOrder',
+        entityId: id,
+      },
+      include: {
+        actedBy: {
+          select: { id: true, name: true, email: true, avatar: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

@@ -5,7 +5,7 @@ import {
   CheckCircle2, AlertCircle, Plus, Trash2, Printer, Save, Award, 
   ChevronRight, Wrench, Package, FileText, Check, ShieldCheck,
   Camera, Upload, Eye, Image as ImageIcon, ZoomIn, X, Play, RotateCcw,
-  Timer
+  Timer, History, RefreshCw
 } from 'lucide-react';
 import { api, API_HOST as API_BASE } from '../services/api';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
@@ -41,6 +41,10 @@ export const FabricationDetailPage: React.FC = () => {
   const [reworkReason, setReworkReason] = useState<string>('');
   const [materials, setMaterials] = useState<any[]>([]);
 
+  // Audit Trail / History states
+  const [history, setHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+
   // Photos & Media states
   const [resultImages, setResultImages] = useState<any[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -52,12 +56,25 @@ export const FabricationDetailPage: React.FC = () => {
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const loadHistory = async (jobId: string) => {
+    try {
+      setLoadingHistory(true);
+      const h = await api.getFabricationHistory(jobId);
+      setHistory(Array.isArray(h) ? h : []);
+    } catch (e) {
+      console.error('Failed to load fabrication history:', e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const loadJob = async (jobId: string) => {
     try {
       setLoading(true);
-      const [jobData, usersData] = await Promise.all([
+      const [jobData, usersData, historyData] = await Promise.all([
         api.getFabricationOrder(jobId),
         api.getUsers({ department: 'xưởng cơ điện' }),
+        api.getFabricationHistory(jobId).catch(() => []),
       ]);
 
       if (!jobData) {
@@ -68,6 +85,7 @@ export const FabricationDetailPage: React.FC = () => {
 
       setJob(jobData);
       setStaffList(Array.isArray(usersData) ? usersData : []);
+      setHistory(Array.isArray(historyData) ? historyData : []);
 
       // Populate states
       setStatus(jobData.status || 'ASSIGNED');
@@ -249,6 +267,7 @@ export const FabricationDetailPage: React.FC = () => {
       setJob(updated);
       setStatus('IN_PROGRESS');
       setActualStartDate(nowIso);
+      loadHistory(job.id);
       toast.success('Bắt đầu làm việc', 'Đã ghi nhận mốc thời gian bắt đầu và kích hoạt tính giờ công');
     } catch (err: any) {
       console.error(err);
@@ -294,6 +313,7 @@ export const FabricationDetailPage: React.FC = () => {
       setActualStartDate(startIso);
       setActualEndDate(nowIso);
       setActualHours(computedHours);
+      loadHistory(job.id);
       toast.success('Báo cáo hoàn thành', `Đã hoàn thành. Giờ công thực tế tự động tính: ${computedHours} giờ`);
     } catch (err: any) {
       console.error(err);
@@ -335,6 +355,7 @@ export const FabricationDetailPage: React.FC = () => {
 
       setJob(updated);
       setStatus(updated.status);
+      loadHistory(job.id);
       toast.success('Đã lưu', 'Cập nhật tiến độ và ghi nhận công việc thành công');
     } catch (err: any) {
       console.error(err);
@@ -373,6 +394,7 @@ export const FabricationDetailPage: React.FC = () => {
       setStatus('CLOSED');
       setAcceptedByName(recipient);
       setAcceptanceRating(finalRating);
+      loadHistory(job.id);
       toast.success('Nghiệm thu thành công', `Đã nghiệm thu đạt chuẩn và bàn giao cho ${recipient}`);
     } catch (err: any) {
       console.error(err);
@@ -425,6 +447,7 @@ export const FabricationDetailPage: React.FC = () => {
       setAcceptanceRating('REWORK');
       setResultNotes(newResultNotes);
       setReworkReason('');
+      loadHistory(job.id);
       toast.warning('Yêu cầu sửa lại', 'Đã chuyển phiếu về trạng thái Đang thực hiện cho kỹ thuật viên sửa chữa');
     } catch (err: any) {
       console.error(err);
@@ -455,6 +478,7 @@ export const FabricationDetailPage: React.FC = () => {
       });
       setJob(updated);
       setStatus('IN_PROGRESS');
+      loadHistory(job.id);
       toast.info('Đã mở lại phiếu', 'Phiếu đã chuyển về trạng thái Đang thực hiện');
     } catch (err: any) {
       toast.error('Lỗi', err.message || 'Không thể mở lại phiếu');
@@ -601,6 +625,26 @@ export const FabricationDetailPage: React.FC = () => {
         return '⚠️ Không đạt / Yêu cầu sửa chữa lại';
       default:
         return rating || 'Chưa đánh giá';
+    }
+  };
+
+  const getAuditActionBadge = (action: string) => {
+    switch (action) {
+      case 'CREATE':
+        return { text: 'Khởi tạo phiếu', bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' };
+      case 'START_WORK':
+        return { text: 'Bắt đầu làm việc', bg: '#ecfeff', color: '#0e7490', border: '#a5f3fc' };
+      case 'COMPLETE_WORK':
+        return { text: 'Báo cáo hoàn thành', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' };
+      case 'ACCEPT_HANDOVER':
+        return { text: 'Đạt nghiệm thu & Bàn giao', bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' };
+      case 'REJECT_REWORK':
+        return { text: 'Nghiệm thu không đạt (Sửa lại)', bg: '#fff1f2', color: '#be123c', border: '#fecdd3' };
+      case 'REOPEN':
+        return { text: 'Mở lại phiếu', bg: '#fffbeb', color: '#b45309', border: '#fde68a' };
+      case 'UPDATE':
+      default:
+        return { text: 'Cập nhật', bg: '#f8fafc', color: '#475569', border: '#e2e8f0' };
     }
   };
 
@@ -1874,6 +1918,165 @@ export const FabricationDetailPage: React.FC = () => {
                     Người tạo phiếu: <strong>{job.creator.name}</strong> ({new Date(job.createdAt).toLocaleDateString('vi-VN')})
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* 6. Nhật ký thao tác & Audit Trail */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              padding: '18px 20px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#1e40af',
+                letterSpacing: '0.03em',
+                textTransform: 'uppercase',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '14px',
+                borderBottom: '1px solid #f1f5f9',
+                paddingBottom: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <History size={15} /> 6. Nhật ký thao tác & Audit Trail ({history.length})
+              </div>
+              <button
+                type="button"
+                onClick={() => job && loadHistory(job.id)}
+                disabled={loadingHistory}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#2563eb',
+                  cursor: 'pointer',
+                  fontSize: '11.5px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: 0,
+                }}
+                title="Làm mới lịch sử"
+              >
+                <RefreshCw size={12} className={loadingHistory ? 'animate-spin' : ''} /> Làm mới
+              </button>
+            </div>
+
+            {loadingHistory && history.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '16px', color: '#64748b', fontSize: '12px' }}>
+                Đang tải nhật ký thao tác...
+              </div>
+            ) : history.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '16px', color: '#94a3b8', fontSize: '12px', fontStyle: 'italic' }}>
+                Chưa có ghi nhận lịch sử nào cho phiếu này.
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  maxHeight: '420px',
+                  overflowY: 'auto',
+                  paddingRight: '4px',
+                }}
+              >
+                {history.map((h: any, idx: number) => {
+                  const badge = getAuditActionBadge(h.action);
+                  return (
+                    <div
+                      key={h.id || idx}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        fontSize: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '2px 7px',
+                            borderRadius: '4px',
+                            backgroundColor: badge.bg,
+                            color: badge.color,
+                            border: `1px solid ${badge.border}`,
+                          }}
+                        >
+                          {badge.text}
+                        </span>
+
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          {formatDateTimeDisplay(h.createdAt)}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: '#475569' }}>
+                        <div
+                          style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            backgroundColor: '#cbd5e1',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {h.actedBy?.name ? h.actedBy.name.charAt(0) : 'U'}
+                        </div>
+                        <span style={{ fontWeight: 600, color: '#1e293b' }}>
+                          {h.actedBy?.name || 'Hệ thống'}
+                        </span>
+                        {h.fromStatus && h.toStatus && (
+                          <span style={{ marginLeft: 'auto', fontSize: '10.5px', color: '#64748b' }}>
+                            {h.fromStatus} &rarr; <strong>{h.toStatus}</strong>
+                          </span>
+                        )}
+                      </div>
+
+                      {h.comment && (
+                        <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.4 }}>
+                          {h.comment}
+                        </div>
+                      )}
+
+                      {h.reason && (
+                        <div
+                          style={{
+                            backgroundColor: '#fff1f2',
+                            border: '1px solid #fecdd3',
+                            borderRadius: '6px',
+                            padding: '6px 8px',
+                            fontSize: '11.5px',
+                            color: '#9f1239',
+                            whiteSpace: 'pre-wrap',
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          <strong>Lý do:</strong> {h.reason}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

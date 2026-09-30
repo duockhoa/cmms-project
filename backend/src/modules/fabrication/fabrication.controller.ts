@@ -41,6 +41,12 @@ export class FabricationController {
     return this.fabricationService.findOne(id);
   }
 
+  @Get(':id/history')
+  @ApiOperation({ summary: 'Lịch sử nhật ký & Audit trail của phiếu gia công' })
+  async getHistory(@Param('id') id: string) {
+    return this.fabricationService.getHistory(id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Cập nhật tiến độ, nghiệm thu, giờ công, vật tư' })
   async update(@Param('id') id: string, @Body() dto: UpdateFabricationDto, @Req() req: any) {

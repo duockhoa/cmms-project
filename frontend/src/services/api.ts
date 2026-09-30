@@ -699,6 +699,10 @@ export const api = {
     });
   },
 
+  getFabricationHistory: (id: string) => {
+    return request(`/fabrication-orders/${id}/history`);
+  },
+
   // Master Catalog Cache Interface
   catalog: {
     getEquipment: () => catalogCache.fetchWithCache('equipment_all', () => request('/equipment')),
