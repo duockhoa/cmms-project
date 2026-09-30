@@ -10,6 +10,7 @@ const RETENTION_POLICIES: Record<string, 'HARD_DELETE' | 'SOFT_DELETE'> = {
   WorkOrder: 'SOFT_DELETE',
   ChecklistExecutionItem: 'SOFT_DELETE',
   WorkOrderExecutionLog: 'SOFT_DELETE',
+  FabricationOrder: 'HARD_DELETE',
 };
 
 @Injectable()
@@ -96,6 +97,10 @@ export class AttachmentsService {
       case 'WorkOrderExecutionLog':
         const log = await this.prisma.workOrderExecutionLog.findUnique({ where: { id: entityId } });
         exists = !!log;
+        break;
+      case 'FabricationOrder':
+        const fo = await this.prisma.fabricationOrder.findUnique({ where: { id: entityId } });
+        exists = !!fo;
         break;
       default:
         throw new BadRequestException(`Phân loại thực thể không hợp lệ: ${entityType}`);

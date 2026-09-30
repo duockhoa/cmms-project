@@ -190,8 +190,20 @@ export class FabricationService {
       if (dto.status === 'IN_PROGRESS' && !existing.actualStartDate && !dto.actualStartDate) {
         updateData.actualStartDate = new Date();
       }
-      if (dto.status === 'COMPLETED' && !existing.actualEndDate && !dto.actualEndDate) {
-        updateData.actualEndDate = new Date();
+      if (dto.status === 'COMPLETED') {
+        if (!existing.actualEndDate && !dto.actualEndDate) {
+          updateData.actualEndDate = new Date();
+        }
+        if (dto.actualHours === undefined && (!existing.actualHours || existing.actualHours === 0)) {
+          const start = updateData.actualStartDate || existing.actualStartDate;
+          const end = updateData.actualEndDate || existing.actualEndDate || new Date();
+          if (start && end) {
+            const diffMs = new Date(end).getTime() - new Date(start).getTime();
+            if (diffMs > 0) {
+              updateData.actualHours = Number((diffMs / (1000 * 60 * 60)).toFixed(2));
+            }
+          }
+        }
       }
       if (dto.status === 'CLOSED') {
         updateData.acceptedAt = new Date();
