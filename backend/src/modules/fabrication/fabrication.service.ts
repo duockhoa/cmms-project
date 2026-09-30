@@ -254,6 +254,10 @@ export class FabricationService {
 
   async remove(id: string) {
     await this.findOne(id);
+    await this.prisma.fabricationMaterial.deleteMany({ where: { orderId: id } });
+    await this.prisma.attachment.deleteMany({
+      where: { entityType: 'FabricationOrder', entityId: id },
+    });
     return this.prisma.fabricationOrder.delete({
       where: { id },
     });

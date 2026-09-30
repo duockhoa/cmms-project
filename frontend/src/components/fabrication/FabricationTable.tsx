@@ -5,6 +5,7 @@ import { StatusBadge } from '../common/Badge';
 import { TableSkeleton } from '../common/Skeleton';
 import { EmptyState } from '../common';
 import { FabricationJobItem } from '../../hooks/useFabricationPage';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface FabricationTableProps {
   jobs: FabricationJobItem[];
@@ -20,6 +21,8 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
   onDeleteJob,
 }) => {
   const navigate = useNavigate();
+  const { can, isAdmin } = usePermissions();
+  const canDelete = isAdmin || can('fabrication:delete');
   const getCategoryLabel = (cat: string) => {
     switch (cat) {
       case 'FABRICATION':
@@ -276,15 +279,20 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
                       >
                         <Eye size={13} /> Chi tiết
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => onDeleteJob(job.id)}
-                        style={{ fontSize: '11.5px', padding: '4px 6px', color: '#ef4444' }}
-                        title="Xóa phiếu"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteJob(job.id);
+                          }}
+                          style={{ fontSize: '11.5px', padding: '4px 6px', color: '#ef4444' }}
+                          title="Xóa phiếu"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

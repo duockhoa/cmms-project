@@ -5,7 +5,7 @@ import { Modal } from '../common/Modal';
 import { 
   Plus, Edit2, Trash2, RefreshCw, Shield, CheckSquare, 
   Square, Search, ChevronRight, Check,
-  Zap, Cpu, AlertTriangle, ClipboardList, BookOpen, Package, Calendar, Settings, MessageSquare, Layers
+  Zap, Cpu, AlertTriangle, ClipboardList, BookOpen, Package, Calendar, Settings, MessageSquare, Layers, Hammer
 } from 'lucide-react';
 import { PERMISSIONS_REGISTRY, ALL_PERMISSION_CODES } from '../../constants/permissions.registry';
 import { EmptyState } from '../common/EmptyState';
@@ -15,6 +15,7 @@ const MODULE_ICONS: Record<string, React.FC<any>> = {
   equipment: Cpu,
   requests: AlertTriangle,
   work_orders: ClipboardList,
+  fabrication: Hammer,
   checklists: CheckSquare,
   operation_logs: BookOpen,
   spare_parts: Package,

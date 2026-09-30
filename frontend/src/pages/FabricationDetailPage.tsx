@@ -10,15 +10,19 @@ import {
 import { api, API_HOST as API_BASE } from '../services/api';
 import { useToast } from '../components/common/Toast';
 import { StatusBadge } from '../components/common/Badge';
+import { usePermissions } from '../hooks/usePermissions';
 
 export const FabricationDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+  const { can, isAdmin } = usePermissions();
+  const canDelete = isAdmin || can('fabrication:delete');
 
   const [job, setJob] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Available staff for assignment (from 'xưởng cơ điện')
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -332,7 +336,25 @@ export const FabricationDetailPage: React.FC = () => {
     }
   };
 
-  // 4. ACTION: Xử lý chụp ảnh & upload ảnh kết quả
+  // 4. ACTION: Xóa phiếu công việc
+  const handleDeleteJob = async () => {
+    if (!job) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa phiếu [${job.orderCode}] "${job.title}" không? Dữ liệu đã xóa sẽ không thể phục hồi.`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await api.deleteFabricationOrder(job.id);
+      toast.success('Đã xóa', `Đã xóa thành công phiếu ${job.orderCode}`);
+      navigate('/fabrication');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Lỗi xóa', err.message || 'Không thể xóa phiếu công việc');
+      setDeleting(false);
+    }
+  };
+
+  // 5. ACTION: Xử lý chụp ảnh & upload ảnh kết quả
   const handleImageFiles = async (files: FileList | null) => {
     if (!files || files.length === 0 || !job) return;
     setUploadingImage(true);
@@ -505,6 +527,28 @@ export const FabricationDetailPage: React.FC = () => {
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {canDelete && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleDeleteJob}
+              disabled={deleting || saving}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                color: '#ef4444',
+                borderColor: '#fca5a5',
+                backgroundColor: '#fef2f2',
+                fontWeight: 600,
+              }}
+              title="Xóa phiếu gia công/chế tạo này"
+            >
+              <Trash2 size={15} /> {deleting ? 'Đang xóa...' : 'Xóa phiếu'}
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-secondary"
@@ -518,7 +562,7 @@ export const FabricationDetailPage: React.FC = () => {
             type="button"
             className="btn btn-primary"
             onClick={() => handleSave()}
-            disabled={saving}
+            disabled={saving || deleting}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600 }}
           >
             <Save size={15} /> {saving ? 'Đang lưu...' : 'Lưu ghi nhận'}
@@ -593,7 +637,7 @@ export const FabricationDetailPage: React.FC = () => {
                   type="button"
                   className="btn btn-primary"
                   onClick={handleStartWork}
-                  disabled={saving}
+                  disabled={saving || deleting}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700 }}
                 >
                   <Play size={14} /> Bắt đầu làm việc (Bật tính giờ)
@@ -604,7 +648,7 @@ export const FabricationDetailPage: React.FC = () => {
                   type="button"
                   className="btn"
                   onClick={handleCompleteWork}
-                  disabled={saving}
+                  disabled={saving || deleting}
                   style={{
                     backgroundColor: '#16a34a',
                     color: '#ffffff',
@@ -623,7 +667,7 @@ export const FabricationDetailPage: React.FC = () => {
                   type="button"
                   className="btn btn-sm"
                   onClick={() => handleSave('CLOSED')}
-                  disabled={saving}
+                  disabled={saving || deleting}
                   style={{ backgroundColor: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', fontWeight: 600 }}
                 >
                   Nghiệm thu bàn giao
@@ -768,7 +812,7 @@ export const FabricationDetailPage: React.FC = () => {
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={handleStartWork}
-                    disabled={saving}
+                    disabled={saving || deleting}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 700 }}
                   >
                     <Play size={13} /> Bắt đầu làm việc
@@ -779,7 +823,7 @@ export const FabricationDetailPage: React.FC = () => {
                     type="button"
                     className="btn btn-sm"
                     onClick={handleCompleteWork}
-                    disabled={saving}
+                    disabled={saving || deleting}
                     style={{ backgroundColor: '#16a34a', color: '#ffffff', display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 700 }}
                   >
                     <CheckCircle2 size={13} /> Báo cáo hoàn thành

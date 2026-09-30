@@ -4,7 +4,7 @@ import { useToast } from '../common/Toast';
 import { Modal } from '../common/Modal';
 import { 
   Shield, ShieldCheck, Search, Key, CheckSquare, Square, Info, ChevronRight, Check,
-  Zap, Cpu, AlertTriangle, ClipboardList, BookOpen, Package, Calendar, Settings, MessageSquare, Layers
+  Zap, Cpu, AlertTriangle, ClipboardList, BookOpen, Package, Calendar, Settings, MessageSquare, Layers, Hammer
 } from 'lucide-react';
 import { PERMISSIONS_REGISTRY, ALL_PERMISSION_CODES } from '../../constants/permissions.registry';
 
@@ -13,6 +13,7 @@ const MODULE_ICONS: Record<string, React.FC<any>> = {
   equipment: Cpu,
   requests: AlertTriangle,
   work_orders: ClipboardList,
+  fabrication: Hammer,
   checklists: CheckSquare,
   operation_logs: BookOpen,
   spare_parts: Package,
