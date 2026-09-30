@@ -57,6 +57,14 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
     }
   };
 
+  const handleRowClick = (job: FabricationJobItem) => {
+    if (onSelectJob) {
+      onSelectJob(job);
+    } else {
+      navigate(`/fabrication/${job.id}`);
+    }
+  };
+
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       <div className="table-wrapper">
@@ -93,7 +101,7 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
                   <td>
                     <button
                       type="button"
-                      onClick={() => navigate(`/fabrication/${job.id}`)}
+                      onClick={() => handleRowClick(job)}
                       style={{
                         background: 'none',
                         border: 'none',
@@ -116,7 +124,7 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
                   {/* 2. Tên công việc & mô tả */}
                   <td>
                     <div
-                      onClick={() => navigate(`/fabrication/${job.id}`)}
+                      onClick={() => handleRowClick(job)}
                       style={{
                         fontWeight: 700,
                         fontSize: '13.5px',
@@ -273,7 +281,7 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
-                        onClick={() => navigate(`/fabrication/${job.id}`)}
+                        onClick={() => handleRowClick(job)}
                         style={{ fontSize: '11.5px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '3px' }}
                         title="Ghi nhận tiến độ & Báo cáo nghiệm thu"
                       >

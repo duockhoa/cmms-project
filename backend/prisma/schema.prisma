@@ -805,6 +805,7 @@ enum FabricationCategory {
 enum FabricationStatus {
   ASSIGNED        // Đã phân công / Chờ thực hiện
   IN_PROGRESS     // Đang thực hiện
+  ON_HOLD         // Tạm dừng
   COMPLETED       // Đã hoàn thành (chờ nghiệm thu)
   CLOSED          // Đã đóng / Nghiệm thu đạt
   CANCELLED       // Đã hủy

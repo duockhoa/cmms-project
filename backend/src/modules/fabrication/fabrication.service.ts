@@ -292,6 +292,13 @@ export class FabricationService {
         if (dto.status === 'IN_PROGRESS' && existing.status === 'ASSIGNED') {
           auditAction = 'START_WORK';
           auditComment = 'Bắt đầu làm việc (Bật tính giờ công thực tế)';
+        } else if (dto.status === 'ON_HOLD') {
+          auditAction = 'PAUSE_WORK';
+          auditComment = 'Tạm dừng công việc';
+          auditReason = dto.resultNotes || 'Tạm dừng theo yêu cầu';
+        } else if (dto.status === 'IN_PROGRESS' && existing.status === 'ON_HOLD') {
+          auditAction = 'RESUME_WORK';
+          auditComment = 'Tiếp tục thực hiện công việc sau khi tạm dừng';
         } else if (dto.status === 'IN_PROGRESS' && dto.acceptanceRating === 'REWORK') {
           auditAction = 'REJECT_REWORK';
           auditComment = 'Nghiệm thu KHÔNG ĐẠT - Yêu cầu kỹ thuật viên sửa chữa lại';
