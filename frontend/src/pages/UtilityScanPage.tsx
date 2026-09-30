@@ -1,18 +1,17 @@
 import React, { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useUtilityPointScanner } from '../hooks/useUtilityPointScanner';
 import { useUtilityScanForm } from '../hooks/useUtilityScanForm';
 import { 
-  Camera, ArrowLeft, Zap, Droplets, Cpu, 
+  Zap, Droplets, Cpu,
   CheckCircle2, AlertTriangle, Clock, RefreshCw, 
-  ChevronRight, QrCode, ShieldCheck
+  ChevronRight, QrCode
 } from 'lucide-react';
 import { formatVN } from '../utils/formatters';
+import { UtilityScanHeader } from '../components/utilities/UtilityScanHeader';
+import { UtilityQrScannerPanel } from '../components/utilities/UtilityQrScannerPanel';
 import './UtilityScanPage.css';
 
 export const UtilityScanPage: React.FC = () => {
-  const navigate = useNavigate();
-
   const [selectedPoint, setSelectedPoint] = useState<any | null>(null);
 
   const handleSelectPoint = useCallback((point: any) => {
@@ -39,64 +38,15 @@ export const UtilityScanPage: React.FC = () => {
 
   return (
     <div className="utility-scan-container">
-      {/* Header Điều hướng */}
-      <div className="utility-scan-header">
-        <button
-          onClick={() => navigate('/utilities')}
-          className="scan-back-btn"
-        >
-          <ArrowLeft size={18} />
-          <span>Bảng Quản Lý Tiện Ích</span>
-        </button>
+      <UtilityScanHeader
+        hasSelectedPoint={Boolean(selectedPoint)}
+        onScanOther={() => {
+          setSelectedPoint(null);
+          setScanning(true);
+        }}
+      />
 
-        {selectedPoint && (
-          <button
-            onClick={() => {
-              setSelectedPoint(null);
-              setScanning(true);
-            }}
-            className="scan-other-btn"
-          >
-            <Camera size={16} />
-            <span>Quét Mã Khác</span>
-          </button>
-        )}
-      </div>
-
-      {/* 1. MÀN HÌNH QUÉT CAMERA QR */}
-      {scanning && !selectedPoint && (
-        <div className="card scan-card">
-          <div className="scan-icon-circle">
-            <Camera size={30} />
-          </div>
-          <h2 className="scan-title">
-            QUÉT MÃ QR TIỆN ÍCH / NĂNG LƯỢNG
-          </h2>
-          <p className="scan-subtitle">
-            Hướng camera vào tem mã QR dán trên mặt đồng hồ điện, nước hoặc tủ máy.
-          </p>
-
-          {/* Camera Scanner Box */}
-          <div className="scanner-viewport-wrapper">
-            <div id="utility-qr-reader" />
-          </div>
-
-          {/* Thông báo bắt buộc quét mã QR tại vị trí hiện trường */}
-          <div className="scan-compliance-notice">
-            <div className="scan-compliance-icon">
-              <ShieldCheck size={22} />
-            </div>
-            <div className="scan-compliance-body">
-              <div className="scan-compliance-title">
-                Yêu cầu bắt buộc quét mã QR tại vị trí đồng hồ
-              </div>
-              <div className="scan-compliance-desc">
-                Nhân viên vận hành bắt buộc phải <strong>có mặt trực tiếp tại vị trí đồng hồ đo hoặc tủ điện / máy</strong> và hướng camera vào tem mã QR để ghi số liệu. Hệ thống không cho phép chọn thủ công từ xa nhằm đảm bảo tính trung thực và trách nhiệm kiểm tra hiện trường.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {scanning && !selectedPoint && <UtilityQrScannerPanel />}
 
       {/* 2. MÀN HÌNH FORM NHẬP KHI ĐÃ CHỌN ĐIỂM ĐO */}
       {selectedPoint && (
