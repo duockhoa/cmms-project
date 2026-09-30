@@ -11,27 +11,12 @@ import {
 } from 'lucide-react';
 import { formatVN } from '../../utils/formatters';
 import { SearchInput, useToast } from '../common';
-
-interface PeriodMeterItem {
-  pointId: string;
-  code: string;
-  name: string;
-  type: 'ELECTRICITY' | 'WATER';
-  location: string;
-  unit: string;
-  multiplier: number;
-  isSupplyMeter: boolean;
-  isRecycledWater?: boolean;
-  isExcludedFromTotal?: boolean;
-  cycleDescription: string;
-  cycleStartDate: string;
-  cycleEndDate: string;
-  startDayLabel: string;
-  baselineValue: number;
-  hasExistingBaseline: boolean;
-  lastReadingValue: number | null;
-  lastReadingAt: string | null;
-}
+import {
+  calculateMeterConsumption,
+  PeriodMeterItem,
+  UtilityMeterEditValue,
+  UtilityMeterFilter,
+} from './utilitySettings.types';
 
 export const UtilitySettingsTab: React.FC = () => {
   const navigate = useNavigate();
@@ -54,10 +39,10 @@ export const UtilitySettingsTab: React.FC = () => {
 
   // Search & Filter
   const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState<'ALL' | 'ELECTRICITY' | 'WATER' | 'SUPPLY'>('ALL');
+  const [filterType, setFilterType] = useState<UtilityMeterFilter>('ALL');
 
   // Giá trị chỉnh sửa tạm thời { [pointId]: { value: string, currentValue: string, notes: string } }
-  const [editValues, setEditValues] = useState<Record<string, { value: string; currentValue: string; notes: string }>>({});
+  const [editValues, setEditValues] = useState<Record<string, UtilityMeterEditValue>>({});
 
   useEffect(() => {
     loadPeriodData();
@@ -77,7 +62,7 @@ export const UtilitySettingsTab: React.FC = () => {
       setAllMeters(res.allMeters || []);
 
       // Khởi tạo state edit
-      const initialEdits: Record<string, { value: string; currentValue: string; notes: string }> = {};
+      const initialEdits: Record<string, UtilityMeterEditValue> = {};
       (res.allMeters || []).forEach((m: PeriodMeterItem) => {
         initialEdits[m.pointId] = {
           value: m.baselineValue !== null && m.baselineValue !== undefined ? m.baselineValue.toString() : '0',
@@ -566,7 +551,7 @@ export const UtilitySettingsTab: React.FC = () => {
                       const bVal = parseFloat(edit.value);
                       const cVal = parseFloat(edit.currentValue);
                       if (!isNaN(bVal) && !isNaN(cVal) && cVal >= bVal) {
-                        const diffUnits = (cVal - bVal) * (meter.multiplier || 1.0);
+                        const diffUnits = calculateMeterConsumption(edit, meter.multiplier);
                         return (
                           <div
                             style={{
@@ -779,9 +764,7 @@ export const UtilitySettingsTab: React.FC = () => {
                     (!isNaN(bNum) && bNum !== meter.baselineValue) ||
                     (!isNaN(cNum) && cNum !== meter.lastReadingValue);
 
-                  const diffUnits = !isNaN(bNum) && !isNaN(cNum) && cNum >= bNum
-                    ? (cNum - bNum) * (meter.multiplier || 1.0)
-                    : 0;
+                  const diffUnits = calculateMeterConsumption(edit, meter.multiplier);
 
                   return (
                     <tr
