@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Eye, Trash2, Clock, User, MapPin } from 'lucide-react';
 import { StatusBadge } from '../common/Badge';
 import { TableSkeleton } from '../common/Skeleton';
@@ -8,7 +9,7 @@ import { FabricationJobItem } from '../../hooks/useFabricationPage';
 interface FabricationTableProps {
   jobs: FabricationJobItem[];
   loading: boolean;
-  onSelectJob: (job: FabricationJobItem) => void;
+  onSelectJob?: (job: FabricationJobItem) => void;
   onDeleteJob: (id: string) => void;
 }
 
@@ -18,6 +19,7 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
   onSelectJob,
   onDeleteJob,
 }) => {
+  const navigate = useNavigate();
   const getCategoryLabel = (cat: string) => {
     switch (cat) {
       case 'FABRICATION':
@@ -86,7 +88,23 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
                 <tr key={job.id} style={{ transition: 'background-color 0.15s ease' }}>
                   {/* 1. Mã phiếu */}
                   <td>
-                    <strong style={{ color: '#2563eb', fontSize: '13px' }}>{job.orderCode}</strong>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/fabrication/${job.id}`)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        color: '#2563eb',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                      }}
+                      title="Mở chi tiết phiếu"
+                    >
+                      {job.orderCode}
+                    </button>
                     <div style={{ marginTop: '2px' }}>
                       <StatusBadge status={job.priority} />
                     </div>
@@ -94,7 +112,17 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
 
                   {/* 2. Tên công việc & mô tả */}
                   <td>
-                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)', marginBottom: '3px' }}>
+                    <div
+                      onClick={() => navigate(`/fabrication/${job.id}`)}
+                      style={{
+                        fontWeight: 700,
+                        fontSize: '13.5px',
+                        color: 'var(--text-primary)',
+                        marginBottom: '3px',
+                        cursor: 'pointer',
+                      }}
+                      title="Mở trang chi tiết & báo cáo"
+                    >
                       {job.title}
                     </div>
                     <div
@@ -242,11 +270,11 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
-                        onClick={() => onSelectJob(job)}
+                        onClick={() => navigate(`/fabrication/${job.id}`)}
                         style={{ fontSize: '11.5px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '3px' }}
-                        title="Xem & Cập nhật tiến độ"
+                        title="Ghi nhận tiến độ & Báo cáo nghiệm thu"
                       >
-                        <Eye size={13} /> Xử lý
+                        <Eye size={13} /> Chi tiết
                       </button>
                       <button
                         type="button"

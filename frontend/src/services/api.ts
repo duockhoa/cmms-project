@@ -682,6 +682,10 @@ export const api = {
     });
   },
 
+  getFabricationOrder: (id: string) => {
+    return request(`/fabrication-orders/${id}`);
+  },
+
   updateFabricationOrder: (id: string, data: any) => {
     return request(`/fabrication-orders/${id}`, {
       method: 'PATCH',
