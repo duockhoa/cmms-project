@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useUtilitySettings } from '../../hooks/useUtilitySettings';
 import {
   Zap,
@@ -7,14 +6,13 @@ import {
   Save,
   RefreshCw,
   Layers,
-  ArrowUpRight
 } from 'lucide-react';
 import { formatVN } from '../../utils/formatters';
 import { SearchInput } from '../common';
 import { calculateMeterConsumption } from './utilitySettings.types';
+import { UtilitySettingsControls } from './UtilitySettingsControls';
 
 export const UtilitySettingsTab: React.FC = () => {
-  const navigate = useNavigate();
   const {
     selectedMonth, setSelectedMonth, selectedYear, setSelectedYear,
     loading, savingId, batchSaving, elecCycle, waterCycle, supplyMeters,
@@ -25,155 +23,19 @@ export const UtilitySettingsTab: React.FC = () => {
 
   return (
     <div>
-      {/* Header & Period Selector Toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '16px',
-          flexWrap: 'wrap',
-          gap: '12px',
-        }}
-      >
-        <div>
-          <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: '#0f172a' }}>
-            Chỉ Số Chốt Đầu Kỳ (Điện & Nước)
-          </h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginTop: '4px', margin: 0 }}>
-            Khởi tạo mặt số ban đầu cho từng chu kỳ tính toán điện & nước theo đúng logic kỳ đối soát nhà máy.
-          </p>
-        </div>
-
-        {/* Action buttons */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => navigate(`/utilities?tab=cumulative&month=${selectedMonth}&year=${selectedYear}`)}
-            style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: '#2563eb' }}
-          >
-            <span>Xem Báo Cáo Kỳ {selectedMonth}/{selectedYear}</span>
-            <ArrowUpRight size={15} />
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={handleAutoFillFromHistory}
-            disabled={loading || batchSaving}
-            title="Tự động điền mốc đầu kỳ cho các đồng hồ chưa có số chốt"
-            style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: '#047857' }}
-          >
-            <Zap size={14} color="#059669" />
-            <span>Điền mốc từ lịch sử</span>
-          </button>
-          <button
-            className="btn btn-secondary"
-            onClick={loadPeriodData}
-            disabled={loading || batchSaving}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Tải lại
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleSaveAll}
-            disabled={loading || batchSaving}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', backgroundColor: '#2563eb' }}
-          >
-            {batchSaving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-            Lưu tất cả chỉ số kỳ này
-          </button>
-        </div>
-      </div>
-
-      {/* CHỌN KỲ TÍNH TOÁN & HIỂN THỊ LOGIC CHU KỲ */}
-      <div
-        style={{
-          backgroundColor: '#f8fafc',
-          border: '1.5px solid #e2e8f0',
-          borderRadius: '10px',
-          padding: '16px 20px',
-          marginBottom: '20px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-          {/* Dropdown Chọn Kỳ Tháng / Năm */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#1e293b' }}>
-              Chọn Kỳ Tính Toán:
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <select
-                className="form-input"
-                style={{ width: '130px', height: '36px', fontSize: '13px', fontWeight: 600 }}
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
-              >
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                  <option key={m} value={m}>
-                    Tháng {m < 10 ? `0${m}` : m}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                className="form-input"
-                style={{ width: '100px', height: '36px', fontSize: '13px', fontWeight: 600 }}
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
-              >
-                {[2025, 2026, 2027, 2028].map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Logic Chu kỳ hiển thị cụ thể */}
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <div
-              style={{
-                backgroundColor: '#fefce8',
-                border: '1px solid #fde047',
-                borderRadius: '6px',
-                padding: '6px 12px',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                color: '#854d0e',
-              }}
-            >
-              <Zap size={15} color="#ca8a04" />
-              <span>
-                <strong>Logic Kỳ Điện:</strong> {elecCycle?.cycleDescription || `Từ 01 đến ngày cuối tháng`} (Bắt đầu: <strong>{elecCycle?.startDayLabel}</strong>)
-              </span>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: '#f0f9ff',
-                border: '1px solid #bae6fd',
-                borderRadius: '6px',
-                padding: '6px 12px',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                color: '#0369a1',
-              }}
-            >
-              <Droplets size={15} color="#0284c7" />
-              <span>
-                <strong>Logic Kỳ Nước:</strong> {waterCycle?.cycleDescription || `Từ 21 tháng trước đến 20 tháng này`} (Bắt đầu: <strong>{waterCycle?.startDayLabel}</strong>)
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <UtilitySettingsControls
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+        loading={loading}
+        batchSaving={batchSaving}
+        elecCycle={elecCycle}
+        waterCycle={waterCycle}
+        onMonthChange={setSelectedMonth}
+        onYearChange={setSelectedYear}
+        onAutoFill={handleAutoFillFromHistory}
+        onReload={loadPeriodData}
+        onSaveAll={handleSaveAll}
+      />
 
       {/* KHU VỰC ĐẶC BIỆT: CHỈ SỐ ĐẦU KỲ CHO TỔNG CẤP ĐIỆN & NƯỚC */}
       <div style={{ marginBottom: '28px' }}>
