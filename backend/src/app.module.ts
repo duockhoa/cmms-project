@@ -17,6 +17,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ChecklistTemplatesModule } from './modules/checklist-templates/checklist-templates.module';
 import { FeedbacksModule } from './modules/feedbacks/feedbacks.module';
 import { UtilitiesModule } from './modules/utilities/utilities.module';
+import { FabricationModule } from './modules/fabrication/fabrication.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { UtilitiesModule } from './modules/utilities/utilities.module';
     ChecklistTemplatesModule,
     FeedbacksModule,
     UtilitiesModule,
+    FabricationModule,
   ],
 })
 export class AppModule {}

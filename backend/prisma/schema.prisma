@@ -64,6 +64,8 @@ model User {
   voidedOperationLogs   OperationLog[]         @relation("UserVoidedOperationLogs")
   utilityReadings       UtilityReading[]       @relation("UserUtilityReadings")
   utilityStatusLogs     UtilitySystemStatusLog[] @relation("UserUtilityStatusLogs")
+  assignedFabrications  FabricationOrder[]     @relation("FabricationAssignedLead")
+  createdFabrications   FabricationOrder[]     @relation("FabricationCreatedBy")
   
   // Custom Role Association
   roleId                String?
@@ -114,6 +116,7 @@ model Equipment {
   technicalSpecs        EquipmentTechnicalSpec[]
   operationLogs         OperationLog[]
   functionalUnits       EquipmentFunctionalUnit[]
+  fabricationOrders     FabricationOrder[]
 
   @@index([status])
   @@index([category])
@@ -788,5 +791,88 @@ model UtilitySystemStatusLog {
   recordedById    String
   recordedByName  String?
   recordedByUser  User?               @relation("UserUtilityStatusLogs", fields: [recordedById], references: [id], onDelete: Restrict)
+}
+
+enum FabricationCategory {
+  FABRICATION     // Gia công chi tiết, phụ tùng cơ khí (tiện, phay, hàn, cắt...)
+  NEW_MAKING      // Chế tạo mới (bàn inox, giá kệ, xe đẩy, máng...)
+  MODIFICATION    // Cải tiến kỹ thuật / Kaizen
+  INSTALLATION    // Lắp đặt & Di dời hệ thống
+  INFRASTRUCTURE  // Cơ sở hạ tầng & Nhà xưởng
+  OTHER           // Công việc khác
+}
+
+enum FabricationStatus {
+  ASSIGNED        // Đã phân công / Chờ thực hiện
+  IN_PROGRESS     // Đang thực hiện
+  COMPLETED       // Đã hoàn thành (chờ nghiệm thu)
+  CLOSED          // Đã đóng / Nghiệm thu đạt
+  CANCELLED       // Đã hủy
+}
+
+model FabricationOrder {
+  id                   String              @id @default(uuid())
+  orderCode            String              @unique // GC-2026-0001
+  title                String              // Tên công việc / sản phẩm
+  category             FabricationCategory @default(FABRICATION)
+  priority             String              @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status               FabricationStatus   @default(ASSIGNED)
+
+  description          String              @db.Text
+  specifications       String?             @db.Text // Kích thước, quy cách kỹ thuật, vật liệu
+  location             String?             // Vị trí / Phân xưởng áp dụng
+  targetDepartment     String?             // Bộ phận hưởng lợi / sử dụng
+
+  equipmentId          String?
+  equipment            Equipment?          @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+
+  assignedTechnicianId String?
+  assignedTechnician   User?               @relation("FabricationAssignedLead", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
+  supporterIds         Json?               // Mảng user IDs thợ phụ hỗ trợ
+
+  creatorId            String?
+  creator              User?               @relation("FabricationCreatedBy", fields: [creatorId], references: [id], onDelete: SetNull)
+
+  plannedStartDate     DateTime?
+  plannedEndDate       DateTime?
+  actualStartDate      DateTime?
+  actualEndDate        DateTime?
+
+  estimatedHours       Float               @default(0)
+  actualHours          Float               @default(0)
+
+  drawings             Json?               // URLs/paths của bản vẽ kỹ thuật, tài liệu
+  resultImages         Json?               // URLs/paths ảnh sản phẩm sau gia công
+  resultNotes          String?             @db.Text
+
+  acceptanceRating     String?             // EXCELLENT, GOOD, ACCEPTABLE, POOR
+  acceptedById         String?
+  acceptedByName       String?
+  acceptedAt           DateTime?
+
+  totalCost            Float               @default(0)
+  materials            FabricationMaterial[]
+
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([status])
+  @@index([category])
+  @@index([assignedTechnicianId])
+  @@index([createdAt])
+}
+
+model FabricationMaterial {
+  id              String           @id @default(uuid())
+  orderId         String
+  order           FabricationOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  materialName    String           // Tên vật tư (Inox 304 tấm 1.5mm, Hộp inox 40x40...)
+  quantity        Float            @default(1)
+  unit            String           // cây, tấm, kg, mét, cái...
+  unitPrice       Float            @default(0)
+  totalPrice      Float            @default(0)
+  inventoryItemId String?          // Nếu xuất từ kho vật tư
+
+  @@index([orderId])
 }
 

@@ -13,6 +13,7 @@ const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ defa
 const EquipmentPage = React.lazy(() => import('./pages/EquipmentPage').then(m => ({ default: m.EquipmentPage })));
 const RequestsPage = React.lazy(() => import('./pages/RequestsPage').then(m => ({ default: m.RequestsPage })));
 const WorkOrdersPage = React.lazy(() => import('./pages/WorkOrdersPage').then(m => ({ default: m.WorkOrdersPage })));
+const FabricationPage = React.lazy(() => import('./pages/FabricationPage').then(m => ({ default: m.FabricationPage })));
 const ChecklistsPage = React.lazy(() => import('./pages/ChecklistsPage').then(m => ({ default: m.ChecklistsPage })));
 const ChecklistDetailPage = React.lazy(() => import('./pages/ChecklistDetailPage').then(m => ({ default: m.ChecklistDetailPage })));
 const SparePartsPage = React.lazy(() => import('./pages/SparePartsPage').then(m => ({ default: m.SparePartsPage })));
@@ -129,6 +130,7 @@ function AppLayout() {
               <Route path="/equipment/:id" element={<ProtectedRoute permission="equipment:view"><EquipmentPage /></ProtectedRoute>} />
               <Route path="/requests" element={<ProtectedRoute permission="requests:view"><RequestsPage /></ProtectedRoute>} />
               <Route path="/work-orders" element={<ProtectedRoute permission="work_orders:view"><WorkOrdersPage /></ProtectedRoute>} />
+              <Route path="/fabrication" element={<ProtectedRoute permission="fabrication:view"><FabricationPage /></ProtectedRoute>} />
               <Route path="/checklists" element={<ProtectedRoute permission="checklists:view"><ChecklistsPage /></ProtectedRoute>} />
               <Route path="/checklists/:id" element={<ProtectedRoute permission="checklists:view"><ChecklistDetailPage /></ProtectedRoute>} />
               <Route path="/spare-parts" element={<ProtectedRoute permission="inventory:view"><SparePartsPage /></ProtectedRoute>} />

@@ -18,6 +18,8 @@ async function main() {
     'work_orders:view',
     // Checklist - xem
     'checklists:view',
+    // Gia công & Chế tạo - xem
+    'fabrication:view',
     // Tiện ích - xem
     'utilities:view',
     // Sổ vận hành - xem
@@ -44,6 +46,9 @@ async function main() {
     // Phiếu bảo trì
     'work_orders:view',
     'work_orders:execute',
+    // Gia công & Chế tạo
+    'fabrication:view',
+    'fabrication:edit',
     // Checklist
     'checklists:view',
     'checklists:execute',
@@ -90,6 +95,11 @@ async function main() {
     'work_orders:execute',
     'work_orders:close',
     'work_orders:cancel',
+    // Gia công & Chế tạo
+    'fabrication:view',
+    'fabrication:create',
+    'fabrication:edit',
+    'fabrication:close',
     // Checklist
     'checklists:view',
     'checklists:create',

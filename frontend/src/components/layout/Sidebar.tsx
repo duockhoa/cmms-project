@@ -17,6 +17,7 @@ import {
   ClipboardList,
   MessageSquarePlus,
   Zap,
+  Hammer,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -41,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
     { id: 'operation-logs', label: 'Sổ vận hành', icon: ClipboardList, permission: 'operation_logs:view' },
     { id: 'utilities', label: 'Điện, Nước & Tiện ích', icon: Zap, permission: 'utilities:view' },
     { id: 'work-orders', label: 'Phiếu sửa chữa', icon: Wrench, permission: 'work_orders:view' },
+    { id: 'fabrication', label: 'Gia công & Chế tạo', icon: Hammer, permission: 'fabrication:view' },
     { id: 'checklists', label: 'Checklist bảo trì', icon: CheckSquare, permission: 'checklists:view' },
     { id: 'spare-parts', label: 'Kho phụ tùng', icon: Package, permission: 'inventory:view' },
     { id: 'reports', label: 'Báo cáo & Phân tích', icon: BarChart3, permission: 'reports:view' },

@@ -657,6 +657,44 @@ export const api = {
     return request(`/utilities/reports/trend-matrix${toQueryString(params)}`);
   },
 
+  // Fabrication & Manufacturing API
+  getFabricationOrders: (params?: {
+    status?: string;
+    category?: string;
+    search?: string;
+    technicianId?: string;
+  }) => {
+    return request(`/fabrication-orders${toQueryString(params)}`);
+  },
+
+  getFabricationStats: () => {
+    return request('/fabrication-orders/stats');
+  },
+
+  getFabricationOrderById: (id: string) => {
+    return request(`/fabrication-orders/${id}`);
+  },
+
+  createFabricationOrder: (data: any) => {
+    return request('/fabrication-orders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateFabricationOrder: (id: string, data: any) => {
+    return request(`/fabrication-orders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteFabricationOrder: (id: string) => {
+    return request(`/fabrication-orders/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Master Catalog Cache Interface
   catalog: {
     getEquipment: () => catalogCache.fetchWithCache('equipment_all', () => request('/equipment')),

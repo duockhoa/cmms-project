@@ -202,6 +202,37 @@ export const PERMISSIONS_REGISTRY: ModulePermissions[] = [
     ],
   },
   {
+    id: 'fabrication',
+    name: 'Gia công & Chế tạo',
+    permissions: [
+      {
+        code: 'fabrication:view',
+        name: 'Xem công việc gia công & chế tạo',
+        description: 'Xem danh sách và chi tiết các công việc gia công, chế tạo, cải tiến',
+      },
+      {
+        code: 'fabrication:create',
+        name: 'Tạo & phân công gia công chế tạo',
+        description: 'Tạo công việc gia công, chế tạo mới và phân công trực tiếp cho kỹ thuật viên',
+      },
+      {
+        code: 'fabrication:edit',
+        name: 'Cập nhật tiến độ & vật tư',
+        description: 'Cập nhật tiến độ, số giờ công và vật tư sử dụng trong quá trình gia công',
+      },
+      {
+        code: 'fabrication:close',
+        name: 'Nghiệm thu & đóng công việc',
+        description: 'Đánh giá nghiệm thu sản phẩm gia công và đóng phiếu công việc',
+      },
+      {
+        code: 'fabrication:delete',
+        name: 'Xóa phiếu gia công chế tạo',
+        description: 'Xóa phiếu công việc gia công chế tạo (Dành cho Quản trị viên)',
+      },
+    ],
+  },
+  {
     id: 'checklists',
     name: 'Checklist bảo trì',
     permissions: [

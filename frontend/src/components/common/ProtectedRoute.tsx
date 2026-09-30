@@ -140,6 +140,7 @@ export const SmartHomeRoute: React.FC<{ dashboardComponent: React.ReactNode }> =
     { perm: 'requests:view', path: '/requests' },
     { perm: 'operation_logs:view', path: '/operation-logs' },
     { perm: 'work_orders:view', path: '/work-orders' },
+    { perm: 'fabrication:view', path: '/fabrication' },
     { perm: 'equipment:view', path: '/equipment' },
     { perm: 'utilities:view', path: '/utilities' },
     { perm: 'checklists:view', path: '/checklists' },
