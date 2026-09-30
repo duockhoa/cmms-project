@@ -1,295 +1,56 @@
-import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import React from 'react';
 import { PriorityBadge, StatusBadge } from '../components/common/Badge';
-import { Modal } from '../components/common/Modal';
-import { Plus, CheckCircle, XCircle, RotateCcw, Send, Ban, Clock, AlertCircle, RefreshCw, QrCode, Cpu, Edit2, Trash2, Eye, AlertTriangle, Lock } from 'lucide-react';
-import { useToast } from '../components/common/Toast';
-import { QRScanner } from '../components/common/QRScanner';
+import { Plus, Cpu, Edit2, Trash2, Eye, Lock } from 'lucide-react';
 import { RequestDetailView } from '../components/common/RequestDetailView';
-import { usePermissions } from '../hooks/usePermissions';
 import { TableSkeleton, CardListSkeleton } from '../components/common/Skeleton';
 import { EmptyState, FilterBar, PageHeader } from '../components/common';
+import { RequestDeleteModal } from '../components/requests/RequestDeleteModal';
+import { RequestCreateModal } from '../components/requests/RequestCreateModal';
+import { RequestEditModal } from '../components/requests/RequestEditModal';
+import { useRequestsPage } from '../hooks/useRequestsPage';
 
 export const RequestsPage: React.FC = () => {
-  const { can } = usePermissions();
-  const canEdit = can('requests:edit');
-  const canDelete = can('requests:delete');
-
-  const [requests, setRequests] = useState<any[]>([]);
-  const [equipmentList, setEquipmentList] = useState<any[]>([]);
-  const [functionalUnits, setFunctionalUnits] = useState<any[]>([]);
-  const [loadingUnits, setLoadingUnits] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const toast = useToast();
-  const [statusFilter, setStatusFilter] = useState('');
-
-  // Selected Detail state for Split Pane layout
-  const [selectedDetailReqId, setSelectedDetailReqId] = useState<string | null>(null);
-
-  // Modals
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
-
-  // Edit Modal State
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingReq, setEditingReq] = useState<any | null>(null);
-  const [editFormData, setEditFormData] = useState({
-    equipmentId: '',
-    functionalUnitId: '',
-    title: '',
-    description: '',
-    priority: 'HIGH',
-  });
-  const [editFunctionalUnits, setEditFunctionalUnits] = useState<any[]>([]);
-  const [loadingEditUnits, setLoadingEditUnits] = useState(false);
-  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
-
-  // Delete Modal State
-  const [deleteConfirmReq, setDeleteConfirmReq] = useState<any | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const handleQRScan = (decodedText: string) => {
-    let rawCode = (decodedText || '')
-      .replace(/^cmms-equipment:/i, '')
-      .replace(/^equipment:/i, '')
-      .trim();
-
-    // Tách mã máy nếu quét chuỗi dạng Mã$Tên_Máy (VD: TBSX412$Máy_Rửa_Lọ)
-    if (rawCode.includes('$')) {
-      rawCode = rawCode.split('$')[0].trim();
-    }
-
-    const matched = equipmentList.find(
-      (e) =>
-        e.code?.toLowerCase() === rawCode.toLowerCase() ||
-        e.id === rawCode ||
-        e.accountingCode?.toLowerCase() === rawCode.toLowerCase()
-    );
-
-    if (matched) {
-      setFormData((prev) => ({ ...prev, equipmentId: matched.id, functionalUnitId: '' }));
-      toast.success('Nhận diện thiết bị thành công', `Thiết bị: ${matched.name} (${matched.code})`);
-      setShowScanner(false);
-    } else {
-      toast.error('Thiết bị không tồn tại', `Mã quét [${rawCode}] không tồn tại trong danh mục thiết bị.`);
-    }
-  };
-  const [currentUser, setCurrentUser] = useState<any>(null);
-
-  const [formData, setFormData] = useState({
-    equipmentId: '',
-    functionalUnitId: '',
-    title: '',
-    description: '',
-    priority: 'HIGH',
-    reporterName: '',
-    department: '',
-  });
-
-  const [users, setUsers] = useState<any[]>([]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [reqRes, eqRes, userRes, meRes] = await Promise.all([
-        api.getRequests({ status: statusFilter }),
-        api.getEquipment(),
-        api.getUsers().catch(() => []),
-        api.getMe().catch(() => null),
-      ]);
-      setRequests(reqRes);
-      setEquipmentList(eqRes);
-      setUsers(userRes);
-
-      if (meRes && meRes.authenticated) {
-        setCurrentUser(meRes.user);
-        setFormData((prev) => ({
-          ...prev,
-          reporterName: meRes.user.name,
-          department: meRes.user.department || '',
-        }));
-      }
-
-      if (eqRes.length > 0 && !formData.equipmentId) {
-        setFormData((prev) => ({
-          ...prev,
-          equipmentId: eqRes[0].id,
-        }));
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Tải danh sách cụm chức năng theo thiết bị được chọn
-  useEffect(() => {
-    if (!formData.equipmentId) {
-      setFunctionalUnits([]);
-      return;
-    }
-    let isMounted = true;
-    const fetchUnits = async () => {
-      try {
-        setLoadingUnits(true);
-        const res = await api.getEquipmentFunctionalUnits(formData.equipmentId);
-        if (isMounted) {
-          setFunctionalUnits(Array.isArray(res) ? res : []);
-        }
-      } catch (err) {
-        if (isMounted) setFunctionalUnits([]);
-      } finally {
-        if (isMounted) setLoadingUnits(false);
-      }
-    };
-    fetchUnits();
-    return () => {
-      isMounted = false;
-    };
-  }, [formData.equipmentId]);
-
-  const getActiveUserId = () => {
-    const active = users.find((u: any) => u.isActive);
-    return active ? active.id : (users[0]?.id || 'user-id');
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [statusFilter]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.equipmentId) {
-      toast.warning('Cảnh báo', 'Vui lòng chọn thiết bị gặp sự cố!');
-      return;
-    }
-    const cleanTitle = (formData.title || '').trim();
-    const cleanDesc = (formData.description || '').trim();
-    if (!cleanTitle) {
-      toast.warning('Cảnh báo', 'Tiêu đề sự cố không được để trống!');
-      return;
-    }
-    if (!cleanDesc) {
-      toast.warning('Cảnh báo', 'Mô tả hiện trạng hư hỏng không được để trống!');
-      return;
-    }
-
-    try {
-      await api.createRequest({
-        equipmentId: formData.equipmentId,
-        title: cleanTitle,
-        description: cleanDesc,
-        priority: formData.priority || 'HIGH',
-        reporterId: currentUser?.id || undefined,
-        reporterName: currentUser?.name || undefined,
-        department: currentUser?.department || undefined,
-        functionalUnitId: formData.functionalUnitId?.trim() || undefined,
-      });
-      setIsAddOpen(false);
-      setFormData({
-        equipmentId: equipmentList[0]?.id || '',
-        functionalUnitId: '',
-        title: '',
-        description: '',
-        priority: 'HIGH',
-        reporterName: currentUser?.name || '',
-        department: currentUser?.department || '',
-      });
-      toast.success('Thành công', 'Đã gửi báo cáo sự cố!');
-      loadData();
-    } catch (err: any) {
-      toast.error('Lỗi', err?.message || 'Không thể tạo yêu cầu bảo trì!');
-    }
-  };
-
-  // Tải danh sách cụm chức năng theo thiết bị được chọn trong Edit modal
-  useEffect(() => {
-    if (!editFormData.equipmentId) {
-      setEditFunctionalUnits([]);
-      return;
-    }
-    let isMounted = true;
-    const fetchUnits = async () => {
-      try {
-        setLoadingEditUnits(true);
-        const res = await api.getEquipmentFunctionalUnits(editFormData.equipmentId);
-        if (isMounted) {
-          setEditFunctionalUnits(Array.isArray(res) ? res : []);
-        }
-      } catch (err) {
-        if (isMounted) setEditFunctionalUnits([]);
-      } finally {
-        if (isMounted) setLoadingEditUnits(false);
-      }
-    };
-    fetchUnits();
-    return () => {
-      isMounted = false;
-    };
-  }, [editFormData.equipmentId]);
-
-  const openEditModal = (req: any) => {
-    setEditingReq(req);
-    setEditFormData({
-      equipmentId: req.equipmentId || '',
-      functionalUnitId: req.functionalUnitId || '',
-      title: req.title || '',
-      description: req.description || '',
-      priority: req.priority || 'HIGH',
-    });
-    setIsEditOpen(true);
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingReq) return;
-    try {
-      setIsSubmittingEdit(true);
-      await api.updateRequest(editingReq.id, {
-        equipmentId: editFormData.equipmentId,
-        functionalUnitId: editFormData.functionalUnitId || null,
-        title: editFormData.title.trim(),
-        description: editFormData.description.trim(),
-        priority: editFormData.priority,
-      });
-      setIsEditOpen(false);
-      setEditingReq(null);
-      toast.success('Thành công', `Đã cập nhật yêu cầu sự cố ${editingReq.requestCode}`);
-      loadData();
-    } catch (err: any) {
-      toast.error('Lỗi cập nhật', err?.message || 'Không thể cập nhật yêu cầu sự cố!');
-    } finally {
-      setIsSubmittingEdit(false);
-    }
-  };
-
-  const openDeleteConfirm = (req: any) => {
-    setDeleteConfirmReq(req);
-  };
-
-  const handleDelete = async () => {
-    if (!deleteConfirmReq) return;
-    try {
-      setIsDeleting(true);
-      await api.deleteRequest(deleteConfirmReq.id);
-      toast.success('Thành công', `Đã xóa yêu cầu sự cố ${deleteConfirmReq.requestCode}`);
-      if (selectedDetailReqId === deleteConfirmReq.id) {
-        setSelectedDetailReqId(null);
-      }
-      setDeleteConfirmReq(null);
-      loadData();
-    } catch (err: any) {
-      toast.error('Lỗi khi xóa', err?.message || 'Không thể xóa yêu cầu sự cố!');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const isReqLocked = (req: any) => {
-    if (!req) return false;
-    return req.status === 'CLOSED' || (req.workOrders && req.workOrders.length > 0);
-  };
+  const {
+    canEdit,
+    canDelete,
+    requests,
+    equipmentList,
+    users,
+    currentUser,
+    loading,
+    statusFilter,
+    setStatusFilter,
+    selectedDetailReqId,
+    setSelectedDetailReqId,
+    isAddOpen,
+    setIsAddOpen,
+    showScanner,
+    setShowScanner,
+    formData,
+    setFormData,
+    functionalUnits,
+    loadingUnits,
+    handleQRScan,
+    handleCreate,
+    isEditOpen,
+    setIsEditOpen,
+    editingReq,
+    setEditingReq,
+    editFormData,
+    setEditFormData,
+    editFunctionalUnits,
+    loadingEditUnits,
+    isSubmittingEdit,
+    openEditModal,
+    handleUpdate,
+    deleteConfirmReq,
+    setDeleteConfirmReq,
+    isDeleting,
+    openDeleteConfirm,
+    handleDelete,
+    isReqLocked,
+    loadData,
+  } = useRequestsPage();
 
   return (
     <div>
@@ -550,273 +311,42 @@ export const RequestsPage: React.FC = () => {
       </div>
 
       {/* Create Request Modal */}
-      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Tạo Yêu cầu Sửa chữa / Báo sự cố">
-        <form onSubmit={handleCreate}>
-          <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label className="form-label" style={{ margin: 0 }}>Chọn Thiết bị gặp sự cố *</label>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 8px', fontSize: '12px', borderColor: 'var(--border-color)' }}
-                onClick={() => setShowScanner(true)}
-              >
-                <QrCode size={14} /> Quét mã QR
-              </button>
-            </div>
-            {showScanner ? (
-              <div style={{ marginBottom: '12px' }}>
-                <QRScanner onScanSuccess={handleQRScan} onClose={() => setShowScanner(false)} />
-              </div>
-            ) : (
-              <select 
-                className="form-select" 
-                required 
-                value={formData.equipmentId} 
-                onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value, functionalUnitId: '' })}
-              >
-                {equipmentList.map((eq) => (
-                  <option key={eq.id} value={eq.id}>
-                    [{eq.code}] {eq.name} - {eq.location}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Cụm chức năng gặp lỗi (Load theo thiết bị đã chọn) */}
-          <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Cpu size={15} style={{ color: '#2563eb' }} />
-                <span>Cụm chức năng lỗi (Tùy chọn)</span>
-              </label>
-              {loadingUnits && (
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Đang tải danh sách cụm...
-                </span>
-              )}
-            </div>
-            <select
-              className="form-select"
-              value={formData.functionalUnitId}
-              onChange={(e) => setFormData({ ...formData, functionalUnitId: e.target.value })}
-              disabled={loadingUnits}
-            >
-              <option value="">-- Toàn bộ thiết bị / Chưa phân loại cụm --</option>
-              {functionalUnits.map((fu) => (
-                <option key={fu.id} value={fu.id}>
-                  {fu.code ? `[${fu.code}] ` : ''}{fu.name} {fu.libraryItem?.category ? `(${fu.libraryItem.category})` : ''}
-                </option>
-              ))}
-            </select>
-            {formData.equipmentId && functionalUnits.length === 0 && !loadingUnits && (
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                💡 Thiết bị này chưa được cấu hình cụm chức năng riêng lẻ (sự cố sẽ áp dụng cho toàn bộ máy).
-              </div>
-            )}
-            {formData.functionalUnitId && (
-              <div style={{ fontSize: '11px', color: '#2563eb', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                ✓ Đã chọn cụm sự cố: <strong>{functionalUnits.find(u => u.id === formData.functionalUnitId)?.name}</strong>
-              </div>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Tên sự cố / Tiêu đề ngắn *</label>
-            <input type="text" className="form-input" required value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Băng tải kêu rít, Máy dừng đột ngột..." />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Mức độ ưu tiên</label>
-            <select className="form-select" value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })}>
-              <option value="URGENT">Khẩn cấp (Dừng sản xuất)</option>
-              <option value="HIGH">Cao</option>
-              <option value="MEDIUM">Trung bình</option>
-              <option value="LOW">Thấp</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Mô tả chi tiết hiện trạng hư hỏng *</label>
-            <textarea className="form-textarea" required rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Hiện tượng, thời điểm xảy ra..." />
-          </div>
-
-          <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)}>Hủy</button>
-            <button type="submit" className="btn btn-primary">Gửi Yêu cầu</button>
-          </div>
-        </form>
-      </Modal>
+      <RequestCreateModal
+        isOpen={isAddOpen}
+        onClose={() => setIsAddOpen(false)}
+        formData={formData}
+        setFormData={setFormData}
+        equipmentList={equipmentList}
+        functionalUnits={functionalUnits}
+        loadingUnits={loadingUnits}
+        showScanner={showScanner}
+        setShowScanner={setShowScanner}
+        onQRScan={handleQRScan}
+        onSubmit={handleCreate}
+      />
 
       {/* Edit Request Modal */}
-      {isEditOpen && (
-        <Modal 
-          isOpen={isEditOpen} 
-          onClose={() => { setIsEditOpen(false); setEditingReq(null); }} 
-          title={`Chỉnh sửa Yêu cầu: ${editingReq?.requestCode || ''}`}
-        >
-          <form onSubmit={handleUpdate}>
-            <div className="form-group">
-              <label className="form-label">Thiết bị gặp sự cố *</label>
-              <select 
-                className="form-select" 
-                required 
-                value={editFormData.equipmentId} 
-                onChange={(e) => setEditFormData({ ...editFormData, equipmentId: e.target.value, functionalUnitId: '' })}
-              >
-                {equipmentList.map((eq) => (
-                  <option key={eq.id} value={eq.id}>
-                    [{eq.code}] {eq.name} - {eq.location}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Cụm chức năng gặp lỗi */}
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Cpu size={15} style={{ color: '#2563eb' }} />
-                  <span>Cụm chức năng lỗi (Tùy chọn)</span>
-                </label>
-                {loadingEditUnits && (
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Đang tải danh sách cụm...
-                  </span>
-                )}
-              </div>
-              <select
-                className="form-select"
-                value={editFormData.functionalUnitId}
-                onChange={(e) => setEditFormData({ ...editFormData, functionalUnitId: e.target.value })}
-                disabled={loadingEditUnits}
-              >
-                <option value="">-- Toàn bộ thiết bị / Chưa phân loại cụm --</option>
-                {editFunctionalUnits.map((fu) => (
-                  <option key={fu.id} value={fu.id}>
-                    {fu.code ? `[${fu.code}] ` : ''}{fu.name} {fu.libraryItem?.category ? `(${fu.libraryItem.category})` : ''}
-                  </option>
-                ))}
-              </select>
-              {editFormData.functionalUnitId && (
-                <div style={{ fontSize: '11px', color: '#2563eb', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  ✓ Cụm đã chọn: <strong>{editFunctionalUnits.find(u => u.id === editFormData.functionalUnitId)?.name || 'Cụm chức năng'}</strong>
-                </div>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Tên sự cố / Tiêu đề ngắn *</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                required 
-                value={editFormData.title} 
-                onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })} 
-                placeholder="Băng tải kêu rít, Máy dừng đột ngột..." 
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Mức độ ưu tiên</label>
-              <select 
-                className="form-select" 
-                value={editFormData.priority} 
-                onChange={(e) => setEditFormData({ ...editFormData, priority: e.target.value })}
-              >
-                <option value="URGENT">Khẩn cấp (Dừng sản xuất)</option>
-                <option value="HIGH">Cao</option>
-                <option value="MEDIUM">Trung bình</option>
-                <option value="LOW">Thấp</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Mô tả chi tiết hiện trạng hư hỏng</label>
-              <textarea 
-                className="form-textarea" 
-                rows={3} 
-                value={editFormData.description} 
-                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })} 
-                placeholder="Hiện tượng, thời điểm xảy ra..." 
-              />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => { setIsEditOpen(false); setEditingReq(null); }}
-                disabled={isSubmittingEdit}
-              >
-                Hủy
-              </button>
-              <button 
-                type="submit" 
-                className="btn btn-primary" 
-                disabled={isSubmittingEdit}
-              >
-                {isSubmittingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      <RequestEditModal
+        isOpen={isEditOpen}
+        onClose={() => { setIsEditOpen(false); setEditingReq(null); }}
+        editingReq={editingReq}
+        editFormData={editFormData}
+        setEditFormData={setEditFormData}
+        equipmentList={equipmentList}
+        editFunctionalUnits={editFunctionalUnits}
+        loadingEditUnits={loadingEditUnits}
+        isSubmittingEdit={isSubmittingEdit}
+        onSubmit={handleUpdate}
+      />
 
       {/* Delete Confirmation Modal */}
-      {deleteConfirmReq && (
-        <Modal 
-          isOpen={Boolean(deleteConfirmReq)} 
-          onClose={() => setDeleteConfirmReq(null)} 
-          title="Xác nhận xóa Yêu cầu sự cố"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 16px', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
-              <AlertTriangle size={24} style={{ color: '#dc2626', flexShrink: 0, marginTop: '2px' }} />
-              <div style={{ fontSize: '13px', color: '#991b1b' }}>
-                <strong>Cảnh báo:</strong> Hành động này sẽ xóa vĩnh viễn yêu cầu sự cố và lịch sử liên quan khỏi hệ thống. Hành động này không thể hoàn tác!
-              </div>
-            </div>
-
-            {isReqLocked(deleteConfirmReq) && (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fef3c7', fontSize: '12px', color: '#b45309' }}>
-                <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
-                <div>
-                  <strong>Dữ liệu đã đóng / có phiếu sửa chữa:</strong> Với quyền Quản trị viên (ADMIN), thao tác xóa này sẽ tự động dọn dẹp sạch toàn bộ phiếu sửa chữa (Work Order) và dữ liệu liên quan đi kèm.
-                </div>
-              </div>
-            )}
-
-            <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '13px', border: '1px solid var(--border-color)' }}>
-              <div><strong>Mã yêu cầu:</strong> <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{deleteConfirmReq.requestCode}</span></div>
-              <div style={{ marginTop: '4px' }}><strong>Tiêu đề:</strong> {deleteConfirmReq.title}</div>
-              <div style={{ marginTop: '4px' }}><strong>Thiết bị:</strong> {deleteConfirmReq.equipment?.name} ({deleteConfirmReq.equipment?.code})</div>
-              <div style={{ marginTop: '4px' }}><strong>Người báo:</strong> {deleteConfirmReq.reporterName}</div>
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '12px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => setDeleteConfirmReq(null)} 
-                disabled={isDeleting}
-              >
-                Hủy bỏ
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-danger" 
-                onClick={handleDelete} 
-                disabled={isDeleting} 
-                style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none' }}
-              >
-                {isDeleting ? 'Đang xóa...' : 'Xóa vĩnh viễn'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <RequestDeleteModal
+        request={deleteConfirmReq}
+        locked={isReqLocked(deleteConfirmReq)}
+        deleting={isDeleting}
+        onClose={() => setDeleteConfirmReq(null)}
+        onConfirm={handleDelete}
+      />
 
     </div>
   );
