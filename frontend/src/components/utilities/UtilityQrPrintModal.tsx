@@ -1,6 +1,6 @@
 import React from 'react';
 import type { UtilitiesPageViewModel } from '../../hooks/useUtilitiesPage';
-import { Ban, Edit2, Printer, RefreshCw, ShieldAlert, X } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { printSingleQRTag } from '../../utils/qrPrintHelper';
 
 interface UtilityModalProps {
