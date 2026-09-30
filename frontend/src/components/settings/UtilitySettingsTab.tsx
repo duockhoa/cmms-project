@@ -1,6 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../services/api';
 import { useUtilitySettings } from '../../hooks/useUtilitySettings';
 import {
   Zap,
@@ -11,192 +10,18 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { formatVN } from '../../utils/formatters';
-import { SearchInput, useToast } from '../common';
-import {
-  calculateMeterConsumption,
-  PeriodMeterItem,
-} from './utilitySettings.types';
+import { SearchInput } from '../common';
+import { calculateMeterConsumption } from './utilitySettings.types';
 
 export const UtilitySettingsTab: React.FC = () => {
   const navigate = useNavigate();
-  const toast = useToast();
   const {
     selectedMonth, setSelectedMonth, selectedYear, setSelectedYear,
-    loading, savingId, setSavingId, batchSaving, setBatchSaving,
-    elecCycle, waterCycle, supplyMeters, setSupplyMeters,
-    allMeters, setAllMeters, search, setSearch, filterType, setFilterType,
-    editValues, setEditValues, loadPeriodData,
+    loading, savingId, batchSaving, elecCycle, waterCycle, supplyMeters,
+    search, setSearch, filterType, setFilterType, editValues, filteredMeters,
+    loadPeriodData, handleValueChange, handleCurrentValueChange, handleNotesChange,
+    handleSaveSingle, handleSaveAll, handleAutoFillFromHistory,
   } = useUtilitySettings();
-
-  const handleValueChange = (pointId: string, value: string) => {
-    setEditValues((prev) => ({
-      ...prev,
-      [pointId]: {
-        ...prev[pointId],
-        value,
-      },
-    }));
-  };
-
-  const handleCurrentValueChange = (pointId: string, currentValue: string) => {
-    setEditValues((prev) => ({
-      ...prev,
-      [pointId]: {
-        ...prev[pointId],
-        currentValue,
-      },
-    }));
-  };
-
-  const handleNotesChange = (pointId: string, notes: string) => {
-    setEditValues((prev) => ({
-      ...prev,
-      [pointId]: {
-        ...prev[pointId],
-        notes,
-      },
-    }));
-  };
-
-  // Lưu chỉ số đầu kỳ & hiện tại cho 1 điểm đo
-  const handleSaveSingle = async (meter: PeriodMeterItem) => {
-    const edit = editValues[meter.pointId];
-    if (!edit || edit.value === '') {
-      toast.error('Thiếu thông tin', 'Vui lòng nhập chỉ số đầu kỳ hợp lệ.');
-      return;
-    }
-    const num = parseFloat(edit.value);
-    if (isNaN(num) || num < 0) {
-      toast.error('Giá trị không hợp lệ', 'Chỉ số đầu kỳ phải là số dương (≥ 0).');
-      return;
-    }
-
-    const currNum = edit.currentValue !== '' && !isNaN(parseFloat(edit.currentValue)) ? parseFloat(edit.currentValue) : undefined;
-    if (currNum !== undefined && currNum < num) {
-      toast.error('Giá trị không hợp lệ', `Chỉ số hiện tại (${currNum}) không được nhỏ hơn chỉ số đầu kỳ (${num})!`);
-      return;
-    }
-
-    try {
-      setSavingId(meter.pointId);
-      await api.setUtilityPeriodBaselines({
-        month: selectedMonth,
-        year: selectedYear,
-        items: [
-          {
-            pointId: meter.pointId,
-            baselineValue: num,
-            currentValue: currNum,
-            notes: edit.notes || `Chỉ số chốt đầu kỳ tính toán Tháng ${selectedMonth}/${selectedYear}`,
-          },
-        ],
-      });
-
-      const diff = currNum !== undefined && currNum >= num ? (currNum - num) * (meter.multiplier || 1) : 0;
-      toast.success(
-        'Đã lưu thành công',
-        `Đã chốt đầu kỳ: ${formatVN(num)} ${meter.unit} | Hiện tại: ${formatVN(currNum ?? num)} ${meter.unit} (Sản lượng: +${formatVN(diff)} ${meter.unit}).`
-      );
-
-      // Cập nhật lại local state
-      setSupplyMeters((prev) =>
-        prev.map((m) =>
-          m.pointId === meter.pointId
-            ? { ...m, baselineValue: num, lastReadingValue: currNum ?? m.lastReadingValue, hasExistingBaseline: true }
-            : m
-        )
-      );
-      setAllMeters((prev) =>
-        prev.map((m) =>
-          m.pointId === meter.pointId
-            ? { ...m, baselineValue: num, lastReadingValue: currNum ?? m.lastReadingValue, hasExistingBaseline: true }
-            : m
-        )
-      );
-    } catch (err: any) {
-      toast.error('Lỗi lưu chỉ số', err.message || 'Không thể lưu chỉ số.');
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  // Lưu tất cả các điểm đo có thay đổi
-  const handleSaveAll = async () => {
-    const itemsToUpdate = allMeters
-      .filter((m) => {
-        const edit = editValues[m.pointId];
-        if (!edit) return false;
-        const num = parseFloat(edit.value);
-        const currNum = parseFloat(edit.currentValue);
-        const baselineChanged = !isNaN(num) && num !== m.baselineValue;
-        const currentChanged = !isNaN(currNum) && currNum !== m.lastReadingValue;
-        return baselineChanged || currentChanged;
-      })
-      .map((m) => ({
-        pointId: m.pointId,
-        baselineValue: parseFloat(editValues[m.pointId].value),
-        currentValue: !isNaN(parseFloat(editValues[m.pointId].currentValue)) ? parseFloat(editValues[m.pointId].currentValue) : undefined,
-        notes: editValues[m.pointId].notes || `Chỉ số chốt đầu kỳ tính toán Tháng ${selectedMonth}/${selectedYear}`,
-      }));
-
-    if (itemsToUpdate.length === 0) {
-      toast.info('Thông báo', 'Không có chỉ số nào thay đổi cần lưu.');
-      return;
-    }
-
-    try {
-      setBatchSaving(true);
-      await api.setUtilityPeriodBaselines({
-        month: selectedMonth,
-        year: selectedYear,
-        items: itemsToUpdate,
-      });
-
-      toast.success(
-        'Thành công',
-        `Đã lưu chỉ số tính toán Tháng ${selectedMonth}/${selectedYear} cho ${itemsToUpdate.length} đồng hồ.`
-      );
-      await loadPeriodData();
-    } catch (err: any) {
-      toast.error('Lỗi cập nhật', err.message || 'Không thể cập nhật danh sách chỉ số.');
-    } finally {
-      setBatchSaving(false);
-    }
-  };
-
-  const handleAutoFillFromHistory = () => {
-    const newEdits = { ...editValues };
-    let filledCount = 0;
-    allMeters.forEach((m) => {
-      const currentVal = newEdits[m.pointId]?.value;
-      if (!currentVal || parseFloat(currentVal) === 0) {
-        const fillVal = m.baselineValue && m.baselineValue > 0 ? m.baselineValue : (m.lastReadingValue || 0);
-        newEdits[m.pointId] = {
-          ...newEdits[m.pointId],
-          value: String(fillVal),
-          currentValue: String(m.lastReadingValue || fillVal),
-        };
-        filledCount++;
-      }
-    });
-    setEditValues(newEdits);
-    toast.success('Đồng bộ mốc', `Đã điền chỉ số mốc gợi ý cho ${filledCount} đồng hồ từ dữ liệu ghi nhận.`);
-  };
-
-  const filteredMeters = allMeters.filter((m) => {
-    const matchSearch =
-      !search ||
-      m.code.toLowerCase().includes(search.toLowerCase()) ||
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.location.toLowerCase().includes(search.toLowerCase());
-
-    if (!matchSearch) return false;
-
-    if (filterType === 'ELECTRICITY') return m.type === 'ELECTRICITY';
-    if (filterType === 'WATER') return m.type === 'WATER';
-    if (filterType === 'SUPPLY') return m.isSupplyMeter;
-    return true;
-  });
 
   return (
     <div>
