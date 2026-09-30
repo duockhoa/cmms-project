@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import { useUtilitySettings } from '../../hooks/useUtilitySettings';
 import {
   Zap,
   Droplets,
@@ -14,69 +15,18 @@ import { SearchInput, useToast } from '../common';
 import {
   calculateMeterConsumption,
   PeriodMeterItem,
-  UtilityMeterEditValue,
-  UtilityMeterFilter,
 } from './utilitySettings.types';
 
 export const UtilitySettingsTab: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
-
-  // Chọn Tháng & Năm của Kỳ tính toán
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
-
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [batchSaving, setBatchSaving] = useState(false);
-
-  // Dữ liệu chu kỳ và danh sách điểm đo
-  const [elecCycle, setElecCycle] = useState<any>(null);
-  const [waterCycle, setWaterCycle] = useState<any>(null);
-  const [supplyMeters, setSupplyMeters] = useState<PeriodMeterItem[]>([]);
-  const [allMeters, setAllMeters] = useState<PeriodMeterItem[]>([]);
-
-  // Search & Filter
-  const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState<UtilityMeterFilter>('ALL');
-
-  // Giá trị chỉnh sửa tạm thời { [pointId]: { value: string, currentValue: string, notes: string } }
-  const [editValues, setEditValues] = useState<Record<string, UtilityMeterEditValue>>({});
-
-  useEffect(() => {
-    loadPeriodData();
-  }, [selectedMonth, selectedYear]);
-
-  const loadPeriodData = async () => {
-    try {
-      setLoading(true);
-      const res = await api.getUtilityPeriodBaselines({
-        month: selectedMonth,
-        year: selectedYear,
-      });
-
-      setElecCycle(res.elecCycle);
-      setWaterCycle(res.waterCycle);
-      setSupplyMeters(res.supplyMeters || []);
-      setAllMeters(res.allMeters || []);
-
-      // Khởi tạo state edit
-      const initialEdits: Record<string, UtilityMeterEditValue> = {};
-      (res.allMeters || []).forEach((m: PeriodMeterItem) => {
-        initialEdits[m.pointId] = {
-          value: m.baselineValue !== null && m.baselineValue !== undefined ? m.baselineValue.toString() : '0',
-          currentValue: m.lastReadingValue !== null && m.lastReadingValue !== undefined ? m.lastReadingValue.toString() : (m.baselineValue !== null && m.baselineValue !== undefined ? m.baselineValue.toString() : '0'),
-          notes: `Chỉ số chốt đầu kỳ tính toán Tháng ${selectedMonth}/${selectedYear}`,
-        };
-      });
-      setEditValues(initialEdits);
-    } catch (err: any) {
-      toast.error('Lỗi tải dữ liệu kỳ', err.message || 'Không thể tải thông tin kỳ tính toán tiện ích.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    selectedMonth, setSelectedMonth, selectedYear, setSelectedYear,
+    loading, savingId, setSavingId, batchSaving, setBatchSaving,
+    elecCycle, waterCycle, supplyMeters, setSupplyMeters,
+    allMeters, setAllMeters, search, setSearch, filterType, setFilterType,
+    editValues, setEditValues, loadPeriodData,
+  } = useUtilitySettings();
 
   const handleValueChange = (pointId: string, value: string) => {
     setEditValues((prev) => ({
