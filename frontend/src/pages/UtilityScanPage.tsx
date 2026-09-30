@@ -1,8 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../services/api';
 import { useUtilityPointScanner } from '../hooks/useUtilityPointScanner';
-import { useToast } from '../components/common/Toast';
+import { useUtilityScanForm } from '../hooks/useUtilityScanForm';
 import { 
   Camera, ArrowLeft, Zap, Droplets, Cpu, 
   CheckCircle2, AlertTriangle, Clock, RefreshCw, 
@@ -13,38 +12,11 @@ import './UtilityScanPage.css';
 
 export const UtilityScanPage: React.FC = () => {
   const navigate = useNavigate();
-  const toast = useToast();
 
   const [selectedPoint, setSelectedPoint] = useState<any | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Form State cho Điện & Nước
-  const [readingValue, setReadingValue] = useState<string>('');
-  const [normalValue, setNormalValue] = useState<string>('');
-  const [peakValue, setPeakValue] = useState<string>('');
-  const [offPeakValue, setOffPeakValue] = useState<string>('');
-  const [powerKw, setPowerKw] = useState<string>('');
-  const [powerFactor, setPowerFactor] = useState<string>('');
-  const [notes, setNotes] = useState<string>('');
-
-  // Form State cho Hệ thống phụ trợ (Bật / Tắt)
-  const [systemStatus, setSystemStatus] = useState<string>('RUNNING');
-  const [runningHours, setRunningHours] = useState<string>('');
-  const [statusReason, setStatusReason] = useState<string>('');
 
   const handleSelectPoint = useCallback((point: any) => {
     setSelectedPoint(point);
-    setScanning(false);
-    setReadingValue('');
-    setNormalValue('');
-    setPeakValue('');
-    setOffPeakValue('');
-    setPowerKw('');
-    setPowerFactor('');
-    setNotes('');
-    setSystemStatus(point.currentStatus || 'RUNNING');
-    setRunningHours(point.lastReadingValue ? point.lastReadingValue.toString() : '');
-    setStatusReason('');
   }, []);
 
   const { scanning, setScanning } = useUtilityPointScanner({
@@ -52,85 +24,18 @@ export const UtilityScanPage: React.FC = () => {
     onSelectPoint: handleSelectPoint,
   });
 
-  // Tính toán sản lượng tiêu thụ tức thời
-  const previousValue = selectedPoint ? selectedPoint.lastReadingValue || 0 : 0;
-  const multiplier = selectedPoint ? selectedPoint.multiplier || 1.0 : 1.0;
-  const currentNum = parseFloat(readingValue);
-  const diff = !isNaN(currentNum) ? currentNum - previousValue : 0;
-  const calculatedConsumption = diff >= 0 ? diff * multiplier : 0;
-  const isSmallerThanPrevious = !isNaN(currentNum) && previousValue > 0 && currentNum < previousValue;
-  const isOutlier = !isNaN(currentNum) && previousValue > 0 && diff > previousValue * 1.5;
-
-  // Gửi form ghi số Điện / Nước
-  const handleSubmitReading = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPoint) return;
-    if (isNaN(parseFloat(readingValue))) {
-      toast.error('Thiếu thông tin', 'Vui lòng nhập chỉ số mới hợp lệ.');
-      return;
-    }
-    if (isSmallerThanPrevious) {
-      toast.error(
-        'Chặn chỉ số không hợp lệ',
-        `Chỉ số mới (${currentNum}) không được nhỏ hơn chỉ số trước (${previousValue} ${selectedPoint.unit}). Vui lòng kiểm tra lại mặt đồng hồ!`,
-      );
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      await api.recordUtilityReading({
-        pointId: selectedPoint.id,
-        readingValue: parseFloat(readingValue),
-        normalValue: normalValue ? parseFloat(normalValue) : undefined,
-        peakValue: peakValue ? parseFloat(peakValue) : undefined,
-        offPeakValue: offPeakValue ? parseFloat(offPeakValue) : undefined,
-        powerKw: powerKw ? parseFloat(powerKw) : undefined,
-        powerFactorCosPhi: powerFactor ? parseFloat(powerFactor) : undefined,
-        notes,
-      });
-
-      toast.success(
-        'Thành công',
-        `Đã ghi nhận chỉ số ${selectedPoint.name}: ${readingValue} ${selectedPoint.unit} (Tiêu thụ: +${formatVN(calculatedConsumption)} ${selectedPoint.unit}).`,
-      );
-
-      setSelectedPoint(null);
-      setScanning(true);
-    } catch (error: any) {
-      toast.error('Lỗi lưu chỉ số', error?.message || 'Có lỗi xảy ra khi lưu chỉ số.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Gửi form cập nhật trạng thái Bật / Tắt hệ thống
-  const handleSubmitSystemStatus = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPoint) return;
-
-    try {
-      setSubmitting(true);
-      await api.recordUtilitySystemStatus({
-        pointId: selectedPoint.id,
-        status: systemStatus as any,
-        runningHours: runningHours ? parseFloat(runningHours) : undefined,
-        reason: statusReason,
-      });
-
-      toast.success(
-        'Thành công',
-        `Đã cập nhật trạng thái ${selectedPoint.name} thành [${systemStatus}].`,
-      );
-
-      setSelectedPoint(null);
-      setScanning(true);
-    } catch (error: any) {
-      toast.error('Lỗi cập nhật', error?.message || 'Có lỗi xảy ra khi cập nhật trạng thái.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const {
+    submitting, readingValue, setReadingValue, normalValue, setNormalValue,
+    peakValue, setPeakValue, offPeakValue, setOffPeakValue, powerKw, setPowerKw,
+    powerFactor, setPowerFactor, notes, setNotes, systemStatus, setSystemStatus,
+    runningHours, setRunningHours, statusReason, setStatusReason, previousValue,
+    currentNum, calculatedConsumption, isSmallerThanPrevious, isOutlier,
+    handleSubmitReading, handleSubmitSystemStatus,
+  } = useUtilityScanForm({
+    selectedPoint,
+    setSelectedPoint,
+    resumeScanning: () => setScanning(true),
+  });
 
   return (
     <div className="utility-scan-container">
