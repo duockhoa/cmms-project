@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+import { useUtilityPointScanner } from '../hooks/useUtilityPointScanner';
 import { useToast } from '../components/common/Toast';
 import { 
   Camera, ArrowLeft, Zap, Droplets, Cpu, 
@@ -8,18 +9,13 @@ import {
   ChevronRight, QrCode, ShieldCheck
 } from 'lucide-react';
 import { formatVN } from '../utils/formatters';
-import { Html5QrcodeScanner } from 'html5-qrcode';
 import './UtilityScanPage.css';
 
 export const UtilityScanPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const toast = useToast();
 
-  const [points, setPoints] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedPoint, setSelectedPoint] = useState<any | null>(null);
-  const [scanning, setScanning] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   // Form State cho Điện & Nước
@@ -36,104 +32,7 @@ export const UtilityScanPage: React.FC = () => {
   const [runningHours, setRunningHours] = useState<string>('');
   const [statusReason, setStatusReason] = useState<string>('');
 
-  // Tải danh sách điểm đo khi khởi động
-  useEffect(() => {
-    const fetchPoints = async () => {
-      try {
-        setLoading(true);
-        const data = await api.getUtilityPoints({ isActive: true });
-        const list = Array.isArray(data) ? data : [];
-        setPoints(list);
-
-        // Nếu có query param code hoặc id, tự động chọn
-        const queryCode = searchParams.get('code') || searchParams.get('id');
-        if (queryCode) {
-          const match = list.find((p) => p.code === queryCode || p.id === queryCode);
-          if (match) {
-            handleSelectPoint(match);
-            setScanning(false);
-          }
-        }
-      } catch (err) {
-        console.error('Lỗi khi tải danh sách điểm đo:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchPoints();
-  }, [searchParams]);
-
-  // Setup camera scanner
-  useEffect(() => {
-    let scanner: any = null;
-    if (scanning && !selectedPoint) {
-      const timer = setTimeout(() => {
-        try {
-          scanner = new Html5QrcodeScanner(
-            'utility-qr-reader',
-            { fps: 10, qrbox: { width: 220, height: 220 } },
-            false,
-          );
-
-          scanner.render(
-            async (decodedText: string) => {
-              try {
-                scanner.clear().catch(console.error);
-                setScanning(false);
-                let text = decodedText.trim();
-                
-                // Hỗ trợ format JSON nếu QR in theo JSON: { "code": "ELEC-MSB-01" }
-                if (text.startsWith('{') && text.endsWith('}')) {
-                  try {
-                    const parsed = JSON.parse(text);
-                    text = parsed.code || parsed.id || text;
-                  } catch (e) {}
-                }
-
-                // Xóa tiền tố nếu có (VD: UTILITY:ELEC:MSB-01 -> ELEC-MSB-01)
-                const cleanCode = text.replace(/^UTILITY:(ELEC|WATER|SYS):/i, '');
-
-                const found = points.find(
-                  (p) =>
-                    p.code.toUpperCase() === cleanCode.toUpperCase() ||
-                    p.code.toUpperCase() === text.toUpperCase() ||
-                    p.id === text,
-                );
-
-                if (found) {
-                  handleSelectPoint(found);
-                } else {
-                  try {
-                    const res = await api.getUtilityPointByIdOrCode(cleanCode);
-                    if (res) {
-                      handleSelectPoint(res);
-                    }
-                  } catch (e) {
-                    toast.error('Không tìm thấy', `Mã QR [${cleanCode}] chưa được đăng ký trong hệ thống tiện ích.`);
-                    setScanning(true);
-                  }
-                }
-              } catch (e) {
-                console.error(e);
-              }
-            },
-            () => {},
-          );
-        } catch (e) {
-          console.error('Lỗi khởi tạo máy quét:', e);
-        }
-      }, 300);
-
-      return () => {
-        clearTimeout(timer);
-        if (scanner) {
-          scanner.clear().catch(console.error);
-        }
-      };
-    }
-  }, [scanning, selectedPoint, points]);
-
-  const handleSelectPoint = (point: any) => {
+  const handleSelectPoint = useCallback((point: any) => {
     setSelectedPoint(point);
     setScanning(false);
     setReadingValue('');
@@ -146,7 +45,12 @@ export const UtilityScanPage: React.FC = () => {
     setSystemStatus(point.currentStatus || 'RUNNING');
     setRunningHours(point.lastReadingValue ? point.lastReadingValue.toString() : '');
     setStatusReason('');
-  };
+  }, []);
+
+  const { scanning, setScanning } = useUtilityPointScanner({
+    selectedPoint,
+    onSelectPoint: handleSelectPoint,
+  });
 
   // Tính toán sản lượng tiêu thụ tức thời
   const previousValue = selectedPoint ? selectedPoint.lastReadingValue || 0 : 0;
