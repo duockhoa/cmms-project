@@ -136,28 +136,19 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? "Chỉnh sửa thiết bị" : "Thêm thiết bị mới"}>
       <form onSubmit={handleSubmit}>
         <div className="grid-2">
-          {isEdit ? (
-            <div className="form-group">
-              <label className="form-label">Mã thiết bị (Không thể sửa)</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                disabled 
-                value={formData.code} 
-              />
-            </div>
-          ) : (
-            <div className="form-group">
-              <label className="form-label">Mã thiết bị (Để trống tự sinh)</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Nhập mã thiết bị (ví dụ: EQ-0001)" 
-                value={formData.code} 
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })} 
-              />
-            </div>
-          )}
+          <div className="form-group">
+            <label className="form-label">
+              Mã thiết bị {isEdit ? <span style={{ color: 'var(--danger, #ef4444)' }}>*</span> : <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>(Để trống tự sinh)</span>}
+            </label>
+            <input 
+              type="text" 
+              className="form-input" 
+              required={isEdit}
+              placeholder={isEdit ? "Nhập mã thiết bị (ví dụ: EQ-0001)" : "Nhập mã thiết bị (để trống tự sinh)"}
+              value={formData.code} 
+              onChange={(e) => setFormData({ ...formData, code: e.target.value })} 
+            />
+          </div>
           
           <div className="form-group">
             <label className="form-label">Mã phụ (Kế toán)</label>

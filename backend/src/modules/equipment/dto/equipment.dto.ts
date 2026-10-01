@@ -76,6 +76,10 @@ export class CreateEquipmentDto {
 export class UpdateEquipmentDto {
   @IsString()
   @IsOptional()
+  code?: string;
+
+  @IsString()
+  @IsOptional()
   accountingCode?: string;
 
   @IsString()

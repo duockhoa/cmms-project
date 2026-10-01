@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateEquipmentDto } from './dto/equipment.dto';
 
@@ -264,6 +264,30 @@ export class EquipmentService implements OnModuleInit {
 
     const { expectedVersion, ...updateData } = data;
     const sanitizedData: any = { ...updateData };
+
+    if ('code' in sanitizedData) {
+      const trimmedCode = sanitizedData.code && String(sanitizedData.code).trim() !== ''
+        ? String(sanitizedData.code).trim()
+        : null;
+
+      if (!trimmedCode) {
+        throw new BadRequestException('Mã thiết bị không được để trống.');
+      }
+
+      sanitizedData.code = trimmedCode;
+
+      if (sanitizedData.code !== item.code) {
+        const existingCode = await this.prisma.equipment.findFirst({
+          where: { code: sanitizedData.code, NOT: { id } },
+        });
+        if (existingCode) {
+          throw new ConflictException(
+            `Mã thiết bị '${sanitizedData.code}' đã được sử dụng cho thiết bị khác (${existingCode.name}).`,
+          );
+        }
+      }
+    }
+
     if ('department' in sanitizedData) {
       sanitizedData.department = sanitizedData.department && String(sanitizedData.department).trim() !== ''
         ? String(sanitizedData.department).trim()

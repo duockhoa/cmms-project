@@ -121,6 +121,7 @@ export function useEquipmentPage() {
         const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment/${equipmentModal.data.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
+            code: finalFormData.code ? finalFormData.code.trim() : undefined,
             name: finalFormData.name,
             category: finalFormData.category,
             department: finalFormData.department || undefined,
