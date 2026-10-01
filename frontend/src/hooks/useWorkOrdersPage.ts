@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, fetchWithAuth, API_HOST } from '../services/api';
 import { useToast } from '../components/common/Toast';
 import { usePermissions } from './usePermissions';
@@ -7,6 +8,7 @@ const API_BASE = API_HOST;
 
 export const useWorkOrdersPage = () => {
   const { can, isAdmin } = usePermissions();
+  const [searchParams] = useSearchParams();
   const [workOrders, setWorkOrders] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,12 +58,12 @@ export const useWorkOrdersPage = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // QR and Detail states
+  // QR and Detail states (initialize from ?id= if present)
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [manualDeviceCode, setManualDeviceCode] = useState('');
   const [multipleWosList, setMultipleWosList] = useState<any[]>([]);
   const [isSelectWoOpen, setIsSelectWoOpen] = useState(false);
-  const [selectedDetailWoId, setSelectedDetailWoId] = useState<string | null>(null);
+  const [selectedDetailWoId, setSelectedDetailWoId] = useState<string | null>(searchParams.get('id') || null);
 
   // Quick Pause & Delete modals
   const [woToPause, setWoToPause] = useState<any | null>(null);
@@ -192,6 +194,13 @@ export const useWorkOrdersPage = () => {
   useEffect(() => {
     loadWorkOrders();
   }, [search, page, handlerTeamFilter, statusFilter]);
+
+  useEffect(() => {
+    const idFromUrl = searchParams.get('id');
+    if (idFromUrl) {
+      setSelectedDetailWoId(idFromUrl);
+    }
+  }, [searchParams]);
 
   const handleFilterChange = (setter: (val: string) => void, val: string) => {
     setter(val);

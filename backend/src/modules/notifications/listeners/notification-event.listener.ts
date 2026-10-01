@@ -94,7 +94,7 @@ export class NotificationEventListener {
           ],
           notes: request.description || request.title,
           actionText: 'Xem chi tiết sự cố',
-          actionPath: '/requests',
+          actionPath: `/requests?id=${request.id}`,
         });
       }
     } catch (err: any) {
@@ -147,7 +147,7 @@ export class NotificationEventListener {
               { label: 'Bộ phận nhận', value: targetDept },
             ],
             actionText: 'Xem phiếu bảo trì',
-            actionPath: '/work-orders',
+            actionPath: `/work-orders?id=${workOrder.id}`,
           });
         }
       } else if (workOrder.assignedTechnicianId || workOrder.technicianName) {
@@ -192,7 +192,7 @@ export class NotificationEventListener {
                 },
               ],
               actionText: 'Xem phiếu bảo trì',
-              actionPath: '/work-orders',
+              actionPath: `/work-orders?id=${workOrder.id}`,
             });
           }
         }
@@ -215,7 +215,7 @@ export class NotificationEventListener {
             { label: 'Kỹ thuật viên', value: workOrder.technicianName || 'Đang điều phối' },
           ],
           actionText: 'Theo dõi sự cố',
-          actionPath: '/requests',
+          actionPath: `/requests?id=${request.id}`,
         });
       }
     } catch (err: any) {
@@ -259,7 +259,7 @@ export class NotificationEventListener {
           ],
           notes: 'Vui lòng kiểm tra lại thông tin thiết bị hoặc trao đổi trực tiếp với quản lý phân xưởng.',
           actionText: 'Xem chi tiết sự cố',
-          actionPath: '/requests',
+          actionPath: `/requests?id=${fullReq.id}`,
         });
       }
     } catch (err: any) {
@@ -303,7 +303,7 @@ export class NotificationEventListener {
           ],
           notes: 'Vui lòng kiểm tra lại thông tin thiết bị hoặc làm rõ các chi tiết theo yêu cầu.',
           actionText: 'Bổ sung thông tin',
-          actionPath: '/requests',
+          actionPath: `/requests?id=${fullReq.id}`,
         });
       }
     } catch (err: any) {
@@ -367,7 +367,7 @@ export class NotificationEventListener {
             ],
             notes: wo.description,
             actionText: 'Xem phiếu bảo trì',
-            actionPath: '/work-orders',
+            actionPath: `/work-orders?id=${wo.id}`,
           });
         }
       }
@@ -433,7 +433,7 @@ export class NotificationEventListener {
             ],
             notes: comment || 'Đã sửa chữa xong, thiết bị sẵn sàng chạy thử.',
             actionText: 'Nghiệm thu phiếu bảo trì',
-            actionPath: '/work-orders',
+            actionPath: `/work-orders?id=${wo.id}`,
           });
         }
       }
@@ -478,7 +478,7 @@ export class NotificationEventListener {
             ],
             notes: comment || 'Xưởng đã nghiệm thu đạt tiêu chuẩn nội bộ.',
             actionText: 'Thẩm định hồ sơ QA',
-            actionPath: '/work-orders',
+            actionPath: `/work-orders?id=${wo.id}`,
           });
         }
       }
@@ -512,7 +512,7 @@ export class NotificationEventListener {
               ],
               notes: 'Vui lòng kiểm tra lại thiết bị và phối hợp với vận hành xưởng để khắc phục triệt để.',
               actionText: 'Xem chi tiết phiếu bảo trì',
-              actionPath: '/work-orders',
+              actionPath: `/work-orders?id=${wo.id}`,
             });
           }
         }
@@ -565,7 +565,7 @@ export class NotificationEventListener {
               { label: 'Kết luận QA', value: comment || 'Đạt tiêu chuẩn GMP & an toàn' },
             ],
             actionText: 'Xem hồ sơ bảo trì',
-            actionPath: '/work-orders',
+            actionPath: `/work-orders?id=${wo.id}`,
           });
         }
       }
@@ -598,7 +598,7 @@ export class NotificationEventListener {
               ],
               notes: 'Vui lòng trao đổi với chuyên viên QA và tiến hành khắc phục theo hướng dẫn.',
               actionText: 'Xem chi tiết phiếu',
-              actionPath: '/work-orders',
+              actionPath: `/work-orders?id=${wo.id}`,
             });
           }
         }
@@ -642,7 +642,7 @@ export class NotificationEventListener {
               { label: 'Lý do chuyển', value: reason || 'Cần hỗ trợ chuyên sâu' },
             ],
             actionText: 'Phân công kỹ thuật',
-            actionPath: '/work-orders',
+            actionPath: `/work-orders?id=${wo.id}`,
           });
         }
       }
@@ -674,7 +674,7 @@ export class NotificationEventListener {
               { label: 'Phân xưởng', value: locationName },
             ],
             actionText: 'Xem lịch sử bảo trì',
-            actionPath: '/work-orders',
+            actionPath: `/work-orders?id=${wo.id}`,
           });
         }
       }
@@ -947,7 +947,7 @@ export class NotificationEventListener {
             schedule.description ||
             'Vui lòng kiểm tra thiết bị, thực hiện bảo dưỡng và tích chọn checklist theo đúng quy trình GMP.',
           actionText: 'Xem phiếu bảo trì',
-          actionPath: '/work-orders',
+          actionPath: `/work-orders?id=${createdWO.id}`,
         });
       }
     } catch (err: any) {
@@ -999,7 +999,7 @@ export class NotificationEventListener {
           ],
           notes: 'Đề nghị bộ phận quản lý kho và mua sắm tiến hành lập kế hoạch bổ sung vật tư kịp thời.',
           actionText: 'Quản lý kho vật tư',
-          actionPath: '/inventory',
+          actionPath: `/spare-parts?search=${encodeURIComponent(item.itemCode || item.name)}`,
         });
       }
     } catch (err: any) {

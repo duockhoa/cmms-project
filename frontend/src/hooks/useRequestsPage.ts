@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useToast } from '../components/common/Toast';
 import { usePermissions } from './usePermissions';
@@ -7,6 +8,7 @@ export function useRequestsPage() {
   const { can } = usePermissions();
   const canEdit = can('requests:edit');
   const canDelete = can('requests:delete');
+  const [searchParams] = useSearchParams();
 
   const [requests, setRequests] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
@@ -16,8 +18,8 @@ export function useRequestsPage() {
   const toast = useToast();
   const [statusFilter, setStatusFilter] = useState('');
 
-  // Selected Detail state for Split Pane layout
-  const [selectedDetailReqId, setSelectedDetailReqId] = useState<string | null>(null);
+  // Selected Detail state for Split Pane layout (initialize from ?id= if present)
+  const [selectedDetailReqId, setSelectedDetailReqId] = useState<string | null>(searchParams.get('id') || null);
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -176,6 +178,13 @@ export function useRequestsPage() {
   useEffect(() => {
     loadData();
   }, [statusFilter]);
+
+  useEffect(() => {
+    const idFromUrl = searchParams.get('id');
+    if (idFromUrl) {
+      setSelectedDetailReqId(idFromUrl);
+    }
+  }, [searchParams]);
 
   const handleCreate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

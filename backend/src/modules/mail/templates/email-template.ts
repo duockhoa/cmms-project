@@ -30,7 +30,7 @@ export function buildDkPharmaEmailTemplate(options: BuildEmailOptions): string {
   } = options;
 
   const badgeStyles: Record<string, { bg: string; color: string; border: string }> = {
-    blue: { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
+    blue: { bg: '#e6f7f4', color: '#007965', border: '#a7f3d0' },
     green: { bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' },
     amber: { bg: '#fffbeb', color: '#b45309', border: '#fde68a' },
     red: { bg: '#fff1f2', color: '#be123c', border: '#fecdd3' },
@@ -46,7 +46,7 @@ export function buildDkPharmaEmailTemplate(options: BuildEmailOptions): string {
         ${metadata.map((item, idx) => `
           <tr style="border-bottom: ${idx === metadata.length - 1 ? 'none' : '1px solid #e2e8f0'};">
             <td style="padding: 10px 14px; width: 35%; color: #64748b; font-weight: 500;">${item.label}</td>
-            <td style="padding: 10px 14px; width: 65%; color: ${item.isHighlight ? '#1d4ed8' : '#1e293b'}; font-weight: ${item.isHighlight ? '700' : '600'};">${item.value}</td>
+            <td style="padding: 10px 14px; width: 65%; color: ${item.isHighlight ? '#007965' : '#1e293b'}; font-weight: ${item.isHighlight ? '700' : '600'};">${item.value}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -62,7 +62,7 @@ export function buildDkPharmaEmailTemplate(options: BuildEmailOptions): string {
 
   const buttonHtml = actionUrl ? `
     <div style="text-align: center; margin-top: 28px; margin-bottom: 28px;">
-      <a href="${actionUrl}" target="_blank" style="display: inline-block; padding: 12px 28px; background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);">
+      <a href="${actionUrl}" target="_blank" style="display: inline-block; padding: 13px 32px; background: linear-gradient(135deg, #005f4f 0%, #007965 100%); color: #ffffff; text-decoration: none; font-size: 14.5px; font-weight: 700; border-radius: 8px; box-shadow: 0 4px 12px -2px rgba(0, 121, 101, 0.4); letter-spacing: 0.3px;">
         ${actionText} &rarr;
       </a>
     </div>
@@ -83,13 +83,13 @@ export function buildDkPharmaEmailTemplate(options: BuildEmailOptions): string {
         <!-- Container -->
         <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 620px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); border: 1px solid #e2e8f0;">
           
-          <!-- Header Banner -->
+          <!-- Header Banner (DK Pharma Emerald Green #007965) -->
           <tr>
-            <td style="background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); padding: 24px 30px; text-align: left;">
+            <td style="background: linear-gradient(135deg, #005f4f 0%, #007965 100%); padding: 24px 30px; text-align: left;">
               <table width="100%" border="0" cellspacing="0" cellpadding="0">
                 <tr>
                   <td>
-                    <div style="font-size: 11.5px; text-transform: uppercase; letter-spacing: 1px; color: #93c5fd; font-weight: 700; margin-bottom: 4px;">
+                    <div style="font-size: 11.5px; text-transform: uppercase; letter-spacing: 1px; color: #a7f3d0; font-weight: 700; margin-bottom: 4px;">
                       CÔNG TY CỔ PHẦN DƯỢC KHOA
                     </div>
                     <div style="font-size: 18px; font-weight: 800; color: #ffffff;">
@@ -142,7 +142,7 @@ export function buildDkPharmaEmailTemplate(options: BuildEmailOptions): string {
 
               <div style="border-top: 1px dashed #cbd5e1; margin-top: 24px; padding-top: 14px; font-size: 12.5px; color: #64748b; line-height: 1.5;">
                 Nếu nút bấm trên không mở được, bạn có thể copy và dán liên kết sau vào trình duyệt:<br/>
-                <a href="${actionUrl || '#'}" style="color: #2563eb; word-break: break-all;">${actionUrl || '---'}</a>
+                <a href="${actionUrl || '#'}" style="color: #007965; font-weight: 600; word-break: break-all;">${actionUrl || '---'}</a>
               </div>
             </td>
           </tr>
