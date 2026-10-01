@@ -703,6 +703,18 @@ export const api = {
     return request(`/fabrication-orders/${id}/history`);
   },
 
+  // Mail Notifications & SMTP
+  getMailStatus: () => {
+    return request('/mail/status');
+  },
+
+  testSendMail: (data: { email: string; name?: string }) => {
+    return request('/mail/test-send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   // Master Catalog Cache Interface
   catalog: {
     getEquipment: () => catalogCache.fetchWithCache('equipment_all', () => request('/equipment')),

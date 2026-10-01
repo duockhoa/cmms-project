@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
-import { Settings, Save, RefreshCw, AlertCircle, CheckCircle2, Zap, Droplets } from 'lucide-react';
+import { Settings, Save, RefreshCw, AlertCircle, CheckCircle2, Zap, Droplets, Mail, Send, Info } from 'lucide-react';
 import { formatVN } from '../../utils/formatters';
 import { useToast } from '../common/Toast';
 
@@ -21,11 +21,51 @@ export const SystemSettingsTab: React.FC = () => {
   const [meterBaselines, setMeterBaselines] = useState<Record<string, string>>({});
   const [meterCurrents, setMeterCurrents] = useState<Record<string, string>>({});
 
+  // Mail notification status & testing
+  const [mailStatus, setMailStatus] = useState<{ success: boolean; message: string } | null>(null);
+  const [checkingMail, setCheckingMail] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
+  const [sendingTestMail, setSendingTestMail] = useState(false);
+
   const toast = useToast();
 
   useEffect(() => {
     loadSettings();
+    checkMailConnection();
   }, []);
+
+  const checkMailConnection = async () => {
+    setCheckingMail(true);
+    try {
+      const res = await api.getMailStatus();
+      setMailStatus(res);
+    } catch (err: any) {
+      setMailStatus({ success: false, message: err.message || 'Không thể kết nối đến API Mail' });
+    } finally {
+      setCheckingMail(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmail || !testEmail.includes('@')) {
+      toast.error('Lỗi', 'Vui lòng nhập địa chỉ email hợp lệ để nhận thử nghiệm.');
+      return;
+    }
+    setSendingTestMail(true);
+    try {
+      const res = await api.testSendMail({ email: testEmail.trim() });
+      if (res.success) {
+        toast.success('Thành công', res.message || `Đã gửi email thử nghiệm tới ${testEmail}`);
+      } else {
+        toast.warning('Thông báo', res.message || 'Hệ thống đang chạy chế độ giả lập (Simulation Mode).');
+      }
+      checkMailConnection();
+    } catch (err: any) {
+      toast.error('Lỗi gửi mail', err.message || 'Không thể gửi email thử nghiệm.');
+    } finally {
+      setSendingTestMail(false);
+    }
+  };
 
   const loadSettings = async () => {
     setLoading(true);
@@ -333,6 +373,152 @@ export const SystemSettingsTab: React.FC = () => {
                 </div>
               </>
             )}
+
+            {/* HỆ THỐNG THÔNG BÁO EMAIL DK PHARMA */}
+            <div style={{ height: '1px', backgroundColor: 'var(--border-color, #e2e8f0)' }} />
+
+            <div style={{ margin: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                <label className="form-label" style={{ fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', color: '#0f172a' }}>
+                  <Mail size={17} color="#0284c7" />
+                  Hệ thống Thông báo Email Tự động (DK Pharma Mail Service)
+                </label>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {mailStatus ? (
+                    mailStatus.success ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          backgroundColor: '#ecfdf5',
+                          color: '#065f46',
+                          border: '1px solid #a7f3d0',
+                        }}
+                      >
+                        <CheckCircle2 size={13} color="#059669" /> SMTP Sẵn sàng (Live Mode)
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          backgroundColor: '#fef3c7',
+                          color: '#92400e',
+                          border: '1px solid #fde68a',
+                        }}
+                        title={mailStatus.message}
+                      >
+                        <AlertCircle size={13} color="#d97706" /> Giả lập log (Simulation Mode)
+                      </span>
+                    )
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={checkMailConnection}
+                    disabled={checkingMail}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '4px',
+                    }}
+                    title="Kiểm tra lại kết nối SMTP"
+                  >
+                    <RefreshCw size={13} className={checkingMail ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: '16px 18px',
+                  borderRadius: '8px',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderLeft: '4px solid #0284c7',
+                }}
+              >
+                <p style={{ margin: '0 0 10px 0', fontSize: '12.5px', color: '#334155', lineHeight: 1.5 }}>
+                  Hệ thống tự động kích hoạt thông báo HTML nhận diện thương hiệu Dược Khoa theo <strong>Kiến trúc hướng sự kiện (EDA)</strong> cho 5 luồng nghiệp vụ:
+                  <em> Báo sự cố mới, Điều chuyển & Phân công kỹ thuật, Đề nghị nghiệm thu xưởng, Thẩm định GMP phòng QA, và Cảnh báo chạm ngưỡng tồn kho tối thiểu.</em>
+                </p>
+
+                {mailStatus && !mailStatus.success && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: '#fffbeb',
+                      border: '1px solid #fef3c7',
+                      color: '#b45309',
+                      fontSize: '12px',
+                      marginBottom: '14px',
+                    }}
+                  >
+                    <Info size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+                    <span>
+                      {mailStatus.message}. Để gửi email thật về hòm thư, quản trị viên cấu hình <code>SMTP_USER</code> và <code>SMTP_PASS</code> trong file <code>backend/.env</code>.
+                    </span>
+                  </div>
+                )}
+
+                {/* Test send email input */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 280px', maxWidth: '400px' }}>
+                    <input
+                      type="email"
+                      placeholder="Nhập email nhận thử nghiệm (VD: your.name@dkpharma.vn)"
+                      className="form-input"
+                      style={{ height: '36px', fontSize: '13px' }}
+                      value={testEmail}
+                      onChange={(e) => setTestEmail(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleSendTestEmail}
+                    disabled={sendingTestMail || !testEmail}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      height: '36px',
+                      padding: '0 16px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#0284c7',
+                      borderColor: '#bae6fd',
+                    }}
+                  >
+                    {sendingTestMail ? (
+                      <RefreshCw size={14} className="animate-spin" />
+                    ) : (
+                      <Send size={14} />
+                    )}
+                    Gửi email thử nghiệm
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {/* Submit Button */}
             <div
