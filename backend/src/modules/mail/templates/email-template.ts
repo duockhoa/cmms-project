@@ -90,10 +90,10 @@ export function buildDkPharmaEmailTemplate(options: BuildEmailOptions): string {
                 <tr>
                   <td>
                     <div style="font-size: 11.5px; text-transform: uppercase; letter-spacing: 1px; color: #93c5fd; font-weight: 700; margin-bottom: 4px;">
-                      CÔNG TY CỔ PHẦN DƯỢC KHOA (DK PHARMA)
+                      CÔNG TY CỔ PHẦN DƯỢC KHOA
                     </div>
                     <div style="font-size: 18px; font-weight: 800; color: #ffffff;">
-                      HỆ THỐNG QUẢN LÝ THIẾT BỊ & CƠ ĐIỆN (CMMS)
+                      HỆ THỐNG QUẢN LÝ THIẾT BỊ
                     </div>
                   </td>
                 </tr>
@@ -149,10 +149,10 @@ export function buildDkPharmaEmailTemplate(options: BuildEmailOptions): string {
 
           <!-- Footer -->
           <tr>
-            <td style="background-color: #f8fafc; padding: 20px 30px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5;">
-              <div>Đây là email tự động gửi từ <strong>Hệ thống CMMS Dược Khoa</strong>. Vui lòng không trả lời (reply) trực tiếp vào email này.</div>
-              <div style="margin-top: 6px;">
-                Phòng Cơ điện & Quản trị Hệ thống | Hotline hỗ trợ kỹ thuật nội bộ
+            <td style="background-color: #f8fafc; padding: 20px 30px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; text-align: center; line-height: 1.6;">
+              <div style="font-weight: 600; color: #475569;">© DK Pharma CMMS - Thông báo tự động từ hệ thống</div>
+              <div style="margin-top: 4px; color: #94a3b8;">
+                Nhà máy Dược phẩm DK Pharma - Khu CN Quế võ 2, Bắc ninh
               </div>
             </td>
           </tr>

@@ -28,7 +28,7 @@ export class MailController {
       title: 'Kiểm tra cấu hình Hệ thống Email Thông báo',
       badgeText: 'THỬ NGHIỆM',
       badgeColor: 'blue',
-      summaryMessage: 'Đây là email gửi thử nghiệm để kiểm tra khả năng phân phát thông báo tự động từ Hệ thống Quản lý Thiết bị & Cơ điện DK Pharma.',
+      summaryMessage: 'Đây là email gửi thử nghiệm để kiểm tra khả năng phân phát thông báo tự động từ Hệ thống Quản lý Thiết bị DK Pharma.',
       metadata: [
         { label: 'Hệ thống gửi', value: 'CMMS Backend (NestJS Mailer)' },
         { label: 'Thời gian gửi', value: new Date().toLocaleString('vi-VN') },
