@@ -2,7 +2,9 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException, 
 import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
 import { WorkOrderStateMachine, WorkOrderStatus } from './work-order-state-machine';
-import { NotificationsService } from '../notifications/notifications.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { NotificationEvents } from '../notifications/events/notification-events.constants';
+import { WorkOrderStatusChangedEvent } from '../notifications/events/work-order.events';
 import { 
   CreateExecutionLogDto, 
   CompleteWorkOrderDto,
@@ -23,7 +25,7 @@ export class WorkOrdersService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private equipmentStatus: EquipmentStatusService,
-    private notifications: NotificationsService,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   // In-memory cache for department users (5 minutes TTL)
@@ -212,7 +214,7 @@ export class WorkOrdersService implements OnModuleInit {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const createdWo = await this.prisma.$transaction(async (tx) => {
       let nextWoNum = 1;
       const lastWo = await tx.workOrder.findFirst({
         where: { orderCode: { startsWith: 'WO-' } },
@@ -262,6 +264,22 @@ export class WorkOrdersService implements OnModuleInit {
 
       return workOrder;
     });
+
+    if (createdWo && (createdWo.assignedTechnicianId || createdWo.technicianName)) {
+      this.prisma.workOrder.findUnique({
+        where: { id: createdWo.id },
+        include: { equipment: true, items: { include: { inventoryItem: true } }, request: true },
+      }).then((fullWo) => {
+        if (fullWo) {
+          this.eventEmitter.emit(
+            NotificationEvents.WORK_ORDER_STATUS_CHANGED,
+            new WorkOrderStatusChangedEvent(fullWo, 'ASSIGN', 'PENDING'),
+          );
+        }
+      }).catch(() => {});
+    }
+
+    return createdWo;
   }
 
   getPerformerUnitType(user: { role: string; department?: string | null }): PerformerUnitType {
@@ -440,7 +458,7 @@ export class WorkOrdersService implements OnModuleInit {
       resolvedActorUser = await this.prisma.user.findUnique({ where: { id: actorContext.id } });
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updatedWo = await this.prisma.$transaction(async (tx) => {
       const wo = await tx.workOrder.findUnique({
         where: { id },
         include: { items: { include: { inventoryItem: true } } },
@@ -637,9 +655,17 @@ export class WorkOrdersService implements OnModuleInit {
 
       return tx.workOrder.findUnique({
         where: { id },
-        include: { equipment: true, items: { include: { inventoryItem: true } } },
+        include: { equipment: true, items: { include: { inventoryItem: true } }, request: true },
       });
     });
+
+    // Emit domain event for asynchronous in-app notifications and DK Pharma branded emails
+    this.eventEmitter.emit(
+      NotificationEvents.WORK_ORDER_STATUS_CHANGED,
+      new WorkOrderStatusChangedEvent(updatedWo, actionName, targetStatus, actorContext, comment, reason),
+    );
+
+    return updatedWo;
   }
 
   async assign(id: string, dto: AssignWorkOrderDto, actorContext?: { id: string; role: string }) {

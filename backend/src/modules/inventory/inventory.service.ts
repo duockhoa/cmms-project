@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdjustInDto, AdjustOutDto, MaterialReturnDto } from './dto/inventory.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { NotificationEvents } from '../notifications/events/notification-events.constants';
+import { InventoryLowStockEvent } from '../notifications/events/inventory.events';
 
 @Injectable()
 export class InventoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   // ─── HELPER: Validate actedById ───
   private async validateActedBy(tx: any, actedById?: string) {
@@ -104,7 +110,7 @@ export class InventoryService {
   }
 
   async adjustStock(id: string, body: { changeQuantity: number; expectedVersion?: number }) {
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const item = await tx.inventoryItem.findUnique({ where: { id } });
       if (!item) throw new NotFoundException('Không tìm thấy vật tư');
 
@@ -153,6 +159,15 @@ export class InventoryService {
 
       return tx.inventoryItem.findUnique({ where: { id } });
     });
+
+    if (body.changeQuantity < 0 && updated && updated.quantity <= updated.minQuantity) {
+      this.eventEmitter.emit(
+        NotificationEvents.INVENTORY_LOW_STOCK,
+        new InventoryLowStockEvent(updated),
+      );
+    }
+
+    return updated;
   }
 
   // ─── ADJUST IN (PHASE 3.6) ───
@@ -239,7 +254,7 @@ export class InventoryService {
       throw new BadRequestException('expectedVersion là bắt buộc');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       // Idempotency check
       if (dto.clientTransactionId) {
         const existingTx = await tx.inventoryTransaction.findUnique({
@@ -301,6 +316,15 @@ export class InventoryService {
 
       return tx.inventoryItem.findUnique({ where: { id: itemId } });
     });
+
+    if (updated && updated.quantity <= updated.minQuantity) {
+      this.eventEmitter.emit(
+        NotificationEvents.INVENTORY_LOW_STOCK,
+        new InventoryLowStockEvent(updated),
+      );
+    }
+
+    return updated;
   }
 
   // ─── MATERIAL RETURN FROM WORK ORDER (PHASE 3.6) ───
@@ -544,5 +568,20 @@ export class InventoryService {
     }
 
     return this.prisma.inventoryItem.delete({ where: { id } });
+  }
+
+  /**
+   * Scan all items and report low stock items
+   */
+  async checkAllLowStock() {
+    const items = await this.prisma.inventoryItem.findMany({
+      where: { isActive: true },
+    });
+    const lowStock = items.filter((it) => it.quantity <= it.minQuantity);
+    return {
+      totalScanned: items.length,
+      lowStockCount: lowStock.length,
+      items: lowStock,
+    };
   }
 }

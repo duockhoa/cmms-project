@@ -3,15 +3,22 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
 import { HandlingRoute } from '@prisma/client';
 import { ApproveRequestDto } from './dto/approve-request.dto';
-import { NotificationsService } from '../notifications/notifications.service';
 import { canManageDepartmentRequest, hasPermission, isGlobalAdmin } from '../../common/utils/rbac.helper';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { NotificationEvents } from '../notifications/events/notification-events.constants';
+import {
+  RequestCreatedEvent,
+  RequestApprovedEvent,
+  RequestRejectedEvent,
+  RequestReturnedEvent,
+} from '../notifications/events/request.events';
 
 @Injectable()
 export class RequestsService {
   constructor(
     private prisma: PrismaService,
     private equipmentStatus: EquipmentStatusService,
-    private notifications: NotificationsService,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   async findAll(query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string }) {
@@ -233,35 +240,11 @@ export class RequestsService {
       return request;
     });
 
-    // Create Database Notifications OUTSIDE transaction to avoid locking/timeouts!
-    try {
-      const location = await this.prisma.location.findFirst({
-        where: { name: equipment.location },
-      });
-      if (location) {
-        // Notify managers of this department
-        await this.notifications.createNotification(
-          null,
-          'MANAGER',
-          location.name,
-          `Sự cố mới: ${request.requestCode}`,
-          `Thiết bị ${equipment.name} gặp sự cố: ${request.title}. Vui lòng đánh giá phương án xử lý.`,
-        );
-
-        // Notify responsible technician of this location
-        if (location.responsibleTechId) {
-          await this.notifications.createNotification(
-            location.responsibleTechId,
-            null,
-            null,
-            `Sự cố mới: ${request.requestCode}`,
-            `Phân xưởng ${location.name} báo sự cố thiết bị ${equipment.name}: ${request.title}.`,
-          );
-        }
-      }
-    } catch (err) {
-      console.error('Failed to send request creation notifications:', err);
-    }
+    // Emit domain event for notification and email handling
+    this.eventEmitter.emit(
+      NotificationEvents.REQUEST_CREATED,
+      new RequestCreatedEvent(request, equipment),
+    );
 
     return request;
   }
@@ -432,48 +415,17 @@ export class RequestsService {
       return { request: updatedRequest, workOrder, isExternalTransfer };
     });
 
-    // Create Database Notifications OUTSIDE transaction to avoid locking/timeouts!
-    try {
-      const request = await this.prisma.maintenanceRequest.findUnique({
-        where: { id },
-        include: { equipment: true },
-      });
-      const orderCode = result.workOrder.orderCode;
-
-      if (result.isExternalTransfer) {
-        const targetDept = body.targetDepartment || 'Bộ phận kỹ thuật';
-        await this.notifications.createNotification(
-          null,
-          'MANAGER',
-          targetDept,
-          `Phiếu bảo trì mới chờ phân công: ${orderCode}`,
-          `Yêu cầu sửa chữa ${request.requestCode} (${request.equipment.name}) đã chuyển đến ${targetDept}. Vui lòng phân công kỹ thuật viên thực hiện.`,
-        );
-      } else if (result.workOrder.assignedTechnicianId || result.workOrder.technicianName) {
-        let techId = result.workOrder.assignedTechnicianId;
-        if (!techId && result.workOrder.technicianName) {
-          const tech = await this.prisma.user.findFirst({ where: { name: result.workOrder.technicianName } });
-          if (tech) techId = tech.id;
-        }
-        if (techId) {
-          await this.notifications.createNotification(
-            techId,
-            null,
-            null,
-            `Phiếu bảo trì mới được phân công: ${orderCode}`,
-            `Bạn được phân công xử lý phiếu bảo trì ${orderCode} cho thiết bị ${request.equipment.name}.`,
-          );
-        }
-      }
-    } catch (err) {
-      console.error('Failed to send approval notifications:', err);
-    }
+    // Emit domain event for approval notification and email dispatching
+    this.eventEmitter.emit(
+      NotificationEvents.REQUEST_APPROVED,
+      new RequestApprovedEvent(id, result.workOrder, result.isExternalTransfer, body.targetDepartment),
+    );
 
     return result;
   }
 
   async reject(id: string, body: { reason?: string }, actorId?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const updatedRequest = await this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
         include: { equipment: true },
@@ -496,7 +448,7 @@ export class RequestsService {
         throw new ConflictException(`Yêu cầu sửa chữa đã được xử lý (Trạng thái hiện tại: ${request.status})`);
       }
 
-      const updatedRequest = await tx.maintenanceRequest.update({
+      const updated = await tx.maintenanceRequest.update({
         where: { id },
         data: {
           status: 'REJECTED',
@@ -521,8 +473,16 @@ export class RequestsService {
         },
       });
 
-      return updatedRequest;
+      return updated;
     });
+
+    // Emit domain event for reject notification and email dispatching
+    this.eventEmitter.emit(
+      NotificationEvents.REQUEST_REJECTED,
+      new RequestRejectedEvent(id, body.reason, actorId),
+    );
+
+    return updatedRequest;
   }
 
   // ─── HELPER: Validate actedById ───
@@ -545,7 +505,7 @@ export class RequestsService {
       throw new BadRequestException('Lý do trả lại (reason) là bắt buộc.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
         include: { 
@@ -620,6 +580,14 @@ export class RequestsService {
         throw err;
       }
     });
+
+    // Emit domain event for return notification and email dispatching
+    this.eventEmitter.emit(
+      NotificationEvents.REQUEST_RETURNED,
+      new RequestReturnedEvent(id, body.reason, actorId),
+    );
+
+    return result;
   }
 
   // ─── RESUBMIT REQUEST ───

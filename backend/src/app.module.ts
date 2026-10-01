@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from './prisma/prisma.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { RequestsModule } from './modules/requests/requests.module';
@@ -18,11 +19,21 @@ import { ChecklistTemplatesModule } from './modules/checklist-templates/checklis
 import { FeedbacksModule } from './modules/feedbacks/feedbacks.module';
 import { UtilitiesModule } from './modules/utilities/utilities.module';
 import { FabricationModule } from './modules/fabrication/fabrication.module';
+import { MailModule } from './modules/mail/mail.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    EventEmitterModule.forRoot({
+      wildcard: false,
+      delimiter: '.',
+      newListener: false,
+      removeListener: false,
+      maxListeners: 20,
+      verboseMemoryLeak: false,
+      ignoreErrors: false,
     }),
     PrismaModule,
     EquipmentModule,
@@ -42,6 +53,7 @@ import { FabricationModule } from './modules/fabrication/fabrication.module';
     FeedbacksModule,
     UtilitiesModule,
     FabricationModule,
+    MailModule,
   ],
 })
 export class AppModule {}

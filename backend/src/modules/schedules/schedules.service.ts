@@ -17,10 +17,16 @@ import {
   GenerateWorkOrderDto,
 } from './dto/schedules.dto';
 import { SCHEDULE_STATUS, SCHEDULE_FREQUENCY_TYPE } from './schedules.constants';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { NotificationEvents } from '../notifications/events/notification-events.constants';
+import { ScheduleWorkOrderGeneratedEvent } from '../notifications/events/schedule.events';
 
 @Injectable()
 export class SchedulesService implements OnModuleInit {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   async onModuleInit() {
     // Non-blocking boot-time scan for due maintenance schedules
@@ -620,12 +626,15 @@ export class SchedulesService implements OnModuleInit {
       throw new BadRequestException('expectedVersion là bắt buộc');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    let resolvedSchedule: any = null;
+
+    const createdWO = await this.prisma.$transaction(async (tx) => {
       const schedule = await tx.maintenanceSchedule.findUnique({
         where: { id },
         include: { equipment: true, assignedTechnician: true },
       });
       if (!schedule) throw new NotFoundException('Không tìm thấy lịch bảo trì');
+      resolvedSchedule = schedule;
 
       if (schedule.status !== SCHEDULE_STATUS.ACTIVE) {
         throw new BadRequestException(`Không thể phát sinh Work Order từ lịch ở trạng thái ${schedule.status}`);
@@ -746,6 +755,16 @@ export class SchedulesService implements OnModuleInit {
 
       return createdWO;
     });
+
+    // Emit domain event for notification and email handling
+    if (createdWO && resolvedSchedule?.assignedTechnicianId) {
+      this.eventEmitter.emit(
+        NotificationEvents.SCHEDULE_WO_GENERATED,
+        new ScheduleWorkOrderGeneratedEvent(resolvedSchedule, createdWO),
+      );
+    }
+
+    return createdWO;
   }
 
   // ─── AUTO GENERATE PROCESS BATCH ───

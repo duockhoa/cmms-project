@@ -2,10 +2,19 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateFabricationDto } from './dto/create-fabrication.dto';
 import { UpdateFabricationDto } from './dto/update-fabrication.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { NotificationEvents } from '../notifications/events/notification-events.constants';
+import {
+  FabricationAssignedEvent,
+  FabricationUpdatedEvent,
+} from '../notifications/events/fabrication.events';
 
 @Injectable()
 export class FabricationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   private async generateOrderCode(): Promise<string> {
     const year = new Date().getFullYear();
@@ -104,6 +113,14 @@ export class FabricationService {
       });
     } catch (e) {
       console.error('Failed to log audit trail on create fabrication order:', e);
+    }
+
+    // Emit domain event for notification and email handling
+    if (order.assignedTechnicianId) {
+      this.eventEmitter.emit(
+        NotificationEvents.FABRICATION_ASSIGNED,
+        new FabricationAssignedEvent(order),
+      );
     }
 
     return order;
@@ -281,12 +298,13 @@ export class FabricationService {
       },
     });
 
+    let auditAction = 'UPDATE';
+    let auditComment = 'Cập nhật tiến độ & thông tin phiếu';
+    let auditReason: string | null = null;
+    let auditMetadata: any = {};
+
     // Record audit trail in WorkflowHistory
     try {
-      let auditAction = 'UPDATE';
-      let auditComment = 'Cập nhật tiến độ & thông tin phiếu';
-      let auditReason: string | null = null;
-      let auditMetadata: any = {};
 
       if (dto.status !== undefined && dto.status !== existing.status) {
         if (dto.status === 'IN_PROGRESS' && existing.status === 'ASSIGNED') {
@@ -346,6 +364,12 @@ export class FabricationService {
     } catch (auditErr) {
       console.error('Failed to log audit trail on update fabrication order:', auditErr);
     }
+
+    // Emit domain event for update notifications and DK Pharma emails
+    this.eventEmitter.emit(
+      NotificationEvents.FABRICATION_UPDATED,
+      new FabricationUpdatedEvent(updated, existing, dto, auditAction, auditReason, user),
+    );
 
     return updated;
   }
