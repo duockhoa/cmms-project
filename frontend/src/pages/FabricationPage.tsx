@@ -209,7 +209,7 @@ export const FabricationPage: React.FC = () => {
           {/* Master List Pane */}
           <div
             className={`master-pane ${selectedJobId ? 'has-selection' : ''}`}
-            style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+            style={{ padding: '16px', flexDirection: 'column', gap: '12px' }}
           >
             {/* Header Left */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -333,7 +333,7 @@ export const FabricationPage: React.FC = () => {
           </div>
 
           {/* Lề phải: Detail View Pane */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="detail-pane" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <FabricationDetailView
               jobId={selectedJobId}
               onClose={handleCloseDetail}

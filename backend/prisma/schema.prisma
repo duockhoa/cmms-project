@@ -66,6 +66,8 @@ model User {
   utilityStatusLogs     UtilitySystemStatusLog[] @relation("UserUtilityStatusLogs")
   assignedFabrications  FabricationOrder[]     @relation("FabricationAssignedLead")
   createdFabrications   FabricationOrder[]     @relation("FabricationCreatedBy")
+  fabricationLogs       FabricationProgressLog[] @relation("UserFabricationLogs")
+  fabricationSessions   FabricationWorkSession[] @relation("UserFabricationSessions")
   
   // Custom Role Association
   roleId                String?
@@ -853,6 +855,8 @@ model FabricationOrder {
 
   totalCost            Float               @default(0)
   materials            FabricationMaterial[]
+  progressLogs         FabricationProgressLog[]
+  workSessions         FabricationWorkSession[]
 
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
@@ -876,4 +880,61 @@ model FabricationMaterial {
 
   @@index([orderId])
 }
+
+model FabricationProgressLog {
+  id              String           @id @default(uuid())
+  orderId         String
+  order           FabricationOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  userId          String
+  user            User             @relation("UserFabricationLogs", fields: [userId], references: [id], onDelete: Cascade)
+  userName        String           // Snapshot tên người tại thời điểm ghi
+  userCode        String?          // Mã nhân viên (VD: 0947)
+
+  loggedAt        DateTime         @default(now())
+  hoursSpent      Float            @default(0)     // Số giờ công lượt này
+  progressPercent Int?                            // % tiến độ ước tính
+  progressText    String?                         // Text mô tả tiến độ tự do
+
+  taskContent     String           @db.Text        // Chi tiết những gì người này đã làm
+  notes           String?          @db.Text        // Ghi chú / khó khăn / lưu ý
+  photos          Json?                            // Mảng URLs ảnh minh chứng
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([loggedAt])
+}
+
+model FabricationWorkSession {
+  id              String           @id @default(uuid())
+  orderId         String
+  order           FabricationOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  userId          String
+  user            User             @relation("UserFabricationSessions", fields: [userId], references: [id], onDelete: Cascade)
+  userName        String           // Snapshot tên người
+  userEmail       String?          // Snapshot email người làm
+
+  startedAt       DateTime         @default(now())
+  endedAt         DateTime?
+  durationMinutes Float            @default(0) // Số phút thực tế (vd: 95 phút)
+  durationHours   Float            @default(0) // Quy đổi giờ thập phân (vd: 1.58 giờ)
+  status          String           @default("ACTIVE") // ACTIVE, COMPLETED, AUTO_CLOSED
+
+  notes           String?          @db.Text
+  taskContent     String?          @db.Text
+  photos          Json?            // Ảnh đính kèm khi kết thúc ca
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@index([startedAt])
+}
+
 

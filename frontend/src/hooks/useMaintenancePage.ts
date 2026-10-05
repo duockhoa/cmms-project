@@ -360,7 +360,7 @@ export const useMaintenancePage = () => {
     setFormData({
       title: '',
       description: '',
-      equipmentId: equipmentList[0]?.id || '',
+      equipmentId: '',
       frequencyType: 'MONTHLY',
       frequencyInterval: 1,
       startDate: new Date().toISOString().split('T')[0],

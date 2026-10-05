@@ -75,7 +75,6 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
               <th style={{ minWidth: '220px' }}>Tên công việc / Sản phẩm</th>
               <th style={{ width: '140px' }}>Phân loại</th>
               <th style={{ width: '150px' }}>Khu vực / Bộ phận</th>
-              <th style={{ width: '150px' }}>Thợ phụ trách</th>
               <th style={{ width: '110px' }}>Hạn hoàn thành</th>
               <th style={{ width: '100px' }}>Giờ công</th>
               <th style={{ width: '120px' }}>Vật tư (VNĐ)</th>
@@ -85,10 +84,10 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
           </thead>
           <tbody>
             {loading ? (
-              <TableSkeleton columns={10} rows={5} />
+              <TableSkeleton columns={9} rows={5} />
             ) : jobs.length === 0 ? (
               <EmptyState
-                colSpan={10}
+                colSpan={9}
                 compact
                 minHeight={160}
                 title="Chưa có công việc gia công hoặc chế tạo nào"
@@ -182,69 +181,7 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
                     </div>
                   </td>
 
-                  {/* 5. Thợ phụ trách */}
-                  <td>
-                    {job.assignedTechnician ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div
-                          style={{
-                            width: '26px',
-                            height: '26px',
-                            borderRadius: '50%',
-                            backgroundColor: '#eff6ff',
-                            color: '#2563eb',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                          }}
-                        >
-                          {job.assignedTechnician.name.charAt(0)}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '12.5px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span>{job.assignedTechnician.name}</span>
-                            {(() => {
-                              try {
-                                const s = typeof job.supporterIds === 'string' ? JSON.parse(job.supporterIds) : job.supporterIds;
-                                if (Array.isArray(s) && s.length > 0) {
-                                  return (
-                                    <span
-                                      style={{
-                                        fontSize: '10.5px',
-                                        color: '#2563eb',
-                                        backgroundColor: '#eff6ff',
-                                        padding: '1px 5px',
-                                        borderRadius: '4px',
-                                        border: '1px solid #bfdbfe',
-                                        fontWeight: 700,
-                                      }}
-                                      title={`Phụ trách chung: ${s.length} người hỗ trợ`}
-                                    >
-                                      +{s.length}
-                                    </span>
-                                  );
-                                }
-                              } catch (e) {}
-                              return null;
-                            })()}
-                          </div>
-                          {job.assignedTechnician.specialty && (
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                              {job.assignedTechnician.specialty}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                        Chưa phân công
-                      </span>
-                    )}
-                  </td>
-
-                  {/* 6. Hạn hoàn thành */}
+                  {/* 5. Hạn hoàn thành */}
                   <td style={{ fontSize: '12px' }}>
                     {job.plannedEndDate ? (
                       <span style={{ fontWeight: 600, color: '#334155' }}>

@@ -703,6 +703,45 @@ export const api = {
     return request(`/fabrication-orders/${id}/history`);
   },
 
+  getFabricationProgressLogs: (id: string) => {
+    return request(`/fabrication-orders/${id}/progress-logs`);
+  },
+
+  createFabricationProgressLog: (id: string, data: any) => {
+    return request(`/fabrication-orders/${id}/progress-logs`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteFabricationProgressLog: (id: string, logId: string) => {
+    return request(`/fabrication-orders/${id}/progress-logs/${logId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getFabricationActiveSession: (orderId: string) => {
+    return request(`/fabrication-orders/${orderId}/sessions/active`);
+  },
+
+  startFabricationSession: (orderId: string, data?: { notes?: string; autoSwitch?: boolean }) => {
+    return request(`/fabrication-orders/${orderId}/sessions/start`, {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
+    });
+  },
+
+  stopFabricationSession: (orderId: string, sessionId: string, data?: { taskContent?: string; notes?: string; progressPercent?: number; progressText?: string; photos?: any[]; autoStopReason?: string }) => {
+    return request(`/fabrication-orders/${orderId}/sessions/${sessionId}/stop`, {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
+    });
+  },
+
+  getFabricationSessions: (orderId: string) => {
+    return request(`/fabrication-orders/${orderId}/sessions`);
+  },
+
   // Mail Notifications & SMTP
   getMailStatus: () => {
     return request('/mail/status');

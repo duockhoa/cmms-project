@@ -13,6 +13,7 @@ import { StatusBadge, PriorityBadge } from '../common/Badge';
 import { usePermissions } from '../../hooks/usePermissions';
 import { Modal } from '../common/Modal';
 import { DetailViewSkeleton } from '../common/Skeleton';
+import { FabricationProgressLogTable } from './FabricationProgressLogTable';
 
 // Reusable Circular Action Button (CMMS Standard)
 const ActionButton = ({ onClick, disabled, icon: Icon, label, color }: any) => (
@@ -20,6 +21,7 @@ const ActionButton = ({ onClick, disabled, icon: Icon, label, color }: any) => (
     type="button"
     onClick={onClick}
     disabled={disabled}
+    className="action-button-item"
     style={{
       display: 'flex',
       flexDirection: 'column',
@@ -114,9 +116,14 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
   // Log Progress Modal states (Ghi nhận tiến độ)
   const [isLogProgressModalOpen, setIsLogProgressModalOpen] = useState(false);
   const [progressContent, setProgressContent] = useState<string>('');
-  const [progressPercent, setProgressPercent] = useState<string>('50%');
+  const [progressText, setProgressText] = useState<string>('');
   const [progressNotes, setProgressNotes] = useState<string>('');
+  const [progressHoursSpent, setProgressHoursSpent] = useState<string>('1.0');
   const [progressPhotos, setProgressPhotos] = useState<FileList | null>(null);
+
+  // Multi-user Progress Logs states (Bảng nhật ký tiến độ từng thành viên)
+  const [progressLogs, setProgressLogs] = useState<any[]>([]);
+  const [loadingProgressLogs, setLoadingProgressLogs] = useState<boolean>(false);
 
   // Pause Modal states (Tạm dừng công việc)
   const [isPauseModalOpen, setIsPauseModalOpen] = useState(false);
@@ -132,8 +139,8 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
   const [uploadingImage, setUploadingImage] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  // Live timer for IN_PROGRESS
-  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const [mySession, setMySession] = useState<any | null>(null);
+  const [sessionBusy, setSessionBusy] = useState(false);
 
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -150,13 +157,56 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
     }
   };
 
+  const loadProgressLogs = async (id: string) => {
+    try {
+      setLoadingProgressLogs(true);
+      const pLogs = await api.getFabricationProgressLogs(id);
+      setProgressLogs(Array.isArray(pLogs) ? pLogs : []);
+    } catch (e) {
+      console.error('Failed to load fabrication progress logs:', e);
+    } finally {
+      setLoadingProgressLogs(false);
+    }
+  };
+
+  // Làm mới nhẹ (không bật skeleton) sau khi bấm giờ bắt đầu/kết thúc
+  const loadMySession = async (id: string) => {
+    try {
+      const r: any = await api.getFabricationActiveSession(id);
+      setMySession(r?.mySession || null);
+    } catch {
+      setMySession(null);
+    }
+  };
+
+  const refreshAfterSession = async (id: string) => {
+    loadMySession(id);
+    try {
+      const [jobData, pLogsData] = await Promise.all([
+        api.getFabricationOrder(id),
+        api.getFabricationProgressLogs(id).catch(() => []),
+      ]);
+      if (jobData) {
+        setJob(jobData);
+        setStatus(jobData.status || 'ASSIGNED');
+        setActualHours(jobData.actualHours || 0);
+        setActualStartDate(jobData.actualStartDate ? new Date(jobData.actualStartDate).toISOString() : '');
+        setActualEndDate(jobData.actualEndDate ? new Date(jobData.actualEndDate).toISOString() : '');
+      }
+      setProgressLogs(Array.isArray(pLogsData) ? pLogsData : []);
+    } catch (e) {
+      console.error('Failed to refresh after session:', e);
+    }
+  };
+
   const loadJob = async (id: string) => {
     try {
       setLoading(true);
-      const [jobData, usersData, historyData] = await Promise.all([
+      const [jobData, usersData, historyData, pLogsData] = await Promise.all([
         api.getFabricationOrder(id),
         api.getUsers({ department: 'xưởng cơ điện' }),
         api.getFabricationHistory(id).catch(() => []),
+        api.getFabricationProgressLogs(id).catch(() => []),
       ]);
 
       if (!jobData) {
@@ -166,8 +216,10 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
       }
 
       setJob(jobData);
+      loadMySession(id);
       setStaffList(Array.isArray(usersData) ? usersData : []);
       setHistory(Array.isArray(historyData) ? historyData : []);
+      setProgressLogs(Array.isArray(pLogsData) && pLogsData.length > 0 ? pLogsData : (Array.isArray(jobData.progressLogs) ? jobData.progressLogs : []));
 
       // Populate states
       setStatus(jobData.status || 'ASSIGNED');
@@ -227,32 +279,6 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
       loadJob(jobId);
     }
   }, [jobId]);
-
-  // Live timer tick when status is IN_PROGRESS and actualStartDate exists
-  useEffect(() => {
-    if (status === 'IN_PROGRESS' && actualStartDate) {
-      const updateTimer = () => {
-        const diffMs = Math.max(0, Date.now() - new Date(actualStartDate).getTime());
-        setElapsedSeconds(Math.floor(diffMs / 1000));
-      };
-      updateTimer();
-      const interval = setInterval(updateTimer, 1000);
-      return () => clearInterval(interval);
-    } else {
-      setElapsedSeconds(0);
-    }
-  }, [status, actualStartDate]);
-
-  const formatElapsed = (totalSec: number) => {
-    const hrs = Math.floor(totalSec / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    const secs = totalSec % 60;
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    if (hrs > 0) {
-      return `${hrs}h ${pad(mins)}m ${pad(secs)}s`;
-    }
-    return `${pad(mins)}m ${pad(secs)}s`;
-  };
 
   const formatDateTimeDisplay = (isoStr?: string | null) => {
     if (!isoStr) return '---';
@@ -334,6 +360,36 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
     toast.info('Đã tính lại giờ', `Giờ công thực tế: ${hours} giờ`);
   };
 
+  // Bấm giờ theo từng người: mỗi kỹ thuật viên tự Bắt đầu / Dừng, hệ thống tính giờ hành chính ngầm
+  const handleSessionStart = async () => {
+    if (!job) return;
+    setSessionBusy(true);
+    try {
+      await api.startFabricationSession(job.id, { autoSwitch: true } as any);
+      await refreshAfterSession(job.id);
+      loadHistory(job.id);
+      toast.success('Bắt đầu', 'Đã ghi nhận bắt đầu ca làm việc của bạn');
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Không thể bắt đầu');
+    } finally {
+      setSessionBusy(false);
+    }
+  };
+
+  const handleSessionStop = async () => {
+    if (!job || !mySession) return;
+    setSessionBusy(true);
+    try {
+      await api.stopFabricationSession(job.id, mySession.id, {});
+      await refreshAfterSession(job.id);
+      toast.success('Đã dừng', 'Giờ công của bạn đã được ghi vào nhật ký tiến độ');
+    } catch (err: any) {
+      toast.error('Lỗi', err.message || 'Không thể dừng');
+    } finally {
+      setSessionBusy(false);
+    }
+  };
+
   // 1. ACTION: Bắt đầu làm việc (Start Work)
   const handleStartWork = async () => {
     if (!job) return;
@@ -397,7 +453,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
       setActualHours(computedHours);
       loadHistory(job.id);
       if (onUpdated) onUpdated(updated);
-      toast.success('Báo cáo hoàn thành', `Đã hoàn thành. Giờ công thực tế tự động tính: ${computedHours} giờ`);
+      toast.success('Báo cáo hoàn thành', 'Đã chuyển phiếu sang chờ nghiệm thu. Các phiên bấm giờ đang mở đã được tự động chốt, giờ công lấy theo tổng của từng người.');
     } catch (err: any) {
       console.error(err);
       toast.error('Lỗi', err.message || 'Không thể cập nhật hoàn thành');
@@ -583,12 +639,12 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
     }
   };
 
-  // 5c. ACTION: Ghi nhận tiến độ công việc & hình ảnh minh chứng
+  // 5c. ACTION: Ghi nhận tiến độ công việc & hình ảnh minh chứng theo người đăng nhập
   const handleLogProgressSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!job) return;
     if (!progressContent.trim()) {
-      toast.warning('Thiếu nội dung', 'Vui lòng nhập nội dung thao tác đã thực hiện');
+      toast.warning('Thiếu nội dung', 'Vui lòng nhập nội dung công việc đã thực hiện');
       return;
     }
 
@@ -624,40 +680,95 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
         newUploadedImgs = uploaded.filter((img) => img.url);
       }
 
-      const combinedImgs = [...resultImages, ...newUploadedImgs];
+      // 2. Gửi API tạo progress log theo user đăng nhập
+      let parsedPercent: number | undefined = undefined;
+      const cleanProgressText = progressText.trim();
+      if (cleanProgressText) {
+        const match = cleanProgressText.match(/(\d{1,3})\s*%/);
+        if (match) {
+          const v = parseInt(match[1], 10);
+          if (!isNaN(v) && v >= 0 && v <= 100) parsedPercent = v;
+        } else {
+          const numOnly = parseInt(cleanProgressText, 10);
+          if (!isNaN(numOnly) && numOnly >= 0 && numOnly <= 100 && String(numOnly) === cleanProgressText) {
+            parsedPercent = numOnly;
+          }
+        }
+      }
 
-      // 2. Format progress entry
-      const timeStr = new Date().toLocaleString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
+      // Giờ công chỉ được ghi tự động từ bấm giờ, form này không nhập giờ tay
+      const hoursSpentNum = 0;
+
+      await api.createFabricationProgressLog(job.id, {
+        taskContent: progressContent.trim(),
+        hoursSpent: hoursSpentNum,
+        progressPercent: parsedPercent,
+        progressText: cleanProgressText || undefined,
+        notes: progressNotes.trim() || undefined,
+        photos: newUploadedImgs,
       });
-      const performer = user?.name || 'Kỹ thuật viên';
-      const logEntry = `\n\n[📝 TIẾN ĐỘ (${progressPercent}) - ${timeStr} bởi ${performer}]:\n• Nội dung: ${progressContent.trim()}${progressNotes.trim() ? `\n• Lưu ý: ${progressNotes.trim()}` : ''}${newUploadedImgs.length > 0 ? `\n• Kèm ${newUploadedImgs.length} ảnh minh chứng` : ''}`;
-      const newResultNotes = resultNotes ? `${resultNotes}${logEntry}` : logEntry.trim();
 
-      const updated = await api.updateFabricationOrder(job.id, {
-        resultNotes: newResultNotes,
-        resultImages: combinedImgs,
-      });
+      // 3. Tự động thêm ảnh vào resultImages nếu có ảnh mới
+      if (newUploadedImgs.length > 0) {
+        const combined = [...resultImages, ...newUploadedImgs];
+        setResultImages(combined);
+        await api.updateFabricationOrder(job.id, {
+          resultImages: combined,
+        }).catch(() => {});
+      }
 
-      setJob(updated);
-      setResultNotes(newResultNotes);
-      setResultImages(combinedImgs);
+      // 4. Cập nhật lại actualHours trên giao diện
+      if (hoursSpentNum > 0) {
+        setActualHours((prev) => Number(((Number(prev) || 0) + hoursSpentNum).toFixed(2)));
+      }
+
+      // 5. Làm mới danh sách nhật ký tiến độ & audit trail
+      await loadProgressLogs(job.id);
+      loadHistory(job.id);
+
       setProgressContent('');
       setProgressNotes('');
+      setProgressText('');
+      setProgressHoursSpent('1.0');
       setProgressPhotos(null);
       setIsLogProgressModalOpen(false);
-      loadHistory(job.id);
-      if (onUpdated) onUpdated(updated);
-      toast.success('Đã ghi nhận tiến độ', 'Nội dung công việc và ảnh minh chứng đã được cập nhật');
+
+      if (onUpdated) onUpdated();
+      toast.success('Đã lưu nhật ký tiến độ', `Công việc của ${user?.name || 'bạn'} đã được ghi nhận vào bảng`);
     } catch (err: any) {
       console.error(err);
       toast.error('Lỗi', err.message || 'Không thể lưu ghi nhận tiến độ');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // 5c-2. ACTION: Xóa bản ghi tiến độ (chỉ người tạo hoặc Admin)
+  const handleDeleteProgressLog = async (logId: string) => {
+    if (!job) return;
+    const ok = await confirm(
+      'Xóa bản ghi tiến độ',
+      'Bạn có chắc chắn muốn xóa bản ghi nhật ký tiến độ này không? Giờ công đóng góp của bản ghi này sẽ được trừ lại.',
+      { confirmText: 'Xác nhận xóa', cancelText: 'Hủy' }
+    );
+    if (!ok) return;
+
+    try {
+      await api.deleteFabricationProgressLog(job.id, logId);
+      toast.success('Đã xóa', 'Bản ghi tiến độ đã được xóa thành công');
+      await loadProgressLogs(job.id);
+
+      // Tải lại phiếu để cập nhật actualHours
+      const refreshed = await api.getFabricationOrder(job.id);
+      if (refreshed) {
+        setJob(refreshed);
+        setActualHours(refreshed.actualHours || 0);
+      }
+      loadHistory(job.id);
+      if (onUpdated) onUpdated();
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Không thể xóa', err.message || 'Lỗi khi xóa bản ghi tiến độ');
     }
   };
 
@@ -951,7 +1062,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
       {/* Title Bar (Synchronized with WorkOrderDetailView) */}
       <div
-        className="no-print"
+        className="no-print fabrication-detail-header"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -962,11 +1073,31 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
           gap: '12px',
         }}
       >
-        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1e3a8a' }}>
-          {job.title} <span style={{ color: 'var(--text-muted)' }}>- {job.orderCode}</span>
-        </h2>
+        <div className="fabrication-detail-header-left" style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+          {onClose && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={onClose}
+              title="Quay lại danh sách phiếu"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 10px',
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              <ArrowLeft size={16} /> <span>Trở về</span>
+            </button>
+          )}
+          <h2 className="fabrication-detail-header-title" style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1e3a8a' }}>
+            {job.title} <span style={{ color: 'var(--text-muted)' }}>- {job.orderCode}</span>
+          </h2>
+        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="fabrication-detail-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {canDelete && (
             <button
               type="button"
@@ -1014,7 +1145,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
               className="btn-icon"
               title="Đóng chi tiết"
               style={{
-                marginLeft: '8px',
+                marginLeft: '4px',
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
@@ -1045,7 +1176,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
       >
         {/* TOP HEADER CARD - ACTION GRID (Identical to WorkOrder Header) */}
         <div
-          className="card no-print"
+          className="card no-print fabrication-action-card"
           style={{
             padding: '24px',
             backgroundColor: 'var(--bg-card)',
@@ -1053,14 +1184,14 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
             border: '1px solid var(--border-color)',
           }}
         >
-          <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a8a', textAlign: 'center', marginBottom: '24px' }}>
+          <h3 className="fabrication-action-title" style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a8a', textAlign: 'center', marginBottom: '24px' }}>
             {job.title} - {job.orderCode}
           </h3>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="fabrication-action-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center', alignItems: 'center' }}>
             {status === 'ASSIGNED' && (
               <ActionButton
-                onClick={handleStartWork}
+                onClick={handleSessionStart}
                 disabled={saving || deleting}
                 icon={Play}
                 label="Bắt đầu chế tạo"
@@ -1085,6 +1216,23 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
             {status === 'IN_PROGRESS' && (
               <>
+                {mySession ? (
+                  <ActionButton
+                    onClick={handleSessionStop}
+                    disabled={saving || deleting || sessionBusy}
+                    icon={Pause}
+                    label="Dừng (kết thúc ca của tôi)"
+                    color="#ef4444"
+                  />
+                ) : (
+                  <ActionButton
+                    onClick={handleSessionStart}
+                    disabled={saving || deleting || sessionBusy}
+                    icon={Play}
+                    label="Bắt đầu (tính giờ của tôi)"
+                    color="#3b82f6"
+                  />
+                )}
                 <ActionButton
                   onClick={() => setIsLogProgressModalOpen(true)}
                   disabled={saving || deleting}
@@ -1178,7 +1326,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
         {/* METADATA TABLE CARD (Synchronized with WorkOrderMetadata style) */}
         <div
-          className="card no-print"
+          className="card no-print fabrication-metadata-card"
           style={{
             padding: '24px',
             backgroundColor: 'var(--bg-card)',
@@ -1186,23 +1334,23 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
             border: '1px solid var(--border-color)',
           }}
         >
-          <table style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse' }}>
+          <table className="fabrication-metadata-table" style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse' }}>
             <tbody>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', width: '25%', color: 'var(--text-secondary)' }}>Mã phiếu gia công</td>
-                <td style={{ padding: '12px 0', fontWeight: 700, color: '#2563eb' }}>{job.orderCode}</td>
+                <td className="meta-label" style={{ padding: '12px 0', width: '25%', color: 'var(--text-secondary)' }}>Mã phiếu gia công</td>
+                <td className="meta-value" style={{ padding: '12px 0', fontWeight: 700, color: '#2563eb' }}>{job.orderCode}</td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Tên công việc / Sản phẩm</td>
-                <td style={{ padding: '12px 0', fontWeight: 600 }}>{job.title}</td>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Tên công việc / Sản phẩm</td>
+                <td className="meta-value" style={{ padding: '12px 0', fontWeight: 600 }}>{job.title}</td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Phân loại hình thức</td>
-                <td style={{ padding: '12px 0', fontWeight: 600 }}>{getCategoryLabel(job.category)}</td>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Phân loại hình thức</td>
+                <td className="meta-value" style={{ padding: '12px 0', fontWeight: 600 }}>{getCategoryLabel(job.category)}</td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Trạng thái</td>
-                <td style={{ padding: '12px 0' }}>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Trạng thái</td>
+                <td className="meta-value" style={{ padding: '12px 0' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                     <StatusBadge status={job.status} />
                     {job.acceptanceRating === 'REWORK' && job.status === 'IN_PROGRESS' && (
@@ -1227,128 +1375,116 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mức độ ưu tiên</td>
-                <td style={{ padding: '12px 0' }}>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mức độ ưu tiên</td>
+                <td className="meta-value" style={{ padding: '12px 0' }}>
                   <PriorityBadge priority={job.priority} />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Bộ phận yêu cầu / Thụ hưởng</td>
-                <td style={{ padding: '12px 0', fontWeight: 600 }}>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Bộ phận yêu cầu / Thụ hưởng</td>
+                <td className="meta-value" style={{ padding: '12px 0', fontWeight: 600 }}>
                   {job.targetDepartment || 'Toàn phân xưởng'} {job.location && `— Vị trí: ${job.location}`}
                 </td>
               </tr>
               {job.equipment && (
                 <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Thiết bị liên quan</td>
-                  <td style={{ padding: '12px 0', fontWeight: 600 }}>{job.equipment.code} - {job.equipment.name}</td>
+                  <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Thiết bị liên quan</td>
+                  <td className="meta-value" style={{ padding: '12px 0', fontWeight: 600 }}>{job.equipment.code} - {job.equipment.name}</td>
                 </tr>
               )}
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Người giao việc / Tạo phiếu</td>
-                <td style={{ padding: '12px 0' }}>{job.creator?.name || 'Hệ thống'}</td>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Người giao việc / Tạo phiếu</td>
+                <td className="meta-value" style={{ padding: '12px 0' }}>{job.creator?.name || 'Hệ thống'}</td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Thợ cơ điện phụ trách</td>
-                <td style={{ padding: '12px 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                    <div>
-                      <strong style={{ color: '#1e293b' }}>
-                        {job.assignedTechnician?.name || (selectedTechIds.length > 0 ? staffList.find(s => s.id === selectedTechIds[0])?.name : 'Chưa phân công')}
-                      </strong>
-                      {selectedTechIds.length > 1 && (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '13px', marginLeft: '6px' }}>
-                          (+ {selectedTechIds.slice(1).map(id => staffList.find(s => s.id === id)?.name).filter(Boolean).join(', ')})
-                        </span>
-                      )}
-                    </div>
-                    {status !== 'CLOSED' && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          setNewPrimaryTechId(job.assignedTechnicianId || selectedTechIds[0] || '');
-                          setNewSupporterIds(selectedTechIds.length > 1 ? selectedTechIds.slice(1) : []);
-                          setReassignNote('');
-                          setIsReassignModalOpen(true);
-                        }}
-                        style={{ fontSize: '11.5px', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                        title="Đổi thợ cơ điện phụ trách"
-                      >
-                        <ArrowRightLeft size={12} /> Đổi người
-                      </button>
-                    )}
-                  </div>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Người phụ trách</td>
+                <td className="meta-value" style={{ padding: '12px 0' }}>
+                  {(() => {
+                    const allTechNames: string[] = [];
+                    const primaryName = job.assignedTechnician?.name || (selectedTechIds.length > 0 ? staffList.find(s => s.id === selectedTechIds[0])?.name : null);
+                    if (primaryName) allTechNames.push(primaryName);
+
+                    if (selectedTechIds.length > 1) {
+                      selectedTechIds.slice(1).forEach(id => {
+                        const sName = staffList.find(s => s.id === id)?.name;
+                        if (sName && !allTechNames.includes(sName)) {
+                          allTechNames.push(sName);
+                        }
+                      });
+                    }
+
+                    if (allTechNames.length === 0) {
+                      return <span style={{ color: 'var(--text-muted)' }}>Chưa phân công</span>;
+                    }
+
+                    return (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                        {allTechNames.map((name, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '3px 9px',
+                              borderRadius: '6px',
+                              backgroundColor: '#f1f5f9',
+                              color: '#1e293b',
+                              border: '1px solid #cbd5e1',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <User size={13} style={{ color: '#64748b' }} /> {name}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Ngày tạo</td>
-                <td style={{ padding: '12px 0' }}>{formatDateTimeDisplay(job.createdAt)}</td>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Ngày tạo</td>
+                <td className="meta-value" style={{ padding: '12px 0' }}>{formatDateTimeDisplay(job.createdAt)}</td>
               </tr>
               {job.plannedEndDate && (
                 <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Hạn hoàn thành kế hoạch</td>
-                  <td style={{ padding: '12px 0', fontWeight: 600 }}>{formatDateTimeDisplay(job.plannedEndDate)}</td>
+                  <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Hạn hoàn thành kế hoạch</td>
+                  <td className="meta-value" style={{ padding: '12px 0', fontWeight: 600 }}>{formatDateTimeDisplay(job.plannedEndDate)}</td>
                 </tr>
               )}
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Thời gian thực hiện thực tế</td>
-                <td style={{ padding: '12px 0' }}>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Thời gian thực hiện thực tế</td>
+                <td className="meta-value" style={{ padding: '12px 0' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
                     <span>Bắt đầu: <strong>{formatDateTimeDisplay(actualStartDate)}</strong></span>
                     <span>Hoàn thành: <strong>{formatDateTimeDisplay(actualEndDate)}</strong></span>
-                    {status === 'IN_PROGRESS' && elapsedSeconds > 0 && (
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          color: '#10b981',
-                          backgroundColor: '#ecfdf5',
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '5px',
-                        }}
-                      >
-                        <Timer size={13} className="animate-spin" /> Đang tính giờ: {formatElapsed(elapsedSeconds)}
-                      </span>
-                    )}
                   </div>
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Giờ công thực tế</td>
-                <td style={{ padding: '12px 0' }}>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Giờ công thực tế</td>
+                <td className="meta-value" style={{ padding: '12px 0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <strong style={{ fontSize: '15px', color: '#2563eb' }}>{actualHours} giờ</strong>
                     <span style={{ fontSize: '12.5px', color: 'var(--text-muted)' }}>(Dự kiến: {job.estimatedHours || 0}h)</span>
-                    {status !== 'CLOSED' && (
-                      <button
-                        type="button"
-                        onClick={handleRecalculateHours}
-                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
-                      >
-                        Tính lại theo mốc giờ
-                      </button>
-                    )}
                   </div>
                 </td>
               </tr>
               {job.specifications && (
                 <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Quy cách kỹ thuật / Bản vẽ</td>
-                  <td style={{ padding: '12px 0', fontWeight: 600, color: '#334155' }}>{job.specifications}</td>
+                  <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Quy cách kỹ thuật / Bản vẽ</td>
+                  <td className="meta-value" style={{ padding: '12px 0', fontWeight: 600, color: '#334155' }}>{job.specifications}</td>
                 </tr>
               )}
               <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mô tả yêu cầu</td>
-                <td style={{ padding: '12px 0', lineHeight: '1.5' }}>{job.description}</td>
+                <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mô tả yêu cầu</td>
+                <td className="meta-value" style={{ padding: '12px 0', lineHeight: '1.5' }}>{job.description}</td>
               </tr>
               {resultNotes && (
                 <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Ghi chú kết quả & Nghiệm thu</td>
-                  <td style={{ padding: '12px 0', whiteSpace: 'pre-wrap', lineHeight: '1.5', color: '#1e293b' }}>
+                  <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Ghi chú kết quả & Nghiệm thu</td>
+                  <td className="meta-value" style={{ padding: '12px 0', whiteSpace: 'pre-wrap', lineHeight: '1.5', color: '#1e293b' }}>
                     {resultNotes}
                   </td>
                 </tr>
@@ -1357,10 +1493,23 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
           </table>
         </div>
 
+        {/* BẢNG NHẬT KÝ TIẾN ĐỘ THỰC HIỆN CỦA TỪNG THÀNH VIÊN */}
+        <FabricationProgressLogTable
+          logs={progressLogs}
+          loading={loadingProgressLogs}
+          canEdit={status !== 'CLOSED' && status !== 'CANCELLED'}
+          currentUserId={user?.id}
+          isAdmin={isAdmin}
+          onOpenCreateModal={() => setIsLogProgressModalOpen(true)}
+          onRefresh={() => loadProgressLogs(job.id)}
+          onDeleteLog={handleDeleteProgressLog}
+          onPreviewImage={(url) => setPreviewImage(url)}
+        />
+
         {/* SECTION 2: VẬT TƯ & PHÔI THÔ SỬ DỤNG */}
         <div
           id="record-materials-section"
-          className="card no-print"
+          className="card no-print fabrication-section-card"
           style={{
             padding: '24px',
             backgroundColor: 'var(--bg-card)',
@@ -1486,7 +1635,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
         {/* SECTION 3: HÌNH ẢNH MINH CHỨNG KẾT QUẢ */}
         <div
-          className="card no-print"
+          className="card no-print fabrication-section-card"
           style={{
             padding: '24px',
             backgroundColor: 'var(--bg-card)',
@@ -1527,7 +1676,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
               Chưa có hình ảnh minh chứng sản phẩm. Dùng nút "Chụp ảnh" hoặc "Tải ảnh lên" để cập nhật.
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px' }}>
+            <div className="fabrication-photos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px' }}>
               {resultImages.map((img, idx) => (
                 <div
                   key={idx}
@@ -1596,7 +1745,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
         {/* SECTION 4: AUDIT TRAIL / TIMELINE (CMMS Standard) */}
         <div
-          className="card no-print"
+          className="card no-print fabrication-section-card"
           style={{
             padding: '24px',
             backgroundColor: 'var(--bg-card)',
@@ -1761,62 +1910,94 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
         </Modal>
       )}
 
-      {/* 0b. Modal Ghi nhận tiến độ gia công & chế tạo */}
+      {/* 0b. Modal Ghi nhận tiến độ gia công & chế tạo theo người đăng nhập */}
       {isLogProgressModalOpen && (
         <Modal
           isOpen={isLogProgressModalOpen}
           onClose={() => setIsLogProgressModalOpen(false)}
-          title={`Ghi nhận tiến độ công việc: ${job.orderCode}`}
-          maxWidth="600px"
+          title={`Ghi nhận phần việc & tiến độ: ${job.orderCode}`}
+          maxWidth="620px"
         >
           <form onSubmit={handleLogProgressSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '12px', backgroundColor: 'rgba(139, 92, 246, 0.08)', borderRadius: '8px', border: '1px solid rgba(139, 92, 246, 0.2)', fontSize: '13px', color: '#6d28d9' }}>
-              Ghi lại nội dung thao tác, giai đoạn hoàn thành và ảnh minh chứng thực tế cho công việc này.
+            {/* Logged in User Identity Banner */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 14px',
+                backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                borderRadius: '8px',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+              }}
+            >
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: '14px',
+                  flexShrink: 0,
+                }}
+              >
+                {(user?.name || 'U').charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Tài khoản đang đăng nhập ghi nhận:</div>
+                <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e3a8a' }}>
+                  {user?.name || 'Kỹ thuật viên'}
+                  {user?.employeeCode && (
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748b', marginLeft: '6px' }}>
+                      (Mã NV: {user.employeeCode})
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label" style={{ fontWeight: 600 }}>Nội dung thao tác / công việc đã thực hiện *</label>
+              <label className="form-label" style={{ fontWeight: 600 }}>Nội dung phần việc bạn đã làm *</label>
               <textarea
                 className="form-input"
                 rows={3}
                 required
-                placeholder="VD: Đã cắt phôi thép tấm theo kích thước 500x300mm, mài nhẵn bavia, tiện ren trục chính..."
+                placeholder="VD: Cắt phôi inox 304 theo bản vẽ, tiện 2 đầu ren trục phi 40, kiểm tra dung sai khớp nối..."
                 value={progressContent}
                 onChange={(e) => setProgressContent(e.target.value)}
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 600 }}>Ước tính tiến độ đạt được *</label>
-                <select
-                  className="form-select"
-                  value={progressPercent}
-                  onChange={(e) => setProgressPercent(e.target.value)}
-                >
-                  <option value="25%">25% - Hoàn thành cắt/chuẩn bị phôi</option>
-                  <option value="50%">50% - Đang gia công chi tiết cơ khí</option>
-                  <option value="75%">75% - Hoàn thiện tiện/phay/hàn cơ bản</option>
-                  <option value="90%">90% - Đang mài bóng & xử lý bề mặt</option>
-                  <option value="99%">99% - Sẵn sàng nghiệm thu thử tải</option>
-                </select>
-              </div>
+            <div className="form-group">
+              <label className="form-label" style={{ fontWeight: 600 }}>Ước tính tiến độ đạt được</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="VD: 70%, Đã xong tiện ren trục, 80%..."
+                value={progressText}
+                onChange={(e) => setProgressText(e.target.value)}
+              />
+            </div>
 
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 600 }}>Lưu ý kỹ thuật (Tùy chọn)</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ghi chú về dung sai, thông số đo..."
-                  value={progressNotes}
-                  onChange={(e) => setProgressNotes(e.target.value)}
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label" style={{ fontWeight: 600 }}>Lưu ý kỹ thuật hoặc khó khăn (Tùy chọn)</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Ghi chú về dung sai, thông số đo hoặc lưu ý cho đồng đội..."
+                value={progressNotes}
+                onChange={(e) => setProgressNotes(e.target.value)}
+              />
             </div>
 
             <div className="form-group">
               <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, cursor: 'pointer' }}>
-                <Camera size={18} color="#2563eb" /> Đính kèm ảnh minh chứng tiến độ (Chụp hoặc chọn file)
+                <Camera size={18} color="#2563eb" /> Đính kèm ảnh minh chứng (Chụp ảnh hoặc chọn file)
               </label>
               <input
                 type="file"
@@ -1835,7 +2016,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
             <div className="modal-footer" style={{ padding: 0, marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setIsLogProgressModalOpen(false)}>Hủy</button>
               <button type="submit" className="btn btn-primary" disabled={saving || !progressContent.trim()}>
-                {saving ? <Loader2 className="animate-spin" size={14} /> : "Lưu ghi nhận tiến độ"}
+                {saving ? <Loader2 className="animate-spin" size={14} /> : "Lưu vào nhật ký công việc"}
               </button>
             </div>
           </form>
