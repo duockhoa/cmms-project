@@ -3,7 +3,7 @@ import { api } from '../services/api';
 import { 
   Settings, Layers, MapPin, Cpu, Shield, Users, 
   ListChecks, UserCheck, Gauge, AlertTriangle, RefreshCw,
-  LucideIcon, Sliders, BookOpen, Activity, Zap
+  LucideIcon, Sliders, BookOpen, Activity, Zap, Calendar
 } from 'lucide-react';
 
 import { PageHeader, Tabs } from '../components/common';
@@ -21,6 +21,7 @@ const UsersSettingsTab = lazy(() => import('../components/settings/UsersSettings
 const TechniciansSettingsTab = lazy(() => import('../components/settings/TechniciansSettingsTab').then(module => ({ default: module.TechniciansSettingsTab })));
 const EquipmentParameterAssignTab = lazy(() => import('../components/settings/EquipmentParameterAssignTab').then(module => ({ default: module.EquipmentParameterAssignTab })));
 const FunctionalUnitLibraryTab = lazy(() => import('../components/settings/FunctionalUnitLibraryTab').then(module => ({ default: module.FunctionalUnitLibraryTab })));
+const MaintenancePlansSettingsTab = lazy(() => import('../components/settings/MaintenancePlansSettingsTab').then(module => ({ default: module.MaintenancePlansSettingsTab })));
 
 export type SettingsTabId =
   | 'categories'
@@ -30,6 +31,7 @@ export type SettingsTabId =
   | 'standard-technical-specs'
   | 'standard-parameters'
   | 'equipment-parameters'
+  | 'maintenance-plans'
   | 'checklist-library'
   | 'utility-settings'
   | 'system-settings'
@@ -98,6 +100,12 @@ const SETTINGS_GROUPS: NavGroup[] = [
   {
     title: 'VẬN HÀNH & CHECKLIST',
     items: [
+      {
+        id: 'maintenance-plans',
+        label: 'Kế hoạch bảo trì định kỳ',
+        description: 'Thiết lập chu kỳ, checklist mẫu & quét tự động',
+        icon: Calendar,
+      },
       {
         id: 'checklist-library',
         label: 'Thư viện Checklist',
@@ -292,6 +300,7 @@ export const SettingsPage: React.FC = () => {
             {activeTab === 'standard-technical-specs' && <StandardTechnicalSpecsTab />}
             {activeTab === 'standard-parameters' && <StandardParametersTab />}
             {activeTab === 'equipment-parameters' && <EquipmentParameterAssignTab />}
+            {activeTab === 'maintenance-plans' && <MaintenancePlansSettingsTab />}
             {activeTab === 'checklist-library' && <ChecklistLibraryTab />}
             {activeTab === 'utility-settings' && <UtilitySettingsTab />}
             {activeTab === 'system-settings' && <SystemSettingsTab />}

@@ -100,7 +100,8 @@ export const useWorkOrdersPage = () => {
       ]);
       setEquipmentList(eqRes);
       setUsers(userRes);
-      setTechniciansList(userRes.filter((u: any) => u.role === 'TECHNICIAN'));
+      const activeUsers = Array.isArray(userRes) ? userRes.filter((u: any) => u.isActive !== false) : [];
+      setTechniciansList(activeUsers);
       setDepartments(deptRes);
       if (meRes && meRes.user) {
         setCurrentUser(meRes.user);

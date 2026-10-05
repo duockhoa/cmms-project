@@ -73,7 +73,9 @@ export const useMaintenancePage = () => {
       ]);
       setEquipmentList(eqRes);
       setUsers(userRes);
-      setTechnicians(userRes.filter((u: any) => u.role === 'TECHNICIAN' || u.role === 'ADMIN' || u.role === 'MANAGER'));
+      // Lấy toàn bộ người dùng đang hoạt động để người dùng tự do nhập và lọc
+      const activeUsers = Array.isArray(userRes) ? userRes.filter((u: any) => u.isActive !== false) : [];
+      setTechnicians(activeUsers);
       setChecklistTemplates(chkRes);
       if (eqRes.length > 0 && !formData.equipmentId) {
         setFormData((prev) => ({ ...prev, equipmentId: eqRes[0].id }));
@@ -425,7 +427,7 @@ export const useMaintenancePage = () => {
     isAddOpen, editTarget, formData, setFormData, equipmentList,
     checklistTemplates, technicians, closeScheduleModal, handleCreate, handleUpdate,
     pauseTarget, actionReason, handlePauseSubmit, historyTarget, historyTimeline,
-    historyLoading, setHistoryTarget,
+    historyLoading, setHistoryTarget, loadHistory,
   };
 
 
