@@ -32,4 +32,12 @@ export class UpdateFabricationDto extends PartialType(CreateFabricationDto) {
   @IsOptional()
   @IsString()
   acceptedByName?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
 }

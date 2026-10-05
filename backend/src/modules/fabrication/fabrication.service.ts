@@ -381,21 +381,31 @@ export class FabricationService {
     // Record audit trail in WorkflowHistory
     try {
 
-      if (dto.status !== undefined && dto.status !== existing.status) {
+      if (dto.assignedTechnicianId && dto.assignedTechnicianId !== existing.assignedTechnicianId) {
+        auditAction = 'REASSIGN';
+        const newTech = await this.prisma.user.findUnique({
+          where: { id: dto.assignedTechnicianId },
+          select: { name: true },
+        });
+        const oldTechName = existing.assignedTechnician?.name || 'Chưa phân công';
+        const newTechName = newTech?.name || 'Kỹ thuật viên mới';
+        auditComment = `Điều chuyển người phụ trách: ${oldTechName} ➔ ${newTechName}`;
+        auditReason = dto.reason || dto.note || null;
+      } else if (dto.status !== undefined && dto.status !== existing.status) {
         if (dto.status === 'IN_PROGRESS' && existing.status === 'ASSIGNED') {
           auditAction = 'START_WORK';
           auditComment = 'Bắt đầu làm việc (Bật tính giờ công thực tế)';
         } else if (dto.status === 'ON_HOLD') {
           auditAction = 'PAUSE_WORK';
           auditComment = 'Tạm dừng công việc';
-          auditReason = dto.resultNotes || 'Tạm dừng theo yêu cầu';
+          auditReason = dto.reason || dto.note || 'Tạm dừng theo yêu cầu';
         } else if (dto.status === 'IN_PROGRESS' && existing.status === 'ON_HOLD') {
           auditAction = 'RESUME_WORK';
           auditComment = 'Tiếp tục thực hiện công việc sau khi tạm dừng';
         } else if (dto.status === 'IN_PROGRESS' && dto.acceptanceRating === 'REWORK') {
           auditAction = 'REJECT_REWORK';
           auditComment = 'Nghiệm thu KHÔNG ĐẠT - Yêu cầu kỹ thuật viên sửa chữa lại';
-          auditReason = dto.resultNotes || 'Không đạt tiêu chuẩn nghiệm thu';
+          auditReason = dto.reason || dto.note || 'Không đạt tiêu chuẩn nghiệm thu';
         } else if (dto.status === 'IN_PROGRESS' && existing.status === 'CLOSED') {
           auditAction = 'REOPEN';
           auditComment = 'Mở lại phiếu công việc sau khi đã hoàn tất';
@@ -409,13 +419,14 @@ export class FabricationService {
           const rating = dto.acceptanceRating || existing.acceptanceRating || 'GOOD';
           const recipient = updateData.acceptedByName || 'Đại diện tiếp nhận';
           auditComment = `Đạt nghiệm thu & Bàn giao sản phẩm cho: ${recipient} (Đánh giá: ${rating})`;
+          auditReason = dto.reason || dto.note || dto.resultNotes || null;
           auditMetadata.rating = rating;
           auditMetadata.acceptedByName = recipient;
         }
       } else if (dto.acceptanceRating === 'REWORK' && dto.status === 'IN_PROGRESS') {
         auditAction = 'REJECT_REWORK';
         auditComment = 'Nghiệm thu KHÔNG ĐẠT - Yêu cầu kỹ thuật viên sửa chữa lại';
-        auditReason = dto.resultNotes || 'Không đạt tiêu chuẩn nghiệm thu';
+        auditReason = dto.reason || dto.note || 'Không đạt tiêu chuẩn nghiệm thu';
       } else if (dto.materials && Array.isArray(dto.materials)) {
         auditComment = `Cập nhật danh mục vật tư sử dụng (${dto.materials.length} loại vật tư)`;
       } else if (dto.resultImages && Array.isArray(dto.resultImages)) {

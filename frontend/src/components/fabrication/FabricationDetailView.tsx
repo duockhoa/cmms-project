@@ -525,22 +525,21 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
         month: '2-digit',
         year: 'numeric',
       });
-      const acceptHeader = `\n\n[✅ BIÊN BẢN NGHIỆM THU BÀN GIAO - ${timeStr}]:\n• Người nhận: ${recipient}\n• Quy cách kỹ thuật: ${testRunResult}\n• Vệ sinh 5S: ${cleanlinessResult}\n• Đánh giá: ${getRatingLabel(acceptanceRating)}\n• Ý kiến phân xưởng: ${workshopComment.trim() || 'Đồng ý nghiệm thu & tiếp nhận bàn giao'}`;
-      const newResultNotes = resultNotes ? `${resultNotes}${acceptHeader}` : acceptHeader.trim();
-
       const finalRating = acceptanceRating === 'REWORK' ? 'GOOD' : acceptanceRating;
+      const cleanAcceptNote = workshopComment.trim() || undefined;
       const updated = await api.updateFabricationOrder(job.id, {
         status: 'CLOSED',
         acceptanceRating: finalRating,
         acceptedByName: recipient,
-        resultNotes: newResultNotes,
+        resultNotes: cleanAcceptNote,
+        reason: workshopComment.trim() || undefined,
       });
 
       setJob(updated);
       setStatus('CLOSED');
       setAcceptedByName(recipient);
       setAcceptanceRating(finalRating);
-      setResultNotes(newResultNotes);
+      setResultNotes(cleanAcceptNote || '');
       setIsAcceptanceModalOpen(false);
       loadHistory(job.id);
       if (onUpdated) onUpdated(updated);
@@ -564,27 +563,15 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
     setSaving(true);
     try {
-      const timeStr = new Date().toLocaleString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      });
-      const inspector = user?.name || 'Bộ phận nghiệm thu';
-      const reworkEntry = `\n\n[⚠️ YÊU CẦU SỬA LẠI - ${timeStr} bởi ${inspector}]:\n${reworkReason.trim()}`;
-      const newResultNotes = resultNotes ? `${resultNotes}${reworkEntry}` : reworkEntry.trim();
-
       const updated = await api.updateFabricationOrder(job.id, {
         status: 'IN_PROGRESS',
         acceptanceRating: 'REWORK',
-        resultNotes: newResultNotes,
+        reason: reworkReason.trim(),
       });
 
       setJob(updated);
       setStatus('IN_PROGRESS');
       setAcceptanceRating('REWORK');
-      setResultNotes(newResultNotes);
       setReworkReason('');
       setIsRejectModalOpen(false);
       loadHistory(job.id);
@@ -609,29 +596,16 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
     setSaving(true);
     try {
-      const timeStr = new Date().toLocaleString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      });
-      const oldTechName = job.assignedTechnician?.name || 'Chưa phân công';
       const newTechName = staffList.find((s) => s.id === newPrimaryTechId)?.name || 'Kỹ thuật viên mới';
-      const actorName = user?.name || 'Quản trị viên';
-
-      const transferNote = `\n\n[🔄 ĐIỀU CHUYỂN PHÂN CÔNG - ${timeStr} bởi ${actorName}]:\n• Chuyển từ: ${oldTechName} -> Sang: ${newTechName}${reassignNote.trim() ? `\n• Lý do: ${reassignNote.trim()}` : ''}`;
-      const newResultNotes = resultNotes ? `${resultNotes}${transferNote}` : transferNote.trim();
 
       const updated = await api.updateFabricationOrder(job.id, {
         assignedTechnicianId: newPrimaryTechId,
         supporterIds: newSupporterIds,
-        resultNotes: newResultNotes,
+        reason: reassignNote.trim() || undefined,
       });
 
       setJob(updated);
       setSelectedTechIds([newPrimaryTechId, ...newSupporterIds]);
-      setResultNotes(newResultNotes);
       setIsReassignModalOpen(false);
       loadHistory(job.id);
       if (onUpdated) onUpdated(updated);
@@ -858,25 +832,13 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
     setSaving(true);
     try {
-      const timeStr = new Date().toLocaleString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      });
-      const performer = user?.name || 'Kỹ thuật viên';
-      const pauseEntry = `\n\n[⏸️ TẠM DỪNG - ${timeStr} bởi ${performer}]:\n• Lý do: ${finalReason}`;
-      const newResultNotes = resultNotes ? `${resultNotes}${pauseEntry}` : pauseEntry.trim();
-
       const updated = await api.updateFabricationOrder(job.id, {
         status: 'ON_HOLD',
-        resultNotes: newResultNotes,
+        reason: finalReason,
       });
 
       setJob(updated);
       setStatus('ON_HOLD');
-      setResultNotes(newResultNotes);
       setIsPauseModalOpen(false);
       setCustomPauseReason('');
       loadHistory(job.id);
@@ -895,25 +857,12 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
     if (!job) return;
     setSaving(true);
     try {
-      const timeStr = new Date().toLocaleString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      });
-      const performer = user?.name || 'Kỹ thuật viên';
-      const resumeEntry = `\n\n[▶️ TIẾP TỤC LÀM VIỆC - ${timeStr} bởi ${performer}]`;
-      const newResultNotes = resultNotes ? `${resultNotes}${resumeEntry}` : resumeEntry.trim();
-
       const updated = await api.updateFabricationOrder(job.id, {
         status: 'IN_PROGRESS',
-        resultNotes: newResultNotes,
       });
 
       setJob(updated);
       setStatus('IN_PROGRESS');
-      setResultNotes(newResultNotes);
       loadHistory(job.id);
       if (onUpdated) onUpdated(updated);
       toast.success('Tiếp tục chế tạo', 'Đã chuyển phiếu về trạng thái Đang thực hiện');
@@ -1088,6 +1037,12 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
         return { text: 'Bắt đầu làm việc', bg: '#ecfeff', color: '#0e7490', border: '#a5f3fc' };
       case 'COMPLETE_WORK':
         return { text: 'Báo cáo hoàn thành', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' };
+      case 'PAUSE_WORK':
+        return { text: 'Tạm dừng công việc', bg: '#fffbeb', color: '#b45309', border: '#fde68a' };
+      case 'RESUME_WORK':
+        return { text: 'Tiếp tục thực hiện', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' };
+      case 'REASSIGN':
+        return { text: 'Điều chuyển phân công', bg: '#f5f3ff', color: '#6d28d9', border: '#ddd6fe' };
       case 'ACCEPT_HANDOVER':
         return { text: 'Đạt nghiệm thu & Bàn giao', bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' };
       case 'REJECT_REWORK':
@@ -1098,6 +1053,28 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
       default:
         return { text: 'Cập nhật', bg: '#f8fafc', color: '#475569', border: '#e2e8f0' };
     }
+  };
+
+  const cleanResultNotes = (notes?: string | null): string => {
+    if (!notes) return '';
+    const blocks = notes.split(/(?=\[(?:🔄|⏸️?|▶️?|⚠️|✅)[^\]]+\])/g);
+    const meaningfulParts: string[] = [];
+    for (const block of blocks) {
+      const trimmed = block.trim();
+      if (!trimmed) continue;
+      if (trimmed.startsWith('[🔄') || trimmed.startsWith('[⏸') || trimmed.startsWith('[▶') || trimmed.startsWith('[⚠️')) {
+        continue;
+      }
+      if (trimmed.startsWith('[✅')) {
+        const match = trimmed.match(/Ý kiến phân xưởng:\s*([^\n]+)/i);
+        if (match && match[1] && match[1].trim() && match[1].trim() !== 'Đồng ý nghiệm thu & tiếp nhận bàn giao') {
+          meaningfulParts.push(match[1].trim());
+        }
+        continue;
+      }
+      meaningfulParts.push(trimmed);
+    }
+    return meaningfulParts.join('\n\n').trim();
   };
 
   if (loading || !job) {
@@ -1559,11 +1536,11 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                 <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mô tả yêu cầu</td>
                 <td className="meta-value" style={{ padding: '12px 0', lineHeight: '1.5' }}>{job.description}</td>
               </tr>
-              {resultNotes && (
+              {cleanResultNotes(resultNotes) && (
                 <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                   <td className="meta-label" style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Ghi chú kết quả & Nghiệm thu</td>
                   <td className="meta-value" style={{ padding: '12px 0', whiteSpace: 'pre-wrap', lineHeight: '1.5', color: '#1e293b' }}>
-                    {resultNotes}
+                    {cleanResultNotes(resultNotes)}
                   </td>
                 </tr>
               )}
@@ -1887,16 +1864,18 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                           {bStyle.text}
                         </span>
                         <strong style={{ fontSize: '13px', color: '#1e293b' }}>
-                          {hItem.performedBy?.name || 'Hệ thống'}
+                          {hItem.actedBy?.name || hItem.performedBy?.name || 'Hệ thống'}
                         </strong>
                       </div>
                       <span style={{ fontSize: '11.5px', color: '#64748b' }}>
                         {formatDateTimeDisplay(hItem.createdAt)}
                       </span>
                     </div>
-                    {hItem.note && (
+                    {(hItem.comment || hItem.reason || hItem.note) && (
                       <div style={{ fontSize: '12.5px', color: '#475569', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>
-                        {hItem.note}
+                        {hItem.comment && <div style={{ fontWeight: 500 }}>{hItem.comment}</div>}
+                        {hItem.reason && <div style={{ color: '#64748b', marginTop: hItem.comment ? '2px' : 0 }}>Lý do: {hItem.reason}</div>}
+                        {!hItem.comment && !hItem.reason && hItem.note && <div>{hItem.note}</div>}
                       </div>
                     )}
                   </div>
@@ -2502,7 +2481,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
             </tr>
             <tr>
               <td style={{ padding: '4px 0' }}><strong>Ghi chú kết quả:</strong></td>
-              <td>{resultNotes || 'Đã hoàn thành theo quy cách'}</td>
+              <td>{cleanResultNotes(resultNotes) || 'Đã hoàn thành theo quy cách'}</td>
             </tr>
             <tr>
               <td style={{ padding: '4px 0' }}><strong>Đánh giá nghiệm thu:</strong></td>
