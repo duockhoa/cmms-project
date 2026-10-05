@@ -27,7 +27,7 @@ interface FabricationProgressLogTableProps {
   canEdit?: boolean;
   currentUserId?: string;
   isAdmin?: boolean;
-  onOpenCreateModal: () => void;
+  onOpenCreateModal?: () => void;
   onRefresh: () => void;
   onDeleteLog: (logId: string) => void;
   onPreviewImage: (url: string) => void;
@@ -103,9 +103,6 @@ export const FabricationProgressLogTable: React.FC<FabricationProgressLogTablePr
             <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
               Nhật ký tiến độ & Báo cáo công việc ({logs.length})
             </h3>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Mỗi nhân sự tự đăng nhập và ghi nhận chi tiết phần việc đã thực hiện
-            </span>
           </div>
         </div>
 
@@ -119,17 +116,6 @@ export const FabricationProgressLogTable: React.FC<FabricationProgressLogTablePr
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
-
-          {canEdit && (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={onOpenCreateModal}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
-            >
-              <Plus size={15} /> Ghi nhận phần việc của tôi
-            </button>
-          )}
         </div>
       </div>
 
@@ -205,10 +191,7 @@ export const FabricationProgressLogTable: React.FC<FabricationProgressLogTablePr
           }}
         >
           <Clock size={28} style={{ color: '#94a3b8', margin: '0 auto 8px', display: 'block' }} />
-          <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Chưa có lượt ghi nhận tiến độ nào</div>
-          <div style={{ fontSize: '12.5px', marginTop: '4px', color: 'var(--text-muted)' }}>
-            Mỗi người trong danh sách phụ trách có thể bấm nút <strong>"Ghi nhận phần việc của tôi"</strong> để cập nhật việc mình đã làm.
-          </div>
+          <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-muted)' }}>Chưa có lượt ghi nhận tiến độ nào</div>
         </div>
       ) : (
         <>

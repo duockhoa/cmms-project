@@ -28,9 +28,6 @@ export const FunctionalUnitDeleteModal: React.FC<any> = ({
               <AlertTriangle size={24} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
               <div style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.5 }}>
                 Bạn có chắc chắn muốn xóa cụm chức năng <strong style={{ color: '#ef4444' }}>{unitToDelete.name}</strong> ({unitToDelete.code}) khỏi thiết bị này?
-                <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Lưu ý: Thao tác này chỉ gỡ cụm ra khỏi thiết bị, không xóa mẫu trong Thư viện dùng chung.
-                </div>
               </div>
             </div>
 

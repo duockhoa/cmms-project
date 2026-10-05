@@ -884,8 +884,8 @@ export class FabricationService {
       },
     });
 
-    // Không tạo dòng nhật ký nếu phiên không phát sinh giờ hành chính nào
-    if (durationMinutes <= 0) {
+    // Không tạo dòng nhật ký nếu phiên không phát sinh giờ hành chính nào VÀ không có nội dung phần việc
+    if (durationMinutes <= 0 && !dto.taskContent?.trim()) {
       return updatedSession;
     }
 
@@ -894,7 +894,7 @@ export class FabricationService {
     const startStr = fmt(new Date(session.startedAt));
     const endStr = fmt(endedAt);
     const content = dto.taskContent?.trim()
-      ? `${dto.taskContent.trim()} (Tự động ghi nhận: ${startStr} - ${endStr})`
+      ? dto.taskContent.trim()
       : `Thời gian thực hiện tự động ghi nhận (${startStr} → ${endStr} • ${durationMinutes} phút giờ hành chính)`;
 
     let sessionProgressPercent = dto.progressPercent ?? null;
@@ -923,13 +923,15 @@ export class FabricationService {
       },
     });
 
-    // Tự động cộng dồn giờ công vào tổng giờ công toàn phiếu (actualHours)
-    await this.prisma.fabricationOrder.update({
-      where: { id: orderId },
-      data: {
-        actualHours: { increment: durationHours },
-      },
-    });
+    // Tự động cộng dồn giờ công vào tổng giờ công toàn phiếu (actualHours) nếu có phát sinh
+    if (durationHours > 0) {
+      await this.prisma.fabricationOrder.update({
+        where: { id: orderId },
+        data: {
+          actualHours: { increment: durationHours },
+        },
+      });
+    }
 
     return updatedSession;
   }

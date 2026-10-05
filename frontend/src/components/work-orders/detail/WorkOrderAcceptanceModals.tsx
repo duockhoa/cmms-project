@@ -44,10 +44,6 @@ export const WorkOrderAcceptanceModals: React.FC<any> = ({
       {isWorkshopAcceptOpen && (
         <Modal isOpen={isWorkshopAcceptOpen} onClose={() => setIsWorkshopAcceptOpen(false)} title="Biên bản Nghiệm thu Bàn giao (Phân xưởng)">
           <form onSubmit={handleWorkshopAcceptSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '12px', backgroundColor: 'rgba(16, 185, 129, 0.08)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)', fontSize: '13px', color: '#065f46' }}>
-              <strong>Lưu ý GMP:</strong> Sau khi phân xưởng nghiệm thu đạt, phiếu sẽ được chuyển tiếp sang <strong>Bộ phận Đảm bảo chất lượng (QA)</strong> để thẩm định hồ sơ và cấp phép giải phóng chuyền (Line Clearance).
-            </div>
-
             <div className="form-group">
               <label className="form-label">Tình trạng chạy thử & kiểm tra vận hành *</label>
               <select
@@ -110,10 +106,6 @@ export const WorkOrderAcceptanceModals: React.FC<any> = ({
       {isQaAcceptOpen && (
         <Modal isOpen={isQaAcceptOpen} onClose={() => setIsQaAcceptOpen(false)} title="Biên bản Thẩm định & Nghiệm thu (Đảm bảo chất lượng - QA)">
           <form onSubmit={handleQaVerifySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '12px', backgroundColor: 'rgba(124, 58, 237, 0.08)', borderRadius: '8px', border: '1px solid rgba(124, 58, 237, 0.2)', fontSize: '13px', color: '#5b21b6' }}>
-              <strong>Phê duyệt QA (Cấp cuối):</strong> Sau khi QA phê duyệt, phiếu sửa chữa chính thức hoàn tất (VERIFIED). Hệ thống sẽ tự động đóng và khóa yêu cầu sự cố liên kết để bảo toàn hồ sơ bảo trì GMP.
-            </div>
-
             <div className="form-group">
               <label className="form-label">Đánh giá tác động chất lượng sản phẩm (GMP Impact) *</label>
               <select

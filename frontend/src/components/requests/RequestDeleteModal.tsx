@@ -22,19 +22,16 @@ export const RequestDeleteModal: React.FC<RequestDeleteModalProps> = ({
   return (
     <Modal isOpen onClose={onClose} title="Xác nhận xóa Yêu cầu sự cố">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 16px', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
-          <AlertTriangle size={24} style={{ color: '#dc2626', flexShrink: 0, marginTop: '2px' }} />
-          <div style={{ fontSize: '13px', color: '#991b1b' }}>
-            <strong>Cảnh báo:</strong> Hành động này sẽ xóa vĩnh viễn yêu cầu sự cố và lịch sử liên quan khỏi hệ thống. Hành động này không thể hoàn tác!
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
+          <AlertTriangle size={18} style={{ color: '#dc2626', flexShrink: 0 }} />
+          <div style={{ fontSize: '13px', color: '#991b1b', fontWeight: 500 }}>
+            Hành động này sẽ xóa vĩnh viễn yêu cầu sự cố và không thể hoàn tác.
           </div>
         </div>
 
         {locked && (
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fef3c7', fontSize: '12px', color: '#b45309' }}>
-            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div>
-              <strong>Dữ liệu đã đóng / có phiếu sửa chữa:</strong> Với quyền Quản trị viên (ADMIN), thao tác xóa này sẽ tự động dọn dẹp sạch toàn bộ phiếu sửa chữa (Work Order) và dữ liệu liên quan đi kèm.
-            </div>
+          <div style={{ padding: '8px 12px', backgroundColor: '#fffbeb', borderRadius: '6px', border: '1px solid #fef3c7', fontSize: '12px', color: '#b45309' }}>
+            Phiếu sửa chữa (Work Order) liên quan cũng sẽ được dọn dẹp đồng thời.
           </div>
         )}
 

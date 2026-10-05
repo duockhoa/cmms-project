@@ -5,7 +5,7 @@ import {
   ChevronRight, Wrench, Package, FileText, Check, ShieldCheck,
   Camera, Upload, Eye, Image as ImageIcon, ZoomIn, X, Play, RotateCcw,
   Timer, History, RefreshCw, Lock, XOctagon, Loader2, ArrowRightLeft,
-  Pause
+  Pause, Square
 } from 'lucide-react';
 import { api, API_HOST as API_BASE } from '../../services/api';
 import { useToast, useConfirmDialog } from '../common/Toast';
@@ -113,13 +113,18 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
   const [newSupporterIds, setNewSupporterIds] = useState<string[]>([]);
   const [reassignNote, setReassignNote] = useState<string>('');
 
-  // Log Progress Modal states (Ghi nhận tiến độ)
+  // Log Progress Modal states (Ghi nhận tiến độ & Máy ảnh)
   const [isLogProgressModalOpen, setIsLogProgressModalOpen] = useState(false);
   const [progressContent, setProgressContent] = useState<string>('');
   const [progressText, setProgressText] = useState<string>('');
   const [progressNotes, setProgressNotes] = useState<string>('');
   const [progressHoursSpent, setProgressHoursSpent] = useState<string>('1.0');
-  const [progressPhotos, setProgressPhotos] = useState<FileList | null>(null);
+  const [progressPhotos, setProgressPhotos] = useState<File[]>([]);
+  const [showWebcamModal, setShowWebcamModal] = useState(false);
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
+  const modalCameraInputRef = useRef<HTMLInputElement | null>(null);
+  const modalFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Multi-user Progress Logs states (Bảng nhật ký tiến độ từng thành viên)
   const [progressLogs, setProgressLogs] = useState<any[]>([]);
@@ -639,7 +644,72 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
     }
   };
 
-  // 5c. ACTION: Ghi nhận tiến độ công việc & hình ảnh minh chứng theo người đăng nhập
+  const handleOpenDirectCamera = async () => {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      modalCameraInputRef.current?.click();
+      return;
+    }
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        setShowWebcamModal(true);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        setWebcamStream(stream);
+        if (webcamVideoRef.current) {
+          webcamVideoRef.current.srcObject = stream;
+          webcamVideoRef.current.play();
+        }
+      } catch (err: any) {
+        console.warn('Webcam unavailable, falling back to camera input:', err);
+        setShowWebcamModal(false);
+        modalCameraInputRef.current?.click();
+      }
+    } else {
+      modalCameraInputRef.current?.click();
+    }
+  };
+
+  const closeWebcam = () => {
+    if (webcamStream) {
+      webcamStream.getTracks().forEach((track) => track.stop());
+      setWebcamStream(null);
+    }
+    setShowWebcamModal(false);
+  };
+
+  const handleCaptureWebcam = () => {
+    if (!webcamVideoRef.current) return;
+    const video = webcamVideoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setProgressPhotos((prev) => [...prev, file]);
+      }
+      closeWebcam();
+    }, 'image/jpeg', 0.9);
+  };
+
+  const handleAddPhotos = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const newFiles = Array.from(fileList);
+    setProgressPhotos((prev) => [...prev, ...newFiles]);
+  };
+
+  const handleRemovePhoto = (indexToRemove: number) => {
+    setProgressPhotos((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  // 5c. ACTION: Ghi nhận tiến độ công việc & hình ảnh minh chứng (hoặc kết thúc ca làm)
   const handleLogProgressSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!job) return;
@@ -653,7 +723,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
       // 1. Upload các ảnh đính kèm nếu có
       let newUploadedImgs: any[] = [];
       if (progressPhotos && progressPhotos.length > 0) {
-        const uploadPromises = Array.from(progressPhotos).map(async (file) => {
+        const uploadPromises = progressPhotos.map(async (file) => {
           const formData = new FormData();
           formData.append('file', file);
           formData.append('entityType', 'FabricationOrder');
@@ -680,7 +750,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
         newUploadedImgs = uploaded.filter((img) => img.url);
       }
 
-      // 2. Gửi API tạo progress log theo user đăng nhập
+      // 2. Parse tiến độ ước tính nếu có
       let parsedPercent: number | undefined = undefined;
       const cleanProgressText = progressText.trim();
       if (cleanProgressText) {
@@ -696,30 +766,35 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
         }
       }
 
-      // Giờ công chỉ được ghi tự động từ bấm giờ, form này không nhập giờ tay
-      const hoursSpentNum = 0;
+      // 3. Nếu đang có ca làm việc của tôi -> Chốt kết thúc ca làm kèm tiến độ
+      if (mySession) {
+        await api.stopFabricationSession(job.id, mySession.id, {
+          taskContent: progressContent.trim(),
+          progressPercent: parsedPercent,
+          progressText: cleanProgressText || undefined,
+          notes: progressNotes.trim() || undefined,
+          photos: newUploadedImgs,
+        });
+        await refreshAfterSession(job.id);
+      } else {
+        // Nếu không có ca làm việc đang chạy -> Ghi trực tiếp vào nhật ký tiến độ
+        await api.createFabricationProgressLog(job.id, {
+          taskContent: progressContent.trim(),
+          hoursSpent: 0,
+          progressPercent: parsedPercent,
+          progressText: cleanProgressText || undefined,
+          notes: progressNotes.trim() || undefined,
+          photos: newUploadedImgs,
+        });
+      }
 
-      await api.createFabricationProgressLog(job.id, {
-        taskContent: progressContent.trim(),
-        hoursSpent: hoursSpentNum,
-        progressPercent: parsedPercent,
-        progressText: cleanProgressText || undefined,
-        notes: progressNotes.trim() || undefined,
-        photos: newUploadedImgs,
-      });
-
-      // 3. Tự động thêm ảnh vào resultImages nếu có ảnh mới
+      // 4. Tự động thêm ảnh vào resultImages nếu có ảnh mới
       if (newUploadedImgs.length > 0) {
         const combined = [...resultImages, ...newUploadedImgs];
         setResultImages(combined);
         await api.updateFabricationOrder(job.id, {
           resultImages: combined,
         }).catch(() => {});
-      }
-
-      // 4. Cập nhật lại actualHours trên giao diện
-      if (hoursSpentNum > 0) {
-        setActualHours((prev) => Number(((Number(prev) || 0) + hoursSpentNum).toFixed(2)));
       }
 
       // 5. Làm mới danh sách nhật ký tiến độ & audit trail
@@ -730,11 +805,14 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
       setProgressNotes('');
       setProgressText('');
       setProgressHoursSpent('1.0');
-      setProgressPhotos(null);
+      setProgressPhotos([]);
       setIsLogProgressModalOpen(false);
 
       if (onUpdated) onUpdated();
-      toast.success('Đã lưu nhật ký tiến độ', `Công việc của ${user?.name || 'bạn'} đã được ghi nhận vào bảng`);
+      toast.success(
+        mySession ? 'Đã kết thúc ca làm & ghi nhận tiến độ' : 'Đã lưu nhật ký tiến độ',
+        `Công việc của ${user?.name || 'bạn'} đã được ghi nhận vào hệ thống`
+      );
     } catch (err: any) {
       console.error(err);
       toast.error('Lỗi', err.message || 'Không thể lưu ghi nhận tiến độ');
@@ -1192,25 +1270,10 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
             {status === 'ASSIGNED' && (
               <ActionButton
                 onClick={handleSessionStart}
-                disabled={saving || deleting}
+                disabled={saving || deleting || sessionBusy}
                 icon={Play}
                 label="Bắt đầu chế tạo"
                 color="#3b82f6"
-              />
-            )}
-
-            {['ASSIGNED', 'IN_PROGRESS'].includes(status) && (
-              <ActionButton
-                onClick={() => {
-                  setNewPrimaryTechId(job.assignedTechnicianId || selectedTechIds[0] || '');
-                  setNewSupporterIds(selectedTechIds.length > 1 ? selectedTechIds.slice(1) : []);
-                  setReassignNote('');
-                  setIsReassignModalOpen(true);
-                }}
-                disabled={saving || deleting}
-                icon={ArrowRightLeft}
-                label="Đổi người phụ trách"
-                color="#6366f1"
               />
             )}
 
@@ -1218,10 +1281,16 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
               <>
                 {mySession ? (
                   <ActionButton
-                    onClick={handleSessionStop}
+                    onClick={() => {
+                      setProgressContent('');
+                      setProgressText('');
+                      setProgressNotes('');
+                      setProgressPhotos([]);
+                      setIsLogProgressModalOpen(true);
+                    }}
                     disabled={saving || deleting || sessionBusy}
-                    icon={Pause}
-                    label="Dừng (kết thúc ca của tôi)"
+                    icon={Square}
+                    label="Kết thúc ca làm"
                     color="#ef4444"
                   />
                 ) : (
@@ -1233,13 +1302,6 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                     color="#3b82f6"
                   />
                 )}
-                <ActionButton
-                  onClick={() => setIsLogProgressModalOpen(true)}
-                  disabled={saving || deleting}
-                  icon={Plus}
-                  label="Ghi nhận tiến độ"
-                  color="#8b5cf6"
-                />
                 <ActionButton
                   onClick={() => setIsPauseModalOpen(true)}
                   disabled={saving || deleting}
@@ -1264,6 +1326,22 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                 icon={Play}
                 label="Tiếp tục chế tạo"
                 color="#3b82f6"
+              />
+            )}
+
+            {/* Nút Đổi người phụ trách: NẰM NGOÀI CÙNG BÊN PHẢI */}
+            {['ASSIGNED', 'IN_PROGRESS'].includes(status) && (
+              <ActionButton
+                onClick={() => {
+                  setNewPrimaryTechId(job.assignedTechnicianId || selectedTechIds[0] || '');
+                  setNewSupporterIds(selectedTechIds.length > 1 ? selectedTechIds.slice(1) : []);
+                  setReassignNote('');
+                  setIsReassignModalOpen(true);
+                }}
+                disabled={saving || deleting}
+                icon={ArrowRightLeft}
+                label="Đổi người phụ trách"
+                color="#6366f1"
               />
             )}
 
@@ -1840,10 +1918,6 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
           maxWidth="560px"
         >
           <form onSubmit={handleReassignSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '12px', backgroundColor: 'rgba(99, 102, 241, 0.08)', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.2)', fontSize: '13px', color: '#3730a3' }}>
-              Điều chuyển hoặc phân công lại thợ cơ điện phụ trách công việc gia công/chế tạo này.
-            </div>
-
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 600 }}>Thợ cơ điện phụ trách chính *</label>
               <select
@@ -1915,52 +1989,10 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
         <Modal
           isOpen={isLogProgressModalOpen}
           onClose={() => setIsLogProgressModalOpen(false)}
-          title={`Ghi nhận phần việc & tiến độ: ${job.orderCode}`}
+          title={mySession ? `Ghi nhận tiến độ & Kết thúc ca làm: ${job.orderCode}` : `Ghi nhận phần việc & tiến độ: ${job.orderCode}`}
           maxWidth="620px"
         >
           <form onSubmit={handleLogProgressSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Logged in User Identity Banner */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 14px',
-                backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                borderRadius: '8px',
-                border: '1px solid rgba(59, 130, 246, 0.25)',
-              }}
-            >
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  backgroundColor: '#2563eb',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '14px',
-                  flexShrink: 0,
-                }}
-              >
-                {(user?.name || 'U').charAt(0).toUpperCase()}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Tài khoản đang đăng nhập ghi nhận:</div>
-                <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e3a8a' }}>
-                  {user?.name || 'Kỹ thuật viên'}
-                  {user?.employeeCode && (
-                    <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748b', marginLeft: '6px' }}>
-                      (Mã NV: {user.employeeCode})
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 600 }}>Nội dung phần việc bạn đã làm *</label>
               <textarea
@@ -1996,19 +2028,123 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
             </div>
 
             <div className="form-group">
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, cursor: 'pointer' }}>
-                <Camera size={18} color="#2563eb" /> Đính kèm ảnh minh chứng (Chụp ảnh hoặc chọn file)
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                <Camera size={18} color="#2563eb" /> Đính kèm ảnh minh chứng (Tùy chọn)
               </label>
+
+              {/* Hidden file inputs for direct camera and file picker */}
               <input
+                ref={modalCameraInputRef}
                 type="file"
-                multiple
                 accept="image/*"
-                className="form-input"
-                onChange={(e) => setProgressPhotos(e.target.files)}
+                capture="environment"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  handleAddPhotos(e.target.files);
+                  e.target.value = '';
+                }}
               />
-              {progressPhotos && progressPhotos.length > 0 && (
-                <div style={{ fontSize: '12px', color: '#10b981', marginTop: '4px', fontWeight: 600 }}>
-                  Đã chọn {progressPhotos.length} ảnh để tải lên.
+              <input
+                ref={modalFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  handleAddPhotos(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={handleOpenDirectCamera}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    borderColor: '#2563eb',
+                    color: '#2563eb',
+                    fontWeight: 600,
+                    backgroundColor: '#eff6ff',
+                    padding: '8px 16px',
+                  }}
+                >
+                  <Camera size={17} /> Chụp ảnh trực tiếp
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => modalFileInputRef.current?.click()}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 16px',
+                  }}
+                >
+                  <Upload size={16} /> Chọn ảnh từ máy
+                </button>
+
+                {progressPhotos.length > 0 && (
+                  <span style={{ fontSize: '12.5px', color: '#10b981', fontWeight: 600 }}>
+                    Đã có {progressPhotos.length} ảnh đính kèm
+                  </span>
+                )}
+              </div>
+
+              {/* Danh sách ảnh đã chụp/chọn kèm xem trước và nút xóa */}
+              {progressPhotos.length > 0 && (
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
+                  {progressPhotos.map((file, idx) => {
+                    const previewUrl = URL.createObjectURL(file);
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          position: 'relative',
+                          width: '72px',
+                          height: '72px',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          border: '1px solid #cbd5e1',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+                        }}
+                      >
+                        <img
+                          src={previewUrl}
+                          alt={`ảnh ${idx + 1}`}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhoto(idx)}
+                          style={{
+                            position: 'absolute',
+                            top: '2px',
+                            right: '2px',
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(0,0,0,0.7)',
+                            color: '#ffffff',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                          }}
+                          title="Xóa ảnh này"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -2016,10 +2152,63 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
             <div className="modal-footer" style={{ padding: 0, marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setIsLogProgressModalOpen(false)}>Hủy</button>
               <button type="submit" className="btn btn-primary" disabled={saving || !progressContent.trim()}>
-                {saving ? <Loader2 className="animate-spin" size={14} /> : "Lưu vào nhật ký công việc"}
+                {saving ? (
+                  <Loader2 className="animate-spin" size={14} />
+                ) : mySession ? (
+                  "Lưu tiến độ & Kết thúc ca"
+                ) : (
+                  "Lưu vào nhật ký công việc"
+                )}
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* 0b-2. Modal Webcam Chụp ảnh trực tiếp */}
+      {showWebcamModal && (
+        <Modal
+          isOpen={showWebcamModal}
+          onClose={closeWebcam}
+          title="Máy ảnh trực tiếp"
+          maxWidth="560px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <div
+              style={{
+                width: '100%',
+                maxHeight: '380px',
+                backgroundColor: '#000000',
+                borderRadius: '10px',
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <video
+                ref={webcamVideoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ width: '100%', height: 'auto', maxHeight: '380px', objectFit: 'contain' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', width: '100%' }}>
+              <button type="button" className="btn btn-secondary" onClick={closeWebcam}>
+                Đóng
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleCaptureWebcam}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', fontWeight: 700 }}
+              >
+                <Camera size={18} /> Chụp ngay
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 
@@ -2032,10 +2221,6 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
           maxWidth="520px"
         >
           <form onSubmit={handlePauseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '12px', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.25)', fontSize: '13px', color: '#b45309' }}>
-              Công việc sẽ được chuyển sang trạng thái <strong>Tạm dừng</strong> và dừng bộ đếm giờ công thực tế cho đến khi được tiếp tục.
-            </div>
-
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 600 }}>Lý do tạm dừng *</label>
               <select
@@ -2085,10 +2270,6 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
           maxWidth="620px"
         >
           <form onSubmit={handleWorkshopAcceptSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '12px', backgroundColor: 'rgba(16, 185, 129, 0.08)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)', fontSize: '13px', color: '#065f46' }}>
-              <strong>Lưu ý:</strong> Sau khi phân xưởng nghiệm thu đạt, sản phẩm gia công/chế tạo sẽ được bàn giao chính thức cho bộ phận thụ hưởng và khóa hoàn tất phiếu.
-            </div>
-
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 600 }}>Tình trạng quy cách & kích thước bản vẽ *</label>
               <select
@@ -2184,10 +2365,6 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
           maxWidth="540px"
         >
           <form onSubmit={handleRejectReworkSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '13px', color: '#991b1b' }}>
-              Phiếu công việc sẽ được chuyển ngược lại trạng thái <strong>"Đang thực hiện"</strong> để kỹ thuật viên tiến hành sửa chữa theo nội dung yêu cầu bên dưới.
-            </div>
-
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 700, color: '#e11d48' }}>Lý do yêu cầu xử lý lại & Chỉ dẫn cụ thể *</label>
               <textarea
@@ -2321,7 +2498,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
             </tr>
             <tr>
               <td style={{ padding: '4px 0' }}><strong>Giờ công thực tế:</strong></td>
-              <td><strong>{actualHours} giờ</strong> (Tự động tính từ thời điểm bắt đầu đến khi hoàn thành)</td>
+              <td><strong>{actualHours} giờ</strong></td>
             </tr>
             <tr>
               <td style={{ padding: '4px 0' }}><strong>Ghi chú kết quả:</strong></td>

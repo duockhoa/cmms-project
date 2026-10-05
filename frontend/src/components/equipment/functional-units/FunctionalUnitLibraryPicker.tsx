@@ -1,5 +1,4 @@
-import React from 'react';
-import { Search, Sparkles } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 export const FunctionalUnitLibraryPicker: React.FC<any> = ({
   allCategories, editingUnit, equipmentCode, filteredLibrary, formData,
@@ -278,25 +277,6 @@ export const FunctionalUnitLibraryPicker: React.FC<any> = ({
                         <option value="INACTIVE">⚪ Ngừng hoạt động</option>
                       </select>
                     </div>
-
-                    <div style={{ 
-                      padding: '10px 12px', 
-                      backgroundColor: 'rgba(37, 99, 235, 0.06)', 
-                      borderRadius: '6px', 
-                      border: '1px solid rgba(37, 99, 235, 0.15)',
-                      fontSize: '12px',
-                      color: '#1e40af',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '4px'
-                    }}>
-                      <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Sparkles size={14} /> Tự động sinh mã & kế thừa thông tin:
-                      </div>
-                      <div style={{ color: 'var(--text-secondary)' }}>
-                        Mã cụm trên máy sẽ được tự động đánh số thứ tự liên tiếp (VD: <code>{equipmentCode ? `${equipmentCode}-CU${(units.length + 1).toString().padStart(2, '0')}` : `CU-${(units.length + 1).toString().padStart(2, '0')}`}</code>, <code>CU{(units.length + 2).toString().padStart(2, '0')}</code>...). Sau khi gán, bạn có thể chỉnh sửa riêng từng cụm bất cứ lúc nào.
-                      </div>
-                    </div>
                   </div>
                 )}
 
@@ -305,11 +285,11 @@ export const FunctionalUnitLibraryPicker: React.FC<any> = ({
                     padding: '12px', 
                     textAlign: 'center', 
                     color: 'var(--text-muted)', 
-                    fontSize: '12px', 
+                    fontSize: '12.5px', 
                     border: '1px dashed var(--border-color)', 
                     borderRadius: '6px' 
                   }}>
-                    👈 Hãy tích chọn một hoặc nhiều cụm chức năng từ danh sách phía trên để gán vào thiết bị.
+                    Chưa chọn cụm chức năng nào từ danh sách phía trên
                   </div>
                 )}
               </div>

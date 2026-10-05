@@ -93,9 +93,6 @@ export const VoidReadingModal: React.FC<UtilityModalProps> = ({ model }) => {
                   onChange={(e) => setVoidReason(e.target.value)}
                   style={{ width: '100%', borderColor: '#cbd5e1', fontSize: '13px' }}
                 />
-                <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                  * Sau khi hủy, chỉ số đồng hồ sẽ tự động được hoàn nguyên về số hợp lệ gần nhất để NV tiếp tục ghi số đúng.
-                </small>
               </div>
 
               <div className="modal-actions-row">

@@ -18,8 +18,8 @@ export const DeleteWorkOrderModal: React.FC<DeleteWorkOrderModalProps> = ({ work
           Bạn có chắc chắn muốn xóa phiếu sửa chữa <strong style={{ color: '#ef4444' }}>{workOrder?.orderCode}</strong>?
           <div style={{ marginTop: '4px', color: 'var(--text-secondary)' }}>Tiêu đề: <strong>{workOrder?.title}</strong></div>
           {workOrder?.equipment?.name && <div style={{ color: 'var(--text-secondary)' }}>Thiết bị: <strong>{workOrder.equipment.name}</strong></div>}
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#dc2626' }}>
-            ⚠️ Lưu ý: Mọi nhật ký thao tác, checklist và dữ liệu vật tư đính kèm sẽ bị xóa. Hành động này không thể hoàn tác!
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#dc2626', fontWeight: 500 }}>
+            Hành động này không thể hoàn tác.
           </div>
         </div>
       </div>

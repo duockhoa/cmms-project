@@ -215,7 +215,7 @@ export const SystemSettingsTab: React.FC = () => {
                 />
               </div>
               <small style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '6px', display: 'block' }}>
-                Hệ thống sẽ gửi thông báo và đánh dấu cảnh báo trước khi đến hạn bảo trì định kỳ đúng số ngày này.
+                Số ngày cảnh báo trước hạn bảo trì định kỳ.
               </small>
             </div>
 

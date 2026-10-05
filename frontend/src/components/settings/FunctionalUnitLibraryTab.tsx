@@ -186,7 +186,7 @@ export const FunctionalUnitLibraryTab: React.FC = () => {
               Thư viện Cụm chức năng Dùng chung
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-              Danh mục cụm chuẩn toàn nhà máy. Khi thêm cụm trên bất kỳ thiết bị nào, hệ thống sẽ tự động học và lưu vào đây để các máy khác dùng lại.
+              Danh mục cụm chuẩn toàn nhà máy.
             </p>
           </div>
 

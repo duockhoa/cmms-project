@@ -22,11 +22,6 @@ export const FunctionalUnitCustomForm: React.FC<any> = ({
                     required
                     autoFocus
                   />
-                  {!editingUnit && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: 1.4 }}>
-                      💡 <strong>Tự động học:</strong> Sau khi tạo, cụm này sẽ được tự động lưu vào <strong>Thư viện dùng chung</strong> để các máy khác có thể chọn sử dụng.
-                    </div>
-                  )}
                 </div>
 
                 {/* Mã cụm & Phân nhóm */}

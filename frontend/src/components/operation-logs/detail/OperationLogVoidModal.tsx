@@ -44,10 +44,6 @@ export const OperationLogVoidModal: React.FC<any> = ({
               </div>
             </div>
 
-            <div style={{ padding: '10px 12px', borderRadius: '8px', backgroundColor: '#fffbeb', border: '1px solid #fef3c7', color: '#b45309', fontSize: '12px', lineHeight: 1.5, marginBottom: '16px' }}>
-              🛡️ <strong>Lưu ý:</strong> Kết quả sai này sẽ được đánh dấu hủy và lưu lại lịch sử kèm họ tên và lý do bạn nhập.
-            </div>
-
             <form onSubmit={handleVoidSubmit}>
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>

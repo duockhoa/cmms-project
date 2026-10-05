@@ -40,9 +40,6 @@ export const RecordReadingModal: React.FC<UtilityModalProps> = ({ model }) => {
                   <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
                     Chỉnh Sửa Bản Ghi Chỉ Số
                   </h3>
-                  <span style={{ fontSize: '11.5px', color: '#6b7280' }}>
-                    Hệ thống sẽ tự động cập nhật sản lượng và liên kết lại chuỗi bản ghi.
-                  </span>
                 </div>
               </div>
               <button 
