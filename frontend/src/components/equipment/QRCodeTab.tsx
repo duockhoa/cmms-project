@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Printer, Download } from 'lucide-react';
+import QRCode from 'qrcode';
 import { printSingleQRTag } from '../../utils/qrPrintHelper';
 
 interface QRCodeTabProps {
@@ -10,15 +11,41 @@ export const QRCodeTab: React.FC<QRCodeTabProps> = ({ data }) => {
   const code = (data.code || data.id || '').trim();
   const nameFormatted = (data.name || '').trim().replace(/\s+/g, '_');
   const qrPayload = nameFormatted ? `${code}$${nameFormatted}` : code;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrPayload)}`;
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  useEffect(() => {
+    let isMounted = true;
+    QRCode.toDataURL(qrPayload, {
+      width: 300,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    }).then((url) => {
+      if (isMounted) setQrDataUrl(url);
+    }).catch((err) => {
+      console.error('Lỗi tạo mã QR offline:', err);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [qrPayload]);
 
   const handlePrint = () => {
     printSingleQRTag({
       name: data.name,
       code,
+      oldCode: data.oldCode,
       location: data.location,
       qrPayload,
     });
+  };
+
+  const handleDownload = () => {
+    if (!qrDataUrl) return;
+    const link = document.createElement('a');
+    link.download = `QR_${code}_${(data.name || 'device').trim().replace(/\s+/g, '_')}.png`;
+    link.href = qrDataUrl;
+    link.click();
   };
 
   return (
@@ -54,14 +81,25 @@ export const QRCodeTab: React.FC<QRCodeTabProps> = ({ data }) => {
           <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a', marginBottom: '6px' }}>
             {data.name}
           </div>
-          <img 
-            src={qrUrl}
-            alt={`QR ${code}`}
-            style={{ width: '140px', height: '140px', margin: '0 auto 6px auto', display: 'block' }}
-          />
+          {qrDataUrl ? (
+            <img 
+              src={qrDataUrl}
+              alt={`QR ${code}`}
+              style={{ width: '140px', height: '140px', margin: '0 auto 6px auto', display: 'block' }}
+            />
+          ) : (
+            <div style={{ width: '140px', height: '140px', margin: '0 auto 6px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '12px' }}>
+              Đang tạo QR...
+            </div>
+          )}
           <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
             [ {code} ]
           </div>
+          {data.oldCode && (
+            <div style={{ fontSize: '11px', color: '#475569', fontWeight: 700, marginTop: '2px' }}>
+              Mã cũ: {data.oldCode}
+            </div>
+          )}
           {data.location && (
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
               📍 {data.location}
@@ -75,10 +113,8 @@ export const QRCodeTab: React.FC<QRCodeTabProps> = ({ data }) => {
             type="button"
             className="btn btn-secondary btn-sm" 
             style={{ flex: 1, fontSize: '12px', padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-            onClick={() => {
-              const downloadUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qrPayload)}`;
-              window.open(downloadUrl, '_blank');
-            }}
+            onClick={handleDownload}
+            disabled={!qrDataUrl}
           >
             <Download size={14} />
             <span>Tải ảnh</span>
