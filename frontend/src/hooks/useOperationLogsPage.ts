@@ -89,11 +89,12 @@ export function useOperationLogsPage() {
               rawText = rawText.split('$')[0].trim();
             }
 
-            // Look up in equipmentList by code, accountingCode or id
+            // Look up in equipmentList by code, oldCode, accountingCode or id
             let matchedEq = equipmentList.find(
               (eq) =>
                 eq.id?.toLowerCase() === rawText.toLowerCase() ||
                 eq.code?.toLowerCase() === rawText.toLowerCase() ||
+                (eq.oldCode && eq.oldCode.toLowerCase() === rawText.toLowerCase()) ||
                 eq.accountingCode?.toLowerCase() === rawText.toLowerCase()
             );
 
@@ -106,6 +107,7 @@ export function useOperationLogsPage() {
                   (eq: any) =>
                     eq.id?.toLowerCase() === rawText.toLowerCase() ||
                     eq.code?.toLowerCase() === rawText.toLowerCase() ||
+                    (eq.oldCode && eq.oldCode.toLowerCase() === rawText.toLowerCase()) ||
                     eq.accountingCode?.toLowerCase() === rawText.toLowerCase()
                 ) || searchItems[0];
               } catch (_) {}

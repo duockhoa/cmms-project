@@ -307,10 +307,13 @@ export class WorkOrdersService implements OnModuleInit {
       where: {
         OR: [
           { code: cleanToken },
+          { oldCode: cleanToken },
           { id: cleanToken },
           { accountingCode: cleanToken },
           { code: cleanToken.toUpperCase() },
           { code: cleanToken.toLowerCase() },
+          { oldCode: cleanToken.toUpperCase() },
+          { oldCode: cleanToken.toLowerCase() },
         ],
       },
     });

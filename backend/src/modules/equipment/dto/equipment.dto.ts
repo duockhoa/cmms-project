@@ -9,8 +9,12 @@ export enum EquipmentStatus {
 
 export class CreateEquipmentDto {
   @IsString()
-  @IsNotEmpty()
-  code: string;
+  @IsOptional()
+  code?: string;
+
+  @IsString()
+  @IsOptional()
+  oldCode?: string;
 
   @IsString()
   @IsOptional()
@@ -77,6 +81,10 @@ export class UpdateEquipmentDto {
   @IsString()
   @IsOptional()
   code?: string;
+
+  @IsString()
+  @IsOptional()
+  oldCode?: string;
 
   @IsString()
   @IsOptional()

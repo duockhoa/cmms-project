@@ -121,8 +121,8 @@ export function useEquipmentPage() {
         const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment/${equipmentModal.data.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            code: finalFormData.code ? finalFormData.code.trim() : undefined,
             name: finalFormData.name,
+            oldCode: finalFormData.oldCode || undefined,
             category: finalFormData.category,
             department: finalFormData.department || undefined,
             status: finalFormData.status,
@@ -145,6 +145,7 @@ export function useEquipmentPage() {
           ...finalFormData,
         };
         if (!createPayload.code) delete createPayload.code;
+        if (!createPayload.oldCode) delete createPayload.oldCode;
         if (!createPayload.accountingCode) delete createPayload.accountingCode;
 
         const res = await fetchWithAuth(`${API_BASE}/api/v1/equipment`, {
@@ -246,6 +247,7 @@ export function useEquipmentPage() {
         return {
           name: item.name,
           code,
+          oldCode: item.oldCode || '',
           location: item.location || '',
           qrPayload: nameFormatted ? `${code}$${nameFormatted}` : code,
         };
@@ -285,6 +287,7 @@ export function useEquipmentPage() {
       return {
         name: item.name,
         code,
+        oldCode: item.oldCode || '',
         location: item.location || '',
         qrPayload: nameFormatted ? `${code}$${nameFormatted}` : code,
       };
@@ -303,6 +306,7 @@ export function useEquipmentPage() {
     printSingleQRTag({
       name: item.name,
       code,
+      oldCode: item.oldCode || '',
       location: item.location,
       qrPayload: nameFormatted ? `${code}$${nameFormatted}` : code,
     });

@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 export interface QRPrintItem {
   name: string;
   code: string;
+  oldCode?: string;
   location?: string;
   qrPayload?: string;
   category?: string;
@@ -56,6 +57,7 @@ export async function printSingleQRTag(item: QRPrintItem) {
     .name { font-size: 13px; font-weight: 800; color: #000; margin-bottom: 6px; word-break: break-word; line-height: 1.25; }
     .qr { width: 140px; height: 140px; display: block; margin: 0 auto 6px auto; }
     .code { font-family: Consolas, Monaco, "Courier New", monospace; font-size: 14px; font-weight: 900; color: #000; margin-bottom: 2px; }
+    .old-code { font-size: 11px; color: #475569; font-weight: 700; margin-bottom: 2px; }
     .loc { font-size: 11px; color: #475569; font-weight: 600; }
     @media print { html, body { height: 100% !important; overflow: hidden !important; } }
   </style>
@@ -66,6 +68,7 @@ export async function printSingleQRTag(item: QRPrintItem) {
     <div class="name">${item.name || ''}</div>
     <img id="qr-img" class="qr" src="${qrDataUrl}" alt="QR ${code}" />
     <div class="code">[ ${code} ]</div>
+    ${item.oldCode ? `<div class="old-code">Mã cũ: ${item.oldCode}</div>` : ''}
     ${item.location ? `<div class="loc">📍 ${item.location}</div>` : ''}
   </div>
   <script>
@@ -114,6 +117,7 @@ export async function printBatchQRTags(options: {
       return {
         name: item.name || '',
         code,
+        oldCode: item.oldCode || '',
         location: item.location || '',
         dataUrl,
       };
@@ -133,6 +137,7 @@ export async function printBatchQRTags(options: {
         <div class="name" title="${item.name}">${item.name}</div>
         <img class="qr-batch-img" src="${item.dataUrl}" alt="QR ${item.code}" />
         <div class="code">[ ${item.code} ]</div>
+        ${item.oldCode ? `<div style="font-size: 10.5px; color: #475569; font-weight: 700;">Mã cũ: ${item.oldCode}</div>` : ''}
         ${item.location ? `<div class="loc" title="${item.location}">📍 ${item.location}</div>` : '<div class="loc">&nbsp;</div>'}
         <div class="card-seq">#${index + 1}</div>
       </div>

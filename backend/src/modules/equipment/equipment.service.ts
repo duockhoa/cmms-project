@@ -30,6 +30,80 @@ export class EquipmentService implements OnModuleInit {
     } catch (err) {
       console.warn('[EQUIPMENT_SYNC] Lỗi đồng bộ trạng thái thiết bị:', err);
     }
+
+    try {
+      // 3. Tự động chuyển đổi mã hệ thống chuẩn EQ-xxxx cho các thiết bị cũ (Production & Local)
+      const legacyEquipments = await this.prisma.equipment.findMany({
+        where: {
+          OR: [
+            { oldCode: null },
+            { NOT: { code: { startsWith: 'EQ-' } } },
+          ],
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+
+      if (legacyEquipments.length > 0) {
+        console.log(`[EQUIPMENT_MIGRATION] Bắt đầu tự động chuyển đổi mã cho ${legacyEquipments.length} thiết bị sang chuẩn EQ-xxxx...`);
+        const allEquipments = await this.prisma.equipment.findMany({
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        });
+
+        // Bước 1: Gán mã tạm thời để tránh xung đột Unique constraint và bảo lưu mã cũ vào oldCode
+        for (let i = 0; i < allEquipments.length; i++) {
+          const eq = allEquipments[i];
+          const preservedOldCode = eq.oldCode || eq.code;
+          await this.prisma.equipment.update({
+            where: { id: eq.id },
+            data: {
+              oldCode: preservedOldCode,
+              code: `TEMP_MIGRATE_${i + 1}_${Date.now()}`,
+            },
+          });
+        }
+
+        // Bước 2: Gán mã chuẩn EQ-0001, EQ-0002,...
+        for (let i = 0; i < allEquipments.length; i++) {
+          const eq = allEquipments[i];
+          const newCode = `EQ-${String(i + 1).padStart(4, '0')}`;
+          await this.prisma.equipment.update({
+            where: { id: eq.id },
+            data: {
+              code: newCode,
+            },
+          });
+        }
+        console.log(`[EQUIPMENT_MIGRATION] Hoàn thành chuyển đổi ${allEquipments.length} thiết bị sang dải mã EQ-0001 -> EQ-${String(allEquipments.length).padStart(4, '0')}.`);
+      }
+    } catch (err) {
+      console.warn('[EQUIPMENT_MIGRATION] Lỗi tự động chuyển đổi mã thiết bị:', err);
+    }
+  }
+
+  /**
+   * Sinh mã thiết bị hệ thống tự động tiếp theo dạng EQ-0001, EQ-0002...
+   */
+  public async generateNextEquipmentCode(): Promise<string> {
+    const allEq = await this.prisma.equipment.findMany({
+      select: { code: true },
+    });
+    let maxNumber = 0;
+    for (const eq of allEq) {
+      if (eq.code && eq.code.startsWith('EQ-')) {
+        const numPart = parseInt(eq.code.replace('EQ-', ''), 10);
+        if (!isNaN(numPart) && numPart > maxNumber) {
+          maxNumber = numPart;
+        }
+      }
+    }
+    const nextNumber = maxNumber + 1;
+    let candidateCode = `EQ-${String(nextNumber).padStart(4, '0')}`;
+    let counter = nextNumber;
+    while (await this.prisma.equipment.findUnique({ where: { code: candidateCode } })) {
+      counter++;
+      candidateCode = `EQ-${String(counter).padStart(4, '0')}`;
+    }
+    return candidateCode;
   }
 
   async syncStatuses() {
@@ -42,6 +116,8 @@ export class EquipmentService implements OnModuleInit {
       where.OR = [
         { name: { contains: query.search } },
         { code: { contains: query.search } },
+        { oldCode: { contains: query.search } },
+        { accountingCode: { contains: query.search } },
         { serialNumber: { contains: query.search } },
       ];
     }
@@ -104,9 +180,18 @@ export class EquipmentService implements OnModuleInit {
     });
   }
 
-  async findOne(id: string) {
-    const item = await this.prisma.equipment.findUnique({
-      where: { id },
+  async findOne(idOrCode: string) {
+    const item = await this.prisma.equipment.findFirst({
+      where: {
+        OR: [
+          { id: idOrCode },
+          { code: idOrCode },
+          { oldCode: idOrCode },
+          { accountingCode: idOrCode },
+          { code: idOrCode.toUpperCase() },
+          { oldCode: idOrCode.toUpperCase() },
+        ],
+      },
       include: {
         requests: { orderBy: { createdAt: 'desc' }, take: 10 },
         workOrders: { orderBy: { createdAt: 'desc' }, take: 10, include: { items: { include: { inventoryItem: true } } } },
@@ -116,14 +201,15 @@ export class EquipmentService implements OnModuleInit {
     });
     if (!item) throw new NotFoundException('Không tìm thấy thiết bị');
 
+    const realId = item.id;
     const attachments = await this.prisma.attachment.findMany({
-      where: { entityId: id, isDeleted: false },
+      where: { entityId: realId, isDeleted: false },
       orderBy: { createdAt: 'desc' }
     });
 
     const requestIds = item.requests.map(r => r.id);
     const workOrderIds = item.workOrders.map(w => w.id);
-    const logEntityIds = [id, ...requestIds, ...workOrderIds];
+    const logEntityIds = [realId, ...requestIds, ...workOrderIds];
 
     const logs = await this.prisma.workflowHistory.findMany({
       where: {
@@ -151,26 +237,13 @@ export class EquipmentService implements OnModuleInit {
       ? String(data.accountingCode).trim()
       : null;
 
-    // 2. Tự động sinh mã thiết bị nếu để trống
-    let code = data.code ? String(data.code).trim() : '';
-    if (!code) {
-      let isUnique = false;
-      let counter = (await this.prisma.equipment.count()) + 1;
-      while (!isUnique) {
-        code = `EQ-${counter.toString().padStart(4, '0')}`;
-        const exists = await this.prisma.equipment.findUnique({ where: { code } });
-        if (!exists) {
-          isUnique = true;
-        } else {
-          counter++;
-        }
-      }
-    } else {
-      const existing = await this.prisma.equipment.findUnique({ where: { code } });
-      if (existing) {
-        throw new ConflictException(`Mã thiết bị '${code}' đã tồn tại trong hệ thống.`);
-      }
-    }
+    // 2. Chuẩn hóa mã cũ / nhận diện: nếu app ngoài gửi `code` cũ mà không có `oldCode`, tự động lưu vào `oldCode`
+    const oldCode = data.oldCode && String(data.oldCode).trim() !== ''
+      ? String(data.oldCode).trim()
+      : (data.code && String(data.code).trim() !== '' && !String(data.code).startsWith('EQ-') ? String(data.code).trim() : null);
+
+    // 3. Tự động sinh mã thiết bị hệ thống EQ-xxxx (không cho phép người dùng tự điền/sửa)
+    const code = await this.generateNextEquipmentCode();
 
     if (accountingCode) {
       const existingAcc = await this.prisma.equipment.findUnique({ where: { accountingCode } });
@@ -186,6 +259,7 @@ export class EquipmentService implements OnModuleInit {
         data: {
           ...data,
           code,
+          oldCode,
           accountingCode,
           department: data.department && String(data.department).trim() !== '' ? String(data.department).trim() : null,
           serialNumber: data.serialNumber && String(data.serialNumber).trim() !== '' ? String(data.serialNumber).trim() : null,
@@ -265,27 +339,14 @@ export class EquipmentService implements OnModuleInit {
     const { expectedVersion, ...updateData } = data;
     const sanitizedData: any = { ...updateData };
 
-    if ('code' in sanitizedData) {
-      const trimmedCode = sanitizedData.code && String(sanitizedData.code).trim() !== ''
-        ? String(sanitizedData.code).trim()
+    // Mã hệ thống 'code' là Read-Only do hệ thống quản lý, không cho phép client cập nhật
+    delete sanitizedData.code;
+
+    // Cho phép cập nhật mã cũ / mã nhận diện
+    if ('oldCode' in sanitizedData) {
+      sanitizedData.oldCode = sanitizedData.oldCode && String(sanitizedData.oldCode).trim() !== ''
+        ? String(sanitizedData.oldCode).trim()
         : null;
-
-      if (!trimmedCode) {
-        throw new BadRequestException('Mã thiết bị không được để trống.');
-      }
-
-      sanitizedData.code = trimmedCode;
-
-      if (sanitizedData.code !== item.code) {
-        const existingCode = await this.prisma.equipment.findFirst({
-          where: { code: sanitizedData.code, NOT: { id } },
-        });
-        if (existingCode) {
-          throw new ConflictException(
-            `Mã thiết bị '${sanitizedData.code}' đã được sử dụng cho thiết bị khác (${existingCode.name}).`,
-          );
-        }
-      }
     }
 
     if ('department' in sanitizedData) {

@@ -97,6 +97,7 @@ export function useOperationLogForm() {
                 const matchesCurrent =
                   equipment.id?.toLowerCase() === rawText.toLowerCase() ||
                   equipment.code?.toLowerCase() === rawText.toLowerCase() ||
+                  (equipment.oldCode && equipment.oldCode.toLowerCase() === rawText.toLowerCase()) ||
                   (equipment.accountingCode && equipment.accountingCode.toLowerCase() === rawText.toLowerCase());
 
                 if (matchesCurrent) {

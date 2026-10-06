@@ -60,7 +60,7 @@ export const EquipmentDetailPage: React.FC<EquipmentDetailPageProps> = ({ item, 
     <div>
       <PageHeader
         title={data.name}
-        subtitle={`Mã: ${data.code}${data.accountingCode ? ` | Phụ (KT): ${data.accountingCode}` : ''} | Số Serial: ${data.serialNumber || '---'}`}
+        subtitle={`Mã: ${data.code}${data.oldCode ? ` | Mã cũ: ${data.oldCode}` : ''}${data.accountingCode ? ` | KT: ${data.accountingCode}` : ''} | Số Serial: ${data.serialNumber || '---'}`}
         breadcrumb={[{ label: 'Thiết bị', path: '/equipment' }, { label: data.code }]}
         badge={(
           <>

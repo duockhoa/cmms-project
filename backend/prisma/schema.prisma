@@ -91,7 +91,8 @@ model Role {
 
 model Equipment {
   id                    String                @id @default(uuid())
-  code                  String                @unique
+  code                  String                @unique // Mã hệ thống tự động sinh (VD: EQ-0001)
+  oldCode               String?                       // Mã nhận diện cũ / Mã quản lý nội bộ (Cho phép sửa)
   accountingCode        String?               @unique
   name                  String
   category              String // Máy phay, Máy nén khí, Băng tải, Máy hàn...
@@ -123,6 +124,7 @@ model Equipment {
   @@index([status])
   @@index([category])
   @@index([department])
+  @@index([oldCode])
 }
 
 model MaintenanceRequest {

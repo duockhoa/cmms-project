@@ -105,6 +105,7 @@ export function useRequestsPage() {
     const matched = equipmentList.find(
       (e) =>
         e.code?.toLowerCase() === rawCode.toLowerCase() ||
+        (e.oldCode && e.oldCode.toLowerCase() === rawCode.toLowerCase()) ||
         e.id === rawCode ||
         e.accountingCode?.toLowerCase() === rawCode.toLowerCase()
     );

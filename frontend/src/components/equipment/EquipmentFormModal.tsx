@@ -13,7 +13,8 @@ interface EquipmentFormModalProps {
     location: string;
     serialNumber: string;
     specs: string;
-    code: string;
+    code?: string;
+    oldCode?: string;
     accountingCode?: string;
   }) => void;
   initialData?: any;
@@ -39,6 +40,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     serialNumber: '',
     specs: '',
     code: '',
+    oldCode: '',
     accountingCode: '',
   });
 
@@ -84,6 +86,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
             serialNumber: initialData.serialNumber || '',
             specs: initialData.specs || '',
             code: initialData.code || '',
+            oldCode: initialData.oldCode || '',
             accountingCode: initialData.accountingCode || '',
           });
         } else {
@@ -96,6 +99,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
             serialNumber: '',
             specs: '',
             code: '',
+            oldCode: '',
             accountingCode: '',
           });
         }
@@ -113,7 +117,8 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
       location: formData.location,
       serialNumber: formData.serialNumber.trim(),
       specs: formData.specs.trim(),
-      code: formData.code.trim(),
+      code: formData.code.trim() || undefined,
+      oldCode: formData.oldCode.trim() || undefined,
       accountingCode: formData.accountingCode.trim() || undefined,
     });
     // Reset state after submit
@@ -126,6 +131,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
       serialNumber: '',
       specs: '',
       code: '',
+      oldCode: '',
       accountingCode: '',
     });
   };
@@ -138,28 +144,41 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
         <div className="grid-2">
           <div className="form-group">
             <label className="form-label">
-              Mã thiết bị {isEdit ? <span style={{ color: 'var(--danger, #ef4444)' }}>*</span> : <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>(Để trống tự sinh)</span>}
+              Mã hệ thống <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>(Tự động sinh)</span>
             </label>
             <input 
               type="text" 
               className="form-input" 
-              required={isEdit}
-              placeholder={isEdit ? "Nhập mã thiết bị (ví dụ: EQ-0001)" : "Nhập mã thiết bị (để trống tự sinh)"}
-              value={formData.code} 
-              onChange={(e) => setFormData({ ...formData, code: e.target.value })} 
+              disabled
+              style={{ backgroundColor: 'var(--bg-secondary, #f1f5f9)', color: 'var(--text-muted, #64748b)', cursor: 'not-allowed', fontWeight: 600 }}
+              value={isEdit ? formData.code : 'Hệ thống tự động cấp mã (EQ-xxxx)'} 
+              readOnly
             />
           </div>
-          
+
           <div className="form-group">
-            <label className="form-label">Mã phụ (Kế toán)</label>
+            <label className="form-label">
+              Mã cũ / Mã nhận diện <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>(Tùy chọn)</span>
+            </label>
             <input 
               type="text" 
               className="form-input" 
-              placeholder="Nhập mã kế toán (Tùy chọn)" 
-              value={formData.accountingCode || ''} 
-              onChange={(e) => setFormData({ ...formData, accountingCode: e.target.value })} 
+              placeholder="Nhập mã cũ/nội bộ (ví dụ: TBSX001, TS-GD2-049)" 
+              value={formData.oldCode || ''} 
+              onChange={(e) => setFormData({ ...formData, oldCode: e.target.value })} 
             />
           </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Mã phụ (Kế toán)</label>
+          <input 
+            type="text" 
+            className="form-input" 
+            placeholder="Nhập mã kế toán (Tùy chọn)" 
+            value={formData.accountingCode || ''} 
+            onChange={(e) => setFormData({ ...formData, accountingCode: e.target.value })} 
+          />
         </div>
 
         <div className="form-group">

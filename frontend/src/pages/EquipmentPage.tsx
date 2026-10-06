@@ -297,8 +297,17 @@ export const EquipmentPage: React.FC = () => {
                       />
                     </td>
                     <td>
-                      <div style={{ fontWeight: 700 }}>{item.code}</div>
-                      {item.accountingCode && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.accountingCode}</div>}
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.code}</div>
+                      {item.oldCode && (
+                        <div style={{ fontSize: '11.5px', color: 'var(--accent-blue, #2563eb)', fontWeight: 600 }}>
+                          {item.oldCode}
+                        </div>
+                      )}
+                      {item.accountingCode && (
+                        <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                          KT: {item.accountingCode}
+                        </div>
+                      )}
                     </td>
                     <td style={{ fontWeight: 600 }}>{item.name}</td>
                     <td>{item.category}</td>
