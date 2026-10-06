@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   ClipboardCheck, CheckCircle2, AlertTriangle, 
   MapPin, Clock, RefreshCw, Sliders, ShieldAlert,
-  ShieldCheck 
+  ShieldCheck, ArrowUpDown, Save
 } from 'lucide-react';
 import { PageHeader } from '../common';
 import { EquipmentParam, checkSpecStatus } from '../../hooks/useOperationLogForm';
@@ -19,6 +19,14 @@ interface OperationLogInputFormProps {
   handleInputChange: (paramId: string, value: string) => void;
   onFinish: (e: React.FormEvent) => void;
   onCancel: () => void;
+  canReorder?: boolean;
+  isReorderMode?: boolean;
+  setIsReorderMode?: (val: boolean) => void;
+  savingOrder?: boolean;
+  moveParamUp?: (index: number) => void;
+  moveParamDown?: (index: number) => void;
+  saveParamOrder?: () => Promise<void>;
+  cancelReorder?: () => void;
 }
 
 export const OperationLogInputForm: React.FC<OperationLogInputFormProps> = ({
@@ -33,6 +41,14 @@ export const OperationLogInputForm: React.FC<OperationLogInputFormProps> = ({
   handleInputChange,
   onFinish,
   onCancel,
+  canReorder = false,
+  isReorderMode = false,
+  setIsReorderMode,
+  savingOrder = false,
+  moveParamUp,
+  moveParamDown,
+  saveParamOrder,
+  cancelReorder,
 }) => {
   return (
     <div
@@ -150,8 +166,72 @@ export const OperationLogInputForm: React.FC<OperationLogInputFormProps> = ({
         </div>
       ) : (
         <form onSubmit={onFinish}>
+          {/* Parameter Reorder Toolbar (RBAC) */}
+          {canReorder && parameters.length > 1 && (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                backgroundColor: isReorderMode ? '#eff6ff' : '#f8fafc',
+                border: isReorderMode ? '1.5px dashed #3b82f6' : '1px solid var(--border-color, #e2e8f0)',
+                marginBottom: '16px',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}
+            >
+              <div style={{ fontSize: '13px', color: isReorderMode ? '#1d4ed8' : 'var(--text-secondary)' }}>
+                {isReorderMode ? (
+                  <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <ArrowUpDown size={15} /> Chế độ sắp xếp: Bấm nút ▲ / ▼ trên mỗi ô để đổi thứ tự
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                    Thứ tự các ô đo theo luồng kiểm tra thực tế trên thân máy
+                  </span>
+                )}
+              </div>
+
+              {!isReorderMode ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setIsReorderMode?.(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600 }}
+                  title="Sắp xếp lại thứ tự các trường nhập liệu"
+                >
+                  <ArrowUpDown size={13} /> Sắp xếp thứ tự
+                </button>
+              ) : (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={cancelReorder}
+                    disabled={savingOrder}
+                    style={{ fontSize: '12px' }}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={saveParamOrder}
+                    disabled={savingOrder}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', backgroundColor: '#2563eb' }}
+                  >
+                    {savingOrder ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+                    Lưu thứ tự
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-            {parameters.map((param) => {
+            {parameters.map((param, index) => {
               const val = formData[param.id] || '';
               const status = checkSpecStatus(param, val);
               const isOutlier = status === 'OUT_OF_SPEC_LOW' || status === 'OUT_OF_SPEC_HIGH';
@@ -162,12 +242,16 @@ export const OperationLogInputForm: React.FC<OperationLogInputFormProps> = ({
                   style={{
                     padding: '14px',
                     borderRadius: '8px',
-                    border: isOutlier
+                    border: isReorderMode
+                      ? '1.5px solid #93c5fd'
+                      : isOutlier
                       ? '1.5px solid #ef4444'
                       : val
                       ? '1.5px solid #10b981'
                       : '1px solid var(--border-color, #e2e8f0)',
-                    backgroundColor: isOutlier
+                    backgroundColor: isReorderMode
+                      ? '#f8fafc'
+                      : isOutlier
                       ? 'rgba(239, 68, 68, 0.03)'
                       : val
                       ? 'rgba(16, 185, 129, 0.02)'
@@ -175,15 +259,74 @@ export const OperationLogInputForm: React.FC<OperationLogInputFormProps> = ({
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>
-                      {param.name}
-                    </label>
-                    {param.unit && (
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, backgroundColor: 'rgba(0,0,0,0.04)', padding: '1px 6px', borderRadius: '4px' }}>
-                        {param.unit}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: isReorderMode ? '#1d4ed8' : '#64748b',
+                          backgroundColor: isReorderMode ? '#dbeafe' : '#f1f5f9',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        #{index + 1}
                       </span>
-                    )}
+                      <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                        {param.name}
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {param.unit && (
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, backgroundColor: 'rgba(0,0,0,0.04)', padding: '1px 6px', borderRadius: '4px' }}>
+                          {param.unit}
+                        </span>
+                      )}
+
+                      {/* Nút di chuyển Lên/Xuống cho Admin */}
+                      {isReorderMode && (
+                        <div style={{ display: 'flex', gap: '3px' }}>
+                          <button
+                            type="button"
+                            disabled={index === 0 || savingOrder}
+                            onClick={() => moveParamUp?.(index)}
+                            style={{
+                              border: '1px solid #cbd5e1',
+                              backgroundColor: index === 0 ? '#f8fafc' : '#ffffff',
+                              color: index === 0 ? '#cbd5e1' : '#1e293b',
+                              borderRadius: '4px',
+                              padding: '2px 6px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              cursor: index === 0 ? 'not-allowed' : 'pointer',
+                            }}
+                            title="Di chuyển lên trước"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === parameters.length - 1 || savingOrder}
+                            onClick={() => moveParamDown?.(index)}
+                            style={{
+                              border: '1px solid #cbd5e1',
+                              backgroundColor: index === parameters.length - 1 ? '#f8fafc' : '#ffffff',
+                              color: index === parameters.length - 1 ? '#cbd5e1' : '#1e293b',
+                              borderRadius: '4px',
+                              padding: '2px 6px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              cursor: index === parameters.length - 1 ? 'not-allowed' : 'pointer',
+                            }}
+                            title="Di chuyển xuống sau"
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Standard Min - Max Range Spec */}
@@ -272,7 +415,8 @@ export const OperationLogInputForm: React.FC<OperationLogInputFormProps> = ({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={submitting}
+              disabled={submitting || isReorderMode}
+              title={isReorderMode ? 'Vui lòng lưu hoặc hủy sắp xếp thứ tự trước khi ghi nhận sổ' : undefined}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '150px', justifyContent: 'center' }}
             >
               {submitting ? (

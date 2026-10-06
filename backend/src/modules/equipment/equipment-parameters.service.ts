@@ -14,14 +14,22 @@ export class EquipmentParametersService {
 
     return this.prisma.equipmentParameter.findMany({
       where: { equipmentId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
     });
   }
 
   async createParameter(equipmentId: string, data: CreateEquipmentParameterDto) {
+    const lastParam = await this.prisma.equipmentParameter.findFirst({
+      where: { equipmentId },
+      orderBy: { displayOrder: 'desc' },
+      select: { displayOrder: true },
+    });
+    const nextOrder = (lastParam?.displayOrder ?? -1) + 1;
+
     return this.prisma.equipmentParameter.create({
       data: {
         ...data,
+        displayOrder: nextOrder,
         equipmentId,
       },
     });
@@ -32,6 +40,28 @@ export class EquipmentParametersService {
       where: { id },
       data,
     });
+  }
+
+  async reorderParameters(equipmentId: string, parameterIds: string[]) {
+    const equipment = await this.prisma.equipment.findUnique({ where: { id: equipmentId } });
+    if (!equipment) {
+      throw new NotFoundException(`Equipment with ID ${equipmentId} not found`);
+    }
+
+    if (!Array.isArray(parameterIds) || parameterIds.length === 0) {
+      return this.getParameters(equipmentId);
+    }
+
+    await this.prisma.$transaction(
+      parameterIds.map((id, index) =>
+        this.prisma.equipmentParameter.updateMany({
+          where: { id, equipmentId },
+          data: { displayOrder: index },
+        })
+      )
+    );
+
+    return this.getParameters(equipmentId);
   }
 
   async deleteParameter(id: string) {

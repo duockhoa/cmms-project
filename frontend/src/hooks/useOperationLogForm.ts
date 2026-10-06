@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { useToast } from '../components/common/Toast';
+import { usePermissions } from './usePermissions';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 export interface EquipmentParam {
@@ -11,6 +12,7 @@ export interface EquipmentParam {
   minSpec?: number | null;
   maxSpec?: number | null;
   standardValue?: number | null;
+  displayOrder?: number;
   isActive: boolean;
 }
 
@@ -34,6 +36,8 @@ export function useOperationLogForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
+  const { can } = usePermissions();
+  const canReorder = can('equipment:reorder_parameters');
 
   const initialVerified = Boolean(location.state?.verifiedByQr);
   const [isVerified, setIsVerified] = useState(initialVerified);
@@ -44,6 +48,9 @@ export function useOperationLogForm() {
 
   const [equipment, setEquipment] = useState<any>(null);
   const [parameters, setParameters] = useState<EquipmentParam[]>([]);
+  const originalParamsRef = useRef<EquipmentParam[]>([]);
+  const [isReorderMode, setIsReorderMode] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
@@ -135,6 +142,7 @@ export function useOperationLogForm() {
           (p: any) => p.isActive !== false
         );
         setParameters(activeParams);
+        originalParamsRef.current = [...activeParams];
       } catch (error: any) {
         toast.error('Lỗi', 'Không thể tải thông tin thiết bị hoặc thông số vận hành.');
       } finally {
@@ -149,6 +157,50 @@ export function useOperationLogForm() {
       ...prev,
       [paramId]: value,
     }));
+  }, []);
+
+  // Reordering handlers (ADMIN only)
+  const moveParamUp = useCallback((index: number) => {
+    if (index <= 0) return;
+    setParameters((prev) => {
+      const copy = [...prev];
+      const temp = copy[index - 1];
+      copy[index - 1] = copy[index];
+      copy[index] = temp;
+      return copy;
+    });
+  }, []);
+
+  const moveParamDown = useCallback((index: number) => {
+    setParameters((prev) => {
+      if (index >= prev.length - 1) return prev;
+      const copy = [...prev];
+      const temp = copy[index + 1];
+      copy[index + 1] = copy[index];
+      copy[index] = temp;
+      return copy;
+    });
+  }, []);
+
+  const saveParamOrder = useCallback(async () => {
+    if (!id || parameters.length === 0) return;
+    try {
+      setSavingOrder(true);
+      const orderIds = parameters.map((p) => p.id);
+      await api.reorderEquipmentParameters(id, orderIds);
+      toast.success('Thành công', 'Đã lưu thứ tự hiển thị thông số vận hành!');
+      setIsReorderMode(false);
+      originalParamsRef.current = [...parameters];
+    } catch (err: any) {
+      toast.error('Lỗi lưu thứ tự', err.message || 'Không thể cập nhật thứ tự.');
+    } finally {
+      setSavingOrder(false);
+    }
+  }, [id, parameters, toast]);
+
+  const cancelReorder = useCallback(() => {
+    setParameters([...originalParamsRef.current]);
+    setIsReorderMode(false);
   }, []);
 
   // Count total outliers in real-time
@@ -213,5 +265,16 @@ export function useOperationLogForm() {
     // Handlers
     handleInputChange,
     onFinish,
+
+    // Parameter Reorder feature (RBAC)
+    canReorder,
+    isAdmin: canReorder,
+    isReorderMode,
+    setIsReorderMode,
+    savingOrder,
+    moveParamUp,
+    moveParamDown,
+    saveParamOrder,
+    cancelReorder,
   };
 }

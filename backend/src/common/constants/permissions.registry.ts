@@ -112,6 +112,11 @@ export const PERMISSIONS_REGISTRY: ModulePermissions[] = [
         name: 'In & quét mã QR',
         description: 'In tem mã QR quản lý tài sản và quét tra cứu nhanh',
       },
+      {
+        code: 'equipment:reorder_parameters',
+        name: 'Sắp xếp thứ tự thông số đo',
+        description: 'Tùy chỉnh thứ tự hiển thị và nhập liệu các thông số vận hành của thiết bị',
+      },
     ],
   },
   {

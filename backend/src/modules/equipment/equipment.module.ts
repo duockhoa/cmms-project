@@ -10,6 +10,7 @@ import { OperationLogsService } from './operation-logs.service';
 import { OperationLogsController, GlobalOperationLogsController } from './operation-logs.controller';
 import { FunctionalUnitsService } from './functional-units.service';
 import { FunctionalUnitsController, FunctionalUnitLibraryController } from './functional-units.controller';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 
 @Module({
   controllers: [
@@ -28,6 +29,7 @@ import { FunctionalUnitsController, FunctionalUnitLibraryController } from './fu
     EquipmentTechnicalSpecsService,
     OperationLogsService,
     FunctionalUnitsService,
+    PermissionsGuard,
   ],
   exports: [
     EquipmentService, 

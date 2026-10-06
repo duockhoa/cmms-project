@@ -18,6 +18,10 @@ backend/tsconfig.tsbuildinfo
 *.log
 backend/logs/
 
+# Uploads
+backend/uploads/
+uploads/
+
 # Env files
 .env
 .env.local

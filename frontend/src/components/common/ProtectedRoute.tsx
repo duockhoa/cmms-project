@@ -1,6 +1,6 @@
-import React from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { usePermissions } from '../../hooks/usePermissions';
+import { getAccessToken } from '../../utils/authStorage';
 import { ShieldAlert, ArrowLeft, Home } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permission, children }) => {
-  const { can, loading } = usePermissions();
+  const { can, loading, user } = usePermissions();
   const navigate = useNavigate();
 
   if (loading) {
@@ -38,6 +38,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permission, chil
         <span style={{ fontSize: '13px', fontWeight: 500 }}>Đang kiểm tra quyền truy cập...</span>
       </div>
     );
+  }
+
+  if (!user && !getAccessToken()) {
+    const currentPath = window.location.pathname + window.location.search;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(currentPath)}`} replace />;
   }
 
   const hasAccess = can(permission);
@@ -125,10 +130,39 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permission, chil
  * - Nếu không có quyền: Tự động điều hướng đến View đầu tiên mà user được phép xem
  */
 export const SmartHomeRoute: React.FC<{ dashboardComponent: React.ReactNode }> = ({ dashboardComponent }) => {
-  const { can, loading } = usePermissions();
+  const { can, loading, user } = usePermissions();
 
   if (loading) {
-    return null;
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '50vh',
+          gap: '12px',
+          color: 'var(--text-secondary, #64748b)',
+        }}
+      >
+        <div
+          style={{
+            width: '32px',
+            height: '32px',
+            border: '3px solid #e2e8f0',
+            borderTopColor: 'var(--accent-blue, #2563eb)',
+            borderRadius: '50%',
+            animation: 'spin 0.7s linear infinite',
+          }}
+        />
+        <span style={{ fontSize: '13px', fontWeight: 500 }}>Đang kiểm tra quyền truy cập...</span>
+      </div>
+    );
+  }
+
+  if (!user && !getAccessToken()) {
+    const currentPath = window.location.pathname + window.location.search;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(currentPath)}`} replace />;
   }
 
   if (can('dashboard:view')) {

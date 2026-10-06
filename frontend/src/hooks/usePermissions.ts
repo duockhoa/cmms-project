@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
+import { getAccessToken } from '../utils/authStorage';
 
 interface PermissionsState {
   user: any | null;
@@ -20,17 +21,22 @@ export const invalidatePermissionsCache = () => {
 export const fetchPermissionsProfile = async (): Promise<{ user: any; permissions: string[] }> => {
   if (cachedProfile) return cachedProfile;
   if (!profilePromise) {
-    profilePromise = api.getMe()
-      .then((res: any) => {
+    const timeoutPromise = new Promise<{ user: any; permissions: string[] }>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout loading permissions profile')), 6000)
+    );
+
+    profilePromise = Promise.race([
+      api.getMe().then((res: any) => {
         const u = res?.user || res;
         const perms: string[] = Array.isArray(res?.permissions) ? res.permissions : [];
         cachedProfile = { user: u, permissions: perms };
         return cachedProfile;
-      })
-      .catch((err) => {
-        profilePromise = null;
-        throw err;
-      });
+      }),
+      timeoutPromise,
+    ]).catch((err) => {
+      profilePromise = null;
+      throw err;
+    });
   }
   return profilePromise;
 };
@@ -111,11 +117,12 @@ export const usePermissions = () => {
     refreshPermissions: async () => {
       invalidatePermissionsCache();
       const data = await fetchPermissionsProfile();
-      const hasFullAccess = data.permissions.includes('ALL') || data.permissions.includes('*');
+      const role = data.user?.role?.toUpperCase();
+      const isAdminUser = role === 'ADMIN' || role === 'SUPER_ADMIN' || data.permissions.includes('ALL') || data.permissions.includes('*');
       setState({
         user: data.user,
         permissions: data.permissions,
-        isAdmin: hasFullAccess,
+        isAdmin: isAdminUser,
         loading: false,
       });
     },

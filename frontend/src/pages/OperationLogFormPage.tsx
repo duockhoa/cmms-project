@@ -20,6 +20,14 @@ export function OperationLogFormPage() {
     outlierCount,
     handleInputChange,
     onFinish,
+    canReorder,
+    isReorderMode,
+    setIsReorderMode,
+    savingOrder,
+    moveParamUp,
+    moveParamDown,
+    saveParamOrder,
+    cancelReorder,
   } = useOperationLogForm();
 
   if (loading) {
@@ -90,6 +98,14 @@ export function OperationLogFormPage() {
           handleInputChange={handleInputChange}
           onFinish={onFinish}
           onCancel={() => navigate('/operation-logs')}
+          canReorder={canReorder}
+          isReorderMode={isReorderMode}
+          setIsReorderMode={setIsReorderMode}
+          savingOrder={savingOrder}
+          moveParamUp={moveParamUp}
+          moveParamDown={moveParamDown}
+          saveParamOrder={saveParamOrder}
+          cancelReorder={cancelReorder}
         />
       )}
     </div>

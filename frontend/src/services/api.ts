@@ -18,11 +18,14 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 
   refreshPromise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     try {
       const response = await fetch(`${HRM_ROOT_URL}/auth/refresh-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -41,8 +44,10 @@ async function refreshAccessToken(): Promise<string | null> {
       return newAccessToken;
     } catch (error) {
       console.warn('Refresh token failed:', error);
+      clearAuthTokens();
       return null;
     } finally {
+      clearTimeout(timeoutId);
       refreshPromise = null;
     }
   })();
@@ -436,6 +441,8 @@ export const api = {
     request(`/equipment/${equipmentId}/parameters/bulk-assign`, { method: 'POST', body: JSON.stringify({ standardParameterIds }) }),
   batchUpdateEquipmentParameters: (equipmentId: string, items: any[]) =>
     request(`/equipment/${equipmentId}/parameters/batch`, { method: 'PUT', body: JSON.stringify({ items }) }),
+  reorderEquipmentParameters: (equipmentId: string, parameterIds: string[]) =>
+    request(`/equipment/${equipmentId}/parameters/reorder`, { method: 'PUT', body: JSON.stringify({ parameterIds }) }),
   getOperationLogs: (equipmentId: string) => request(`/equipment/${equipmentId}/operation-logs`),
   // Lấy lịch sử sổ vận hành theo thiết bị
   getEquipmentLogs: async (equipmentId: string) => {

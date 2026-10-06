@@ -4,6 +4,8 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 
 import { extractAndSaveTokensFromUrl, getAccessToken, saveAuthTokens } from '../utils/authStorage';
+import { invalidateMeCache } from '../services/api';
+import { invalidatePermissionsCache } from '../hooks/usePermissions';
 
 const HRM_API_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
 
@@ -22,11 +24,13 @@ export function LoginPage() {
     extractAndSaveTokensFromUrl();
     const token = getAccessToken();
     if (token) {
+      invalidateMeCache();
+      invalidatePermissionsCache();
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
-      navigate(redirectTo, { replace: true });
+      window.location.href = redirectTo;
     }
-  }, [navigate]);
+  }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,13 +65,15 @@ export function LoginPage() {
 
       // Save tokens to both localStorage AND shared domain cookies (*.dkpharma.io.vn)
       saveAuthTokens(accessToken, refreshToken);
+      invalidateMeCache();
+      invalidatePermissionsCache();
 
       toast.success('Thành công', 'Đăng nhập thành công!');
 
       // Redirect to intended destination or home
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
-      navigate(redirectTo, { replace: true });
+      window.location.href = redirectTo;
     } catch (error: any) {
       const msg = error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
       setErrorMessage(msg);

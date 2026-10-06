@@ -573,10 +573,13 @@ model EquipmentParameter {
   minSpec       Float?         // Tiêu chuẩn dưới
   maxSpec       Float?         // Tiêu chuẩn trên
   standardValue Float?         // Giá trị chuẩn (nếu có)
+  displayOrder  Int            @default(0) // Thứ tự hiển thị nhập liệu
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   logs          OperationLog[]
+
+  @@index([equipmentId, displayOrder])
 }
 
 model StandardParameter {

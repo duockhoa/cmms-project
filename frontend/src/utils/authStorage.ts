@@ -65,28 +65,66 @@ export function removeCookie(name: string) {
   if (typeof document === 'undefined') return;
   const domain = getCookieDomain();
   const domainPart = domain ? `; domain=${domain}` : '';
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  const pastDate = 'expires=Thu, 01 Jan 1970 00:00:00 GMT';
   // Clear with parent domain
-  document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0${domainPart}; SameSite=Lax`;
+  if (domainPart) {
+    document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; ${pastDate}${domainPart}; SameSite=Lax${secure}`;
+  }
   // Clear with current host (in case host-only cookie was set)
-  document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; SameSite=Lax`;
+  document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; ${pastDate}; SameSite=Lax${secure}`;
+}
+
+/**
+ * Checks if a JWT token string is structurally invalid or expired.
+ */
+export function isJwtExpired(token: string): boolean {
+  if (!token || typeof token !== 'string') return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false; // Non-JWT opaque token fallback
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const decoded = JSON.parse(jsonPayload);
+    if (!decoded.exp) return false;
+    // Add 10s leeway
+    return decoded.exp * 1000 <= Date.now() + 10000;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Retrieves the current active access token.
  * Searches localStorage, then shared domain cookies.
- * Synchronizes between storage layers automatically.
+ * Synchronizes between storage layers automatically and discards expired tokens.
  */
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
 
   // 1. Check primary localStorage
   let token = localStorage.getItem(TOKEN_KEY);
-  if (token) return token;
+  if (token) {
+    if (isJwtExpired(token)) {
+      clearAuthTokens();
+      return null;
+    }
+    return token;
+  }
 
   // 2. Check alternative localStorage keys
   for (const altKey of ALT_TOKEN_KEYS) {
     token = localStorage.getItem(altKey);
     if (token) {
+      if (isJwtExpired(token)) {
+        clearAuthTokens();
+        return null;
+      }
       localStorage.setItem(TOKEN_KEY, token);
       return token;
     }
@@ -101,8 +139,12 @@ export function getAccessToken(): string | null {
     }
   }
 
-  // If found in cookie, synchronize into localStorage
+  // If found in cookie, synchronize into localStorage if not expired
   if (token) {
+    if (isJwtExpired(token)) {
+      clearAuthTokens();
+      return null;
+    }
     localStorage.setItem(TOKEN_KEY, token);
     return token;
   }

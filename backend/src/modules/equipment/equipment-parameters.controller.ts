@@ -2,6 +2,8 @@ import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nes
 import { EquipmentParametersService } from './equipment-parameters.service';
 import { CreateEquipmentParameterDto, UpdateEquipmentParameterDto } from './dto/equipment-parameter.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 
 @Controller('equipment/:equipmentId/parameters')
 @UseGuards(JwtAuthGuard)
@@ -43,6 +45,16 @@ export class EquipmentParametersController {
     @Body() body: { items: any[] },
   ) {
     return this.service.batchUpdateParameters(equipmentId, body.items);
+  }
+
+  @Put('reorder')
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions('equipment:reorder_parameters')
+  async reorder(
+    @Param('equipmentId') equipmentId: string,
+    @Body() body: { parameterIds: string[] },
+  ) {
+    return this.service.reorderParameters(equipmentId, body.parameterIds || []);
   }
 
   @Put(':id')
