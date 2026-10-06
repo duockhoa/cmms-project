@@ -95,11 +95,6 @@ export const QRCodeTab: React.FC<QRCodeTabProps> = ({ data }) => {
           <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
             [ {code} ]
           </div>
-          {data.oldCode && (
-            <div style={{ fontSize: '11px', color: '#475569', fontWeight: 700, marginTop: '2px' }}>
-              Mã cũ: {data.oldCode}
-            </div>
-          )}
           {data.location && (
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
               📍 {data.location}

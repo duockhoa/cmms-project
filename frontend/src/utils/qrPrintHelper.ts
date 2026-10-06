@@ -68,7 +68,6 @@ export async function printSingleQRTag(item: QRPrintItem) {
     <div class="name">${item.name || ''}</div>
     <img id="qr-img" class="qr" src="${qrDataUrl}" alt="QR ${code}" />
     <div class="code">[ ${code} ]</div>
-    ${item.oldCode ? `<div class="old-code">Mã cũ: ${item.oldCode}</div>` : ''}
     ${item.location ? `<div class="loc">📍 ${item.location}</div>` : ''}
   </div>
   <script>
@@ -137,7 +136,6 @@ export async function printBatchQRTags(options: {
         <div class="name" title="${item.name}">${item.name}</div>
         <img class="qr-batch-img" src="${item.dataUrl}" alt="QR ${item.code}" />
         <div class="code">[ ${item.code} ]</div>
-        ${item.oldCode ? `<div style="font-size: 10.5px; color: #475569; font-weight: 700;">Mã cũ: ${item.oldCode}</div>` : ''}
         ${item.location ? `<div class="loc" title="${item.location}">📍 ${item.location}</div>` : '<div class="loc">&nbsp;</div>'}
         <div class="card-seq">#${index + 1}</div>
       </div>
