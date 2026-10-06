@@ -6,6 +6,8 @@ import { WorkOrderAcceptanceModals } from '../work-orders/detail/WorkOrderAccept
 import { WorkOrderTimeline } from '../work-orders/detail/WorkOrderTimeline';
 import { WorkOrderMetadata } from '../work-orders/detail/WorkOrderMetadata';
 import { WorkOrderDetailHeader } from '../work-orders/detail/WorkOrderDetailHeader';
+import { StopWorkOrderSessionModal } from '../work-orders/detail/StopWorkOrderSessionModal';
+import { WorkOrderSessionLogsTable } from '../work-orders/detail/WorkOrderSessionLogsTable';
 import { getWorkOrderStatusColor, getWorkOrderStatusLabel } from '../work-orders/detail/workOrderDetail.utils';
 import { useWorkOrderDetail } from '../../hooks/useWorkOrderDetail';
 
@@ -48,18 +50,18 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
     setLogPhotos, setLogResult, setPauseReason, setQaComment, setQaRejectReason,
     setRejectHandoverReason, setTestRunResult, setWorkshopComment, targetDeptLabel,
     testRunResult, userUnitType, wo, workshopComment,
+    // Work Sessions
+    mySession, sessionList, isStopSessionOpen, sessionLoading,
+    handleStartSession, handleOpenStopSession, handleCloseStopSession, handleStopSessionSubmit,
+    sessionTotalHours, sessionUserSummary,
   } = detail;
 
   if (loading || !wo) {
-    return (
-      <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
-        <DetailViewSkeleton />
-      </div>
-    );
+    return <DetailViewSkeleton />;
   }
 
   return (
-    <div className="work-order-detail-view" style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div className="work-order-detail-view" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <WorkOrderDetailHeader
         actionLoading={actionLoading}
         canModify={canModify}
@@ -83,6 +85,11 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         setWorkshopComment={setWorkshopComment}
         userUnitType={userUnitType}
         wo={wo}
+        // Work Session props
+        mySession={mySession}
+        sessionLoading={sessionLoading}
+        handleStartSession={handleStartSession}
+        handleOpenStopSession={handleOpenStopSession}
       />
 
       <div className="work-order-detail-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, padding: '24px', overflowY: 'auto' }}>
@@ -94,6 +101,13 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
           wo={wo}
         />
 
+        {/* Bảng Tiến độ & Nhật ký tổng hợp các phiên */}
+        <WorkOrderSessionLogsTable
+          sessions={sessionList}
+          totalHours={sessionTotalHours}
+          userSummary={sessionUserSummary}
+        />
+
         <WorkOrderTimeline
           canModify={canModify}
           logs={logs}
@@ -103,6 +117,15 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
           setLogContent={setLogContent}
         />
       </div>
+
+      {/* Modal kết thúc phiên làm việc */}
+      <StopWorkOrderSessionModal
+        isOpen={isStopSessionOpen}
+        onClose={handleCloseStopSession}
+        onSubmit={handleStopSessionSubmit}
+        activeSession={mySession}
+        loading={sessionLoading}
+      />
 
       <WorkOrderExecutionModals
         actionLoading={actionLoading}
@@ -138,13 +161,13 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         setIsLogFormOpen={setIsLogFormOpen}
         setIsPauseFormOpen={setIsPauseFormOpen}
         setLogAdjustReason={setLogAdjustReason}
+        setLogAdjustTargetId={setLogAdjustTargetId}
         setLogContent={setLogContent}
         setLogNotes={setLogNotes}
         setLogPhotoCategory={setLogPhotoCategory}
         setLogPhotos={setLogPhotos}
         setLogResult={setLogResult}
         setPauseReason={setPauseReason}
-        wo={wo}
       />
       <WorkOrderDispatchModals
         actionLoading={actionLoading}
@@ -190,6 +213,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         setIsQaRejectOpen={setIsQaRejectOpen}
         setIsRejectHandoverOpen={setIsRejectHandoverOpen}
         setIsWorkshopAcceptOpen={setIsWorkshopAcceptOpen}
+        lineClearanceResultLabel={lineClearanceResult}
         setLineClearanceResult={setLineClearanceResult}
         setQaComment={setQaComment}
         setQaRejectReason={setQaRejectReason}

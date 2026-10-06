@@ -78,7 +78,26 @@ export const useWorkOrderDetail = ({
   const [isQaRejectOpen, setIsQaRejectOpen] = useState(false);
   const [qaRejectReason, setQaRejectReason] = useState('');
 
+  // Work Session States
+  const [mySession, setMySession] = useState<any>(null);
+  const [sessionList, setSessionList] = useState<any[]>([]);
+  const [isStopSessionOpen, setIsStopSessionOpen] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(false);
+
   const userUnitType = getPerformerUnitType(currentUser);
+
+  const loadSessionsData = async (woId: string) => {
+    try {
+      const [active, list] = await Promise.all([
+        api.getWorkOrderActiveSession(woId).catch(() => null),
+        api.getWorkOrderSessions(woId).catch(() => []),
+      ]);
+      setMySession(active || null);
+      setSessionList(Array.isArray(list) ? list : []);
+    } catch (e) {
+      console.error('Failed to load sessions data:', e);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -91,6 +110,7 @@ export const useWorkOrderDetail = ({
       setWo(woData);
       setLogs(logData);
       setAllUsers(usersData);
+      loadSessionsData(workOrderId);
     } catch (err: any) {
       toast.error('Lỗi tải dữ liệu', err.message || 'Không thể tải chi tiết Work Order');
       onClose?.();
@@ -140,12 +160,12 @@ export const useWorkOrderDetail = ({
   // Permission Checks
   const isAssigned = wo?.assignedTechnicianId === currentUser?.id;
   const isManagerOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
-  const isQA = isManagerOrAdmin || 
-               (currentUser?.department || '').toLowerCase().includes('qa') || 
-               (currentUser?.department || '').toLowerCase().includes('chất lượng') ||
-               (currentUser?.department || '').toLowerCase().includes('quality');
+  const isQA = isManagerOrAdmin ||
+    (currentUser?.department || '').toLowerCase().includes('qa') ||
+    (currentUser?.department || '').toLowerCase().includes('chất lượng') ||
+    (currentUser?.department || '').toLowerCase().includes('quality');
   const isWorkshopUser = userUnitType === 'WORKSHOP' || isManagerOrAdmin;
-  
+
   // Can execute standard repair logs
   const canModify = isAssigned || isManagerOrAdmin || (wo?.handlingRoute === 'WORKSHOP_SELF_HANDLE' && userUnitType === 'WORKSHOP');
 
@@ -294,7 +314,7 @@ export const useWorkOrderDetail = ({
 
     try {
       setActionLoading(true);
-      
+
       const isMaintRoute = wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT';
       let result;
 
@@ -521,6 +541,69 @@ export const useWorkOrderDetail = ({
     }
   };
 
+  // ==================== WORK ORDER SESSIONS ====================
+
+  const handleStartSession = async (taskContent?: string) => {
+    try {
+      setSessionLoading(true);
+      await api.startWorkOrderSession(workOrderId, { taskContent });
+      toast.success('Bắt đầu làm việc', 'Đã mở phiên làm việc và kích hoạt đếm giờ.');
+      await loadData();
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+    } catch (err: any) {
+      toast.error('Lỗi bắt đầu phiên', err.message || 'Không thể bắt đầu phiên làm việc');
+    } finally {
+      setSessionLoading(false);
+    }
+  };
+
+  const handleOpenStopSession = () => {
+    setIsStopSessionOpen(true);
+  };
+
+  const handleCloseStopSession = () => {
+    setIsStopSessionOpen(false);
+  };
+
+  const handleStopSessionSubmit = async (data: { taskContent?: string; resultNotes?: string; photos?: string[]; materialsUsed?: any[] }) => {
+    try {
+      setSessionLoading(true);
+      await api.stopWorkOrderSession(workOrderId, data);
+      toast.success('Kết thúc phiên thành công', 'Đã lưu công việc và chốt giờ làm.');
+      setIsStopSessionOpen(false);
+      await loadData();
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+    } catch (err: any) {
+      toast.error('Lỗi kết thúc phiên', err.message || 'Không thể chốt phiên làm việc');
+    } finally {
+      setSessionLoading(false);
+    }
+  };
+
+  const sessionTotalHours = useMemo(() => {
+    return parseFloat(
+      sessionList
+        .filter((s) => s.status === 'COMPLETED' || s.status === 'AUTO_CLOSED')
+        .reduce((sum, s) => sum + (s.durationHours || 0), 0)
+        .toFixed(2)
+    );
+  }, [sessionList]);
+
+  const sessionUserSummary = useMemo(() => {
+    const map: Record<string, { userName: string; sessionCount: number; totalHours: number }> = {};
+    sessionList.forEach((s) => {
+      const uName = s.user?.name || 'Kỹ thuật viên';
+      if (!map[uName]) {
+        map[uName] = { userName: uName, sessionCount: 0, totalHours: 0 };
+      }
+      if (s.status === 'COMPLETED' || s.status === 'AUTO_CLOSED') {
+        map[uName].sessionCount += 1;
+        map[uName].totalHours = parseFloat((map[uName].totalHours + (s.durationHours || 0)).toFixed(2));
+      }
+    });
+    return Object.values(map);
+  }, [sessionList]);
+
   return {
     actionLoading, allUsers, assignableUsers, assignedExecutorId, canModify,
     classificationNotes, classificationResult, cleanlinessResult, completeConclusion,
@@ -546,5 +629,9 @@ export const useWorkOrderDetail = ({
     setLogPhotos, setLogResult, setPauseReason, setQaComment, setQaRejectReason,
     setRejectHandoverReason, setTestRunResult, setWorkshopComment, targetDeptLabel,
     testRunResult, userUnitType, wo, workshopComment,
+    // Work Sessions
+    mySession, sessionList, isStopSessionOpen, sessionLoading,
+    handleStartSession, handleOpenStopSession, handleCloseStopSession, handleStopSessionSubmit,
+    sessionTotalHours, sessionUserSummary, loadSessionsData,
   };
 };

@@ -81,13 +81,13 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
     'Content-Type': 'application/json',
     ...options.headers
   };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  
+
   let res = await fetch(url, { credentials: 'include', ...options, headers });
-  
+
   if (res.status === 401) {
     const newToken = await refreshAccessToken();
     if (newToken) {
@@ -97,14 +97,14 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
       handleAuthFailure();
     }
   }
-  
+
   return res;
 };
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
   let token = getAccessToken();
-  
+
   const headers: any = {
     'Content-Type': 'application/json',
     ...options.headers,
@@ -138,7 +138,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
       handleAuthFailure();
       throw new Error('Unauthorized');
     }
-    
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: res.statusText }));
       throw new Error(err.message || 'API request failed');
@@ -281,6 +281,14 @@ export const api = {
     request(`/work-orders/${id}/qa-verify`, { method: 'POST', body: JSON.stringify(body) }),
   qaRejectWorkOrder: (id: string, body: { expectedVersion: number; reason: string }) =>
     request(`/work-orders/${id}/qa-reject`, { method: 'POST', body: JSON.stringify(body) }),
+  getWorkOrderActiveSession: (id: string) =>
+    request(`/work-orders/${id}/sessions/active`),
+  startWorkOrderSession: (id: string, data?: { taskContent?: string }) =>
+    request(`/work-orders/${id}/sessions/start`, { method: 'POST', body: JSON.stringify(data || {}) }),
+  stopWorkOrderSession: (id: string, data?: { taskContent?: string; resultNotes?: string; photos?: string[]; materialsUsed?: any[] }) =>
+    request(`/work-orders/${id}/sessions/stop`, { method: 'POST', body: JSON.stringify(data || {}) }),
+  getWorkOrderSessions: (id: string) =>
+    request(`/work-orders/${id}/sessions`),
   addWorkOrderItem: (id: string, item: { inventoryItemId: string; quantity: number }) =>
     request(`/work-orders/${id}/items`, { method: 'POST', body: JSON.stringify(item) }),
   deleteWorkOrder: (id: string) => request(`/work-orders/${id}`, { method: 'DELETE' }),
@@ -383,7 +391,7 @@ export const api = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    
+
     return fetch(`${API_BASE}/attachments`, {
       method: 'POST',
       credentials: 'include',

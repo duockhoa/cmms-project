@@ -25,6 +25,7 @@ import {
   QaVerifyWorkOrderDto,
   QaRejectWorkOrderDto,
 } from './dto/work-orders.dto';
+import { StartWorkOrderSessionDto, StopWorkOrderSessionDto } from './dto/work-order-session.dto';
 
 @ApiTags('Work Orders')
 @Controller('work-orders')
@@ -33,7 +34,7 @@ export class WorkOrdersController {
   constructor(
     private readonly workOrdersService: WorkOrdersService,
     private readonly inventoryService: InventoryService,
-  ) {}
+  ) { }
 
   @ApiStandardResponse({ summary: 'Lấy work order theo QR code thiết bị', method: 'GET', path: '/work-orders/by-equipment-qr/{qrToken}' })
   @Get('by-equipment-qr/:qrToken')
@@ -222,4 +223,31 @@ export class WorkOrdersController {
   remove(@Param('id') id: string, @Req() req: any) {
     return this.workOrdersService.remove(id, req?.user);
   }
+
+  // ==================== WORK SESSIONS ====================
+
+  @ApiStandardResponse({ summary: 'Lấy phiên làm việc đang chạy', method: 'GET', path: '/work-orders/{id}/sessions/active' })
+  @Get(':id/sessions/active')
+  getActiveSession(@Param('id') id: string, @Req() req: any) {
+    return this.workOrdersService.getActiveSession(id, req.user.id);
+  }
+
+  @ApiStandardResponse({ summary: 'Bắt đầu phiên làm việc', method: 'POST', path: '/work-orders/{id}/sessions/start' })
+  @Post(':id/sessions/start')
+  startSession(@Param('id') id: string, @Body() body: StartWorkOrderSessionDto, @Req() req: any) {
+    return this.workOrdersService.startWorkSession(id, req.user.id, body);
+  }
+
+  @ApiStandardResponse({ summary: 'Kết thúc phiên làm việc', method: 'POST', path: '/work-orders/{id}/sessions/stop' })
+  @Post(':id/sessions/stop')
+  stopSession(@Param('id') id: string, @Body() body: StopWorkOrderSessionDto, @Req() req: any) {
+    return this.workOrdersService.stopWorkSession(id, req.user.id, body);
+  }
+
+  @ApiStandardResponse({ summary: 'Lấy danh sách các phiên làm việc của phiếu', method: 'GET', path: '/work-orders/{id}/sessions' })
+  @Get(':id/sessions')
+  getSessions(@Param('id') id: string) {
+    return this.workOrdersService.getWorkSessions(id);
+  }
 }
+

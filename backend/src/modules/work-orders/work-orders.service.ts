@@ -5,8 +5,8 @@ import { WorkOrderStateMachine, WorkOrderStatus } from './work-order-state-machi
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationEvents } from '../notifications/events/notification-events.constants';
 import { WorkOrderStatusChangedEvent } from '../notifications/events/work-order.events';
-import { 
-  CreateExecutionLogDto, 
+import {
+  CreateExecutionLogDto,
   CompleteWorkOrderDto,
   EscalateWorkOrderDto,
   ClassifyWorkOrderDto,
@@ -17,6 +17,7 @@ import {
   QaRejectWorkOrderDto,
   AssignWorkOrderDto
 } from './dto/work-orders.dto';
+import { StartWorkOrderSessionDto, StopWorkOrderSessionDto } from './dto/work-order-session.dto';
 import { ExecutionLogActionType, PerformerUnitType, HandlingRoute } from '@prisma/client';
 import { hasPermission, isGlobalAdmin } from '../../common/utils/rbac.helper';
 
@@ -26,7 +27,7 @@ export class WorkOrdersService implements OnModuleInit {
     private prisma: PrismaService,
     private equipmentStatus: EquipmentStatusService,
     private eventEmitter: EventEmitter2,
-  ) {}
+  ) { }
 
   // In-memory cache for department users (5 minutes TTL)
   private deptUsersCache = new Map<string, { data: { ids: string[]; names: string[] }; expiresAt: number }>();
@@ -169,6 +170,10 @@ export class WorkOrdersService implements OnModuleInit {
         equipment: true,
         request: true,
         items: { include: { inventoryItem: true } },
+        workSessions: {
+          include: { user: { select: { id: true, name: true, specialty: true, role: true } } },
+          orderBy: { startedAt: 'asc' },
+        },
       },
     });
     if (!wo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
@@ -276,7 +281,7 @@ export class WorkOrdersService implements OnModuleInit {
             new WorkOrderStatusChangedEvent(fullWo, 'ASSIGN', 'PENDING'),
           );
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     return createdWo;
@@ -480,7 +485,7 @@ export class WorkOrdersService implements OnModuleInit {
         const unitType = this.getPerformerUnitType(user);
 
         if (wo.handlingRoute === HandlingRoute.WORKSHOP_SELF_HANDLE) {
-          const isAllowedSelf = unitType === PerformerUnitType.WORKSHOP || 
+          const isAllowedSelf = unitType === PerformerUnitType.WORKSHOP ||
             wo.assignedTechnicianId === actorContext.id ||
             actionName === 'QA_VERIFY' || actionName === 'QA_REJECT' ||
             actionName === 'HANDOVER_ACCEPT' || actionName === 'HANDOVER_REJECT';
@@ -490,12 +495,12 @@ export class WorkOrdersService implements OnModuleInit {
         } else {
           const isQaAction = actionName === 'QA_VERIFY' || actionName === 'QA_REJECT' || actionName === 'VERIFY';
           const isHandoverAction = actionName === 'HANDOVER_ACCEPT' || actionName === 'HANDOVER_REJECT';
-          if (wo.assignedTechnicianId !== actorContext.id && 
-              actionName !== 'ESCALATE' && 
-              actionName !== 'CLASSIFY' && 
-              actionName !== 'ASSIGN' &&
-              !isHandoverAction &&
-              !isQaAction) {
+          if (wo.assignedTechnicianId !== actorContext.id &&
+            actionName !== 'ESCALATE' &&
+            actionName !== 'CLASSIFY' &&
+            actionName !== 'ASSIGN' &&
+            !isHandoverAction &&
+            !isQaAction) {
             throw new ForbiddenException('Bạn không phải Cơ điện được phân công cho WO này.');
           }
         }
@@ -1027,7 +1032,7 @@ export class WorkOrdersService implements OnModuleInit {
       await this.prisma.maintenanceSchedule.updateMany({
         where: { id: result.scheduleId },
         data: { lastCompletedAt: new Date(), updatedAt: new Date() },
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     return result;
@@ -1206,4 +1211,242 @@ export class WorkOrdersService implements OnModuleInit {
       return { success: true, message: `Đã xóa phiếu bảo trì ${wo.orderCode} thành công.` };
     });
   }
+
+  // ==================== WORK ORDER WORK SESSIONS ====================
+
+  calculateWorkingMinutes(startedAt: Date, endedAt: Date): number {
+    let totalMinutes = 0;
+    const current = new Date(startedAt.getTime());
+
+    while (current < endedAt) {
+      const year = current.getFullYear();
+      const month = current.getMonth();
+      const date = current.getDate();
+
+      const dayStart = new Date(year, month, date, 8, 0, 0, 0);
+      const lunchStart = new Date(year, month, date, 12, 0, 0, 0);
+      const lunchEnd = new Date(year, month, date, 13, 0, 0, 0);
+      const dayEnd = new Date(year, month, date, 17, 0, 0, 0);
+
+      const dayEffectiveEnd = new Date(year, month, date, 23, 59, 59, 999);
+      const segmentEnd = endedAt < dayEffectiveEnd ? endedAt : dayEffectiveEnd;
+
+      // Morning interval: 08:00 -> 12:00
+      const morningStart = new Date(Math.max(current.getTime(), dayStart.getTime()));
+      const morningEnd = new Date(Math.min(segmentEnd.getTime(), lunchStart.getTime()));
+      if (morningStart < morningEnd) {
+        totalMinutes += Math.round((morningEnd.getTime() - morningStart.getTime()) / (1000 * 60));
+      }
+
+      // Afternoon interval: 13:00 -> 17:00
+      const afternoonStart = new Date(Math.max(current.getTime(), lunchEnd.getTime()));
+      const afternoonEnd = new Date(Math.min(segmentEnd.getTime(), dayEnd.getTime()));
+      if (afternoonStart < afternoonEnd) {
+        totalMinutes += Math.round((afternoonEnd.getTime() - afternoonStart.getTime()) / (1000 * 60));
+      }
+
+      current.setDate(current.getDate() + 1);
+      current.setHours(0, 0, 0, 0);
+    }
+
+    return Math.max(0, totalMinutes);
+  }
+
+  async getActiveSession(workOrderId: string, userId: string) {
+    return this.prisma.workOrderWorkSession.findFirst({
+      where: {
+        workOrderId,
+        userId,
+        status: 'IN_PROGRESS',
+      },
+      include: {
+        user: { select: { id: true, name: true, specialty: true } },
+      },
+    });
+  }
+
+  async startWorkSession(workOrderId: string, userId: string, dto?: StartWorkOrderSessionDto) {
+    const wo = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      include: { equipment: true },
+    });
+    if (!wo) throw new NotFoundException('Không tìm thấy phiếu sửa chữa');
+
+    // Chốt phiên đang chạy ở phiếu khác của người này nếu có
+    const activeElsewhere = await this.prisma.workOrderWorkSession.findFirst({
+      where: {
+        userId,
+        status: 'IN_PROGRESS',
+        workOrderId: { not: workOrderId },
+      },
+    });
+    if (activeElsewhere) {
+      const now = new Date();
+      const cutoff17 = new Date(activeElsewhere.startedAt);
+      cutoff17.setHours(17, 0, 0, 0);
+      const effectiveEnd = now > cutoff17 && activeElsewhere.startedAt < cutoff17 ? cutoff17 : now;
+      const durationMinutes = this.calculateWorkingMinutes(activeElsewhere.startedAt, effectiveEnd);
+      const durationHours = parseFloat((durationMinutes / 60).toFixed(2));
+
+      await this.prisma.workOrderWorkSession.update({
+        where: { id: activeElsewhere.id },
+        data: {
+          endedAt: effectiveEnd,
+          durationMinutes,
+          durationHours,
+          status: 'AUTO_CLOSED',
+          resultNotes: 'Tự động dừng khi bắt đầu làm phiếu sửa chữa khác',
+        },
+      });
+
+      // Cập nhật actualHours phiếu cũ
+      const otherSessions = await this.prisma.workOrderWorkSession.findMany({
+        where: { workOrderId: activeElsewhere.workOrderId, status: { in: ['COMPLETED', 'AUTO_CLOSED'] } },
+      });
+      const otherTotalHours = parseFloat(otherSessions.reduce((acc, s) => acc + (s.durationHours || 0), 0).toFixed(2));
+      await this.prisma.workOrder.update({
+        where: { id: activeElsewhere.workOrderId },
+        data: { actualHours: otherTotalHours },
+      });
+    }
+
+    // Đã có phiên trên chính phiếu này chưa?
+    const existing = await this.prisma.workOrderWorkSession.findFirst({
+      where: {
+        workOrderId,
+        userId,
+        status: 'IN_PROGRESS',
+      },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    // Đếm số phiên đã có để đánh số phiên
+    const count = await this.prisma.workOrderWorkSession.count({
+      where: { workOrderId },
+    });
+
+    const now = new Date();
+    const session = await this.prisma.workOrderWorkSession.create({
+      data: {
+        workOrderId,
+        userId,
+        sessionIndex: count + 1,
+        startedAt: now,
+        taskContent: dto?.taskContent || 'Bắt đầu phiên thực hiện bảo trì / sửa chữa',
+        status: 'IN_PROGRESS',
+      },
+      include: {
+        user: { select: { id: true, name: true, specialty: true } },
+      },
+    });
+
+    // Nếu WO đang PENDING hoặc ASSIGNED hoặc ON_HOLD, chuyển sang IN_PROGRESS
+    if (['PENDING', 'ASSIGNED', 'ON_HOLD'].includes(wo.status)) {
+      await this.prisma.workOrder.update({
+        where: { id: workOrderId },
+        data: {
+          status: 'IN_PROGRESS',
+          actualStartDate: wo.actualStartDate || now,
+        },
+      });
+    }
+
+    return session;
+  }
+
+  async stopWorkSession(workOrderId: string, userId: string, dto?: StopWorkOrderSessionDto) {
+    const active = await this.prisma.workOrderWorkSession.findFirst({
+      where: {
+        workOrderId,
+        userId,
+        status: 'IN_PROGRESS',
+      },
+    });
+    if (!active) {
+      throw new BadRequestException('Không tìm thấy phiên làm việc đang chạy để kết thúc');
+    }
+
+    const now = new Date();
+    // Khung 17h cutoff nếu quên tắt qua ngày
+    const cutoff17 = new Date(active.startedAt);
+    cutoff17.setHours(17, 0, 0, 0);
+    const effectiveEnd = now > cutoff17 && active.startedAt < cutoff17 ? cutoff17 : now;
+
+    const durationMinutes = this.calculateWorkingMinutes(active.startedAt, effectiveEnd);
+    const durationHours = parseFloat((durationMinutes / 60).toFixed(2));
+
+    const photosStr = dto?.photos && dto.photos.length > 0 ? JSON.stringify(dto.photos) : null;
+    const materialsStr = dto?.materialsUsed && dto.materialsUsed.length > 0 ? JSON.stringify(dto.materialsUsed) : null;
+
+    const updatedSession = await this.prisma.workOrderWorkSession.update({
+      where: { id: active.id },
+      data: {
+        endedAt: effectiveEnd,
+        durationMinutes,
+        durationHours,
+        taskContent: dto?.taskContent || active.taskContent,
+        resultNotes: dto?.resultNotes || null,
+        photos: photosStr,
+        materialsUsed: materialsStr,
+        status: 'COMPLETED',
+      },
+      include: {
+        user: { select: { id: true, name: true, specialty: true } },
+      },
+    });
+
+    // Cập nhật tổng actualHours vào WorkOrder
+    const allFinishedSessions = await this.prisma.workOrderWorkSession.findMany({
+      where: { workOrderId, status: { in: ['COMPLETED', 'AUTO_CLOSED'] } },
+    });
+    const totalActualHours = parseFloat(
+      allFinishedSessions.reduce((acc, s) => acc + (s.durationHours || 0), 0).toFixed(2)
+    );
+
+    const wo = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      include: { equipment: true },
+    });
+
+    await this.prisma.workOrder.update({
+      where: { id: workOrderId },
+      data: {
+        actualHours: totalActualHours,
+        actualEndDate: effectiveEnd,
+      },
+    });
+
+    // Đồng bộ tạo bản ghi WorkOrderExecutionLog
+    if (wo) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      await this.prisma.workOrderExecutionLog.create({
+        data: {
+          workOrderId,
+          equipmentId: wo.equipmentId,
+          performedById: userId,
+          performerUnitType: user?.role === 'TECHNICIAN' ? PerformerUnitType.TECHNICAL : PerformerUnitType.WORKSHOP,
+          handlingRoute: wo.handlingRoute,
+          actionType: ExecutionLogActionType.LOG,
+          content: dto?.taskContent || active.taskContent || `Kết thúc phiên làm việc #${active.sessionIndex} (${durationHours} giờ)`,
+          result: dto?.resultNotes || `Đạt ${durationHours} giờ công`,
+          notes: materialsStr ? `Vật tư: ${materialsStr}` : undefined,
+        },
+      });
+    }
+
+    return updatedSession;
+  }
+
+  async getWorkSessions(workOrderId: string) {
+    return this.prisma.workOrderWorkSession.findMany({
+      where: { workOrderId },
+      include: {
+        user: { select: { id: true, name: true, specialty: true, role: true } },
+      },
+      orderBy: { startedAt: 'asc' },
+    });
+  }
 }
+

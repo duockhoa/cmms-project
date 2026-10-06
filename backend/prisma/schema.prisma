@@ -32,47 +32,48 @@ enum ChecklistItemStatus {
 }
 
 model User {
-  id                    String                 @id @default(uuid())
+  id                    String                   @id @default(uuid())
   name                  String
-  email                 String                 @unique
-  role                  String                 @default("TECHNICIAN") // ADMIN, MANAGER, TECHNICIAN, OPERATOR
+  email                 String                   @unique
+  role                  String                   @default("TECHNICIAN") // ADMIN, MANAGER, TECHNICIAN, OPERATOR
   specialty             String?
-  status                TechnicianStatus       @default(AVAILABLE)
+  status                TechnicianStatus         @default(AVAILABLE)
   department            String?
   avatar                String?
-  isActive              Boolean                @default(true)
-  createdAt             DateTime               @default(now())
-  version               Int                    @default(1)
-  checklistExecutions   ChecklistExecution[]   @relation("ExecutedByChecklists")
-  cancelledChecklists   ChecklistExecution[]   @relation("CancelledByChecklists")
+  isActive              Boolean                  @default(true)
+  createdAt             DateTime                 @default(now())
+  version               Int                      @default(1)
+  checklistExecutions   ChecklistExecution[]     @relation("ExecutedByChecklists")
+  cancelledChecklists   ChecklistExecution[]     @relation("CancelledByChecklists")
   attachments           Attachment[]
-  reportedRequests      MaintenanceRequest[]   @relation("RequestReporter")
-  cancelledRequests     MaintenanceRequest[]   @relation("RequestCancelledBy")
-  workflowActions       WorkflowHistory[]      @relation("WorkflowActedBy")
-  inventoryTransactions InventoryTransaction[] @relation("InventoryTxActedBy")
-  createdSchedules      MaintenanceSchedule[]  @relation("ScheduleCreatedBy")
-  assignedSchedules     MaintenanceSchedule[]  @relation("ScheduleAssignedTechnician")
-  pausedSchedules       MaintenanceSchedule[]  @relation("SchedulePausedBy")
-  cancelledSchedules    MaintenanceSchedule[]  @relation("ScheduleCancelledBy")
-  scheduleHistories     ScheduleHistory[]      @relation("ScheduleHistoryActedBy")
-  responsibleLocations Location[]             @relation("LocationResponsibleTech")
-  assignedWorkOrders    WorkOrder[]            @relation("WorkOrderAssignedTechnician")
-  watchedWorkOrders     WorkOrder[]            @relation("WorkOrderWatcher")
-  executionLogs         WorkOrderExecutionLog[] @relation("UserExecutionLogs")
-  classifiedWorkOrders  WorkOrder[]            @relation("WorkOrderClassificationReporter")
-  operationLogs         OperationLog[]         @relation("UserOperationLogs")
-  voidedOperationLogs   OperationLog[]         @relation("UserVoidedOperationLogs")
-  utilityReadings       UtilityReading[]       @relation("UserUtilityReadings")
+  reportedRequests      MaintenanceRequest[]     @relation("RequestReporter")
+  cancelledRequests     MaintenanceRequest[]     @relation("RequestCancelledBy")
+  workflowActions       WorkflowHistory[]        @relation("WorkflowActedBy")
+  inventoryTransactions InventoryTransaction[]   @relation("InventoryTxActedBy")
+  createdSchedules      MaintenanceSchedule[]    @relation("ScheduleCreatedBy")
+  assignedSchedules     MaintenanceSchedule[]    @relation("ScheduleAssignedTechnician")
+  pausedSchedules       MaintenanceSchedule[]    @relation("SchedulePausedBy")
+  cancelledSchedules    MaintenanceSchedule[]    @relation("ScheduleCancelledBy")
+  scheduleHistories     ScheduleHistory[]        @relation("ScheduleHistoryActedBy")
+  responsibleLocations  Location[]               @relation("LocationResponsibleTech")
+  assignedWorkOrders    WorkOrder[]              @relation("WorkOrderAssignedTechnician")
+  watchedWorkOrders     WorkOrder[]              @relation("WorkOrderWatcher")
+  executionLogs         WorkOrderExecutionLog[]  @relation("UserExecutionLogs")
+  classifiedWorkOrders  WorkOrder[]              @relation("WorkOrderClassificationReporter")
+  operationLogs         OperationLog[]           @relation("UserOperationLogs")
+  voidedOperationLogs   OperationLog[]           @relation("UserVoidedOperationLogs")
+  utilityReadings       UtilityReading[]         @relation("UserUtilityReadings")
   utilityStatusLogs     UtilitySystemStatusLog[] @relation("UserUtilityStatusLogs")
-  assignedFabrications  FabricationOrder[]     @relation("FabricationAssignedLead")
-  createdFabrications   FabricationOrder[]     @relation("FabricationCreatedBy")
+  assignedFabrications  FabricationOrder[]       @relation("FabricationAssignedLead")
+  createdFabrications   FabricationOrder[]       @relation("FabricationCreatedBy")
   fabricationLogs       FabricationProgressLog[] @relation("UserFabricationLogs")
   fabricationSessions   FabricationWorkSession[] @relation("UserFabricationSessions")
-  
+  workOrderWorkSessions WorkOrderWorkSession[]   @relation("UserWorkOrderSessions")
+
   // Custom Role Association
-  roleId                String?
-  customRole            Role?                  @relation(fields: [roleId], references: [id], onDelete: SetNull)
-  customPermissions     String?                @db.Text // JSON string of direct permissions override for this user
+  roleId            String?
+  customRole        Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  customPermissions String? @db.Text // JSON string of direct permissions override for this user
 
   @@index([name])
   @@index([role])
@@ -90,15 +91,15 @@ model Role {
 }
 
 model Equipment {
-  id                    String                @id @default(uuid())
-  code                  String                @unique // Mã hệ thống tự động sinh (VD: EQ-0001)
-  oldCode               String?                       // Mã nhận diện cũ / Mã quản lý nội bộ (Cho phép sửa)
-  accountingCode        String?               @unique
+  id                    String                    @id @default(uuid())
+  code                  String                    @unique // Mã hệ thống tự động sinh (VD: EQ-0001)
+  oldCode               String? // Mã nhận diện cũ / Mã quản lý nội bộ (Cho phép sửa)
+  accountingCode        String?                   @unique
   name                  String
   category              String // Máy phay, Máy nén khí, Băng tải, Máy hàn...
   department            String? // Bộ phận quản lý (Kỹ thuật, Cơ điện, Xưởng sản xuất...)
   location              String // Xưởng A, Xưởng B, Phòng sạch...
-  status                String                @default("OPERATIONAL") // OPERATIONAL, UNDER_MAINTENANCE, INCIDENT, DISCOMMISSIONED
+  status                String                    @default("OPERATIONAL") // OPERATIONAL, UNDER_MAINTENANCE, INCIDENT, DISCOMMISSIONED
   purchaseDate          DateTime?
   warrantyPeriod        String? // "24 tháng", "12 tháng"...
   image                 String?
@@ -106,15 +107,15 @@ model Equipment {
   specs                 String? // JSON or Text description
   notes                 String?
   functionalUnit        String? // Cụm chức năng chính/khái quát
-  currentOperatingHours Float                 @default(0)
-  isActive              Boolean               @default(true)
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  version               Int                   @default(1)
+  currentOperatingHours Float                     @default(0)
+  isActive              Boolean                   @default(true)
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  version               Int                       @default(1)
   requests              MaintenanceRequest[]
   workOrders            WorkOrder[]
   schedules             MaintenanceSchedule[]
-  executionLogs         WorkOrderExecutionLog[] @relation("EquipmentExecutionLogs")
+  executionLogs         WorkOrderExecutionLog[]   @relation("EquipmentExecutionLogs")
   parameters            EquipmentParameter[]
   technicalSpecs        EquipmentTechnicalSpec[]
   operationLogs         OperationLog[]
@@ -128,30 +129,30 @@ model Equipment {
 }
 
 model MaintenanceRequest {
-  id              String                   @id @default(uuid())
-  requestCode     String                   @unique
-  equipmentId     String
-  equipment       Equipment                @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  id               String                   @id @default(uuid())
+  requestCode      String                   @unique
+  equipmentId      String
+  equipment        Equipment                @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
   functionalUnitId String?
-  functionalUnit  EquipmentFunctionalUnit? @relation(fields: [functionalUnitId], references: [id], onDelete: SetNull)
-  title           String
-  description     String
-  priority        String                   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
-  status          String                   @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED, CANCELLED
-  reporterId      String?
-  reporter        User?                    @relation("RequestReporter", fields: [reporterId], references: [id], onDelete: SetNull)
-  reporterName    String
-  department      String?
-  images          String? // [LEGACY] JSON array of image URLs
-  rejectedReason  String?
-  returnedReason  String?
-  cancelledReason String?
-  cancelledAt     DateTime?
-  cancelledById   String?
-  cancelledBy     User?                    @relation("RequestCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
-  createdAt       DateTime                 @default(now())
-  version         Int                      @default(1)
-  workOrders      WorkOrder[]
+  functionalUnit   EquipmentFunctionalUnit? @relation(fields: [functionalUnitId], references: [id], onDelete: SetNull)
+  title            String
+  description      String
+  priority         String                   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status           String                   @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED, CANCELLED
+  reporterId       String?
+  reporter         User?                    @relation("RequestReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  reporterName     String
+  department       String?
+  images           String? // [LEGACY] JSON array of image URLs
+  rejectedReason   String?
+  returnedReason   String?
+  cancelledReason  String?
+  cancelledAt      DateTime?
+  cancelledById    String?
+  cancelledBy      User?                    @relation("RequestCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  createdAt        DateTime                 @default(now())
+  version          Int                      @default(1)
+  workOrders       WorkOrder[]
 
   @@index([equipmentId])
   @@index([functionalUnitId])
@@ -162,54 +163,56 @@ model MaintenanceRequest {
 }
 
 model WorkOrder {
-  id                  String                 @id @default(uuid())
-  orderCode           String                 @unique
-  equipmentId         String
-  equipment           Equipment              @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  functionalUnitId    String?
-  functionalUnit      EquipmentFunctionalUnit? @relation(fields: [functionalUnitId], references: [id], onDelete: SetNull)
-  requestId           String?                @unique
-  request             MaintenanceRequest?    @relation(fields: [requestId], references: [id], onDelete: SetNull)
-  title               String
-  description         String
-  priority            String                 @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
-  status              String                 @default("PENDING") // PENDING, IN_PROGRESS, INSPECTION, COMPLETED, VERIFIED, CLOSED, CANCELLED
-  technicianName      String?
-  plannedStartDate    DateTime?
-  plannedEndDate      DateTime?
-  actualStartDate     DateTime?
-  actualEndDate       DateTime?
-  failureCause        String?
-  solution            String?
-  totalCost           Float                  @default(0)
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  version             Int                    @default(1)
-  completedAt         DateTime?
-  verifiedAt          DateTime?
-  closedAt            DateTime?
-  scheduleId          String?
-  schedule            MaintenanceSchedule?   @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
-  scheduledDueDate    DateTime?
-  scheduledDueMeter   Float?
-  generationKey       String?                @unique
-  items               WorkOrderItem[]
-  transactions        InventoryTransaction[]
-  checklistExecutions ChecklistExecution[]
-  scheduleHistories   ScheduleHistory[]      @relation("ScheduleHistoryWorkOrder")
-  assignedTechnicianId String?
-  assignedTechnician   User?                  @relation("WorkOrderAssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: Restrict)
-  assignedTechnicianIds Json?                 // Array of assigned technician IDs (multiple primary)
-  supporterIds         Json?                  // Array of supporter user IDs (optional)
-  watcherId            String?
-  watcher              User?                  @relation("WorkOrderWatcher", fields: [watcherId], references: [id], onDelete: SetNull)
-  handlingRoute        HandlingRoute          @default(WORKSHOP_SELF_HANDLE)
-  classificationNotes  String?                @db.Text
-  classificationResult String?                // WORKSHOP_CONTINUE or MAINTENANCE_REQUIRED
+  id                       String                   @id @default(uuid())
+  orderCode                String                   @unique
+  equipmentId              String
+  equipment                Equipment                @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  functionalUnitId         String?
+  functionalUnit           EquipmentFunctionalUnit? @relation(fields: [functionalUnitId], references: [id], onDelete: SetNull)
+  requestId                String?                  @unique
+  request                  MaintenanceRequest?      @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  title                    String
+  description              String
+  priority                 String                   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status                   String                   @default("PENDING") // PENDING, IN_PROGRESS, INSPECTION, COMPLETED, VERIFIED, CLOSED, CANCELLED
+  technicianName           String?
+  plannedStartDate         DateTime?
+  plannedEndDate           DateTime?
+  actualStartDate          DateTime?
+  actualEndDate            DateTime?
+  failureCause             String?
+  solution                 String?
+  totalCost                Float                    @default(0)
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  version                  Int                      @default(1)
+  completedAt              DateTime?
+  verifiedAt               DateTime?
+  closedAt                 DateTime?
+  scheduleId               String?
+  schedule                 MaintenanceSchedule?     @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  scheduledDueDate         DateTime?
+  scheduledDueMeter        Float?
+  generationKey            String?                  @unique
+  items                    WorkOrderItem[]
+  transactions             InventoryTransaction[]
+  checklistExecutions      ChecklistExecution[]
+  scheduleHistories        ScheduleHistory[]        @relation("ScheduleHistoryWorkOrder")
+  assignedTechnicianId     String?
+  assignedTechnician       User?                    @relation("WorkOrderAssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: Restrict)
+  assignedTechnicianIds    Json? // Array of assigned technician IDs (multiple primary)
+  supporterIds             Json? // Array of supporter user IDs (optional)
+  watcherId                String?
+  watcher                  User?                    @relation("WorkOrderWatcher", fields: [watcherId], references: [id], onDelete: SetNull)
+  handlingRoute            HandlingRoute            @default(WORKSHOP_SELF_HANDLE)
+  classificationNotes      String?                  @db.Text
+  classificationResult     String? // WORKSHOP_CONTINUE or MAINTENANCE_REQUIRED
   classificationReporterId String?
-  classificationReporter User?                @relation("WorkOrderClassificationReporter", fields: [classificationReporterId], references: [id], onDelete: SetNull)
-  executionLogs        WorkOrderExecutionLog[] @relation("WorkOrderExecutionLogs")
-  attachments          Attachment[]           @relation("WorkOrderAttachments")
+  classificationReporter   User?                    @relation("WorkOrderClassificationReporter", fields: [classificationReporterId], references: [id], onDelete: SetNull)
+  executionLogs            WorkOrderExecutionLog[]  @relation("WorkOrderExecutionLogs")
+  attachments              Attachment[]             @relation("WorkOrderAttachments")
+  actualHours              Float                    @default(0)
+  workSessions             WorkOrderWorkSession[]
 
   @@unique([scheduleId, scheduledDueDate])
   @@index([scheduleId])
@@ -380,11 +383,11 @@ model Attachment {
   createdAt    DateTime  @default(now())
 
   // New fields for Phase 4.x
-  workOrderId   String?
-  workOrder     WorkOrder?             @relation("WorkOrderAttachments", fields: [workOrderId], references: [id], onDelete: Restrict)
+  workOrderId    String?
+  workOrder      WorkOrder?             @relation("WorkOrderAttachments", fields: [workOrderId], references: [id], onDelete: Restrict)
   executionLogId String?
-  executionLog  WorkOrderExecutionLog? @relation("ExecutionLogAttachments", fields: [executionLogId], references: [id], onDelete: Restrict)
-  photoCategory String? // BEFORE, DURING, AFTER, OTHER
+  executionLog   WorkOrderExecutionLog? @relation("ExecutionLogAttachments", fields: [executionLogId], references: [id], onDelete: Restrict)
+  photoCategory  String? // BEFORE, DURING, AFTER, OTHER
 
   @@index([entityType, entityId])
 }
@@ -400,26 +403,26 @@ model ChecklistLibraryItem {
 }
 
 model ChecklistTemplate {
-  id          String   @id @default(uuid())
-  code        String   @unique
+  id          String                  @id @default(uuid())
+  code        String                  @unique
   name        String
   description String?
   category    String?
-  isActive    Boolean  @default(true)
-  version     Int      @default(1)
+  isActive    Boolean                 @default(true)
+  version     Int                     @default(1)
   items       ChecklistTemplateItem[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
 }
 
 model ChecklistTemplateItem {
-  id          String   @id @default(uuid())
-  templateId  String
-  template    ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  itemIndex   Int
-  itemText    String
-  isRequired  Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id         String            @id @default(uuid())
+  templateId String
+  template   ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  itemIndex  Int
+  itemText   String
+  isRequired Boolean           @default(true)
+  createdAt  DateTime          @default(now())
 
   @@unique([templateId, itemIndex])
 }
@@ -466,12 +469,12 @@ model EquipmentCategory {
 }
 
 model Location {
-  id          String   @id @default(uuid())
-  code        String   @unique
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(uuid())
+  code              String   @unique
+  name              String
+  description       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
   responsibleTechId String?
   responsibleTech   User?    @relation("LocationResponsibleTech", fields: [responsibleTechId], references: [id], onDelete: SetNull)
 }
@@ -495,9 +498,9 @@ model SystemSetting {
 
 model Notification {
   id         String   @id @default(uuid())
-  userId     String?  // Target user ID
-  role       String?  // Target role (e.g. MANAGER, TECHNICIAN)
-  department String?  // Target department (e.g. CO_DIEN, Xưởng A)
+  userId     String? // Target user ID
+  role       String? // Target role (e.g. MANAGER, TECHNICIAN)
+  department String? // Target department (e.g. CO_DIEN, Xưởng A)
   title      String
   message    String
   isRead     Boolean  @default(false)
@@ -531,50 +534,73 @@ enum HandlingRoute {
 }
 
 model WorkOrderExecutionLog {
-  id                                String                 @id @default(uuid())
-  workOrderId                       String
-  workOrder                         WorkOrder              @relation("WorkOrderExecutionLogs", fields: [workOrderId], references: [id], onDelete: Restrict)
-  equipmentId                       String
-  equipment                         Equipment              @relation("EquipmentExecutionLogs", fields: [equipmentId], references: [id], onDelete: Restrict)
-  performedById                     String
-  performedBy                       User                   @relation("UserExecutionLogs", fields: [performedById], references: [id], onDelete: Restrict)
-  performerUnitType                 PerformerUnitType
-  performerDepartmentId             String?
-  performerDepartmentCodeSnapshot   String?
-  performerDepartmentNameSnapshot   String?
-  handlingRoute                     HandlingRoute
-  actionType                        ExecutionLogActionType
-  content                           String                 @db.Text
-  result                            String?                @db.Text
-  notes                             String?                @db.Text
-  recordedAt                        DateTime               @default(now())
+  id                              String                 @id @default(uuid())
+  workOrderId                     String
+  workOrder                       WorkOrder              @relation("WorkOrderExecutionLogs", fields: [workOrderId], references: [id], onDelete: Restrict)
+  equipmentId                     String
+  equipment                       Equipment              @relation("EquipmentExecutionLogs", fields: [equipmentId], references: [id], onDelete: Restrict)
+  performedById                   String
+  performedBy                     User                   @relation("UserExecutionLogs", fields: [performedById], references: [id], onDelete: Restrict)
+  performerUnitType               PerformerUnitType
+  performerDepartmentId           String?
+  performerDepartmentCodeSnapshot String?
+  performerDepartmentNameSnapshot String?
+  handlingRoute                   HandlingRoute
+  actionType                      ExecutionLogActionType
+  content                         String                 @db.Text
+  result                          String?                @db.Text
+  notes                           String?                @db.Text
+  recordedAt                      DateTime               @default(now())
 
   // Pause / complete details
-  pauseReason                       String?
-  workDone                          String?                @db.Text
-  equipmentStatusAfter              String?
-  testResult                        String?                @db.Text
-  conclusion                        String?
-  recommendations                   String?                @db.Text
+  pauseReason          String?
+  workDone             String? @db.Text
+  equipmentStatusAfter String?
+  testResult           String? @db.Text
+  conclusion           String?
+  recommendations      String? @db.Text
 
   // Adjustment relation
-  adjustedLogId                     String?                @unique
-  adjustedLog                       WorkOrderExecutionLog? @relation("ExecutionLogAdjustments", fields: [adjustedLogId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  adjustments                       WorkOrderExecutionLog? @relation("ExecutionLogAdjustments")
-  adjustmentReason                  String?
+  adjustedLogId    String?                @unique
+  adjustedLog      WorkOrderExecutionLog? @relation("ExecutionLogAdjustments", fields: [adjustedLogId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  adjustments      WorkOrderExecutionLog? @relation("ExecutionLogAdjustments")
+  adjustmentReason String?
 
-  attachments                       Attachment[]           @relation("ExecutionLogAttachments")
+  attachments Attachment[] @relation("ExecutionLogAttachments")
+}
+
+model WorkOrderWorkSession {
+  id              String    @id @default(uuid())
+  workOrderId     String
+  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User      @relation("UserWorkOrderSessions", fields: [userId], references: [id], onDelete: Restrict)
+  sessionIndex    Int       @default(1)
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationMinutes Int?
+  durationHours   Float?
+  taskContent     String?   @db.Text
+  resultNotes     String?   @db.Text
+  photos          String?   @db.LongText
+  materialsUsed   String?   @db.LongText
+  status          String    @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, AUTO_CLOSED
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([workOrderId, startedAt])
+  @@index([userId, status])
 }
 
 model EquipmentParameter {
   id            String         @id @default(uuid())
   equipmentId   String
   equipment     Equipment      @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  name          String         // Tên thông số vận hành (VD: Nhiệt độ, Áp suất, Rung...)
-  unit          String?        // Đơn vị (VD: °C, Bar, RPM)
-  minSpec       Float?         // Tiêu chuẩn dưới
-  maxSpec       Float?         // Tiêu chuẩn trên
-  standardValue Float?         // Giá trị chuẩn (nếu có)
+  name          String // Tên thông số vận hành (VD: Nhiệt độ, Áp suất, Rung...)
+  unit          String? // Đơn vị (VD: °C, Bar, RPM)
+  minSpec       Float? // Tiêu chuẩn dưới
+  maxSpec       Float? // Tiêu chuẩn trên
+  standardValue Float? // Giá trị chuẩn (nếu có)
   displayOrder  Int            @default(0) // Thứ tự hiển thị nhập liệu
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
@@ -585,23 +611,23 @@ model EquipmentParameter {
 }
 
 model StandardParameter {
-  id            String         @id @default(uuid())
-  name          String         @unique // Tên tham số vận hành chuẩn (VD: Nhiệt độ tiệt trùng, Áp suất buồng...)
-  unit          String?
-  minSpec       Float?
-  maxSpec       Float?
-  description   String?
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id          String   @id @default(uuid())
+  name        String   @unique // Tên tham số vận hành chuẩn (VD: Nhiệt độ tiệt trùng, Áp suất buồng...)
+  unit        String?
+  minSpec     Float?
+  maxSpec     Float?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // BẢNG 1: THƯ VIỆN THÔNG SỐ KỸ THUẬT CHUẨN TỪ NHÀ SẢN XUẤT (Công suất, Điện áp, Dung tích, Trọng lượng...)
 model StandardTechnicalSpec {
   id          String   @id @default(uuid())
   name        String   @unique // Tên thông số KT (VD: Công suất động cơ, Điện áp nguồn, Dung tích buồng...)
-  unit        String?  // Đơn vị (VD: kW, V, Lít, mm, kg, HP, Bar...)
-  category    String?  // Phân nhóm: Điện, Cơ khí, Kích thước, Dung tích, Áp lực...
+  unit        String? // Đơn vị (VD: kW, V, Lít, mm, kg, HP, Bar...)
+  category    String? // Phân nhóm: Điện, Cơ khí, Kích thước, Dung tích, Áp lực...
   description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -613,11 +639,11 @@ model EquipmentTechnicalSpec {
   id          String    @id @default(uuid())
   equipmentId String
   equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  name        String    // Tên thông số KT (VD: Công suất động cơ)
-  value       String    // Giá trị danh định từ NSX (VD: "7.5", "380", "1000", "1500 x 800 x 1800")
-  unit        String?   // Đơn vị (kW, V, Lít, mm, kg...)
-  category    String?   // Điện, Cơ khí, Kích thước...
-  notes       String?   // Ghi chú thêm
+  name        String // Tên thông số KT (VD: Công suất động cơ)
+  value       String // Giá trị danh định từ NSX (VD: "7.5", "380", "1000", "1500 x 800 x 1800")
+  unit        String? // Đơn vị (kW, V, Lít, mm, kg...)
+  category    String? // Điện, Cơ khí, Kích thước...
+  notes       String? // Ghi chú thêm
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
@@ -626,8 +652,8 @@ model EquipmentTechnicalSpec {
 model FunctionalUnitLibrary {
   id          String   @id @default(uuid())
   name        String   @unique // Tên cụm chức năng chuẩn (VD: Cụm bơm áp lực, Cụm cấp phôi, Cụm sấy khí nén...)
-  code        String?  // Mã quy chuẩn (VD: FU-PUMP, FU-CONV...)
-  category    String?  // Cơ khí, Điện - Tự động hóa, Khí nén, Thủy lực...
+  code        String? // Mã quy chuẩn (VD: FU-PUMP, FU-CONV...)
+  category    String? // Cơ khí, Điện - Tự động hóa, Khí nén, Thủy lực...
   description String?  @db.Text
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -643,55 +669,55 @@ model EquipmentFunctionalUnit {
   equipment   Equipment              @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
   libraryId   String?
   libraryItem FunctionalUnitLibrary? @relation(fields: [libraryId], references: [id], onDelete: SetNull)
-  code        String?                // Mã cụm trên máy (VD: FNC-01, TBSX917-CU01)
-  name        String                 // Tên cụm chức năng
+  code        String? // Mã cụm trên máy (VD: FNC-01, TBSX917-CU01)
+  name        String // Tên cụm chức năng
   description String?                @db.Text
   status      String                 @default("OPERATIONAL") // OPERATIONAL, WARNING, INCIDENT, INACTIVE
   orderIndex  Int                    @default(0)
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
 
-  requests    MaintenanceRequest[]
-  workOrders  WorkOrder[]
+  requests   MaintenanceRequest[]
+  workOrders WorkOrder[]
 
   @@index([equipmentId])
   @@index([libraryId])
 }
 
 model OperationLog {
-  id            String             @id @default(uuid())
-  equipmentId   String
-  equipment     Equipment          @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  parameterId   String
-  parameter     EquipmentParameter @relation(fields: [parameterId], references: [id], onDelete: Restrict)
-  value         Float              // Giá trị ghi nhận thực tế
-  isOutlier     Boolean            @default(false) // Giá trị có nằm ngoài spec không
-  recordedAt    DateTime           @default(now()) // Thời điểm ghi nhận
-  recordedById  String
-  recordedBy    User               @relation("UserOperationLogs", fields: [recordedById], references: [id], onDelete: Restrict)
-  notes         String?            @db.Text
-  
+  id           String             @id @default(uuid())
+  equipmentId  String
+  equipment    Equipment          @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  parameterId  String
+  parameter    EquipmentParameter @relation(fields: [parameterId], references: [id], onDelete: Restrict)
+  value        Float // Giá trị ghi nhận thực tế
+  isOutlier    Boolean            @default(false) // Giá trị có nằm ngoài spec không
+  recordedAt   DateTime           @default(now()) // Thời điểm ghi nhận
+  recordedById String
+  recordedBy   User               @relation("UserOperationLogs", fields: [recordedById], references: [id], onDelete: Restrict)
+  notes        String?            @db.Text
+
   // Data Integrity / Audit Trail for invalidating erroneous logs without deletion
-  isVoided      Boolean            @default(false)
-  voidReason    String?            @db.Text
-  voidedAt      DateTime?
-  voidedById    String?
-  voidedBy      User?              @relation("UserVoidedOperationLogs", fields: [voidedById], references: [id], onDelete: SetNull)
+  isVoided   Boolean   @default(false)
+  voidReason String?   @db.Text
+  voidedAt   DateTime?
+  voidedById String?
+  voidedBy   User?     @relation("UserVoidedOperationLogs", fields: [voidedById], references: [id], onDelete: SetNull)
 }
 
 model AppFeedback {
   id                     String    @id @default(uuid())
   code                   String    @unique // Mã góp ý / lỗi: FB-2026-001
-  title                  String    // Nội dung / Tiêu đề
+  title                  String // Nội dung / Tiêu đề
   description            String    @db.Text // Mô tả yêu cầu / Lỗi
   type                   String    @default("BUG") // BUG, FEATURE, IMPROVEMENT, OTHER
-  requesterName          String    // Người yêu cầu
-  department             String?   // Bộ phận
-  phone                  String?   // SĐT liên hệ (nếu có)
+  requesterName          String // Người yêu cầu
+  department             String? // Bộ phận
+  phone                  String? // SĐT liên hệ (nếu có)
   createdAt              DateTime  @default(now()) // Ngày đề xuất
   response               String?   @db.Text // Phản hồi
   rootCause              String?   @db.Text // Nguyên nhân (nếu lỗi)
-  handlerName            String?   // Người xử lý
+  handlerName            String? // Người xử lý
   expectedCompletionDate DateTime? // Ngày dự kiến hoàn thành
   status                 String    @default("PENDING") // PENDING (Chờ xử lý), IN_PROGRESS (Đang xử lý), RESOLVED (Đã hoàn thành), REJECTED (Từ chối), CLOSED (Đã đóng)
   actualCompletionDate   DateTime? // Ngày thực tế hoàn thành
@@ -702,169 +728,169 @@ model AppFeedback {
 }
 
 enum UtilityType {
-  ELECTRICITY    // Điện
-  WATER          // Nước
-  SYSTEM_AUX     // Hệ thống phụ trợ (HVAC, Chiller, Nồi hơi, Khí nén...)
-  STEAM          // Hơi
+  ELECTRICITY // Điện
+  WATER // Nước
+  SYSTEM_AUX // Hệ thống phụ trợ (HVAC, Chiller, Nồi hơi, Khí nén...)
+  STEAM // Hơi
   COMPRESSED_AIR // Khí nén
 }
 
 enum UtilityMeterTariffType {
-  SINGLE         // 1 giá
-  THREE_PHASE    // 3 giá (Bình thường, Cao điểm, Thấp điểm)
+  SINGLE // 1 giá
+  THREE_PHASE // 3 giá (Bình thường, Cao điểm, Thấp điểm)
 }
 
 enum UtilitySystemStatus {
-  RUNNING        // Đang chạy
-  OFF            // Tắt
-  STANDBY        // Chờ
-  FAULT          // Sự cố
-  MAINTENANCE    // Đang bảo trì
+  RUNNING // Đang chạy
+  OFF // Tắt
+  STANDBY // Chờ
+  FAULT // Sự cố
+  MAINTENANCE // Đang bảo trì
 }
 
 // 1. Danh mục Đồng hồ / Hệ thống Tiện ích
 model UtilityPoint {
-  id               String                  @id @default(uuid())
-  code             String                  @unique // VD: ELEC-MSB-01, WATER-TONG, SYS-CHILLER-01
-  name             String                  // Tên điểm đo / hệ thống (VD: Đồng hồ điện xưởng Non-Beta, Hệ thống Chiller 01)
-  type             UtilityType             // ELECTRICITY, WATER, SYSTEM_AUX
-  location         String                  // Vị trí (Xưởng Non-Beta, Trạm biến áp...)
-  tariffType       UtilityMeterTariffType  @default(SINGLE)
-  multiplier       Float                   @default(1.0) // Hệ số nhân biến dòng (CT)
-  unit             String                  // kWh, m3, Giờ
-  currentStatus    UtilitySystemStatus?    @default(RUNNING) // Áp dụng cho SYSTEM_AUX
-  lastReadingValue Float?                  @default(0)   // Lưu chỉ số gần nhất để tra cứu nhanh
-  lastReadingAt    DateTime?
-  description      String?
-  isSupplyMeter       Boolean                 @default(false) // Đồng hồ tổng cấp từ nhà cung cấp (Điện lực / Thủy cục)
-  isRecycledWater     Boolean                 @default(false) // Đồng hồ đo nước tái sử dụng (không cộng dồn vào tổng dùng để chống tính trùng)
-  isExcludedFromTotal Boolean                 @default(false) // Đồng hồ đo đối chứng / trung gian nối tiếp (không tính vào tổng cấp và không tính vào tổng dùng)
-  isActive            Boolean                 @default(true)
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  id                  String                 @id @default(uuid())
+  code                String                 @unique // VD: ELEC-MSB-01, WATER-TONG, SYS-CHILLER-01
+  name                String // Tên điểm đo / hệ thống (VD: Đồng hồ điện xưởng Non-Beta, Hệ thống Chiller 01)
+  type                UtilityType // ELECTRICITY, WATER, SYSTEM_AUX
+  location            String // Vị trí (Xưởng Non-Beta, Trạm biến áp...)
+  tariffType          UtilityMeterTariffType @default(SINGLE)
+  multiplier          Float                  @default(1.0) // Hệ số nhân biến dòng (CT)
+  unit                String // kWh, m3, Giờ
+  currentStatus       UtilitySystemStatus?   @default(RUNNING) // Áp dụng cho SYSTEM_AUX
+  lastReadingValue    Float?                 @default(0) // Lưu chỉ số gần nhất để tra cứu nhanh
+  lastReadingAt       DateTime?
+  description         String?
+  isSupplyMeter       Boolean                @default(false) // Đồng hồ tổng cấp từ nhà cung cấp (Điện lực / Thủy cục)
+  isRecycledWater     Boolean                @default(false) // Đồng hồ đo nước tái sử dụng (không cộng dồn vào tổng dùng để chống tính trùng)
+  isExcludedFromTotal Boolean                @default(false) // Đồng hồ đo đối chứng / trung gian nối tiếp (không tính vào tổng cấp và không tính vào tổng dùng)
+  isActive            Boolean                @default(true)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
-  readings         UtilityReading[]
-  statusLogs       UtilitySystemStatusLog[]
+  readings   UtilityReading[]
+  statusLogs UtilitySystemStatusLog[]
 }
 
 // 2. Nhật ký Ghi nhận Số Điện / Nước theo ca
 model UtilityReading {
-  id                String        @id @default(uuid())
-  pointId           String
-  point             UtilityPoint  @relation(fields: [pointId], references: [id], onDelete: Cascade)
-  shift             String?       // Ca 1, Ca 2, Ca 3, hoặc Ngày/Đêm
-  
+  id      String       @id @default(uuid())
+  pointId String
+  point   UtilityPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  shift   String? // Ca 1, Ca 2, Ca 3, hoặc Ngày/Đêm
+
   // Chỉ số đo đếm
-  readingValue      Float         // Chỉ số chính (hoặc tổng kWh / m3)
-  previousValue     Float         // Chỉ số lần trước
-  consumption       Float         // Lượng tiêu thụ = (readingValue - previousValue) * multiplier
-  
+  readingValue  Float // Chỉ số chính (hoặc tổng kWh / m3)
+  previousValue Float // Chỉ số lần trước
+  consumption   Float // Lượng tiêu thụ = (readingValue - previousValue) * multiplier
+
   // Áp dụng cho điện 3 biểu giá
-  normalValue       Float?        // T1: Bình thường
-  peakValue         Float?        // T2: Cao điểm
-  offPeakValue      Float?        // T3: Thấp điểm
-  
+  normalValue  Float? // T1: Bình thường
+  peakValue    Float? // T2: Cao điểm
+  offPeakValue Float? // T3: Thấp điểm
+
   // Chỉ số kỹ thuật mở rộng (tùy chọn)
-  powerKw           Float?        // Công suất tức thời
-  powerFactorCosPhi Float?        // Cos phi
-  
-  imageUrl          String?       @db.Text // Ảnh chụp mặt đồng hồ đối chứng
-  notes             String?       @db.Text
-  isAbnormal        Boolean       @default(false) // Cảnh báo tiêu thụ nhảy vọt
-  recordedAt        DateTime      @default(now())
-  recordedById      String
-  recordedByName    String?
-  recordedByUser    User?         @relation("UserUtilityReadings", fields: [recordedById], references: [id], onDelete: Restrict)
+  powerKw           Float? // Công suất tức thời
+  powerFactorCosPhi Float? // Cos phi
+
+  imageUrl       String?  @db.Text // Ảnh chụp mặt đồng hồ đối chứng
+  notes          String?  @db.Text
+  isAbnormal     Boolean  @default(false) // Cảnh báo tiêu thụ nhảy vọt
+  recordedAt     DateTime @default(now())
+  recordedById   String
+  recordedByName String?
+  recordedByUser User?    @relation("UserUtilityReadings", fields: [recordedById], references: [id], onDelete: Restrict)
 
   // Cơ chế đánh dấu hủy kết quả sai (Audit Trail - Không xóa)
-  isVoided          Boolean       @default(false)
-  voidReason        String?       @db.Text
-  voidedAt          DateTime?
-  voidedById        String?
-  voidedByName      String?
+  isVoided     Boolean   @default(false)
+  voidReason   String?   @db.Text
+  voidedAt     DateTime?
+  voidedById   String?
+  voidedByName String?
 }
 
 // 3. Nhật ký Theo dõi Bật / Tắt & Giờ chạy Hệ thống
 model UtilitySystemStatusLog {
-  id              String              @id @default(uuid())
-  pointId         String
-  point           UtilityPoint        @relation(fields: [pointId], references: [id], onDelete: Cascade)
-  status          UtilitySystemStatus // RUNNING, OFF, STANDBY, FAULT, MAINTENANCE
-  runningHours    Float?              // Số giờ chạy lũy kế đọc trên đồng hồ (Hour meter)
-  runningDelta    Float?              // Số giờ chạy tăng thêm so với lần trước
-  reason          String?             // Lý do bật/tắt/sự cố
-  parametersJson  String?             @db.Text // Lưu snapshot áp suất, nhiệt độ lúc bật/tắt (JSON)
-  recordedAt      DateTime            @default(now())
-  recordedById    String
-  recordedByName  String?
-  recordedByUser  User?               @relation("UserUtilityStatusLogs", fields: [recordedById], references: [id], onDelete: Restrict)
+  id             String              @id @default(uuid())
+  pointId        String
+  point          UtilityPoint        @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  status         UtilitySystemStatus // RUNNING, OFF, STANDBY, FAULT, MAINTENANCE
+  runningHours   Float? // Số giờ chạy lũy kế đọc trên đồng hồ (Hour meter)
+  runningDelta   Float? // Số giờ chạy tăng thêm so với lần trước
+  reason         String? // Lý do bật/tắt/sự cố
+  parametersJson String?             @db.Text // Lưu snapshot áp suất, nhiệt độ lúc bật/tắt (JSON)
+  recordedAt     DateTime            @default(now())
+  recordedById   String
+  recordedByName String?
+  recordedByUser User?               @relation("UserUtilityStatusLogs", fields: [recordedById], references: [id], onDelete: Restrict)
 }
 
 enum FabricationCategory {
-  FABRICATION     // Gia công chi tiết, phụ tùng cơ khí (tiện, phay, hàn, cắt...)
-  NEW_MAKING      // Chế tạo mới (bàn inox, giá kệ, xe đẩy, máng...)
-  MODIFICATION    // Cải tiến kỹ thuật / Kaizen
-  INSTALLATION    // Lắp đặt & Di dời hệ thống
-  INFRASTRUCTURE  // Cơ sở hạ tầng & Nhà xưởng
-  OTHER           // Công việc khác
+  FABRICATION // Gia công chi tiết, phụ tùng cơ khí (tiện, phay, hàn, cắt...)
+  NEW_MAKING // Chế tạo mới (bàn inox, giá kệ, xe đẩy, máng...)
+  MODIFICATION // Cải tiến kỹ thuật / Kaizen
+  INSTALLATION // Lắp đặt & Di dời hệ thống
+  INFRASTRUCTURE // Cơ sở hạ tầng & Nhà xưởng
+  OTHER // Công việc khác
 }
 
 enum FabricationStatus {
-  ASSIGNED        // Đã phân công / Chờ thực hiện
-  IN_PROGRESS     // Đang thực hiện
-  ON_HOLD         // Tạm dừng
-  COMPLETED       // Đã hoàn thành (chờ nghiệm thu)
-  CLOSED          // Đã đóng / Nghiệm thu đạt
-  CANCELLED       // Đã hủy
+  ASSIGNED // Đã phân công / Chờ thực hiện
+  IN_PROGRESS // Đang thực hiện
+  ON_HOLD // Tạm dừng
+  COMPLETED // Đã hoàn thành (chờ nghiệm thu)
+  CLOSED // Đã đóng / Nghiệm thu đạt
+  CANCELLED // Đã hủy
 }
 
 model FabricationOrder {
-  id                   String              @id @default(uuid())
-  orderCode            String              @unique // GC-2026-0001
-  title                String              // Tên công việc / sản phẩm
-  category             FabricationCategory @default(FABRICATION)
-  priority             String              @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
-  status               FabricationStatus   @default(ASSIGNED)
+  id        String              @id @default(uuid())
+  orderCode String              @unique // GC-2026-0001
+  title     String // Tên công việc / sản phẩm
+  category  FabricationCategory @default(FABRICATION)
+  priority  String              @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status    FabricationStatus   @default(ASSIGNED)
 
-  description          String              @db.Text
-  specifications       String?             @db.Text // Kích thước, quy cách kỹ thuật, vật liệu
-  location             String?             // Vị trí / Phân xưởng áp dụng
-  targetDepartment     String?             // Bộ phận hưởng lợi / sử dụng
+  description      String  @db.Text
+  specifications   String? @db.Text // Kích thước, quy cách kỹ thuật, vật liệu
+  location         String? // Vị trí / Phân xưởng áp dụng
+  targetDepartment String? // Bộ phận hưởng lợi / sử dụng
 
-  equipmentId          String?
-  equipment            Equipment?          @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  equipmentId String?
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
 
   assignedTechnicianId String?
-  assignedTechnician   User?               @relation("FabricationAssignedLead", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
-  supporterIds         Json?               // Mảng user IDs thợ phụ hỗ trợ
+  assignedTechnician   User?   @relation("FabricationAssignedLead", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
+  supporterIds         Json? // Mảng user IDs thợ phụ hỗ trợ
 
-  creatorId            String?
-  creator              User?               @relation("FabricationCreatedBy", fields: [creatorId], references: [id], onDelete: SetNull)
+  creatorId String?
+  creator   User?   @relation("FabricationCreatedBy", fields: [creatorId], references: [id], onDelete: SetNull)
 
-  plannedStartDate     DateTime?
-  plannedEndDate       DateTime?
-  actualStartDate      DateTime?
-  actualEndDate        DateTime?
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+  actualStartDate  DateTime?
+  actualEndDate    DateTime?
 
-  estimatedHours       Float               @default(0)
-  actualHours          Float               @default(0)
+  estimatedHours Float @default(0)
+  actualHours    Float @default(0)
 
-  drawings             Json?               // URLs/paths của bản vẽ kỹ thuật, tài liệu
-  resultImages         Json?               // URLs/paths ảnh sản phẩm sau gia công
-  resultNotes          String?             @db.Text
+  drawings     Json? // URLs/paths của bản vẽ kỹ thuật, tài liệu
+  resultImages Json? // URLs/paths ảnh sản phẩm sau gia công
+  resultNotes  String? @db.Text
 
-  acceptanceRating     String?             // EXCELLENT, GOOD, ACCEPTABLE, POOR
-  acceptedById         String?
-  acceptedByName       String?
-  acceptedAt           DateTime?
+  acceptanceRating String? // EXCELLENT, GOOD, ACCEPTABLE, POOR
+  acceptedById     String?
+  acceptedByName   String?
+  acceptedAt       DateTime?
 
-  totalCost            Float               @default(0)
-  materials            FabricationMaterial[]
-  progressLogs         FabricationProgressLog[]
-  workSessions         FabricationWorkSession[]
+  totalCost    Float                    @default(0)
+  materials    FabricationMaterial[]
+  progressLogs FabricationProgressLog[]
+  workSessions FabricationWorkSession[]
 
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([category])
@@ -876,37 +902,37 @@ model FabricationMaterial {
   id              String           @id @default(uuid())
   orderId         String
   order           FabricationOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  materialName    String           // Tên vật tư (Inox 304 tấm 1.5mm, Hộp inox 40x40...)
+  materialName    String // Tên vật tư (Inox 304 tấm 1.5mm, Hộp inox 40x40...)
   quantity        Float            @default(1)
-  unit            String           // cây, tấm, kg, mét, cái...
+  unit            String // cây, tấm, kg, mét, cái...
   unitPrice       Float            @default(0)
   totalPrice      Float            @default(0)
-  inventoryItemId String?          // Nếu xuất từ kho vật tư
+  inventoryItemId String? // Nếu xuất từ kho vật tư
 
   @@index([orderId])
 }
 
 model FabricationProgressLog {
-  id              String           @id @default(uuid())
-  orderId         String
-  order           FabricationOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id      String           @id @default(uuid())
+  orderId String
+  order   FabricationOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  userId          String
-  user            User             @relation("UserFabricationLogs", fields: [userId], references: [id], onDelete: Cascade)
-  userName        String           // Snapshot tên người tại thời điểm ghi
-  userCode        String?          // Mã nhân viên (VD: 0947)
+  userId   String
+  user     User    @relation("UserFabricationLogs", fields: [userId], references: [id], onDelete: Cascade)
+  userName String // Snapshot tên người tại thời điểm ghi
+  userCode String? // Mã nhân viên (VD: 0947)
 
-  loggedAt        DateTime         @default(now())
-  hoursSpent      Float            @default(0)     // Số giờ công lượt này
-  progressPercent Int?                            // % tiến độ ước tính
-  progressText    String?                         // Text mô tả tiến độ tự do
+  loggedAt        DateTime @default(now())
+  hoursSpent      Float    @default(0) // Số giờ công lượt này
+  progressPercent Int? // % tiến độ ước tính
+  progressText    String? // Text mô tả tiến độ tự do
 
-  taskContent     String           @db.Text        // Chi tiết những gì người này đã làm
-  notes           String?          @db.Text        // Ghi chú / khó khăn / lưu ý
-  photos          Json?                            // Mảng URLs ảnh minh chứng
+  taskContent String  @db.Text // Chi tiết những gì người này đã làm
+  notes       String? @db.Text // Ghi chú / khó khăn / lưu ý
+  photos      Json? // Mảng URLs ảnh minh chứng
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([orderId])
   @@index([userId])
@@ -914,32 +940,30 @@ model FabricationProgressLog {
 }
 
 model FabricationWorkSession {
-  id              String           @id @default(uuid())
-  orderId         String
-  order           FabricationOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id      String           @id @default(uuid())
+  orderId String
+  order   FabricationOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  userId          String
-  user            User             @relation("UserFabricationSessions", fields: [userId], references: [id], onDelete: Cascade)
-  userName        String           // Snapshot tên người
-  userEmail       String?          // Snapshot email người làm
+  userId    String
+  user      User    @relation("UserFabricationSessions", fields: [userId], references: [id], onDelete: Cascade)
+  userName  String // Snapshot tên người
+  userEmail String? // Snapshot email người làm
 
-  startedAt       DateTime         @default(now())
+  startedAt       DateTime  @default(now())
   endedAt         DateTime?
-  durationMinutes Float            @default(0) // Số phút thực tế (vd: 95 phút)
-  durationHours   Float            @default(0) // Quy đổi giờ thập phân (vd: 1.58 giờ)
-  status          String           @default("ACTIVE") // ACTIVE, COMPLETED, AUTO_CLOSED
+  durationMinutes Float     @default(0) // Số phút thực tế (vd: 95 phút)
+  durationHours   Float     @default(0) // Quy đổi giờ thập phân (vd: 1.58 giờ)
+  status          String    @default("ACTIVE") // ACTIVE, COMPLETED, AUTO_CLOSED
 
-  notes           String?          @db.Text
-  taskContent     String?          @db.Text
-  photos          Json?            // Ảnh đính kèm khi kết thúc ca
+  notes       String? @db.Text
+  taskContent String? @db.Text
+  photos      Json? // Ảnh đính kèm khi kết thúc ca
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([orderId])
   @@index([userId])
   @@index([status])
   @@index([startedAt])
 }
-
-
