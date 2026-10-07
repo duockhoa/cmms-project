@@ -25,7 +25,7 @@ export const useWorkOrderDetail = ({
   const [logContent, setLogContent] = useState('');
   const [logResult, setLogResult] = useState('');
   const [logNotes, setLogNotes] = useState('');
-  const [logPhotos, setLogPhotos] = useState<FileList | null>(null);
+  const [logPhotos, setLogPhotos] = useState<File[] | FileList | null>(null);
   const [logPhotoCategory, setLogPhotoCategory] = useState<'BEFORE' | 'DURING' | 'AFTER' | 'OTHER'>('DURING');
   const [logAdjustTargetId, setLogAdjustTargetId] = useState<string | null>(null);
   const [logAdjustReason, setLogAdjustReason] = useState('');
@@ -42,7 +42,7 @@ export const useWorkOrderDetail = ({
   const [completeTestResult, setCompleteTestResult] = useState('');
   const [completeConclusion, setCompleteConclusion] = useState('Hoạt động bình thường');
   const [completeRecommendation, setCompleteRecommendation] = useState('');
-  const [completePhotos, setCompletePhotos] = useState<FileList | null>(null);
+  const [completePhotos, setCompletePhotos] = useState<File[] | FileList | null>(null);
 
   // Escalate Modal State
   const [isEscalateOpen, setIsEscalateOpen] = useState(false);
@@ -170,7 +170,7 @@ export const useWorkOrderDetail = ({
   const canModify = isAssigned || isManagerOrAdmin || (wo?.handlingRoute === 'WORKSHOP_SELF_HANDLE' && userUnitType === 'WORKSHOP');
 
   // Upload handler helper
-  const uploadPhotos = async (files: FileList, logId: string, category: 'BEFORE' | 'DURING' | 'AFTER' | 'OTHER') => {
+  const uploadPhotos = async (files: FileList | File[], logId: string, category: 'BEFORE' | 'DURING' | 'AFTER' | 'OTHER') => {
     let failedCount = 0;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];

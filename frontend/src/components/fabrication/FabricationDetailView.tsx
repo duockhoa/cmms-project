@@ -12,6 +12,7 @@ import { useToast, useConfirmDialog } from '../common/Toast';
 import { StatusBadge, PriorityBadge } from '../common/Badge';
 import { usePermissions } from '../../hooks/usePermissions';
 import { Modal } from '../common/Modal';
+import { CameraCaptureModal } from '../common/CameraCaptureModal';
 import { DetailViewSkeleton } from '../common/Skeleton';
 import { FabricationProgressLogTable } from './FabricationProgressLogTable';
 
@@ -120,6 +121,8 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
   const [progressNotes, setProgressNotes] = useState<string>('');
   const [progressHoursSpent, setProgressHoursSpent] = useState<string>('1.0');
   const [progressPhotos, setProgressPhotos] = useState<File[]>([]);
+  const [isProgressCameraOpen, setIsProgressCameraOpen] = useState(false);
+  const [isFabProductCameraOpen, setIsFabProductCameraOpen] = useState(false);
   const [showWebcamModal, setShowWebcamModal] = useState(false);
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
   const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -930,7 +933,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
   };
 
   // Handle uploading photos
-  const handleImageFiles = async (files: FileList | null) => {
+  const handleImageFiles = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     setUploadingImage(true);
 
@@ -1706,12 +1709,12 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => cameraInputRef.current?.click()}
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setIsFabProductCameraOpen(true)}
                   disabled={uploadingImage}
                   style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px' }}
                 >
-                  <Camera size={14} /> Chụp ảnh
+                  <Camera size={14} /> Chụp ảnh trực tiếp
                 </button>
                 <button
                   type="button"
@@ -1725,6 +1728,14 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
               </div>
             )}
           </div>
+
+          {/* Camera Capture Modal for Product Images */}
+          <CameraCaptureModal
+            isOpen={isFabProductCameraOpen}
+            onClose={() => setIsFabProductCameraOpen(false)}
+            onCapture={(capturedFiles) => handleImageFiles(capturedFiles)}
+            title="Chụp ảnh minh chứng sản phẩm & nghiệm thu"
+          />
 
           {resultImages.length === 0 ? (
             <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', color: '#64748b', fontSize: '13px' }}>
@@ -2039,7 +2050,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={handleOpenDirectCamera}
+                  onClick={() => setIsProgressCameraOpen(true)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -2143,6 +2154,14 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
           </form>
         </Modal>
       )}
+
+      {/* Camera Capture Modal for Progress Photos */}
+      <CameraCaptureModal
+        isOpen={isProgressCameraOpen}
+        onClose={() => setIsProgressCameraOpen(false)}
+        onCapture={(capturedFiles) => setProgressPhotos((prev) => [...prev, ...capturedFiles])}
+        title="Chụp ảnh minh chứng tiến độ công việc"
+      />
 
       {/* 0b-2. Modal Webcam Chụp ảnh trực tiếp */}
       {showWebcamModal && (

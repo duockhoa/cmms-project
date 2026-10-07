@@ -1,6 +1,7 @@
-import React from 'react';
-import { Camera, Loader2 } from 'lucide-react';
+import React, { useState, useRef, useMemo } from 'react';
+import { Camera, Loader2, Upload, X } from 'lucide-react';
 import { Modal } from '../../common/Modal';
+import { CameraCaptureModal } from '../../common/CameraCaptureModal';
 
 export const WorkOrderExecutionModals: React.FC<any> = ({
   actionLoading, completeConclusion, completeEquipmentStatus, completePhotos,
@@ -13,8 +14,46 @@ export const WorkOrderExecutionModals: React.FC<any> = ({
   setCustomPauseReason, setIsCompleteFormOpen, setIsLogFormOpen, setIsPauseFormOpen,
   setLogAdjustReason, setLogContent, setLogNotes, setLogPhotoCategory, setLogPhotos,
   setLogResult, setPauseReason, wo,
-}) => (
-  <>
+}) => {
+  const [isLogCameraOpen, setIsLogCameraOpen] = useState(false);
+  const [isCompleteCameraOpen, setIsCompleteCameraOpen] = useState(false);
+  const logFileInputRef = useRef<HTMLInputElement>(null);
+  const completeFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper to convert logPhotos to array
+  const currentLogPhotosArray: File[] = useMemo(() => {
+    if (!logPhotos) return [];
+    if (Array.isArray(logPhotos)) return logPhotos;
+    return Array.from(logPhotos);
+  }, [logPhotos]);
+
+  const handleAddLogPhotos = (newFiles: File[]) => {
+    setLogPhotos([...currentLogPhotosArray, ...newFiles]);
+  };
+
+  const handleRemoveLogPhoto = (idx: number) => {
+    const updated = currentLogPhotosArray.filter((_, i) => i !== idx);
+    setLogPhotos(updated.length > 0 ? updated : null);
+  };
+
+  // Helper to convert completePhotos to array
+  const currentCompletePhotosArray: File[] = useMemo(() => {
+    if (!completePhotos) return [];
+    if (Array.isArray(completePhotos)) return completePhotos;
+    return Array.from(completePhotos);
+  }, [completePhotos]);
+
+  const handleAddCompletePhotos = (newFiles: File[]) => {
+    setCompletePhotos([...currentCompletePhotosArray, ...newFiles]);
+  };
+
+  const handleRemoveCompletePhoto = (idx: number) => {
+    const updated = currentCompletePhotosArray.filter((_, i) => i !== idx);
+    setCompletePhotos(updated.length > 0 ? updated : null);
+  };
+
+  return (
+    <>
       {/* 1. Modal Thêm ghi nhận sửa chữa */}
       {isLogFormOpen && (
         <Modal isOpen={isLogFormOpen} onClose={() => setIsLogFormOpen(false)} title={logAdjustTargetId ? "Điều chỉnh ghi nhận sửa chữa" : "Ghi nhận thao tác xử lý & Ảnh chụp"}>
@@ -78,20 +117,119 @@ export const WorkOrderExecutionModals: React.FC<any> = ({
               </select>
             </div>
 
+            {/* Chụp ảnh và tải ảnh lên */}
             <div className="form-group">
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <Camera size={18} /> Chụp / Chọn ảnh đính kèm (Có thể chọn nhiều)
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Camera size={18} /> Ảnh đính kèm (Tùy chọn)
               </label>
+
+              {/* Hidden file input */}
               <input 
+                ref={logFileInputRef}
                 type="file" 
                 multiple 
                 accept="image/*" 
-                className="form-input" 
-                onChange={(e) => setLogPhotos(e.target.files)} 
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    handleAddLogPhotos(Array.from(e.target.files));
+                    e.target.value = '';
+                  }
+                }} 
               />
-              {logPhotos && logPhotos.length > 0 && (
-                <div style={{ fontSize: '12px', color: 'var(--text-success)', marginTop: '4px', fontWeight: 600 }}>
-                  Đã chọn {logPhotos.length} file ảnh.
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setIsLogCameraOpen(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    borderColor: '#2563eb',
+                    color: '#2563eb',
+                    fontWeight: 600,
+                    backgroundColor: '#eff6ff',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                  }}
+                >
+                  <Camera size={16} /> Chụp ảnh trực tiếp
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => logFileInputRef.current?.click()}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                  }}
+                >
+                  <Upload size={16} /> Tải tệp lên
+                </button>
+
+                {currentLogPhotosArray.length > 0 && (
+                  <span style={{ fontSize: '12.5px', color: '#10b981', fontWeight: 600 }}>
+                    Đã chọn {currentLogPhotosArray.length} ảnh
+                  </span>
+                )}
+              </div>
+
+              {/* Thumbnail preview strip */}
+              {currentLogPhotosArray.length > 0 && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                  {currentLogPhotosArray.map((file, idx) => {
+                    const previewUrl = URL.createObjectURL(file);
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          position: 'relative',
+                          width: '64px',
+                          height: '64px',
+                          borderRadius: '6px',
+                          overflow: 'hidden',
+                          border: '1px solid #cbd5e1',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        }}
+                      >
+                        <img
+                          src={previewUrl}
+                          alt={`log-photo-${idx}`}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLogPhoto(idx)}
+                          style={{
+                            position: 'absolute',
+                            top: '2px',
+                            right: '2px',
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(0,0,0,0.7)',
+                            color: '#fff',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                          }}
+                          title="Xóa ảnh"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -207,20 +345,119 @@ export const WorkOrderExecutionModals: React.FC<any> = ({
               />
             </div>
 
+            {/* Chụp ảnh và tải ảnh hoàn thành */}
             <div className="form-group">
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Camera size={18} /> Ảnh chụp sau sửa chữa / Nghiệm thu (Tùy chọn)
               </label>
+
+              {/* Hidden file input */}
               <input 
+                ref={completeFileInputRef}
                 type="file" 
                 multiple 
                 accept="image/*" 
-                className="form-input" 
-                onChange={(e) => setCompletePhotos(e.target.files)} 
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    handleAddCompletePhotos(Array.from(e.target.files));
+                    e.target.value = '';
+                  }
+                }} 
               />
-              {completePhotos && completePhotos.length > 0 && (
-                <div style={{ fontSize: '12px', color: 'var(--text-success)', marginTop: '4px', fontWeight: 600 }}>
-                  Đã chọn {completePhotos.length} file ảnh AFTER.
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setIsCompleteCameraOpen(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    borderColor: '#2563eb',
+                    color: '#2563eb',
+                    fontWeight: 600,
+                    backgroundColor: '#eff6ff',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                  }}
+                >
+                  <Camera size={16} /> Chụp ảnh trực tiếp
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => completeFileInputRef.current?.click()}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                  }}
+                >
+                  <Upload size={16} /> Tải tệp lên
+                </button>
+
+                {currentCompletePhotosArray.length > 0 && (
+                  <span style={{ fontSize: '12.5px', color: '#10b981', fontWeight: 600 }}>
+                    Đã chọn {currentCompletePhotosArray.length} ảnh AFTER
+                  </span>
+                )}
+              </div>
+
+              {/* Thumbnail preview strip */}
+              {currentCompletePhotosArray.length > 0 && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                  {currentCompletePhotosArray.map((file, idx) => {
+                    const previewUrl = URL.createObjectURL(file);
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          position: 'relative',
+                          width: '64px',
+                          height: '64px',
+                          borderRadius: '6px',
+                          overflow: 'hidden',
+                          border: '1px solid #cbd5e1',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        }}
+                      >
+                        <img
+                          src={previewUrl}
+                          alt={`complete-photo-${idx}`}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCompletePhoto(idx)}
+                          style={{
+                            position: 'absolute',
+                            top: '2px',
+                            right: '2px',
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(0,0,0,0.7)',
+                            color: '#fff',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                          }}
+                          title="Xóa ảnh"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -235,5 +472,20 @@ export const WorkOrderExecutionModals: React.FC<any> = ({
         </Modal>
       )}
 
-  </>
-);
+      {/* Camera Capture Modals */}
+      <CameraCaptureModal
+        isOpen={isLogCameraOpen}
+        onClose={() => setIsLogCameraOpen(false)}
+        onCapture={handleAddLogPhotos}
+        title="Chụp ảnh thao tác sửa chữa"
+      />
+
+      <CameraCaptureModal
+        isOpen={isCompleteCameraOpen}
+        onClose={() => setIsCompleteCameraOpen(false)}
+        onCapture={handleAddCompletePhotos}
+        title="Chụp ảnh hoàn thành / nghiệm thu"
+      />
+    </>
+  );
+};
