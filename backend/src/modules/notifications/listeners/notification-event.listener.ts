@@ -325,50 +325,77 @@ export class NotificationEventListener {
       const equipName = wo.equipment ? `${wo.equipment.name} (${wo.equipment.code})` : 'Thiết bị';
       const locationName = wo.equipment?.location || 'Phân xưởng';
 
-      // 1. ASSIGN / REASSIGN
-      if (actionName === 'ASSIGN' && (wo.assignedTechnicianId || wo.technicianName)) {
-        let techId = wo.assignedTechnicianId;
-        let techUser: any = null;
-        if (techId) {
-          techUser = await this.prisma.user.findUnique({ where: { id: techId } });
-        } else if (wo.technicianName) {
-          techUser = await this.prisma.user.findFirst({ where: { name: wo.technicianName } });
-          if (techUser) techId = techUser.id;
+      // 1. ASSIGN / REASSIGN (Đẩy thông báo và Email đến tất cả nhân sự được phân công)
+      if (actionName === 'ASSIGN' && (wo.assignedTechnicianId || wo.technicianName || wo.assignedTechnicianIds)) {
+        const targetUserIds = new Set<string>();
+        if (wo.assignedTechnicianId) targetUserIds.add(wo.assignedTechnicianId);
+
+        // Danh sách ID kỹ thuật viên
+        if (wo.assignedTechnicianIds) {
+          try {
+            const parsed = typeof wo.assignedTechnicianIds === 'string'
+              ? JSON.parse(wo.assignedTechnicianIds)
+              : wo.assignedTechnicianIds;
+            if (Array.isArray(parsed)) parsed.forEach((id: any) => id && targetUserIds.add(String(id)));
+          } catch {}
         }
 
-        if (techId) {
-          await this.notifications.createNotification(
-            techId,
-            null,
-            null,
-            `Phân công phiếu bảo trì: ${orderCode}`,
-            `Bạn được giao xử lý phiếu bảo trì ${orderCode} cho thiết bị ${equipName}.`,
-          );
+        // Danh sách ID người hỗ trợ phối hợp
+        if (wo.supporterIds) {
+          try {
+            const parsed = typeof wo.supporterIds === 'string'
+              ? JSON.parse(wo.supporterIds)
+              : wo.supporterIds;
+            if (Array.isArray(parsed)) parsed.forEach((id: any) => id && targetUserIds.add(String(id)));
+          } catch {}
         }
 
-        if (techUser?.email) {
-          await this.mailService.sendDkPharmaEmail({
-            to: techUser.email,
-            recipientName: techUser.name,
-            subject: `[Phân công xử lý] Phiếu bảo trì ${orderCode} - ${equipName}`,
-            title: 'Phân công nhiệm vụ bảo trì',
-            badgeText: 'PHÂN CÔNG MỚI',
-            badgeColor: 'blue',
-            summaryMessage: `Bạn vừa được phân công xử lý phiếu bảo trì ${orderCode} cho thiết bị ${equipName}.`,
-            metadata: [
-              { label: 'Mã phiếu', value: orderCode },
-              { label: 'Thiết bị', value: equipName },
-              { label: 'Vị trí/Xưởng', value: locationName },
-              { label: 'Mức độ ưu tiên', value: wo.priority },
-              {
-                label: 'Hạn hoàn thành',
-                value: wo.plannedEndDate ? new Date(wo.plannedEndDate).toLocaleDateString('vi-VN') : 'Trong ngày',
-              },
-            ],
-            notes: wo.description,
-            actionText: 'Xem phiếu bảo trì',
-            actionPath: `/work-orders?id=${wo.id}`,
+        // Dự phòng: Nếu chưa có ID mà có technicianName dạng nối tên
+        if (targetUserIds.size === 0 && wo.technicianName) {
+          const names = String(wo.technicianName).split(',').map((n: string) => n.trim()).filter(Boolean);
+          const matchedUsers = await this.prisma.user.findMany({ where: { name: { in: names } } });
+          matchedUsers.forEach((u) => targetUserIds.add(u.id));
+        }
+
+        if (targetUserIds.size > 0) {
+          const techUsers = await this.prisma.user.findMany({
+            where: { id: { in: Array.from(targetUserIds) } },
           });
+
+          for (const techUser of techUsers) {
+            await this.notifications.createNotification(
+              techUser.id,
+              null,
+              null,
+              `Phân công phiếu bảo trì: ${orderCode}`,
+              `Bạn được phân công tham gia xử lý phiếu bảo trì ${orderCode} cho thiết bị ${equipName}.`,
+            );
+
+            if (techUser.email) {
+              await this.mailService.sendDkPharmaEmail({
+                to: techUser.email,
+                recipientName: techUser.name,
+                subject: `[Phân công xử lý] Phiếu bảo trì ${orderCode} - ${equipName}`,
+                title: 'Phân công nhiệm vụ bảo trì',
+                badgeText: 'PHÂN CÔNG MỚI',
+                badgeColor: 'blue',
+                summaryMessage: `Bạn vừa được phân công tham gia xử lý phiếu bảo trì ${orderCode} cho thiết bị ${equipName}.`,
+                metadata: [
+                  { label: 'Mã phiếu', value: orderCode },
+                  { label: 'Thiết bị', value: equipName },
+                  { label: 'Vị trí/Xưởng', value: locationName },
+                  { label: 'Mức độ ưu tiên', value: wo.priority },
+                  {
+                    label: 'Hạn hoàn thành',
+                    value: wo.plannedEndDate ? new Date(wo.plannedEndDate).toLocaleDateString('vi-VN') : 'Trong ngày',
+                  },
+                ],
+                notes: wo.description,
+                actionText: 'Xem phiếu bảo trì',
+                actionPath: `/work-orders?id=${wo.id}`,
+              });
+            }
+          }
         }
       }
 
@@ -691,48 +718,69 @@ export class NotificationEventListener {
   async handleFabricationAssigned(event: FabricationAssignedEvent) {
     try {
       const { order } = event;
-      if (!order?.assignedTechnicianId) return;
+      if (!order) return;
 
-      await this.notifications.createNotification(
-        order.assignedTechnicianId,
-        null,
-        null,
-        `Phân công gia công/chế tạo: ${order.orderCode}`,
-        `Bạn được phân công thực hiện công việc gia công [${order.orderCode}]: ${order.title}.`,
-      );
+      const targetUserIds = new Set<string>();
+      if (order.assignedTechnicianId) targetUserIds.add(order.assignedTechnicianId);
 
-      if (order.assignedTechnician?.email) {
-        await this.mailService.sendDkPharmaEmail({
-          to: order.assignedTechnician.email,
-          recipientName: order.assignedTechnician.name,
-          subject: `[Phân công gia công] ${order.orderCode} - ${order.title}`,
-          title: 'Phân công nhiệm vụ gia công / chế tạo',
-          badgeText: 'PHÂN CÔNG MỚI',
-          badgeColor: 'blue',
-          summaryMessage: `Bạn vừa được phân công phụ trách công việc gia công/chế tạo mã phiếu ${order.orderCode}.`,
-          metadata: [
-            { label: 'Mã phiếu', value: order.orderCode },
-            { label: 'Tiêu đề', value: order.title },
-            {
-              label: 'Hạng mục',
-              value:
-                order.category === 'FABRICATION'
-                  ? 'Chế tạo mới'
-                  : order.category === 'MODIFICATION'
-                  ? 'Cải tiến / Hoán cải'
-                  : 'Gia công phục hồi',
-            },
-            { label: 'Ưu tiên', value: order.priority },
-            { label: 'Xưởng / Vị trí', value: order.location || order.targetDepartment || 'Xưởng cơ điện' },
-            {
-              label: 'Dự kiến hoàn thành',
-              value: order.plannedEndDate ? new Date(order.plannedEndDate).toLocaleDateString('vi-VN') : 'Theo tiến độ',
-            },
-          ],
-          notes: order.description,
-          actionText: 'Xem chi tiết công việc',
-          actionPath: `/fabrication/${order.id}`,
-        });
+      // Thêm danh sách người hỗ trợ phối hợp
+      if (order.supporterIds) {
+        try {
+          const parsed = typeof order.supporterIds === 'string'
+            ? JSON.parse(order.supporterIds)
+            : order.supporterIds;
+          if (Array.isArray(parsed)) parsed.forEach((id: any) => id && targetUserIds.add(String(id)));
+        } catch {}
+      }
+
+      if (targetUserIds.size === 0) return;
+
+      const techUsers = await this.prisma.user.findMany({
+        where: { id: { in: Array.from(targetUserIds) } },
+      });
+
+      for (const techUser of techUsers) {
+        await this.notifications.createNotification(
+          techUser.id,
+          null,
+          null,
+          `Phân công gia công/chế tạo: ${order.orderCode}`,
+          `Bạn được phân công tham gia thực hiện công việc gia công [${order.orderCode}]: ${order.title}.`,
+        );
+
+        if (techUser.email) {
+          await this.mailService.sendDkPharmaEmail({
+            to: techUser.email,
+            recipientName: techUser.name,
+            subject: `[Phân công gia công] ${order.orderCode} - ${order.title}`,
+            title: 'Phân công nhiệm vụ gia công / chế tạo',
+            badgeText: 'PHÂN CÔNG MỚI',
+            badgeColor: 'blue',
+            summaryMessage: `Bạn vừa được phân công tham gia công việc gia công/chế tạo mã phiếu ${order.orderCode}.`,
+            metadata: [
+              { label: 'Mã phiếu', value: order.orderCode },
+              { label: 'Tiêu đề', value: order.title },
+              {
+                label: 'Hạng mục',
+                value:
+                  order.category === 'FABRICATION'
+                    ? 'Chế tạo mới'
+                    : order.category === 'MODIFICATION'
+                    ? 'Cải tiến / Hoán cải'
+                    : 'Gia công phục hồi',
+              },
+              { label: 'Ưu tiên', value: order.priority },
+              { label: 'Xưởng / Vị trí', value: order.location || order.targetDepartment || 'Xưởng cơ điện' },
+              {
+                label: 'Dự kiến hoàn thành',
+                value: order.plannedEndDate ? new Date(order.plannedEndDate).toLocaleDateString('vi-VN') : 'Theo tiến độ',
+              },
+            ],
+            notes: order.description,
+            actionText: 'Xem chi tiết công việc',
+            actionPath: `/fabrication/${order.id}`,
+          });
+        }
       }
     } catch (err: any) {
       this.logger.error('[EVENT] Error in handleFabricationAssigned:', err);

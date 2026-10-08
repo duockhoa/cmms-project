@@ -78,7 +78,7 @@ export class WorkOrdersService implements OnModuleInit {
     }
   }
 
-  async findAll(query?: { status?: string; priority?: string; search?: string; equipmentId?: string; page?: string; limit?: string; handlerTeam?: string }) {
+  async findAll(query?: { status?: string; priority?: string; search?: string; equipmentId?: string; page?: string; limit?: string; handlerTeam?: string; technicianId?: string }) {
     const andConditions: any[] = [];
 
     if (query?.status) andConditions.push({ status: query.status });
@@ -92,6 +92,18 @@ export class WorkOrdersService implements OnModuleInit {
           { technicianName: { contains: query.search } },
         ]
       });
+    }
+
+    if (query?.technicianId && query.technicianId.trim()) {
+      const techId = query.technicianId.trim();
+      const techUser = await this.prisma.user.findUnique({ where: { id: techId } });
+      const techConditions: any[] = [
+        { assignedTechnicianId: techId },
+      ];
+      if (techUser?.name) {
+        techConditions.push({ technicianName: { contains: techUser.name } });
+      }
+      andConditions.push({ OR: techConditions });
     }
 
     if (query?.handlerTeam) {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, ChevronDown, ChevronLeft, ChevronRight, Eye, LayoutGrid, List, Package, Plus, RefreshCw, Trash2, User } from 'lucide-react';
+import { Camera, ChevronDown, ChevronLeft, ChevronRight, Eye, LayoutGrid, List, Package, Plus, RefreshCw, Trash2, User, UserCheck } from 'lucide-react';
 import { PriorityBadge, StatusBadge } from '../common/Badge';
 import { WorkOrderDetailView } from '../common/WorkOrderDetailView';
 import { CardListSkeleton, TableSkeleton } from '../common/Skeleton';
@@ -13,7 +13,7 @@ interface WorkOrdersContentProps {
 export const WorkOrdersContent: React.FC<WorkOrdersContentProps> = ({ model }) => {
   const {
     can, isAdmin, workOrders, loading, search, setSearch, statusFilter, setStatusFilter,
-    handlerTeamFilter, setHandlerTeamFilter, departments, page, setPage, limit, total,
+    handlerTeamFilter, setHandlerTeamFilter, onlyMyWork, setOnlyMyWork, departments, page, setPage, limit, total,
     totalPages, setIsAddOpen, statusDropdownId, setStatusDropdownId, setIsChecklistOpen,
     setSelectedChecklistWO, openMaterialModal, setIsQrScannerOpen, selectedDetailWoId,
     setSelectedDetailWoId, canDeleteWo, currentUser, loadData, exportWorkOrders,
@@ -46,11 +46,12 @@ export const WorkOrdersContent: React.FC<WorkOrdersContentProps> = ({ model }) =
 
         {/* Filter Bar */}
         <FilterBar
-          hasActiveFilters={Boolean(search || statusFilter || handlerTeamFilter)}
+          hasActiveFilters={Boolean(search || statusFilter || handlerTeamFilter || onlyMyWork)}
           onReset={() => {
             setSearch('');
             setStatusFilter('');
             setHandlerTeamFilter('');
+            setOnlyMyWork?.(false);
             setPage(1);
           }}
         >
@@ -99,6 +100,36 @@ export const WorkOrdersContent: React.FC<WorkOrdersContentProps> = ({ model }) =
               ))}
             </select>
           </div>
+
+          {/* Nút lọc nhanh Việc của tôi */}
+          {currentUser?.id && (
+            <div className="filter-item" style={{ display: 'flex', alignItems: 'center' }}>
+              <button
+                type="button"
+                className={`btn ${onlyMyWork ? 'btn-primary' : 'btn-secondary'}`}
+                style={{
+                  height: '38px',
+                  fontSize: '13px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                  whiteSpace: 'nowrap',
+                  padding: '0 12px',
+                  boxShadow: onlyMyWork ? '0 1px 3px rgba(37, 99, 235, 0.3)' : 'none',
+                }}
+                onClick={() => {
+                  setOnlyMyWork?.(!onlyMyWork);
+                  setPage(1);
+                }}
+                title="Chỉ hiển thị các phiếu sửa chữa bạn được giao hoặc cùng phối hợp thực hiện"
+              >
+                <UserCheck size={15} />
+                {onlyMyWork ? 'Đang lọc: Việc của tôi' : 'Chỉ việc của tôi'}
+              </button>
+            </div>
+          )}
         </FilterBar>
 
         {/* Table */}

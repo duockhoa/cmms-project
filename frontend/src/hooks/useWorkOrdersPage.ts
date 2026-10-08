@@ -16,6 +16,7 @@ export const useWorkOrdersPage = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [handlerTeamFilter, setHandlerTeamFilter] = useState('');
+  const [onlyMyWork, setOnlyMyWork] = useState(false);
   const [departments, setDepartments] = useState<string[]>([]);
 
   // Pagination states
@@ -127,6 +128,7 @@ export const useWorkOrdersPage = () => {
       if (search) url.searchParams.append('search', search);
       if (handlerTeamFilter) url.searchParams.append('handlerTeam', handlerTeamFilter);
       if (statusFilter) url.searchParams.append('status', statusFilter);
+      if (onlyMyWork && currentUser?.id) url.searchParams.append('technicianId', currentUser.id);
 
       const response = await fetchWithAuth(url.toString());
       if (!response.ok) throw new Error('Không thể tải danh sách Work Orders');
@@ -157,6 +159,7 @@ export const useWorkOrdersPage = () => {
     if (search) url.searchParams.append('search', search);
     if (handlerTeamFilter) url.searchParams.append('handlerTeam', handlerTeamFilter);
     if (statusFilter) url.searchParams.append('status', statusFilter);
+    if (onlyMyWork && currentUser?.id) url.searchParams.append('technicianId', currentUser.id);
 
     const response = await fetchWithAuth(url.toString());
     if (!response.ok) throw new Error('Không thể tải dữ liệu phiếu sửa chữa để xuất');
@@ -194,7 +197,7 @@ export const useWorkOrdersPage = () => {
 
   useEffect(() => {
     loadWorkOrders();
-  }, [search, page, handlerTeamFilter, statusFilter]);
+  }, [search, page, handlerTeamFilter, statusFilter, onlyMyWork, currentUser?.id]);
 
   useEffect(() => {
     const idFromUrl = searchParams.get('id');
@@ -406,6 +409,7 @@ export const useWorkOrdersPage = () => {
   const workOrdersViewModel = {
     can, isAdmin, workOrders, equipmentList, loading, toast, search, setSearch,
     statusFilter, setStatusFilter, handlerTeamFilter, setHandlerTeamFilter,
+    onlyMyWork, setOnlyMyWork,
     departments, page, setPage, limit, total, totalPages, isAddOpen, setIsAddOpen,
     statusDropdownId, setStatusDropdownId, isChecklistOpen, setIsChecklistOpen,
     selectedChecklistWO, setSelectedChecklistWO, selectedMaterialWO,
