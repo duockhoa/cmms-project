@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ArrowUpRight, AlertTriangle } from 'lucide-react';
 import { Modal } from '../../common/Modal';
+import { SearchableSelect } from '../../common/SearchableSelect';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -26,6 +27,17 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   const [quantity, setQuantity] = useState(1);
   const [reason, setReason] = useState('');
   const [referenceCode, setReferenceCode] = useState('');
+
+  const inventoryOptions = useMemo(() => {
+    return inventoryList.map((it) => ({
+      value: it.id,
+      label: `[${it.itemCode}] ${it.name}`,
+      subLabel: `Tồn kho: ${it.quantity} ${it.unit} • Vị trí: ${it.location || 'Kho chung'}`,
+      tag: `Tồn: ${it.quantity} ${it.unit}`,
+      tagColor: it.quantity === 0 ? '#fee2e2' : it.quantity <= (it.minQuantity || 1) ? '#fef3c7' : '#dcfce7',
+      disabled: it.quantity <= 0,
+    }));
+  }, [inventoryList]);
 
   const selectedItem = inventoryList.find((i) => i.id === selectedItemId);
   const currentStock = selectedItem ? selectedItem.quantity : 0;
@@ -75,33 +87,38 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label" style={{ fontWeight: 600 }}>Vật tư / Phụ tùng cần xuất *</label>
-          <select
-            className="form-select"
-            required
+          <SearchableSelect
+            options={inventoryOptions}
             value={selectedItemId}
-            onChange={(e) => setSelectedItemId(e.target.value)}
-          >
-            <option value="">-- Chọn phụ tùng trong kho --</option>
-            {inventoryList.map((it) => (
-              <option key={it.id} value={it.id}>
-                [{it.itemCode}] {it.name} - Tồn: {it.quantity} {it.unit} ({it.location || 'Kho chung'})
-              </option>
-            ))}
-          </select>
+            onChange={(val) => setSelectedItemId(val)}
+            placeholder="🔍 Nhập mã vật tư hoặc tên để tìm kiếm..."
+            searchPlaceholder="Gõ mã VT, tên phụ tùng..."
+            required
+          />
           {selectedItem && (
             <div
               style={{
-                marginTop: '6px',
-                fontSize: '12px',
+                marginTop: '8px',
+                padding: '8px 12px',
+                backgroundColor: isOutOfStock ? '#fef2f2' : '#f0fdf4',
+                border: `1px solid ${isOutOfStock ? '#fecaca' : '#bbf7d0'}`,
+                borderRadius: '6px',
+                fontSize: '12.5px',
                 color: isOutOfStock ? '#dc2626' : '#166534',
-                fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '5px',
+                justifyContent: 'space-between',
               }}
             >
-              {isOutOfStock && <AlertTriangle size={14} />}
-              Tồn kho hiện tại: {currentStock} {selectedItem.unit} | Đơn giá: {(selectedItem.unitPrice || 0).toLocaleString('vi-VN')} đ
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                {isOutOfStock && <AlertTriangle size={15} />}
+                <span>
+                  Tồn khả dụng: <strong>{currentStock} {selectedItem.unit}</strong> | Vị trí: <strong>{selectedItem.location || 'Kho chung'}</strong>
+                </span>
+              </div>
+              <div style={{ color: '#0f766e', fontWeight: 700 }}>
+                Đơn giá: {(selectedItem.unitPrice || 0).toLocaleString('vi-VN')} đ
+              </div>
             </div>
           )}
         </div>

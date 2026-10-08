@@ -14,3 +14,4 @@ export * from './ExportButton';
 export * from './QRScanner';
 export * from './KpiCard';
 export * from './Tabs';
+export * from './SearchableSelect';

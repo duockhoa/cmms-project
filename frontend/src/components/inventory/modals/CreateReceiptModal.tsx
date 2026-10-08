@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, Calendar, FileText, Building2, Hash } from 'lucide-react';
 import { Modal } from '../../common/Modal';
+import { SearchableSelect } from '../../common/SearchableSelect';
 import { ReceiptItemInput } from '../../../hooks/useInventoryReceipts';
 
 interface CreateReceiptModalProps {
@@ -38,6 +39,15 @@ export const CreateReceiptModal: React.FC<CreateReceiptModalProps> = ({
       notes: '',
     },
   ]);
+
+  const catalogOptions = useMemo(() => {
+    return catalogItems.map((c) => ({
+      value: c.id,
+      label: `[${c.itemCode}] ${c.name}`,
+      subLabel: `Tồn: ${c.quantity} ${c.unit} • ${c.location || 'Kho chung'}`,
+      tag: c.category || undefined,
+    }));
+  }, [catalogItems]);
 
   const handleAddItemRow = () => {
     setItems((prev) => [
@@ -197,21 +207,16 @@ export const CreateReceiptModal: React.FC<CreateReceiptModalProps> = ({
                 {items.map((row, idx) => (
                   <tr key={idx}>
                     <td style={{ textAlign: 'center', color: '#64748b' }}>{idx + 1}</td>
-                    <td>
-                      <select
-                        className="form-select"
-                        required
+                    <td style={{ minWidth: '220px' }}>
+                      <SearchableSelect
+                        compact
+                        options={catalogOptions}
                         value={row.inventoryItemId}
-                        onChange={(e) => handleItemChange(idx, 'inventoryItemId', e.target.value)}
-                        style={{ height: '34px', fontSize: '12.5px' }}
-                      >
-                        <option value="">-- Chọn phụ tùng --</option>
-                        {catalogItems.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            [{c.itemCode}] {c.name} (Tồn: {c.quantity} {c.unit})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => handleItemChange(idx, 'inventoryItemId', val)}
+                        placeholder="🔍 Tìm mã VT, tên..."
+                        searchPlaceholder="Gõ mã hoặc tên phụ tùng..."
+                        required
+                      />
                     </td>
                     <td style={{ textAlign: 'center', color: '#64748b' }}>{row.unit || '---'}</td>
                     <td>

@@ -18,7 +18,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
-import { EmptyState, PageHeader, FilterBar, SearchInput, ExportButton, KpiCard } from '../components/common';
+import { EmptyState, PageHeader, FilterBar, SearchInput, ExportButton, KpiCard, SearchableSelect } from '../components/common';
 import { Tabs, TabItem } from '../components/common/Tabs';
 import { ReceiptsTab } from '../components/inventory/ReceiptsTab';
 import { IssuesTab } from '../components/inventory/IssuesTab';
@@ -427,25 +427,24 @@ export const SparePartsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Equipment Selector dropdown with search */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px' }}>
-          <select
-            className="form-select"
+        {/* Equipment Selector với Searchable Autocomplete */}
+        <div>
+          <SearchableSelect
+            options={equipments
+              .filter((eq) => !formData.equipmentIds.includes(eq.id))
+              .map((eq) => ({
+                value: eq.id,
+                label: `[${eq.code}] ${eq.name}`,
+                subLabel: `Vị trí: ${eq.location || 'Sản xuất'}${eq.department ? ` • Bộ phận: ${eq.department}` : ''}`,
+                tag: eq.category || undefined,
+              }))}
             value=""
-            onChange={(e) => {
-              const val = e.target.value;
+            onChange={(val) => {
               if (val) toggleEquipmentSelection(val);
             }}
-          >
-            <option value="">-- Chọn máy để thêm vào danh sách gán --</option>
-            {equipments
-              .filter((eq) => !formData.equipmentIds.includes(eq.id))
-              .map((eq) => (
-                <option key={eq.id} value={eq.id}>
-                  [{eq.code}] {eq.name} ({eq.location || 'Sản xuất'})
-                </option>
-              ))}
-          </select>
+            placeholder="🔍 Nhập mã máy hoặc tên máy để tìm kiếm và gán..."
+            searchPlaceholder="Gõ mã máy (EQ-...), tên máy, xưởng..."
+          />
         </div>
       </div>
 
