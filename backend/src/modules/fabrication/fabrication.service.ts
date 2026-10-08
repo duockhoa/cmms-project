@@ -344,15 +344,43 @@ export class FabricationService {
       }
     }
 
-    // actualHours luôn = tổng giờ công của từng người (bấm giờ tự động / nhật ký), không để số nhập tay hay số tính theo đồng hồ treo tường ghi đè
-    if (dto.actualHours !== undefined || dto.status !== undefined) {
-      const sumAgg = await this.prisma.fabricationProgressLog.aggregate({
-        where: { orderId: id },
-        _sum: { hoursSpent: true },
+    // Tự động xuất kho vật tư khi đơn gia công chế tạo nghiệm thu hoàn thành (COMPLETED)
+    if (dto.status === 'COMPLETED' && existing.status !== 'COMPLETED') {
+      const mats = await this.prisma.fabricationMaterial.findMany({
+        where: { orderId: id, inventoryItemId: { not: null } },
       });
-      const loggedHours = sumAgg._sum.hoursSpent || 0;
-      if (loggedHours > 0) {
-        updateData.actualHours = Number(loggedHours.toFixed(2));
+      for (const m of mats) {
+        if (!m.inventoryItemId) continue;
+        const alreadyIssued = await this.prisma.inventoryTransaction.findFirst({
+          where: { fabricationOrderId: id, inventoryItemId: m.inventoryItemId, transactionType: 'ISSUE_FABRICATION' },
+        });
+        if (!alreadyIssued) {
+          const invItem = await this.prisma.inventoryItem.findUnique({ where: { id: m.inventoryItemId } });
+          if (invItem) {
+            const qty = Math.max(1, Math.round(m.quantity));
+            const qtyBefore = invItem.quantity;
+            const qtyAfter = Math.max(0, qtyBefore - qty);
+            await this.prisma.inventoryItem.update({
+              where: { id: m.inventoryItemId },
+              data: { quantity: qtyAfter, version: { increment: 1 } },
+            });
+            await this.prisma.inventoryTransaction.create({
+              data: {
+                inventoryItemId: m.inventoryItemId,
+                fabricationOrderId: id,
+                transactionType: 'ISSUE_FABRICATION',
+                quantity: qty,
+                unitPrice: m.unitPrice,
+                totalAmount: m.totalPrice || qty * m.unitPrice,
+                quantityBefore: qtyBefore,
+                quantityAfter: qtyAfter,
+                reference: `Xuất vật tư gia công: ${existing.orderCode}`,
+                reason: existing.title,
+                actedById: user?.id || null,
+              },
+            });
+          }
+        }
       }
     }
 

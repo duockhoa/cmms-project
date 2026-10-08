@@ -1,12 +1,54 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req, HttpCode, HttpStatus } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
-import { CreateInventoryItemDto, AdjustInventoryStockDto, AdjustInDto, AdjustOutDto, UpdateInventoryItemDto } from './dto/inventory.dto';
+import {
+  CreateInventoryItemDto,
+  AdjustInventoryStockDto,
+  AdjustInDto,
+  AdjustOutDto,
+  UpdateInventoryItemDto,
+  CreateInventoryReceiptDto,
+  DirectIssueDto,
+  InventoryReportQueryDto,
+} from './dto/inventory.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
+
+  @Get('report')
+  getInventoryReport(@Query() query: InventoryReportQueryDto) {
+    return this.inventoryService.getInventoryReport(query);
+  }
+
+  @Get('receipts')
+  findAllReceipts(
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.inventoryService.findAllReceipts({ search, page, limit, startDate, endDate });
+  }
+
+  @Get('receipts/:id')
+  findReceiptOne(@Param('id') id: string) {
+    return this.inventoryService.findReceiptOne(id);
+  }
+
+  @Post('receipts')
+  @HttpCode(HttpStatus.CREATED)
+  createReceipt(@Body() body: CreateInventoryReceiptDto, @Req() req: any) {
+    return this.inventoryService.createReceipt(body, req.user.id);
+  }
+
+  @Post('direct-issue')
+  @HttpCode(HttpStatus.CREATED)
+  directIssue(@Body() body: DirectIssueDto, @Req() req: any) {
+    return this.inventoryService.directIssue(body, req.user.id);
+  }
 
   @Get()
   findAll(

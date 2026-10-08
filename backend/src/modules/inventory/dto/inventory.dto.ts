@@ -169,3 +169,91 @@ export class UpdateInventoryItemDto {
   @IsOptional()
   expectedVersion?: number;
 }
+
+export class ReceiptItemDto {
+  @IsString()
+  @IsNotEmpty({ message: 'inventoryItemId là bắt buộc' })
+  inventoryItemId: string;
+
+  @IsInt()
+  @Min(1, { message: 'Số lượng nhập phải lớn hơn 0' })
+  quantity: number;
+
+  @IsNumber()
+  @Min(0, { message: 'Đơn giá không được âm' })
+  unitPrice: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class CreateInventoryReceiptDto {
+  @IsOptional()
+  @IsString()
+  receiptCode?: string;
+
+  @IsOptional()
+  @IsString()
+  supplierName?: string;
+
+  @IsOptional()
+  @IsString()
+  invoiceNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  receivedDate?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsArray()
+  @IsNotEmpty({ message: 'Danh sách mặt hàng nhập không được rỗng' })
+  items: ReceiptItemDto[];
+}
+
+export class DirectIssueDto {
+  @IsString()
+  @IsNotEmpty({ message: 'inventoryItemId là bắt buộc' })
+  inventoryItemId: string;
+
+  @IsInt()
+  @Min(1, { message: 'Số lượng xuất phải lớn hơn 0' })
+  quantity: number;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Lý do xuất kho là bắt buộc' })
+  reason: string;
+
+  @IsOptional()
+  @IsString()
+  department?: string;
+
+  @IsOptional()
+  @IsString()
+  receiverName?: string;
+
+  @IsOptional()
+  @IsString()
+  referenceCode?: string;
+}
+
+export class InventoryReportQueryDto {
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
+}

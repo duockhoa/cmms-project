@@ -362,6 +362,47 @@ export const api = {
     return res;
   },
 
+  // Inventory Receipts (Nhập kho chính quy)
+  getInventoryReceipts: (params?: { search?: string; page?: number | string; limit?: number | string; startDate?: string; endDate?: string }) => {
+    const sp = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '' && v !== 'undefined') {
+          sp.append(k, String(v));
+        }
+      });
+    }
+    const query = sp.toString();
+    return request(`/inventory/receipts${query ? `?${query}` : ''}`);
+  },
+  getInventoryReceiptDetail: (id: string) => request(`/inventory/receipts/${id}`),
+  createInventoryReceipt: async (data: any) => {
+    const res = await request('/inventory/receipts', { method: 'POST', body: JSON.stringify(data) });
+    catalogCache.invalidate('inventory');
+    return res;
+  },
+
+  // Direct Issue (Xuất kho trực tiếp/nội bộ)
+  directIssueInventory: async (data: any) => {
+    const res = await request('/inventory/direct-issue', { method: 'POST', body: JSON.stringify(data) });
+    catalogCache.invalidate('inventory');
+    return res;
+  },
+
+  // Inventory Report (Báo cáo Nhập - Xuất - Tồn & Thẻ kho)
+  getInventoryReport: (params?: { startDate?: string; endDate?: string; category?: string; location?: string }) => {
+    const sp = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '' && v !== 'undefined') {
+          sp.append(k, String(v));
+        }
+      });
+    }
+    const query = sp.toString();
+    return request(`/inventory/report${query ? `?${query}` : ''}`);
+  },
+
   returnWorkOrderMaterial: (workOrderId: string, body: any) =>
     request(`/work-orders/${workOrderId}/material-returns`, { method: 'POST', body: JSON.stringify(body) }),
   getWorkOrderInventoryTransactions: (workOrderId: string) =>

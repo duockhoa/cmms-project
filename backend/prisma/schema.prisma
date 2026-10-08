@@ -69,6 +69,7 @@ model User {
   fabricationLogs       FabricationProgressLog[] @relation("UserFabricationLogs")
   fabricationSessions   FabricationWorkSession[] @relation("UserFabricationSessions")
   workOrderWorkSessions WorkOrderWorkSession[]   @relation("UserWorkOrderSessions")
+  createdReceipts       InventoryReceipt[]       @relation("ReceiptCreatedBy")
 
   // Custom Role Association
   roleId            String?
@@ -322,6 +323,11 @@ model InventoryItem {
   workItems           WorkOrderItem[]
   transactions        InventoryTransaction[]
   equipmentSpareParts EquipmentSparePart[]
+  receiptItems        InventoryReceiptItem[]
+
+  @@index([category])
+  @@index([isActive])
+  @@index([location])
 }
 
 model EquipmentSparePart {
@@ -382,6 +388,51 @@ model InventoryTransaction {
   clientTransactionId    String?        @unique
   createdAt              DateTime       @default(now())
   issueKey               String?        @unique
+
+  fabricationOrderId     String?
+  fabricationOrder       FabricationOrder? @relation(fields: [fabricationOrderId], references: [id], onDelete: SetNull)
+  receiptId              String?
+  receipt                InventoryReceipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+
+  @@index([inventoryItemId, createdAt])
+  @@index([transactionType])
+  @@index([createdAt])
+  @@index([referenceCode])
+}
+
+model InventoryReceipt {
+  id            String                 @id @default(uuid())
+  receiptCode   String                 @unique // PN-20261008-001
+  supplierName  String?
+  invoiceNumber String?
+  receivedDate  DateTime               @default(now())
+  totalAmount   Float                  @default(0)
+  notes         String?                @db.Text
+  createdById   String?
+  createdBy     User?                  @relation("ReceiptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  items         InventoryReceiptItem[]
+  transactions  InventoryTransaction[]
+
+  @@index([receiptCode])
+  @@index([receivedDate])
+  @@index([createdAt])
+}
+
+model InventoryReceiptItem {
+  id              String           @id @default(uuid())
+  receiptId       String
+  receipt         InventoryReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem    @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  quantity        Int              @default(1)
+  unitPrice       Float            @default(0)
+  totalPrice      Float            @default(0)
+  notes           String?
+
+  @@index([receiptId])
+  @@index([inventoryItemId])
 }
 
 model Attachment {
@@ -905,9 +956,10 @@ model FabricationOrder {
   acceptedAt       DateTime?
 
   totalCost    Float                    @default(0)
-  materials    FabricationMaterial[]
-  progressLogs FabricationProgressLog[]
-  workSessions FabricationWorkSession[]
+  materials             FabricationMaterial[]
+  progressLogs          FabricationProgressLog[]
+  workSessions          FabricationWorkSession[]
+  inventoryTransactions InventoryTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

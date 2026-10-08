@@ -9,6 +9,8 @@ import {
   XCircle,
   WalletCards,
   ArrowUpRight,
+  ArrowDownLeft,
+  FileText,
   X,
   Edit2,
   Cpu,
@@ -17,6 +19,10 @@ import {
 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 import { EmptyState, PageHeader, FilterBar, SearchInput, ExportButton, KpiCard } from '../components/common';
+import { Tabs, TabItem } from '../components/common/Tabs';
+import { ReceiptsTab } from '../components/inventory/ReceiptsTab';
+import { IssuesTab } from '../components/inventory/IssuesTab';
+import { StockReportTab } from '../components/inventory/StockReportTab';
 
 const DEFAULT_CATEGORIES = [
   'Linh kiện tiêu hao',
@@ -37,6 +43,9 @@ export const SparePartsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const toast = useToast();
+
+  // Active Tab State
+  const [activeTab, setActiveTab] = useState<'inventory' | 'receipts' | 'issues' | 'report'>('inventory');
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -532,16 +541,56 @@ export const SparePartsPage: React.FC = () => {
         subtitle="Quản lý kho phụ tùng, vật tư bảo trì"
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
-            <ExportButton
-              onExport={handleExportInventory}
-              label="Xuất danh sách"
-            />
-            <button className="btn btn-primary" onClick={openAddModal}>
-              <Plus size={16} /> Thêm phụ tùng
-            </button>
+            {activeTab === 'inventory' && (
+              <>
+                <ExportButton
+                  onExport={handleExportInventory}
+                  label="Xuất danh sách"
+                />
+                <button className="btn btn-primary" onClick={openAddModal}>
+                  <Plus size={16} /> Thêm phụ tùng
+                </button>
+              </>
+            )}
           </div>
         }
       />
+
+      {/* Tabs Navigation */}
+      <div style={{ marginBottom: '18px' }}>
+        <Tabs
+          variant="segmented"
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as any)}
+          items={[
+            {
+              key: 'inventory',
+              label: 'Danh mục & Tồn kho',
+              icon: Package,
+              count: totalItems,
+            },
+            {
+              key: 'receipts',
+              label: 'Nhập kho (Goods Receipt)',
+              icon: ArrowDownLeft,
+            },
+            {
+              key: 'issues',
+              label: 'Xuất kho (Goods Issue)',
+              icon: ArrowUpRight,
+            },
+            {
+              key: 'report',
+              label: 'Báo cáo Nhập - Xuất - Tồn',
+              icon: FileText,
+            },
+          ]}
+        />
+      </div>
+
+      {/* TAB 1: DANH MỤC & TỒN KHO HIỆN TẠI */}
+      {activeTab === 'inventory' && (
+        <>
 
       {/* KPI Row */}
       <div className="kpi-row">
@@ -771,6 +820,23 @@ export const SparePartsPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+      )}
+      </>
+      )}
+
+      {/* TAB 2: QUẢN LÝ NHẬP KHO CHÍNH QUY */}
+      {activeTab === 'receipts' && (
+        <ReceiptsTab inventoryItems={inventory} onRefreshInventory={loadData} />
+      )}
+
+      {/* TAB 3: QUẢN LÝ XUẤT KHO */}
+      {activeTab === 'issues' && (
+        <IssuesTab inventoryItems={inventory} onRefreshInventory={loadData} />
+      )}
+
+      {/* TAB 4: BÁO CÁO NHẬP - XUẤT - TỒN & THẺ KHO */}
+      {activeTab === 'report' && (
+        <StockReportTab categories={uniqueCategories} />
       )}
 
       {/* Modal 1: Thêm phụ tùng mới */}

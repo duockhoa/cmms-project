@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AdjustInDto, AdjustOutDto, MaterialReturnDto } from './dto/inventory.dto';
+import { AdjustInDto, AdjustOutDto, MaterialReturnDto, CreateInventoryReceiptDto, DirectIssueDto, InventoryReportQueryDto } from './dto/inventory.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationEvents } from '../notifications/events/notification-events.constants';
 import { InventoryLowStockEvent } from '../notifications/events/inventory.events';
@@ -644,6 +644,406 @@ export class InventoryService {
       totalScanned: items.length,
       lowStockCount: lowStock.length,
       items: lowStock,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PHÂN HỆ QUẢN LÝ NHẬP KHO CHÍNH QUY (GOODS RECEIPT)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async createReceipt(dto: CreateInventoryReceiptDto, actorId: string) {
+    if (!dto.items || !Array.isArray(dto.items) || dto.items.length === 0) {
+      throw new BadRequestException('Phiếu nhập kho phải có ít nhất 1 mặt hàng');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.validateActedBy(tx, actorId);
+
+      // 1. Tự sinh mã phiếu nếu chưa có (PN-YYYYMMDD-XXXX)
+      let receiptCode = dto.receiptCode?.trim();
+      if (!receiptCode) {
+        const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const countToday = await tx.inventoryReceipt.count({
+          where: { receiptCode: { startsWith: `PN-${todayStr}` } },
+        });
+        receiptCode = `PN-${todayStr}-${(countToday + 1).toString().padStart(4, '0')}`;
+      } else {
+        const existed = await tx.inventoryReceipt.findUnique({ where: { receiptCode } });
+        if (existed) {
+          throw new ConflictException(`Mã phiếu nhập ${receiptCode} đã tồn tại`);
+        }
+      }
+
+      // 2. Tính tổng tiền phiếu nhập
+      const totalAmount = dto.items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
+
+      // 3. Tạo Header Phiếu nhập kho
+      const receipt = await tx.inventoryReceipt.create({
+        data: {
+          receiptCode,
+          supplierName: dto.supplierName?.trim() || null,
+          invoiceNumber: dto.invoiceNumber?.trim() || null,
+          receivedDate: dto.receivedDate ? new Date(dto.receivedDate) : new Date(),
+          totalAmount,
+          notes: dto.notes?.trim() || null,
+          createdById: actorId,
+        },
+      });
+
+      // 4. Lặp qua từng mặt hàng: Tăng tồn kho, tạo dòng Item và tạo Transaction
+      for (const row of dto.items) {
+        const qty = Number(row.quantity);
+        const price = Number(row.unitPrice) || 0;
+        if (qty <= 0) throw new BadRequestException(`Số lượng nhập của vật tư phải lớn hơn 0`);
+
+        const invItem = await tx.inventoryItem.findUnique({ where: { id: row.inventoryItemId } });
+        if (!invItem) {
+          throw new NotFoundException(`Không tìm thấy vật tư có ID: ${row.inventoryItemId}`);
+        }
+
+        const quantityBefore = invItem.quantity;
+        const quantityAfter = quantityBefore + qty;
+
+        // Cập nhật giá mới nhất nếu có giá nhập > 0
+        const newUnitPrice = price > 0 ? price : invItem.unitPrice;
+
+        await tx.inventoryItem.update({
+          where: { id: row.inventoryItemId },
+          data: {
+            quantity: quantityAfter,
+            unitPrice: newUnitPrice,
+            version: { increment: 1 },
+            updatedAt: new Date(),
+          },
+        });
+
+        // Tạo Receipt Item
+        await tx.inventoryReceiptItem.create({
+          data: {
+            receiptId: receipt.id,
+            inventoryItemId: row.inventoryItemId,
+            quantity: qty,
+            unitPrice: price,
+            totalPrice: qty * price,
+            notes: row.notes?.trim() || null,
+          },
+        });
+
+        // Tạo Transaction sổ kho
+        await tx.inventoryTransaction.create({
+          data: {
+            inventoryItemId: row.inventoryItemId,
+            receiptId: receipt.id,
+            transactionType: 'IMPORT_PURCHASE',
+            quantity: qty,
+            unitPrice: price,
+            totalAmount: qty * price,
+            quantityBefore,
+            quantityAfter,
+            actedById: actorId,
+            reference: `Nhập kho theo phiếu: ${receiptCode}`,
+            referenceCode: dto.invoiceNumber || receiptCode,
+            reason: dto.supplierName ? `NCC: ${dto.supplierName}` : 'Nhập mua mới',
+          },
+        });
+      }
+
+      return tx.inventoryReceipt.findUnique({
+        where: { id: receipt.id },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          items: {
+            include: {
+              inventoryItem: {
+                select: { id: true, itemCode: true, name: true, unit: true, location: true, category: true },
+              },
+            },
+          },
+        },
+      });
+    });
+  }
+
+  async findAllReceipts(query?: { search?: string; page?: string; limit?: string; startDate?: string; endDate?: string }) {
+    const where: any = {};
+    const isValidDate = (d?: string) => Boolean(d && d !== 'undefined' && !isNaN(Date.parse(d)));
+
+    if (query?.search && query.search.trim() && query.search.trim() !== 'undefined') {
+      const q = query.search.trim();
+      where.OR = [
+        { receiptCode: { contains: q } },
+        { supplierName: { contains: q } },
+        { invoiceNumber: { contains: q } },
+        { notes: { contains: q } },
+      ];
+    }
+
+    if (isValidDate(query?.startDate) || isValidDate(query?.endDate)) {
+      where.receivedDate = {};
+      if (isValidDate(query?.startDate)) {
+        where.receivedDate.gte = new Date(query!.startDate!);
+      }
+      if (isValidDate(query?.endDate)) {
+        const eDate = new Date(query!.endDate!);
+        eDate.setHours(23, 59, 59, 999);
+        where.receivedDate.lte = eDate;
+      }
+    }
+
+    const page = Math.max(1, parseInt(query?.page || '1', 10));
+    const limit = Math.max(1, parseInt(query?.limit || '10', 10));
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await Promise.all([
+      this.prisma.inventoryReceipt.count({ where }),
+      this.prisma.inventoryReceipt.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { receivedDate: 'desc' },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          items: {
+            include: {
+              inventoryItem: { select: { id: true, itemCode: true, name: true, unit: true, location: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findReceiptOne(id: string) {
+    const receipt = await this.prisma.inventoryReceipt.findUnique({
+      where: { id },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true, specialty: true } },
+        items: {
+          include: {
+            inventoryItem: { select: { id: true, itemCode: true, name: true, unit: true, location: true, category: true, specs: true } },
+          },
+        },
+        transactions: true,
+      },
+    });
+    if (!receipt) throw new NotFoundException('Không tìm thấy phiếu nhập kho');
+    return receipt;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PHÂN HỆ XUẤT KHO TRỰC TIẾP / NỘI BỘ (GOODS ISSUE)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async directIssue(dto: DirectIssueDto, actorId: string) {
+    const qty = Number(dto.quantity);
+    if (!qty || qty <= 0) throw new BadRequestException('Số lượng xuất phải lớn hơn 0');
+    if (!dto.reason || !dto.reason.trim()) throw new BadRequestException('Lý do xuất kho là bắt buộc');
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.validateActedBy(tx, actorId);
+
+      const item = await tx.inventoryItem.findUnique({ where: { id: dto.inventoryItemId } });
+      if (!item) throw new NotFoundException('Không tìm thấy vật tư');
+      if (!item.isActive) throw new BadRequestException('Vật tư đã bị vô hiệu hóa');
+
+      const quantityBefore = item.quantity;
+      const quantityAfter = quantityBefore - qty;
+
+      if (quantityAfter < 0) {
+        throw new BadRequestException(
+          `Số lượng tồn kho không đủ để xuất (Tồn kho hiện tại: ${quantityBefore}, Yêu cầu xuất: ${qty})`
+        );
+      }
+
+      await tx.inventoryItem.update({
+        where: { id: dto.inventoryItemId },
+        data: {
+          quantity: quantityAfter,
+          version: { increment: 1 },
+          updatedAt: new Date(),
+        },
+      });
+
+      const refText = dto.receiverName
+        ? `Xuất cho: ${dto.receiverName} (${dto.department || 'Nội bộ'})`
+        : `Xuất nội bộ: ${dto.department || 'Xưởng'}`;
+
+      await tx.inventoryTransaction.create({
+        data: {
+          inventoryItemId: dto.inventoryItemId,
+          transactionType: 'ISSUE_INTERNAL',
+          quantity: qty,
+          unitPrice: item.unitPrice,
+          totalAmount: qty * item.unitPrice,
+          quantityBefore,
+          quantityAfter,
+          actedById: actorId,
+          reference: refText,
+          referenceCode: dto.referenceCode || null,
+          reason: dto.reason.trim(),
+        },
+      });
+
+      return tx.inventoryItem.findUnique({ where: { id: dto.inventoryItemId } });
+    });
+
+    if (updated && updated.quantity <= updated.minQuantity) {
+      this.eventEmitter.emit(
+        NotificationEvents.INVENTORY_LOW_STOCK,
+        new InventoryLowStockEvent(updated),
+      );
+    }
+
+    return updated;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PHÂN HỆ BÁO CÁO NHẬP - XUẤT - TỒN & THẺ KHO (STOCK RECONCILIATION)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async getInventoryReport(query: InventoryReportQueryDto) {
+    const isValidDate = (d?: string) => Boolean(d && d !== 'undefined' && !isNaN(Date.parse(d)));
+
+    // 1. Thiết lập khoảng thời gian: Mặc định từ ngày 1 của tháng hiện tại đến hiện tại
+    const now = new Date();
+    const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startDate = isValidDate(query?.startDate) ? new Date(query.startDate!) : defaultStart;
+    
+    let endDate = isValidDate(query?.endDate) ? new Date(query.endDate!) : new Date();
+    endDate.setHours(23, 59, 59, 999);
+
+    // 2. Lấy danh sách vật tư theo bộ lọc
+    const itemWhere: any = { isActive: true };
+    if (query?.category && query.category !== 'ALL' && query.category !== 'undefined' && query.category.trim()) {
+      itemWhere.category = query.category.trim();
+    }
+    if (query?.location && query.location !== 'ALL' && query.location !== 'undefined' && query.location.trim()) {
+      itemWhere.location = { contains: query.location.trim() };
+    }
+
+    const items = await this.prisma.inventoryItem.findMany({
+      where: itemWhere,
+      orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    });
+
+    // 3. Lấy tất cả giao dịch từ startDate đến nay để tính ngược tồn đầu kỳ và biến động trong kỳ
+    const itemIds = items.map((i) => i.id);
+    const allTransactionsSinceStart = await this.prisma.inventoryTransaction.findMany({
+      where: {
+        inventoryItemId: { in: itemIds },
+        createdAt: { gte: startDate },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const importTypes = new Set(['IMPORT_PURCHASE', 'ADJUST_IN', 'RETURN', 'RETURN_WORK_ORDER']);
+    const exportTypes = new Set(['ISSUE', 'ISSUE_WORK_ORDER', 'ISSUE_FABRICATION', 'ISSUE_INTERNAL', 'ADJUST_OUT']);
+
+    // Gom nhóm giao dịch theo itemId
+    const txByItem = new Map<string, typeof allTransactionsSinceStart>();
+    for (const tx of allTransactionsSinceStart) {
+      const arr = txByItem.get(tx.inventoryItemId) || [];
+      arr.push(tx);
+      txByItem.set(tx.inventoryItemId, arr);
+    }
+
+    let summaryTotalOpeningValue = 0;
+    let summaryTotalImportValue = 0;
+    let summaryTotalExportValue = 0;
+    let summaryTotalClosingValue = 0;
+    let lowStockCount = 0;
+
+    const reportRows = items.map((item) => {
+      const txs = txByItem.get(item.id) || [];
+
+      // Tổng nhập/xuất từ startDate tới thời điểm hiện tại (now)
+      let totalImportSinceStart = 0;
+      let totalExportSinceStart = 0;
+
+      // Tổng nhập/xuất trong khoảng kỳ báo cáo [startDate, endDate]
+      let importInPeriod = 0;
+      let exportInPeriod = 0;
+
+      for (const t of txs) {
+        const qty = t.quantity || 0;
+        const isImport = importTypes.has(t.transactionType);
+        const isExport = exportTypes.has(t.transactionType);
+
+        if (isImport) totalImportSinceStart += qty;
+        if (isExport) totalExportSinceStart += qty;
+
+        if (t.createdAt <= endDate) {
+          if (isImport) importInPeriod += qty;
+          if (isExport) exportInPeriod += qty;
+        }
+      }
+
+      // Tồn đầu kỳ tại startDate = Tồn hiện tại - Tổng nhập từ start + Tổng xuất từ start
+      const currentQty = item.quantity;
+      const openingQuantity = Math.max(0, currentQty - totalImportSinceStart + totalExportSinceStart);
+      const closingQuantity = Math.max(0, openingQuantity + importInPeriod - exportInPeriod);
+
+      const price = item.unitPrice || 0;
+      const openingAmount = openingQuantity * price;
+      const importAmount = importInPeriod * price;
+      const exportAmount = exportInPeriod * price;
+      const closingAmount = closingQuantity * price;
+
+      summaryTotalOpeningValue += openingAmount;
+      summaryTotalImportValue += importAmount;
+      summaryTotalExportValue += exportAmount;
+      summaryTotalClosingValue += closingAmount;
+
+      if (closingQuantity <= item.minQuantity) {
+        lowStockCount++;
+      }
+
+      return {
+        id: item.id,
+        itemCode: item.itemCode,
+        name: item.name,
+        category: item.category,
+        unit: item.unit,
+        location: item.location || 'Kho chung',
+        unitPrice: price,
+        minQuantity: item.minQuantity,
+        openingQuantity,
+        openingAmount,
+        importQuantity: importInPeriod,
+        importAmount,
+        exportQuantity: exportInPeriod,
+        exportAmount,
+        closingQuantity,
+        closingAmount,
+        isLowStock: closingQuantity <= item.minQuantity,
+        isOutOfStock: closingQuantity === 0,
+      };
+    });
+
+    return {
+      period: {
+        startDate: startDate.toISOString().slice(0, 10),
+        endDate: endDate.toISOString().slice(0, 10),
+      },
+      summary: {
+        totalItems: items.length,
+        totalOpeningValue: summaryTotalOpeningValue,
+        totalImportValue: summaryTotalImportValue,
+        totalExportValue: summaryTotalExportValue,
+        totalClosingValue: summaryTotalClosingValue,
+        lowStockCount,
+      },
+      rows: reportRows,
     };
   }
 }
