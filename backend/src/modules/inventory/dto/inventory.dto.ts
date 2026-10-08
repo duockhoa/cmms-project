@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional, IsInt, IsNumber, Min } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsInt, IsNumber, Min, IsArray } from 'class-validator';
 
 export class CreateInventoryItemDto {
   @IsString()
@@ -35,6 +35,14 @@ export class CreateInventoryItemDto {
   @IsString()
   @IsOptional()
   location?: string;
+
+  @IsString()
+  @IsOptional()
+  specs?: string;
+
+  @IsArray()
+  @IsOptional()
+  equipmentIds?: string[];
 }
 
 export class AdjustInventoryStockDto {
@@ -149,7 +157,15 @@ export class UpdateInventoryItemDto {
   @IsOptional()
   location?: string;
 
+  @IsString()
+  @IsOptional()
+  specs?: string;
+
+  @IsArray()
+  @IsOptional()
+  equipmentIds?: string[];
+
   @IsInt()
-  @IsNotEmpty({ message: 'expectedVersion là bắt buộc' })
-  expectedVersion: number;
+  @IsOptional()
+  expectedVersion?: number;
 }

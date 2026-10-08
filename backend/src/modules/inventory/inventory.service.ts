@@ -104,35 +104,68 @@ export class InventoryService {
   }
 
   async create(data: any) {
-    if (!data.itemCode) {
+    const { equipmentIds, ...itemData } = data;
+    if (!itemData.itemCode || !itemData.itemCode.trim()) {
       const count = await this.prisma.inventoryItem.count();
-      data.itemCode = `VT-${(count + 1).toString().padStart(4, '0')}`;
+      itemData.itemCode = `VT-${(count + 1).toString().padStart(4, '0')}`;
     }
-    return this.prisma.inventoryItem.create({ data });
+    const item = await this.prisma.inventoryItem.create({ data: itemData });
+
+    if (Array.isArray(equipmentIds) && equipmentIds.length > 0) {
+      for (const eqId of equipmentIds) {
+        if (!eqId) continue;
+        await this.prisma.equipmentSparePart.create({
+          data: {
+            equipmentId: eqId,
+            sparePartId: item.id,
+            quantityPerEquipment: 1,
+          },
+        });
+      }
+    }
+
+    return this.findOne(item.id);
   }
 
   async update(id: string, data: any) {
     const item = await this.findOne(id);
-    
+    const { equipmentIds, ...updateData } = data;
+
     // Optimistic locking check if expectedVersion is provided
-    if (data.expectedVersion !== undefined && item.version !== data.expectedVersion) {
+    if (updateData.expectedVersion !== undefined && item.version !== updateData.expectedVersion) {
       throw new ConflictException('Bản ghi đã bị sửa đổi bởi người dùng khác. Vui lòng tải lại dữ liệu.');
     }
 
-    const expectedVersion = data.expectedVersion !== undefined ? data.expectedVersion : item.version;
-    delete data.expectedVersion;
+    const expectedVersion = updateData.expectedVersion !== undefined ? updateData.expectedVersion : item.version;
+    delete updateData.expectedVersion;
 
     const result = await this.prisma.inventoryItem.updateMany({
       where: { id, version: expectedVersion },
       data: {
-        ...data,
+        ...updateData,
         version: { increment: 1 },
         updatedAt: new Date(),
       },
     });
 
     if (result.count === 0) {
-      throw new ConflictException('Xung đột đồng thời. Vui lòng thử lại.');
+      throw new ConflictException('Xung đột đồng thời hoặc bản ghi đã bị thay đổi. Vui lòng thử lại.');
+    }
+
+    if (Array.isArray(equipmentIds)) {
+      await this.prisma.equipmentSparePart.deleteMany({
+        where: { sparePartId: id },
+      });
+      for (const eqId of equipmentIds) {
+        if (!eqId) continue;
+        await this.prisma.equipmentSparePart.create({
+          data: {
+            equipmentId: eqId,
+            sparePartId: id,
+            quantityPerEquipment: 1,
+          },
+        });
+      }
     }
 
     return this.findOne(id);
