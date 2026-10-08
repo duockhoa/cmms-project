@@ -209,13 +209,30 @@ export class WorkOrdersService implements OnModuleInit {
       if (!request) throw new BadRequestException('Yêu cầu sửa chữa không tồn tại');
     }
 
-    let assignedTechnicianId: string | null = null;
-    if (data.technicianName) {
-      const user = await this.prisma.user.findFirst({
-        where: { name: data.technicianName, role: 'TECHNICIAN' }
-      });
-      if (user) {
-        assignedTechnicianId = user.id;
+    let assignedTechnicianId: string | null = data.assignedTechnicianId || null;
+    let assignedTechnicianIds: string[] | null = Array.isArray(data.assignedTechnicianIds) && data.assignedTechnicianIds.length > 0
+      ? data.assignedTechnicianIds
+      : null;
+    let technicianName = data.technicianName || null;
+
+    if (assignedTechnicianIds && assignedTechnicianIds.length > 0) {
+      if (!assignedTechnicianId) assignedTechnicianId = assignedTechnicianIds[0];
+      if (!technicianName) {
+        const users = await this.prisma.user.findMany({ where: { id: { in: assignedTechnicianIds } } });
+        technicianName = users.map(u => u.name).join(', ');
+      }
+    } else if (assignedTechnicianId) {
+      assignedTechnicianIds = [assignedTechnicianId];
+      if (!technicianName) {
+        const u = await this.prisma.user.findUnique({ where: { id: assignedTechnicianId } });
+        if (u) technicianName = u.name;
+      }
+    } else if (technicianName) {
+      const names = technicianName.split(',').map(n => n.trim()).filter(Boolean);
+      const users = await this.prisma.user.findMany({ where: { name: { in: names } } });
+      if (users.length > 0) {
+        assignedTechnicianId = users[0].id;
+        assignedTechnicianIds = users.map(u => u.id);
       }
     }
 
@@ -247,8 +264,10 @@ export class WorkOrdersService implements OnModuleInit {
           description: data.description,
           priority: data.priority || 'MEDIUM',
           status: 'PENDING',
-          technicianName: data.technicianName || null,
+          technicianName: technicianName || null,
           assignedTechnicianId,
+          assignedTechnicianIds: assignedTechnicianIds || undefined,
+          supporterIds: data.supporterIds || undefined,
           plannedStartDate: data.plannedStartDate ? new Date(data.plannedStartDate) : null,
           plannedEndDate: data.plannedEndDate ? new Date(data.plannedEndDate) : null,
         },
@@ -399,13 +418,17 @@ export class WorkOrdersService implements OnModuleInit {
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
     const unitType = this.getPerformerUnitType(user);
 
+    const isAssigned = wo.assignedTechnicianId === userId || 
+      (Array.isArray(wo.assignedTechnicianIds as any) && (wo.assignedTechnicianIds as string[]).includes(userId)) ||
+      (Array.isArray(wo.supporterIds as any) && (wo.supporterIds as string[]).includes(userId));
+
     if (wo.handlingRoute === HandlingRoute.WORKSHOP_SELF_HANDLE) {
-      if (unitType !== PerformerUnitType.WORKSHOP && user.role !== 'ADMIN' && user.role !== 'MANAGER' && wo.assignedTechnicianId !== userId) {
-        throw new ForbiddenException('Bạn không thuộc bộ phận Xưởng để ghi nhận WO này.');
+      if (unitType !== PerformerUnitType.WORKSHOP && user.role !== 'ADMIN' && user.role !== 'MANAGER' && !isAssigned) {
+        throw new ForbiddenException('Bạn không thuộc bộ phận Xưởng hoặc chưa được phân công cho WO này.');
       }
     } else {
-      if (wo.assignedTechnicianId !== userId && user.role !== 'ADMIN' && user.role !== 'MANAGER') {
-        throw new ForbiddenException('Bạn không phải kỹ thuật viên Cơ điện được phân công cho WO này.');
+      if (!isAssigned && user.role !== 'ADMIN' && user.role !== 'MANAGER') {
+        throw new ForbiddenException('Bạn không phải kỹ thuật viên được phân công cho WO này.');
       }
     }
 
@@ -679,13 +702,27 @@ export class WorkOrdersService implements OnModuleInit {
   async assign(id: string, dto: AssignWorkOrderDto, actorContext?: { id: string; role: string }) {
     let targetTechId = dto.assignedTechnicianId;
     let techName = dto.technicianName;
+    let techIds: string[] = Array.isArray(dto.assignedTechnicianIds) ? dto.assignedTechnicianIds : [];
 
-    if (!targetTechId && techName) {
-      const u = await this.prisma.user.findFirst({ where: { name: techName } });
-      if (u) targetTechId = u.id;
-    } else if (targetTechId && !techName) {
-      const u = await this.prisma.user.findUnique({ where: { id: targetTechId } });
-      if (u) techName = u.name;
+    if (techIds.length > 0) {
+      if (!targetTechId) targetTechId = techIds[0];
+      if (!techName) {
+        const users = await this.prisma.user.findMany({ where: { id: { in: techIds } } });
+        techName = users.map(u => u.name).join(', ');
+      }
+    } else if (targetTechId) {
+      techIds = [targetTechId];
+      if (!techName) {
+        const u = await this.prisma.user.findUnique({ where: { id: targetTechId } });
+        if (u) techName = u.name;
+      }
+    } else if (techName) {
+      const names = techName.split(',').map(n => n.trim()).filter(Boolean);
+      const users = await this.prisma.user.findMany({ where: { name: { in: names } } });
+      if (users.length > 0) {
+        targetTechId = users[0].id;
+        techIds = users.map(u => u.id);
+      }
     }
 
     return this.updateStatusTransaction(
@@ -695,6 +732,8 @@ export class WorkOrdersService implements OnModuleInit {
       {
         technicianName: techName || 'Kỹ thuật viên',
         assignedTechnicianId: targetTechId || null,
+        assignedTechnicianIds: techIds.length > 0 ? techIds : null,
+        supporterIds: dto.supporterIds || null,
       },
       'ASSIGN',
       `Phân công người thực hiện: ${techName || 'Kỹ thuật viên'}`,

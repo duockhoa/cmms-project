@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, ChevronDown, ChevronLeft, ChevronRight, Eye, LayoutGrid, List, Package, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Camera, ChevronDown, ChevronLeft, ChevronRight, Eye, LayoutGrid, List, Package, Plus, RefreshCw, Trash2, User } from 'lucide-react';
 import { PriorityBadge, StatusBadge } from '../common/Badge';
 import { WorkOrderDetailView } from '../common/WorkOrderDetailView';
 import { CardListSkeleton, TableSkeleton } from '../common/Skeleton';
@@ -142,7 +142,33 @@ export const WorkOrdersContent: React.FC<WorkOrdersContentProps> = ({ model }) =
                       <StatusBadge status={wo.status} />
                     </td>
                     <td><PriorityBadge priority={wo.priority} /></td>
-                    <td>{wo.technicianName || 'Chưa phân công'}</td>
+                    <td>
+                      {wo.technicianName ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                          {wo.technicianName.split(',').map((name: string, i: number) => (
+                            <span
+                              key={i}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: '#f1f5f9',
+                                color: '#334155',
+                                border: '1px solid #e2e8f0',
+                                fontSize: '11.5px',
+                                fontWeight: 600,
+                              }}
+                            >
+                              <User size={11} color="#64748b" /> {name.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '12px' }}>Chưa phân công</span>
+                      )}
+                    </td>
                     <td style={{ textAlign: 'center' }}>
                       <button
                         className="btn btn-secondary btn-sm"
@@ -273,7 +299,7 @@ export const WorkOrdersContent: React.FC<WorkOrdersContentProps> = ({ model }) =
                       <LayoutGrid size={12} /> {wo.equipment?.name || '---'}
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <List size={12} /> {wo.technicianName || 'Chưa phân công'}
+                      <User size={12} /> {wo.technicianName || 'Chưa phân công'}
                     </span>
                   </div>
                 </div>

@@ -38,7 +38,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
     isQaAcceptOpen, isQaRejectOpen, isRejectHandoverOpen, isWorkshopAcceptOpen,
     lineClearanceResult, loading, logAdjustReason, logAdjustTargetId, logContent,
     logNotes, logPhotoCategory, logPhotos, logResult, logs, pauseReason, qaComment,
-    qaRejectReason, rejectHandoverReason, setAssignedExecutorId, setClassificationNotes,
+    qaRejectReason, rejectHandoverReason, setAssignedExecutorId, assignedExecutorIds, setAssignedExecutorIds, setClassificationNotes,
     setClassificationResult, setCleanlinessResult, setCompleteConclusion,
     setCompleteEquipmentStatus, setCompletePhotos, setCompleteRecommendation,
     setCompleteTestResult, setCompleteWorkDone, setCustomPauseReason, setEscalateReason,
@@ -173,6 +173,8 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         actionLoading={actionLoading}
         assignableUsers={assignableUsers}
         assignedExecutorId={assignedExecutorId}
+        assignedExecutorIds={assignedExecutorIds}
+        setAssignedExecutorIds={setAssignedExecutorIds}
         classificationNotes={classificationNotes}
         classificationResult={classificationResult}
         escalateReason={escalateReason}

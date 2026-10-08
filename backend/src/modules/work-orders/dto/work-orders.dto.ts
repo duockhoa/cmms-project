@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional, IsInt, IsPositive } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsInt, IsPositive, IsArray } from 'class-validator';
 
 export class CreateWorkOrderDto {
   @IsString()
@@ -27,6 +27,18 @@ export class CreateWorkOrderDto {
 
   @IsString()
   @IsOptional()
+  assignedTechnicianId?: string;
+
+  @IsArray()
+  @IsOptional()
+  assignedTechnicianIds?: string[];
+
+  @IsArray()
+  @IsOptional()
+  supporterIds?: string[];
+
+  @IsString()
+  @IsOptional()
   plannedStartDate?: string;
 
   @IsString()
@@ -42,6 +54,14 @@ export class AssignWorkOrderDto {
   @IsString()
   @IsOptional()
   assignedTechnicianId?: string;
+
+  @IsArray()
+  @IsOptional()
+  assignedTechnicianIds?: string[];
+
+  @IsArray()
+  @IsOptional()
+  supporterIds?: string[];
 
   @IsInt()
   @IsNotEmpty()

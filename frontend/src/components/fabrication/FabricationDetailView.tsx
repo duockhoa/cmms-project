@@ -5,7 +5,7 @@ import {
   ChevronRight, Wrench, Package, FileText, Check, ShieldCheck,
   Camera, Upload, Eye, Image as ImageIcon, ZoomIn, X, Play, RotateCcw,
   Timer, History, RefreshCw, Lock, XOctagon, Loader2, ArrowRightLeft,
-  Pause, Square
+  Pause, Square, Users
 } from 'lucide-react';
 import { api, API_HOST as API_BASE } from '../../services/api';
 import { useToast, useConfirmDialog } from '../common/Toast';
@@ -1899,80 +1899,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
       {/* ── MODALS (ALIGNED WITH WORKORDER ACCEPTANCE FLOW) ── */}
 
-      {/* 0. Modal Đổi người phụ trách / Điều chuyển nhân sự */}
-      {isReassignModalOpen && (
-        <Modal
-          isOpen={isReassignModalOpen}
-          onClose={() => setIsReassignModalOpen(false)}
-          title={`Đổi người phụ trách: ${job.orderCode}`}
-          maxWidth="560px"
-        >
-          <form onSubmit={handleReassignSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group">
-              <label className="form-label" style={{ fontWeight: 600 }}>Thợ cơ điện phụ trách chính *</label>
-              <select
-                className="form-select"
-                required
-                value={newPrimaryTechId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setNewPrimaryTechId(val);
-                  setNewSupporterIds(newSupporterIds.filter((id) => id !== val));
-                }}
-              >
-                <option value="">-- Chọn kỹ thuật viên phụ trách --</option>
-                {staffList.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.specialty || s.department || 'Cơ điện'})
-                  </option>
-                ))}
-              </select>
-            </div>
 
-            <div className="form-group">
-              <label className="form-label" style={{ fontWeight: 600 }}>Thợ cơ điện phối hợp / hỗ trợ (Tùy chọn)</label>
-              <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: 'var(--bg-card)' }}>
-                {staffList
-                  .filter((s) => s.id !== newPrimaryTechId)
-                  .map((s) => (
-                    <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={newSupporterIds.includes(s.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setNewSupporterIds([...newSupporterIds, s.id]);
-                          } else {
-                            setNewSupporterIds(newSupporterIds.filter((id) => id !== s.id));
-                          }
-                        }}
-                      />
-                      <span>{s.name} ({s.specialty || 'Thợ cơ điện'})</span>
-                    </label>
-                  ))}
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" style={{ fontWeight: 600 }}>Lý do điều chuyển / Ghi chú</label>
-              <textarea
-                className="form-input"
-                rows={3}
-                placeholder="Nhập lý do thay đổi người phụ trách (VD: Nhân sự bận đột xuất, chuyển giao theo chuyên môn phay/tiện...)"
-                value={reassignNote}
-                onChange={(e) => setReassignNote(e.target.value)}
-              />
-            </div>
-
-            <div className="modal-footer" style={{ padding: 0, marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsReassignModalOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-primary" disabled={saving || !newPrimaryTechId}>
-                {saving ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận điều chuyển"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
 
       {/* 0b. Modal Ghi nhận tiến độ gia công & chế tạo theo người đăng nhập */}
       {isLogProgressModalOpen && (
@@ -2253,6 +2180,205 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
               <button type="button" className="btn btn-secondary" onClick={() => setIsPauseModalOpen(false)}>Hủy</button>
               <button type="submit" className="btn btn-warning" disabled={saving}>
                 {saving ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận tạm dừng"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 0d. Modal Phân công lại nhân sự phụ trách (Hỗ trợ nhiều người cùng làm) */}
+      {isReassignModalOpen && (
+        <Modal
+          isOpen={isReassignModalOpen}
+          onClose={() => setIsReassignModalOpen(false)}
+          title={`Phân công nhân sự: ${job.orderCode}`}
+          maxWidth="600px"
+        >
+          <form onSubmit={handleReassignSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label className="form-label" style={{ marginBottom: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Users size={15} color="#2563eb" /> Nhân sự thực hiện (Có thể chọn nhiều người) *
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                    Đã chọn: <strong style={{ color: '#2563eb' }}>{([newPrimaryTechId, ...newSupporterIds].filter(Boolean)).length}</strong> người
+                  </span>
+                  {([newPrimaryTechId, ...newSupporterIds].filter(Boolean)).length > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '2px 8px', fontSize: '11px' }}
+                      onClick={() => {
+                        setNewPrimaryTechId('');
+                        setNewSupporterIds([]);
+                      }}
+                    >
+                      Bỏ chọn tất cả
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected Badges */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  minHeight: '36px',
+                  padding: '6px 8px',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  marginBottom: '10px',
+                }}
+              >
+                {([newPrimaryTechId, ...newSupporterIds].filter(Boolean)).length === 0 ? (
+                  <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', alignSelf: 'center' }}>
+                    Chưa chọn nhân sự nào — Vui lòng tick chọn ít nhất 1 người bên dưới
+                  </span>
+                ) : (
+                  [newPrimaryTechId, ...newSupporterIds].filter(Boolean).map((tId, idx) => {
+                    const staff = staffList.find((s) => s.id === tId);
+                    const isPrimary = idx === 0;
+                    return (
+                      <span
+                        key={tId}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          backgroundColor: isPrimary ? '#eff6ff' : '#f8fafc',
+                          color: isPrimary ? '#1d4ed8' : '#334155',
+                          border: isPrimary ? '1px solid #bfdbfe' : '1px solid #cbd5e1',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {staff ? staff.name : tId}
+                        {isPrimary && <span style={{ fontSize: '10px', color: '#2563eb', fontWeight: 700 }}>(Chính)</span>}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isPrimary) {
+                              if (newSupporterIds.length > 0) {
+                                setNewPrimaryTechId(newSupporterIds[0]);
+                                setNewSupporterIds(newSupporterIds.slice(1));
+                              } else {
+                                setNewPrimaryTechId('');
+                              }
+                            } else {
+                              setNewSupporterIds(newSupporterIds.filter((id) => id !== tId));
+                            }
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: 0,
+                            display: 'flex',
+                            color: '#64748b',
+                          }}
+                          title="Bỏ chọn"
+                        >
+                          <X size={13} />
+                        </button>
+                      </span>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Staff check-tags list */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  maxHeight: '160px',
+                  overflowY: 'auto',
+                  padding: '6px',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                {staffList.map((s) => {
+                  const isPrimary = s.id === newPrimaryTechId;
+                  const isSupporter = newSupporterIds.includes(s.id);
+                  const isSelected = isPrimary || isSupporter;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        if (isPrimary) {
+                          if (newSupporterIds.length > 0) {
+                            setNewPrimaryTechId(newSupporterIds[0]);
+                            setNewSupporterIds(newSupporterIds.slice(1));
+                          } else {
+                            setNewPrimaryTechId('');
+                          }
+                        } else if (isSupporter) {
+                          setNewSupporterIds(newSupporterIds.filter((id) => id !== s.id));
+                        } else {
+                          if (!newPrimaryTechId) {
+                            setNewPrimaryTechId(s.id);
+                          } else {
+                            setNewSupporterIds([...newSupporterIds, s.id]);
+                          }
+                        }
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '5px 10px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        border: isSelected ? '1px solid #3b82f6' : '1px solid #cbd5e1',
+                        backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
+                        color: isSelected ? '#1d4ed8' : '#334155',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {isSelected ? <Check size={12} color="#2563eb" /> : <Plus size={12} color="#94a3b8" />}
+                      <span>{s.name}</span>
+                      {s.specialty && (
+                        <span style={{ fontSize: '10.5px', opacity: 0.75 }}>
+                          ({s.specialty})
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" style={{ fontWeight: 600 }}>Ghi chú / Lý do điều chỉnh nhân sự</label>
+              <textarea
+                className="form-input"
+                rows={2}
+                placeholder="Ghi chú thêm về phân công công việc (nếu có)..."
+                value={reassignNote}
+                onChange={(e) => setReassignNote(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-footer" style={{ padding: 0, marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setIsReassignModalOpen(false)}>Hủy</button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={saving || (!newPrimaryTechId && newSupporterIds.length === 0)}
+              >
+                {saving ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận phân công"}
               </button>
             </div>
           </form>

@@ -145,11 +145,21 @@ export const useWorkOrderDetail = ({
     });
   }, [allUsers, targetDeptLabel]);
 
+  const [assignedExecutorIds, setAssignedExecutorIds] = useState<string[]>([]);
+
   useEffect(() => {
-    if (assignableUsers.length > 0 && !assignedExecutorId) {
-      setAssignedExecutorId(assignableUsers[0].id);
+    if (wo) {
+      const ids: string[] = Array.isArray(wo.assignedTechnicianIds)
+        ? wo.assignedTechnicianIds
+        : (wo.assignedTechnicianId ? [wo.assignedTechnicianId] : []);
+      setAssignedExecutorIds(ids);
+      if (ids.length > 0) {
+        setAssignedExecutorId(ids[0]);
+      } else if (assignableUsers.length > 0) {
+        setAssignedExecutorId(assignableUsers[0].id);
+      }
     }
-  }, [assignableUsers, assignedExecutorId]);
+  }, [wo, isAssignExecutorOpen]);
 
   useEffect(() => {
     if (workOrderId) {
@@ -157,8 +167,10 @@ export const useWorkOrderDetail = ({
     }
   }, [workOrderId]);
 
-  // Permission Checks
-  const isAssigned = wo?.assignedTechnicianId === currentUser?.id;
+  // Permission Checks: hỗ trợ cả assignedTechnicianId, assignedTechnicianIds, supporterIds
+  const isAssigned = wo?.assignedTechnicianId === currentUser?.id ||
+    (Array.isArray(wo?.assignedTechnicianIds) && wo?.assignedTechnicianIds.includes(currentUser?.id)) ||
+    (Array.isArray(wo?.supporterIds) && wo?.supporterIds.includes(currentUser?.id));
   const isManagerOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
   const isQA = isManagerOrAdmin ||
     (currentUser?.department || '').toLowerCase().includes('qa') ||
@@ -413,20 +425,25 @@ export const useWorkOrderDetail = ({
 
   const handleAssignExecutorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assignedExecutorId) {
-      toast.error('Yêu cầu dữ liệu', 'Vui lòng chọn kỹ thuật viên để phân công.');
+    const ids = assignedExecutorIds.length > 0 ? assignedExecutorIds : (assignedExecutorId ? [assignedExecutorId] : []);
+    if (ids.length === 0) {
+      toast.error('Yêu cầu dữ liệu', 'Vui lòng chọn ít nhất 1 kỹ thuật viên để phân công.');
       return;
     }
 
-    const tech = assignableUsers.find((t: any) => t.id === assignedExecutorId);
+    const techNames = ids
+      .map((id) => assignableUsers.find((t: any) => t.id === id)?.name || allUsers.find((u: any) => u.id === id)?.name)
+      .filter(Boolean);
+
     try {
       setActionLoading(true);
       await (api as any).assignExecutor(wo.id, {
         expectedVersion: wo.version,
-        assignedTechnicianId: assignedExecutorId,
-        technicianName: tech ? tech.name : undefined,
+        assignedTechnicianId: ids[0],
+        assignedTechnicianIds: ids,
+        technicianName: techNames.join(', '),
       });
-      toast.success('Phân công thành công', `Đã phân công: ${tech ? tech.name : 'Nhân sự phụ trách'}.`);
+      toast.success('Phân công thành công', `Đã phân công: ${techNames.join(', ')}.`);
       setIsAssignExecutorOpen(false);
       if (onStatusChangeSuccess) onStatusChangeSuccess();
       loadData();
@@ -605,7 +622,7 @@ export const useWorkOrderDetail = ({
   }, [sessionList]);
 
   return {
-    actionLoading, allUsers, assignableUsers, assignedExecutorId, canModify,
+    actionLoading, allUsers, assignableUsers, assignedExecutorId, assignedExecutorIds, setAssignedExecutorIds, canModify,
     classificationNotes, classificationResult, cleanlinessResult, completeConclusion,
     completeEquipmentStatus, completePhotos, completeRecommendation, completeTestResult,
     completeWorkDone, customPauseReason, escalateReason, gmpImpactAssessment,

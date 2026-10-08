@@ -149,9 +149,28 @@ export const FabricationTable: React.FC<FabricationTableProps> = ({
                       {job.description}
                     </div>
                     {job.equipment && (
-                      <span style={{ fontSize: '11px', color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px' }}>
+                      <span style={{ fontSize: '11px', color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '3px', marginRight: '8px' }}>
                         Máy: {job.equipment.name}
                       </span>
+                    )}
+                    {job.assignedTechnician && (
+                      <div style={{ fontSize: '11.5px', color: '#475569', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '4px' }}>
+                        <User size={12} color="#64748b" />
+                        <span style={{ fontWeight: 600 }}>{job.assignedTechnician.name}</span>
+                        {(() => {
+                          try {
+                            const sup = job.supporterIds ? (typeof job.supporterIds === 'string' ? JSON.parse(job.supporterIds) : job.supporterIds) : [];
+                            if (Array.isArray(sup) && sup.length > 0) {
+                              return (
+                                <span style={{ fontSize: '10.5px', color: '#2563eb', backgroundColor: '#eff6ff', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                  +{sup.length} người phối hợp
+                                </span>
+                              );
+                            }
+                          } catch {}
+                          return null;
+                        })()}
+                      </div>
                     )}
                   </td>
 
