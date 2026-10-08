@@ -48,6 +48,15 @@ export class InventoryService {
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
+          include: {
+            equipmentSpareParts: {
+              include: {
+                equipment: {
+                  select: { id: true, code: true, name: true },
+                },
+              },
+            },
+          },
         })
       ]);
 
@@ -65,11 +74,31 @@ export class InventoryService {
     return this.prisma.inventoryItem.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      include: {
+        equipmentSpareParts: {
+          include: {
+            equipment: {
+              select: { id: true, code: true, name: true },
+            },
+          },
+        },
+      },
     });
   }
 
   async findOne(id: string) {
-    const item = await this.prisma.inventoryItem.findUnique({ where: { id } });
+    const item = await this.prisma.inventoryItem.findUnique({
+      where: { id },
+      include: {
+        equipmentSpareParts: {
+          include: {
+            equipment: {
+              select: { id: true, code: true, name: true },
+            },
+          },
+        },
+      },
+    });
     if (!item) throw new NotFoundException('Không tìm thấy vật tư');
     return item;
   }

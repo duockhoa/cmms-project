@@ -121,6 +121,7 @@ model Equipment {
   operationLogs         OperationLog[]
   functionalUnits       EquipmentFunctionalUnit[]
   fabricationOrders     FabricationOrder[]
+  spareParts            EquipmentSparePart[]
 
   @@index([status])
   @@index([category])
@@ -312,12 +313,31 @@ model InventoryItem {
   minQuantity  Int                    @default(5)
   unitPrice    Float                  @default(0)
   location     String? // Kệ A1, Kho 2...
-  isActive     Boolean                @default(true)
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
-  version      Int                    @default(1)
-  workItems    WorkOrderItem[]
-  transactions InventoryTransaction[]
+  isActive            Boolean                @default(true)
+  specs               String?                @db.Text
+  imageUrl            String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  version             Int                    @default(1)
+  workItems           WorkOrderItem[]
+  transactions        InventoryTransaction[]
+  equipmentSpareParts EquipmentSparePart[]
+}
+
+model EquipmentSparePart {
+  id                   String        @id @default(uuid())
+  equipmentId          String
+  equipment            Equipment     @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  sparePartId          String
+  sparePart            InventoryItem @relation(fields: [sparePartId], references: [id], onDelete: Cascade)
+  role                 String?       // Vai trò / Vị trí trên máy
+  quantityPerEquipment Int           @default(1)
+  notes                String?       @db.Text
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([equipmentId])
+  @@index([sparePartId])
 }
 
 model WorkflowHistory {

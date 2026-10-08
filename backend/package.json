@@ -10,6 +10,7 @@
     "start:prod": "node dist/main.js",
     "db:push": "prisma db push",
     "db:seed": "ts-node prisma/seed.ts",
+    "db:seed:parts": "ts-node prisma/seed-spare-parts-bom.ts",
     "test": "npx jest --runInBand"
   },
   "dependencies": {

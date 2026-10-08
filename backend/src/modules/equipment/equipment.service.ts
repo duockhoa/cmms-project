@@ -197,6 +197,12 @@ export class EquipmentService implements OnModuleInit {
         workOrders: { orderBy: { createdAt: 'desc' }, take: 10, include: { items: { include: { inventoryItem: true } } } },
         schedules: true,
         functionalUnits: { include: { libraryItem: true }, orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
+        spareParts: {
+          include: {
+            sparePart: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
     if (!item) throw new NotFoundException('Không tìm thấy thiết bị');
@@ -219,16 +225,68 @@ export class EquipmentService implements OnModuleInit {
       take: 20
     });
 
-    const spareParts = await this.prisma.inventoryItem.findMany({
-      where: { isActive: true }
-    });
-
     return {
       ...item,
       attachments,
       logs,
-      spareParts
+      spareParts: item.spareParts || [],
     };
+  }
+
+  async getEquipmentSpareParts(equipmentId: string) {
+    const eq = await this.prisma.equipment.findFirst({
+      where: {
+        OR: [{ id: equipmentId }, { code: equipmentId }, { oldCode: equipmentId }],
+      },
+    });
+    if (!eq) throw new NotFoundException('Không tìm thấy thiết bị');
+
+    return this.prisma.equipmentSparePart.findMany({
+      where: { equipmentId: eq.id },
+      include: {
+        sparePart: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async addEquipmentSparePart(equipmentId: string, data: { sparePartId: string; role?: string; quantityPerEquipment?: number; notes?: string }) {
+    const eq = await this.prisma.equipment.findFirst({
+      where: {
+        OR: [{ id: equipmentId }, { code: equipmentId }, { oldCode: equipmentId }],
+      },
+    });
+    if (!eq) throw new NotFoundException('Không tìm thấy thiết bị');
+
+    const sparePart = await this.prisma.inventoryItem.findUnique({
+      where: { id: data.sparePartId },
+    });
+    if (!sparePart) throw new NotFoundException('Không tìm thấy phụ tùng');
+
+    return this.prisma.equipmentSparePart.create({
+      data: {
+        equipmentId: eq.id,
+        sparePartId: data.sparePartId,
+        role: data.role?.trim() || undefined,
+        quantityPerEquipment: Math.max(1, data.quantityPerEquipment || 1),
+        notes: data.notes?.trim() || undefined,
+      },
+      include: {
+        sparePart: true,
+      },
+    });
+  }
+
+  async removeEquipmentSparePart(equipmentId: string, linkId: string) {
+    const item = await this.prisma.equipmentSparePart.findUnique({
+      where: { id: linkId },
+    });
+    if (!item) throw new NotFoundException('Không tìm thấy liên kết phụ tùng');
+
+    await this.prisma.equipmentSparePart.delete({
+      where: { id: linkId },
+    });
+    return { success: true };
   }
 
   async create(data: any) {

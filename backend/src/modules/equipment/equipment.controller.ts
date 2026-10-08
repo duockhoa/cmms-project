@@ -37,6 +37,27 @@ export class EquipmentController {
     return this.equipmentService.findOne(id);
   }
 
+  @ApiStandardResponse({ summary: 'Lấy danh mục phụ tùng BOM của thiết bị', method: 'GET', path: '/equipment/{id}/spare-parts' })
+  @Get(':id/spare-parts')
+  getSpareParts(@Param('id') id: string) {
+    return this.equipmentService.getEquipmentSpareParts(id);
+  }
+
+  @ApiStandardResponse({ summary: 'Gán phụ tùng vào thiết bị', method: 'POST', path: '/equipment/{id}/spare-parts' })
+  @Post(':id/spare-parts')
+  addSparePart(
+    @Param('id') id: string,
+    @Body() data: { sparePartId: string; role?: string; quantityPerEquipment?: number; notes?: string },
+  ) {
+    return this.equipmentService.addEquipmentSparePart(id, data);
+  }
+
+  @ApiStandardResponse({ summary: 'Gỡ phụ tùng khỏi thiết bị', method: 'DELETE', path: '/equipment/{id}/spare-parts/{linkId}' })
+  @Delete(':id/spare-parts/:linkId')
+  removeSparePart(@Param('id') id: string, @Param('linkId') linkId: string) {
+    return this.equipmentService.removeEquipmentSparePart(id, linkId);
+  }
+
   @ApiStandardResponse({ summary: 'Tạo thiết bị mới', method: 'POST', path: '/equipment' })
   @Post()
   @HttpCode(HttpStatus.CREATED)

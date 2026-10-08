@@ -206,6 +206,12 @@ export const api = {
     catalogCache.invalidate('equipment');
     return res;
   },
+  getEquipmentSpareParts: (equipmentId: string) =>
+    request(`/equipment/${equipmentId}/spare-parts`),
+  addEquipmentSparePart: (equipmentId: string, data: any) =>
+    request(`/equipment/${equipmentId}/spare-parts`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteEquipmentSparePart: (equipmentId: string, linkId: string) =>
+    request(`/equipment/${equipmentId}/spare-parts/${linkId}`, { method: 'DELETE' }),
 
   // Functional Unit Library (Thư viện cụm chức năng dùng chung)
   getFunctionalUnitLibrary: () => request('/functional-unit-library'),

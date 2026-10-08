@@ -33,3 +33,9 @@ uploads/
 *.ntvs*
 *.njsproj
 *.sln
+
+# Excel Documents
+*.xlsx
+*.xls
+~$*
+
