@@ -39,8 +39,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   options,
   value,
   onChange,
-  placeholder = '-- Chọn mục --',
-  searchPlaceholder = 'Nhập tìm kiếm...',
+  placeholder = '🔍 Tìm kiếm hoặc chọn...',
   disabled = false,
   className = '',
   compact = false,
@@ -49,7 +48,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   renderOption,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [inputText, setInputText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -58,31 +58,30 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return options.find((opt) => opt.value === value);
   }, [options, value]);
 
+  // Đồng bộ inputText với selectedOption khi không đang gõ
+  useEffect(() => {
+    if (!isTyping) {
+      setInputText(selectedOption ? selectedOption.label : '');
+    }
+  }, [selectedOption, isTyping]);
+
   // Click outside to close
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        setIsTyping(false);
+        setInputText(selectedOption ? selectedOption.label : '');
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Focus input when opened
-  useEffect(() => {
-    if (isOpen) {
-      setQuery('');
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-    }
-  }, [isOpen]);
+  }, [selectedOption]);
 
   // Filtered options with Vietnamese accent-insensitive matching
   const filteredOptions = useMemo(() => {
-    if (!query.trim()) return options;
-    const cleanQuery = removeVietnameseTones(query.trim());
+    if (!isTyping || !inputText.trim()) return options;
+    const cleanQuery = removeVietnameseTones(inputText.trim());
 
     return options.filter((opt) => {
       const matchLabel = removeVietnameseTones(opt.label).includes(cleanQuery);
@@ -90,70 +89,111 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       const matchTag = opt.tag ? removeVietnameseTones(opt.tag).includes(cleanQuery) : false;
       return matchLabel || matchSub || matchTag;
     });
-  }, [options, query]);
+  }, [options, inputText, isTyping]);
+
+  const handleInputFocus = () => {
+    if (disabled) return;
+    setIsOpen(true);
+    setIsTyping(true);
+    // Khi click vào để tìm lại, bôi đen text hiện tại để dễ gõ đè
+    inputRef.current?.select();
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputText(e.target.value);
+    setIsTyping(true);
+    if (!isOpen) setIsOpen(true);
+  };
 
   const handleSelect = (option: SearchableOption) => {
     if (option.disabled) return;
     onChange(option.value, option);
+    setInputText(option.label);
+    setIsTyping(false);
     setIsOpen(false);
   };
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
     onChange('', undefined);
+    setInputText('');
+    setIsTyping(false);
+    setIsOpen(false);
+    inputRef.current?.focus();
   };
 
   return (
     <div
       ref={containerRef}
       className={`searchable-select-container ${className}`}
-      style={{ position: 'relative', width: '100%', minWidth: compact ? '160px' : '220px' }}
+      style={{ position: 'relative', width: '100%' }}
     >
-      {/* Trigger Box */}
+      {/* Direct Input Trigger */}
       <div
-        onClick={() => !disabled && setIsOpen(!isOpen)}
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: compact ? '4px 8px' : '6px 10px',
-          height: compact ? '34px' : '38px',
-          backgroundColor: disabled ? '#f8fafc' : '#ffffff',
-          border: `1px solid ${isOpen ? '#2563eb' : '#cbd5e1'}`,
-          borderRadius: '6px',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          fontSize: compact ? '12.5px' : '13px',
-          boxShadow: isOpen ? '0 0 0 2px rgba(37,99,235,0.15)' : 'none',
-          transition: 'all 0.15s ease',
-          userSelect: 'none',
+          position: 'relative',
+          width: '100%',
         }}
       >
-        <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '6px' }}>
-          {selectedOption ? (
-            <span style={{ fontWeight: 600, color: '#1e293b' }}>
-              {selectedOption.label}
-              {selectedOption.tag && (
-                <span
-                  style={{
-                    marginLeft: '6px',
-                    fontSize: '11px',
-                    padding: '1px 5px',
-                    borderRadius: '4px',
-                    backgroundColor: selectedOption.tagColor || '#eff6ff',
-                    color: '#1d4ed8',
-                    fontWeight: 700,
-                  }}
-                >
-                  {selectedOption.tag}
-                </span>
-              )}
-            </span>
-          ) : (
-            <span style={{ color: '#94a3b8' }}>{placeholder}</span>
-          )}
-        </div>
+        <Search
+          size={14}
+          style={{
+            position: 'absolute',
+            left: '8px',
+            color: '#94a3b8',
+            pointerEvents: 'none',
+          }}
+        />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#94a3b8' }}>
+        <input
+          ref={inputRef}
+          type="text"
+          className="form-input"
+          disabled={disabled}
+          value={inputText}
+          onChange={handleInputChange}
+          onFocus={handleInputFocus}
+          placeholder={placeholder}
+          style={{
+            height: compact ? '34px' : '38px',
+            fontSize: compact ? '12.5px' : '13px',
+            paddingLeft: '28px',
+            paddingRight: clearable && selectedOption ? '48px' : '28px',
+            backgroundColor: disabled ? '#f8fafc' : '#ffffff',
+            borderColor: isOpen ? '#2563eb' : '#cbd5e1',
+            boxShadow: isOpen ? '0 0 0 2px rgba(37,99,235,0.18)' : 'none',
+            fontWeight: selectedOption && !isTyping ? 600 : 400,
+            color: selectedOption && !isTyping ? '#1e293b' : '#334155',
+            cursor: disabled ? 'not-allowed' : 'text',
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setIsOpen(false);
+              setIsTyping(false);
+              setInputText(selectedOption ? selectedOption.label : '');
+            }
+            if (e.key === 'Enter' && isOpen && filteredOptions.length > 0) {
+              e.preventDefault();
+              handleSelect(filteredOptions[0]);
+            }
+            if (e.key === 'ArrowDown' && !isOpen) {
+              setIsOpen(true);
+            }
+          }}
+        />
+
+        {/* Right Action Icons */}
+        <div
+          style={{
+            position: 'absolute',
+            right: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+          }}
+        >
           {clearable && selectedOption && !disabled && (
             <button
               type="button"
@@ -172,11 +212,29 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               <X size={14} />
             </button>
           )}
-          <ChevronDown size={15} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+
+          <ChevronDown
+            size={14}
+            onClick={() => {
+              if (!disabled) {
+                if (isOpen) {
+                  setIsOpen(false);
+                } else {
+                  inputRef.current?.focus();
+                }
+              }
+            }}
+            style={{
+              color: '#94a3b8',
+              cursor: 'pointer',
+              transform: isOpen ? 'rotate(180deg)' : 'none',
+              transition: 'transform 0.15s ease',
+            }}
+          />
         </div>
       </div>
 
-      {/* Hidden input for form validation */}
+      {/* Hidden input for HTML5 required form validation */}
       {required && (
         <input
           type="text"
@@ -194,60 +252,47 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             position: 'absolute',
             top: 'calc(100% + 4px)',
             left: 0,
-            right: 0,
-            zIndex: 9999,
+            width: 'max(100%, 360px)',
+            maxWidth: '520px',
+            zIndex: 99999,
             backgroundColor: '#ffffff',
             borderRadius: '8px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+            border: '1px solid #cbd5e1',
+            boxShadow: '0 12px 30px rgba(0,0,0,0.22), 0 4px 10px rgba(0,0,0,0.1)',
             overflow: 'hidden',
-            maxHeight: '300px',
+            maxHeight: '260px',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
-          {/* Search Input Box */}
+          {/* Header count info */}
           <div
             style={{
-              padding: '8px',
-              borderBottom: '1px solid #f1f5f9',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              padding: '6px 12px',
               backgroundColor: '#f8fafc',
+              borderBottom: '1px solid #f1f5f9',
+              fontSize: '11.5px',
+              color: '#64748b',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
             }}
           >
-            <Search size={14} color="#94a3b8" />
-            <input
-              ref={inputRef}
-              type="text"
-              className="form-input"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={searchPlaceholder}
-              style={{
-                height: '30px',
-                fontSize: '12.5px',
-                padding: '4px 8px',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
-                flex: 1,
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setIsOpen(false);
-                if (e.key === 'Enter' && filteredOptions.length > 0) {
-                  e.preventDefault();
-                  handleSelect(filteredOptions[0]);
-                }
-              }}
-            />
+            <span>
+              {filteredOptions.length > 0
+                ? `Tìm thấy ${filteredOptions.length} kết quả`
+                : 'Không có kết quả'}
+            </span>
+            {isTyping && inputText && (
+              <span style={{ fontStyle: 'italic' }}>Từ khóa: "{inputText}"</span>
+            )}
           </div>
 
           {/* Options List */}
-          <div style={{ overflowY: 'auto', flex: 1, maxHeight: '240px' }}>
+          <div style={{ overflowY: 'auto', flex: 1, maxHeight: '220px' }}>
             {filteredOptions.length === 0 ? (
-              <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: '12.5px' }}>
-                Không tìm thấy kết quả phù hợp
+              <div style={{ padding: '20px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                Không tìm thấy mặt hàng nào phù hợp với từ khóa
               </div>
             ) : (
               filteredOptions.map((opt) => {
@@ -255,7 +300,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 return (
                   <div
                     key={opt.value}
-                    onClick={() => handleSelect(opt)}
+                    onMouseDown={(e) => {
+                      // Dùng onMouseDown thay vì onClick để trigger trước khi input onBlur
+                      e.preventDefault();
+                      handleSelect(opt);
+                    }}
                     style={{
                       padding: '8px 12px',
                       display: 'flex',
@@ -279,7 +328,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     ) : (
                       <div style={{ flex: 1, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: isSelected ? 700 : 500, fontSize: '12.5px', color: '#1e293b' }}>
+                          <span style={{ fontWeight: isSelected ? 700 : 600, fontSize: '12.5px', color: '#1e293b' }}>
                             {opt.label}
                           </span>
                           {opt.tag && (

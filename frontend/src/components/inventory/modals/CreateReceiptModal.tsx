@@ -41,7 +41,8 @@ export const CreateReceiptModal: React.FC<CreateReceiptModalProps> = ({
   ]);
 
   const catalogOptions = useMemo(() => {
-    return catalogItems.map((c) => ({
+    const list = Array.isArray(catalogItems) ? catalogItems : (catalogItems as any)?.data || [];
+    return list.map((c: any) => ({
       value: c.id,
       label: `[${c.itemCode}] ${c.name}`,
       subLabel: `Tồn: ${c.quantity} ${c.unit} • ${c.location || 'Kho chung'}`,
@@ -189,12 +190,12 @@ export const CreateReceiptModal: React.FC<CreateReceiptModalProps> = ({
             </button>
           </div>
 
-          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-            <table className="custom-table" style={{ margin: 0, fontSize: '12.5px' }}>
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'visible', minHeight: '260px' }}>
+            <table className="custom-table" style={{ margin: 0, fontSize: '12.5px', overflow: 'visible' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f8fafc' }}>
                   <th style={{ width: '40px', textAlign: 'center' }}>#</th>
-                  <th style={{ minWidth: '220px' }}>Vật tư / Phụ tùng *</th>
+                  <th style={{ minWidth: '240px' }}>Vật tư / Phụ tùng *</th>
                   <th style={{ width: '70px', textAlign: 'center' }}>ĐVT</th>
                   <th style={{ width: '90px', textAlign: 'center' }}>Số lượng *</th>
                   <th style={{ width: '120px', textAlign: 'right' }}>Đơn giá (đ) *</th>
@@ -203,18 +204,17 @@ export const CreateReceiptModal: React.FC<CreateReceiptModalProps> = ({
                   <th style={{ width: '45px', textAlign: 'center' }}></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody style={{ overflow: 'visible' }}>
                 {items.map((row, idx) => (
-                  <tr key={idx}>
+                  <tr key={idx} style={{ overflow: 'visible' }}>
                     <td style={{ textAlign: 'center', color: '#64748b' }}>{idx + 1}</td>
-                    <td style={{ minWidth: '220px' }}>
+                    <td style={{ minWidth: '240px', overflow: 'visible', position: 'relative' }}>
                       <SearchableSelect
                         compact
                         options={catalogOptions}
                         value={row.inventoryItemId}
                         onChange={(val) => handleItemChange(idx, 'inventoryItemId', val)}
-                        placeholder="🔍 Tìm mã VT, tên..."
-                        searchPlaceholder="Gõ mã hoặc tên phụ tùng..."
+                        placeholder="🔍 Gõ mã VT hoặc tên..."
                         required
                       />
                     </td>

@@ -53,7 +53,8 @@ export function useInventoryIssues(onRefreshParent?: () => void) {
     if (inventoryList.length === 0) {
       try {
         const items = await api.getInventory();
-        setInventoryList(items || []);
+        const list = Array.isArray(items) ? items : (items as any)?.data || [];
+        setInventoryList(list);
       } catch (err) {
         console.error('Lỗi tải danh mục vật tư:', err);
       }

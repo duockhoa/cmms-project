@@ -92,7 +92,8 @@ export function useInventoryReceipts(onRefreshParent?: () => void) {
     if (catalogItems.length === 0) {
       try {
         const items = await api.getInventory();
-        setCatalogItems(items || []);
+        const list = Array.isArray(items) ? items : (items as any)?.data || [];
+        setCatalogItems(list);
       } catch (err) {
         console.error('Lỗi nạp danh mục phụ tùng:', err);
       }
