@@ -1385,7 +1385,7 @@ export class WorkOrdersService implements OnModuleInit {
         userId,
         sessionIndex: count + 1,
         startedAt: now,
-        taskContent: dto?.taskContent || 'Bắt đầu phiên thực hiện bảo trì / sửa chữa',
+        taskContent: dto?.taskContent || null,
         status: 'IN_PROGRESS',
       },
       include: {

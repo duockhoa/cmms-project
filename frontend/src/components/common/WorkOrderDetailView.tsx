@@ -128,6 +128,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
       />
 
       <WorkOrderExecutionModals
+        wo={wo}
         actionLoading={actionLoading}
         completeConclusion={completeConclusion}
         completeEquipmentStatus={completeEquipmentStatus}

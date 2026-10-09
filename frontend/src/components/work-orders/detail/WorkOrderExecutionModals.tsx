@@ -286,7 +286,7 @@ export const WorkOrderExecutionModals: React.FC<any> = ({
 
       {/* 3. Modal Hoàn thành sửa chữa / Đề nghị bàn giao */}
       {isCompleteFormOpen && (
-        <Modal isOpen={isCompleteFormOpen} onClose={() => setIsCompleteFormOpen(false)} title={wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? "Đề nghị bàn giao kỹ thuật" : "Xác nhận hoàn thành sửa chữa"}>
+        <Modal isOpen={isCompleteFormOpen} onClose={() => setIsCompleteFormOpen(false)} title={wo?.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? "Đề nghị bàn giao kỹ thuật" : "Xác nhận hoàn thành sửa chữa"}>
           <form onSubmit={handleCompleteSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto' }}>
             
             <div className="form-group">
@@ -465,7 +465,7 @@ export const WorkOrderExecutionModals: React.FC<any> = ({
             <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setIsCompleteFormOpen(false)}>Hủy</button>
               <button type="submit" className="btn btn-success" disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : (wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? "Gửi đề nghị bàn giao" : "Xác nhận hoàn thành")}
+                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : (wo?.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? "Gửi đề nghị bàn giao" : "Xác nhận hoàn thành")}
               </button>
             </div>
           </form>

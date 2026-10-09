@@ -327,7 +327,7 @@ export const useWorkOrderDetail = ({
     try {
       setActionLoading(true);
 
-      const isMaintRoute = wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT';
+      const isMaintRoute = wo?.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT';
       let result;
 
       if (isMaintRoute) {

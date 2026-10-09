@@ -49,7 +49,11 @@ export const StopWorkOrderSessionModal: React.FC<StopWorkOrderSessionModalProps>
 
   useEffect(() => {
     if (isOpen && activeSession?.startedAt) {
-      setTaskContent(activeSession.taskContent || '');
+      // Bỏ text mặc định, để trống trường nhập liệu để hiển thị gợi ý chìm (placeholder)
+      const initialTask = (activeSession.taskContent && activeSession.taskContent !== 'Bắt đầu phiên thực hiện bảo trì / sửa chữa')
+        ? activeSession.taskContent
+        : '';
+      setTaskContent(initialTask);
       setResultNotes('');
       setPhotos([]);
       setIsWebcamActive(false);
@@ -168,7 +172,7 @@ export const StopWorkOrderSessionModal: React.FC<StopWorkOrderSessionModalProps>
           <textarea
             className="form-input"
             rows={3}
-            placeholder="Mô tả công việc đã thực hiện..."
+            placeholder="Nhập nội dung công việc bạn đã thực hiện trong phiên này..."
             value={taskContent}
             onChange={(e) => setTaskContent(e.target.value)}
             required

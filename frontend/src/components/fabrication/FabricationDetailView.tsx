@@ -435,12 +435,12 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
     setSaving(true);
     try {
-      const validMaterials = materials
-        .filter((m) => m.materialName && m.materialName.trim() !== '')
+      const validMaterials = (materials || [])
+        .filter((m) => m && m.materialName && m.materialName.trim() !== '')
         .map((m) => ({
           materialName: m.materialName.trim(),
           quantity: Number(m.quantity) || 1,
-          unit: m.unit.trim() || 'cái',
+          unit: (m.unit || 'cái').trim() || 'cái',
           unitPrice: Number(m.unitPrice) || 0,
         }));
 
@@ -449,9 +449,9 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
         actualStartDate: startIso,
         actualEndDate: nowIso,
         actualHours: computedHours,
-        resultNotes: resultNotes.trim() || undefined,
+        resultNotes: (resultNotes || '').trim() || undefined,
         materials: validMaterials,
-        resultImages: resultImages,
+        resultImages: resultImages || [],
       });
 
       setJob(updated);
@@ -1293,7 +1293,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                   onClick={handleCompleteWork}
                   disabled={saving || deleting}
                   icon={CheckCircle2}
-                  label={acceptanceRating === 'REWORK' ? 'Báo cáo hoàn thành lại' : 'Báo cáo hoàn thành'}
+                  label={acceptanceRating === 'REWORK' ? 'Báo cáo hoàn thành lại' : 'Đề nghị bàn giao'}
                   color="#10b981"
                 />
               </>

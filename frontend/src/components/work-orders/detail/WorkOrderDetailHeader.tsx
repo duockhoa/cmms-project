@@ -101,7 +101,7 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
                   onClick={() => setIsCompleteFormOpen(true)}
                   disabled={actionLoading}
                   icon={CheckCircle2}
-                  label={wo.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? 'Đề nghị bàn giao' : 'Hoàn thành sửa'}
+                  label={wo?.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? 'Đề nghị bàn giao' : 'Hoàn thành sửa'}
                   color="#2563eb"
                 />
               )}
@@ -109,7 +109,7 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
           )}
 
           {/* Escalate */}
-          {wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' && isWorkingStatus && (userUnitType === 'WORKSHOP' || isManagerOrAdmin) && (
+          {wo?.handlingRoute === 'WORKSHOP_SELF_HANDLE' && isWorkingStatus && (userUnitType === 'WORKSHOP' || isManagerOrAdmin) && (
             <ActionButton onClick={() => setIsEscalateOpen(true)} disabled={actionLoading} icon={ArrowRightLeft} label="Yêu cầu hỗ trợ" color="#ef4444" />
           )}
 
@@ -124,7 +124,7 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
               onClick={() => setIsAssignExecutorOpen(true)}
               disabled={actionLoading}
               icon={Play}
-              label={wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? "Phân công nội bộ xưởng" : "Phân công Kỹ thuật / Cơ điện"}
+              label={wo?.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? "Phân công nội bộ xưởng" : "Phân công Kỹ thuật / Cơ điện"}
               color="#3b82f6"
             />
           )}
@@ -139,7 +139,7 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
           )}
 
           {/* Accept/Reject Handover */}
-          {wo.status === 'COMPLETED' && (userUnitType === 'WORKSHOP' || isManagerOrAdmin || wo.handlingRoute === 'WORKSHOP_SELF_HANDLE') && (
+          {wo?.status === 'COMPLETED' && (userUnitType === 'WORKSHOP' || isManagerOrAdmin || wo?.handlingRoute === 'WORKSHOP_SELF_HANDLE') && (
             <>
               <ActionButton
                 onClick={() => {

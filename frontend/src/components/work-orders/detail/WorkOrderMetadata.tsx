@@ -27,7 +27,7 @@ export const WorkOrderMetadata: React.FC<any> = ({
           </tr>
           <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
             <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Tuyến xử lý</td>
-            <td style={{ padding: '12px 0', fontWeight: 600 }}>{wo.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? 'Xưởng tự xử lý' : 'Cơ điện sửa chữa'}</td>
+            <td style={{ padding: '12px 0', fontWeight: 600 }}>{wo?.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? 'Xưởng tự xử lý' : 'Cơ điện sửa chữa'}</td>
           </tr>
           <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
             <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mức độ ưu tiên</td>
