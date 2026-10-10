@@ -25,6 +25,21 @@ export class NotificationEventListener {
     private readonly mailService: MailService,
   ) {}
 
+  /**
+   * Helper: Retrieve all active admin emails so administration is always in the loop
+   */
+  private async getAdminEmails(): Promise<string[]> {
+    try {
+      const admins = await this.prisma.user.findMany({
+        where: { role: 'ADMIN', isActive: true },
+        select: { email: true },
+      });
+      return admins.map((a) => a.email).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // 1. MAINTENANCE REQUESTS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -61,7 +76,7 @@ export class NotificationEventListener {
         );
       }
 
-      // Email: Responsible Tech & Department Managers
+      // Email: Responsible Tech, Department Managers & Admins
       const targetEmails: string[] = [];
       if (location.responsibleTechId) {
         const tech = await this.prisma.user.findUnique({ where: { id: location.responsibleTechId } });
@@ -75,12 +90,16 @@ export class NotificationEventListener {
         select: { email: true },
       });
       targetEmails.push(...managers.map((m) => m.email));
+      const adminEmails = await this.getAdminEmails();
+      targetEmails.push(...adminEmails);
       const uniqueEmails = Array.from(new Set(targetEmails)).filter(Boolean);
 
       if (uniqueEmails.length > 0) {
         await this.mailService.sendDkPharmaEmail({
           to: uniqueEmails,
-          subject: `[Sự cố mới] ${request.requestCode} - ${equipment.name} (${location.name})`,
+          threadKey: request.requestCode,
+          isFirstInThread: true,
+          subject: `[CMMS] [${request.requestCode}] Báo sự cố ${equipment.name} (${location.name})`,
           title: 'Báo cáo sự cố thiết bị mới',
           badgeText: 'CHỜ ĐÁNH GIÁ',
           badgeColor: 'amber',
@@ -113,6 +132,7 @@ export class NotificationEventListener {
       if (!request) return;
 
       const orderCode = workOrder.orderCode;
+      const adminEmails = await this.getAdminEmails();
 
       if (isExternalTransfer) {
         const targetDept = targetDepartment || 'Bộ phận kỹ thuật';
@@ -131,11 +151,13 @@ export class NotificationEventListener {
           },
           select: { email: true },
         });
-        const targetEmails = Array.from(new Set(targetManagers.map((m) => m.email))).filter(Boolean);
+        const targetEmails = Array.from(new Set([...targetManagers.map((m) => m.email), ...adminEmails])).filter(Boolean);
         if (targetEmails.length > 0) {
           await this.mailService.sendDkPharmaEmail({
             to: targetEmails,
-            subject: `[Điều chuyển sự cố] Phiếu ${orderCode} chuyển đến ${targetDept}`,
+            threadKey: request.requestCode,
+            isFirstInThread: false,
+            subject: `Re: [CMMS] [${request.requestCode}] Báo sự cố ${request.equipment.name} - [Chuyển ${targetDept} - Phiếu ${orderCode}]`,
             title: 'Phiếu bảo trì mới chờ phân công',
             badgeText: 'CHUYỂN KỸ THUẬT',
             badgeColor: 'blue',
@@ -170,14 +192,17 @@ export class NotificationEventListener {
           );
 
           if (techUser?.email) {
+            const recipients = Array.from(new Set([techUser.email, ...adminEmails])).filter(Boolean);
             await this.mailService.sendDkPharmaEmail({
-              to: techUser.email,
+              to: recipients,
               recipientName: techUser.name,
-              subject: `[Phân công xử lý] Phiếu bảo trì ${orderCode} - ${request.equipment.name}`,
+              threadKey: request.requestCode,
+              isFirstInThread: false,
+              subject: `Re: [CMMS] [${request.requestCode}] Báo sự cố ${request.equipment.name} - [Phân công KTV - Phiếu ${orderCode}]`,
               title: 'Phân công nhiệm vụ bảo trì',
               badgeText: 'PHÂN CÔNG MỚI',
               badgeColor: 'blue',
-              summaryMessage: `Bạn vừa được phân công xử lý phiếu bảo trì ${orderCode} cho thiết bị ${request.equipment.name}.`,
+              summaryMessage: `Kỹ thuật viên ${techUser.name} vừa được phân công xử lý phiếu bảo trì ${orderCode} cho thiết bị ${request.equipment.name}.`,
               metadata: [
                 { label: 'Mã phiếu bảo trì', value: orderCode },
                 { label: 'Mã sự cố gốc', value: request.requestCode },
@@ -198,16 +223,19 @@ export class NotificationEventListener {
         }
       }
 
-      // Email to Reporter confirming approval
+      // Email to Reporter confirming approval (and loop in Admins)
       if (request.reporter?.email) {
+        const reporterRecipients = Array.from(new Set([request.reporter.email, ...adminEmails])).filter(Boolean);
         await this.mailService.sendDkPharmaEmail({
-          to: request.reporter.email,
+          to: reporterRecipients,
           recipientName: request.reporter.name,
-          subject: `[Yêu cầu đã duyệt] ${request.requestCode} - Khởi tạo phiếu bảo trì ${orderCode}`,
+          threadKey: request.requestCode,
+          isFirstInThread: false,
+          subject: `Re: [CMMS] [${request.requestCode}] Báo sự cố ${request.equipment.name} - [Đã phê duyệt tạo phiếu ${orderCode}]`,
           title: 'Yêu cầu sự cố đã được phê duyệt',
           badgeText: 'ĐÃ PHÊ DUYỆT',
           badgeColor: 'green',
-          summaryMessage: `Yêu cầu xử lý sự cố ${request.requestCode} của bạn đã được phê duyệt và khởi tạo phiếu sửa chữa ${orderCode}.`,
+          summaryMessage: `Yêu cầu xử lý sự cố ${request.requestCode} đã được phê duyệt và khởi tạo phiếu sửa chữa ${orderCode}.`,
           metadata: [
             { label: 'Mã sự cố', value: request.requestCode },
             { label: 'Mã phiếu bảo trì', value: orderCode },
@@ -244,10 +272,14 @@ export class NotificationEventListener {
       }
 
       if (fullReq.reporter?.email) {
+        const adminEmails = await this.getAdminEmails();
+        const recipients = Array.from(new Set([fullReq.reporter.email, ...adminEmails])).filter(Boolean);
         await this.mailService.sendDkPharmaEmail({
-          to: fullReq.reporter.email,
+          to: recipients,
           recipientName: fullReq.reporter.name,
-          subject: `[Từ chối yêu cầu] ${fullReq.requestCode} - ${fullReq.equipment.name}`,
+          threadKey: fullReq.requestCode,
+          isFirstInThread: false,
+          subject: `Re: [CMMS] [${fullReq.requestCode}] Báo sự cố ${fullReq.equipment.name} - [Từ chối yêu cầu]`,
           title: 'Yêu cầu sự cố đã bị từ chối',
           badgeText: 'TỪ CHỐI',
           badgeColor: 'red',
@@ -288,10 +320,14 @@ export class NotificationEventListener {
       }
 
       if (fullReq.reporter?.email) {
+        const adminEmails = await this.getAdminEmails();
+        const recipients = Array.from(new Set([fullReq.reporter.email, ...adminEmails])).filter(Boolean);
         await this.mailService.sendDkPharmaEmail({
-          to: fullReq.reporter.email,
+          to: recipients,
           recipientName: fullReq.reporter.name,
-          subject: `[Yêu cầu trả lại] ${fullReq.requestCode} - Cần bổ sung thông tin`,
+          threadKey: fullReq.requestCode,
+          isFirstInThread: false,
+          subject: `Re: [CMMS] [${fullReq.requestCode}] Báo sự cố ${fullReq.equipment.name} - [Yêu cầu bổ sung thông tin]`,
           title: 'Yêu cầu sự cố được trả lại',
           badgeText: 'CẦN BỔ SUNG',
           badgeColor: 'amber',
@@ -325,7 +361,27 @@ export class NotificationEventListener {
       const equipName = wo.equipment ? `${wo.equipment.name} (${wo.equipment.code})` : 'Thiết bị';
       const locationName = wo.equipment?.location || 'Phân xưởng';
 
-      // 1. ASSIGN / REASSIGN (Đẩy thông báo và Email đến tất cả nhân sự được phân công)
+      // Resolve threadKey: link back to original Incident (Request) if exists, else WorkOrder code
+      let threadKey = wo.orderCode;
+      let isFirstInThread = false;
+
+      if (wo.requestId) {
+        if (wo.request?.requestCode) {
+          threadKey = wo.request.requestCode;
+        } else {
+          const req = await this.prisma.maintenanceRequest.findUnique({
+            where: { id: wo.requestId },
+            select: { requestCode: true },
+          });
+          if (req?.requestCode) threadKey = req.requestCode;
+        }
+      } else if (actionName === 'ASSIGN') {
+        isFirstInThread = true;
+      }
+
+      const adminEmails = await this.getAdminEmails();
+
+      // 1. ASSIGN / REASSIGN (Đẩy thông báo và Email đến tất cả nhân sự được phân công + Quản trị viên)
       if (actionName === 'ASSIGN' && (wo.assignedTechnicianId || wo.technicianName || wo.assignedTechnicianIds)) {
         const targetUserIds = new Set<string>();
         if (wo.assignedTechnicianId) targetUserIds.add(wo.assignedTechnicianId);
@@ -372,10 +428,15 @@ export class NotificationEventListener {
             );
 
             if (techUser.email) {
+              const recipients = Array.from(new Set([techUser.email, ...adminEmails])).filter(Boolean);
               await this.mailService.sendDkPharmaEmail({
-                to: techUser.email,
+                to: recipients,
                 recipientName: techUser.name,
-                subject: `[Phân công xử lý] Phiếu bảo trì ${orderCode} - ${equipName}`,
+                threadKey,
+                isFirstInThread,
+                subject: isFirstInThread
+                  ? `[CMMS] [${orderCode}] Phân công phiếu bảo trì ${orderCode} - ${equipName}`
+                  : `Re: [CMMS] [${threadKey}] ${equipName} - [Phân công KTV - Phiếu ${orderCode}]`,
                 title: 'Phân công nhiệm vụ bảo trì',
                 badgeText: 'PHÂN CÔNG MỚI',
                 badgeColor: 'blue',
@@ -442,12 +503,15 @@ export class NotificationEventListener {
           const reporter = await this.prisma.user.findUnique({ where: { id: wo.request.reporterId } });
           if (reporter?.email) targetEmails.push(reporter.email);
         }
+        targetEmails.push(...adminEmails);
         const uniqueEmails = Array.from(new Set(targetEmails)).filter(Boolean);
 
         if (uniqueEmails.length > 0) {
           await this.mailService.sendDkPharmaEmail({
             to: uniqueEmails,
-            subject: `[Đề nghị nghiệm thu] Phiếu bảo trì ${orderCode} - ${equipName}`,
+            threadKey,
+            isFirstInThread: false,
+            subject: `Re: [CMMS] [${threadKey}] ${equipName} - [Đề nghị nghiệm thu bàn giao - Phiếu ${orderCode}]`,
             title: 'Yêu cầu nghiệm thu bàn giao thiết bị',
             badgeText: 'CHỜ NGHIỆM THU',
             badgeColor: 'amber',
@@ -487,12 +551,14 @@ export class NotificationEventListener {
           },
           select: { email: true },
         });
-        const qaEmails = Array.from(new Set(qaUsers.map((u) => u.email))).filter(Boolean);
+        const qaEmails = Array.from(new Set([...qaUsers.map((u) => u.email), ...adminEmails])).filter(Boolean);
 
         if (qaEmails.length > 0) {
           await this.mailService.sendDkPharmaEmail({
             to: qaEmails,
-            subject: `[Thẩm định GMP] Phiếu bảo trì ${orderCode} - ${equipName}`,
+            threadKey,
+            isFirstInThread: false,
+            subject: `Re: [CMMS] [${threadKey}] ${equipName} - [Xưởng đã nghiệm thu / Chờ QA thẩm định - Phiếu ${orderCode}]`,
             title: 'Hồ sơ bảo trì chờ thẩm định chất lượng',
             badgeText: 'CHỜ QA ĐÁNH GIÁ',
             badgeColor: 'purple',
@@ -523,10 +589,13 @@ export class NotificationEventListener {
 
           const tech = await this.prisma.user.findUnique({ where: { id: wo.assignedTechnicianId } });
           if (tech?.email) {
+            const recipients = Array.from(new Set([tech.email, ...adminEmails])).filter(Boolean);
             await this.mailService.sendDkPharmaEmail({
-              to: tech.email,
+              to: recipients,
               recipientName: tech.name,
-              subject: `[Yêu cầu xử lý lại] Phiếu bảo trì ${orderCode} - ${equipName}`,
+              threadKey,
+              isFirstInThread: false,
+              subject: `Re: [CMMS] [${threadKey}] ${equipName} - [Nghiệm thu không đạt - Yêu cầu làm lại - Phiếu ${orderCode}]`,
               title: 'Nghiệm thu bàn giao không đạt',
               badgeText: 'YÊU CẦU LÀM LẠI',
               badgeColor: 'red',
@@ -575,12 +644,15 @@ export class NotificationEventListener {
           select: { email: true },
         });
         targetEmails.push(...managers.map((m) => m.email));
+        targetEmails.push(...adminEmails);
         const uniqueEmails = Array.from(new Set(targetEmails)).filter(Boolean);
 
         if (uniqueEmails.length > 0) {
           await this.mailService.sendDkPharmaEmail({
             to: uniqueEmails,
-            subject: `[Nghiệm thu hoàn tất] Phiếu bảo trì ${orderCode} - ${equipName}`,
+            threadKey,
+            isFirstInThread: false,
+            subject: `Re: [CMMS] [${threadKey}] ${equipName} - [Nghiệm thu hoàn tất & Bàn giao sản xuất - Phiếu ${orderCode}]`,
             title: 'Nghiệm thu chất lượng hoàn tất',
             badgeText: 'ĐÃ NGHIỆM THU',
             badgeColor: 'green',
@@ -610,10 +682,13 @@ export class NotificationEventListener {
 
           const tech = await this.prisma.user.findUnique({ where: { id: wo.assignedTechnicianId } });
           if (tech?.email) {
+            const recipients = Array.from(new Set([tech.email, ...adminEmails])).filter(Boolean);
             await this.mailService.sendDkPharmaEmail({
-              to: tech.email,
+              to: recipients,
               recipientName: tech.name,
-              subject: `[QA Yêu cầu khắc phục] Phiếu bảo trì ${orderCode} - ${equipName}`,
+              threadKey,
+              isFirstInThread: false,
+              subject: `Re: [CMMS] [${threadKey}] ${equipName} - [QA yêu cầu khắc phục - Phiếu ${orderCode}]`,
               title: 'Hồ sơ QA chưa đạt tiêu chuẩn',
               badgeText: 'QA TỪ CHỐI',
               badgeColor: 'red',
@@ -652,12 +727,14 @@ export class NotificationEventListener {
           },
           select: { email: true },
         });
-        const emails = Array.from(new Set(techManagers.map((m) => m.email))).filter(Boolean);
+        const emails = Array.from(new Set([...techManagers.map((m) => m.email), ...adminEmails])).filter(Boolean);
 
         if (emails.length > 0) {
           await this.mailService.sendDkPharmaEmail({
             to: emails,
-            subject: `[Hỗ trợ kỹ thuật] Phiếu bảo trì ${orderCode} - ${equipName}`,
+            threadKey,
+            isFirstInThread: false,
+            subject: `Re: [CMMS] [${threadKey}] ${equipName} - [Chuyển hỗ trợ Cơ điện - Phiếu ${orderCode}]`,
             title: 'Yêu cầu hỗ trợ kỹ thuật từ xưởng sản xuất',
             badgeText: 'CHUYỂN KỸ THUẬT',
             badgeColor: 'amber',
@@ -685,12 +762,15 @@ export class NotificationEventListener {
           const reporter = await this.prisma.user.findUnique({ where: { id: wo.request.reporterId } });
           if (reporter?.email) targetEmails.push(reporter.email);
         }
+        targetEmails.push(...adminEmails);
         const uniqueEmails = Array.from(new Set(targetEmails)).filter(Boolean);
 
         if (uniqueEmails.length > 0) {
           await this.mailService.sendDkPharmaEmail({
             to: uniqueEmails,
-            subject: `[Đóng phiếu bảo trì] ${orderCode} - ${equipName}`,
+            threadKey,
+            isFirstInThread: false,
+            subject: `Re: [CMMS] [${threadKey}] ${equipName} - [Đã đóng hồ sơ bảo trì - Phiếu ${orderCode}]`,
             title: 'Phiếu bảo trì đã đóng hoàn tất',
             badgeText: 'ĐÃ ĐÓNG',
             badgeColor: 'green',
@@ -735,6 +815,7 @@ export class NotificationEventListener {
 
       if (targetUserIds.size === 0) return;
 
+      const adminEmails = await this.getAdminEmails();
       const techUsers = await this.prisma.user.findMany({
         where: { id: { in: Array.from(targetUserIds) } },
       });
@@ -749,10 +830,13 @@ export class NotificationEventListener {
         );
 
         if (techUser.email) {
+          const recipients = Array.from(new Set([techUser.email, ...adminEmails])).filter(Boolean);
           await this.mailService.sendDkPharmaEmail({
-            to: techUser.email,
+            to: recipients,
             recipientName: techUser.name,
-            subject: `[Phân công gia công] ${order.orderCode} - ${order.title}`,
+            threadKey: order.orderCode,
+            isFirstInThread: true,
+            subject: `[CMMS] [${order.orderCode}] Phân công gia công/chế tạo: ${order.title}`,
             title: 'Phân công nhiệm vụ gia công / chế tạo',
             badgeText: 'PHÂN CÔNG MỚI',
             badgeColor: 'blue',
@@ -796,6 +880,7 @@ export class NotificationEventListener {
       const orderCode = updated.orderCode;
       const title = updated.title;
       const location = updated.location || updated.targetDepartment || 'Xưởng cơ điện';
+      const adminEmails = await this.getAdminEmails();
 
       // 1. REASSIGN TECHNICIAN
       if (dto.assignedTechnicianId && dto.assignedTechnicianId !== existing.assignedTechnicianId) {
@@ -808,10 +893,13 @@ export class NotificationEventListener {
         );
 
         if (updated.assignedTechnician?.email) {
+          const recipients = Array.from(new Set([updated.assignedTechnician.email, ...adminEmails])).filter(Boolean);
           await this.mailService.sendDkPharmaEmail({
-            to: updated.assignedTechnician.email,
+            to: recipients,
             recipientName: updated.assignedTechnician.name,
-            subject: `[Điều chuyển phân công] ${orderCode} - ${title}`,
+            threadKey: orderCode,
+            isFirstInThread: false,
+            subject: `Re: [CMMS] [${orderCode}] ${title} - [Điều chuyển KTV phụ trách]`,
             title: 'Phân công nhiệm vụ gia công / chế tạo',
             badgeText: 'PHÂN CÔNG MỚI',
             badgeColor: 'blue',
@@ -860,12 +948,15 @@ export class NotificationEventListener {
 
         const targetEmails = managers.map((m) => m.email);
         if (updated.creator?.email) targetEmails.push(updated.creator.email);
+        targetEmails.push(...adminEmails);
         const uniqueEmails = Array.from(new Set(targetEmails)).filter(Boolean);
 
         if (uniqueEmails.length > 0) {
           await this.mailService.sendDkPharmaEmail({
             to: uniqueEmails,
-            subject: `[Đề nghị nghiệm thu] Phiếu gia công ${orderCode} - ${title}`,
+            threadKey: orderCode,
+            isFirstInThread: false,
+            subject: `Re: [CMMS] [${orderCode}] ${title} - [Đề nghị nghiệm thu bàn giao]`,
             title: 'Sản phẩm gia công hoàn thành, chờ nghiệm thu',
             badgeText: 'CHỜ BÀN GIAO',
             badgeColor: 'amber',
@@ -896,10 +987,13 @@ export class NotificationEventListener {
           );
 
           if (updated.assignedTechnician?.email) {
+            const recipients = Array.from(new Set([updated.assignedTechnician.email, ...adminEmails])).filter(Boolean);
             await this.mailService.sendDkPharmaEmail({
-              to: updated.assignedTechnician.email,
+              to: recipients,
               recipientName: updated.assignedTechnician.name,
-              subject: `[Yêu cầu sửa lại] Phiếu gia công ${orderCode} - ${title}`,
+              threadKey: orderCode,
+              isFirstInThread: false,
+              subject: `Re: [CMMS] [${orderCode}] ${title} - [Nghiệm thu chưa đạt - Yêu cầu làm lại]`,
               title: 'Nghiệm thu chưa đạt - Yêu cầu làm lại',
               badgeText: 'YÊU CẦU LÀM LẠI',
               badgeColor: 'red',
@@ -922,12 +1016,15 @@ export class NotificationEventListener {
         const targetEmails: string[] = [];
         if (updated.assignedTechnician?.email) targetEmails.push(updated.assignedTechnician.email);
         if (updated.creator?.email) targetEmails.push(updated.creator.email);
+        targetEmails.push(...adminEmails);
         const uniqueEmails = Array.from(new Set(targetEmails)).filter(Boolean);
 
         if (uniqueEmails.length > 0) {
           await this.mailService.sendDkPharmaEmail({
             to: uniqueEmails,
-            subject: `[Nghiệm thu đạt] Hoàn tất bàn giao phiếu ${orderCode} - ${title}`,
+            threadKey: orderCode,
+            isFirstInThread: false,
+            subject: `Re: [CMMS] [${orderCode}] ${title} - [Nghiệm thu đạt chuẩn & Đã bàn giao]`,
             title: 'Nghiệm thu bàn giao sản phẩm thành công',
             badgeText: 'ĐÃ BÀN GIAO',
             badgeColor: 'green',
@@ -967,10 +1064,14 @@ export class NotificationEventListener {
       );
 
       if (schedule.assignedTechnician?.email) {
+        const adminEmails = await this.getAdminEmails();
+        const recipients = Array.from(new Set([schedule.assignedTechnician.email, ...adminEmails])).filter(Boolean);
         await this.mailService.sendDkPharmaEmail({
-          to: schedule.assignedTechnician.email,
+          to: recipients,
           recipientName: schedule.assignedTechnician.name,
-          subject: `[Bảo trì định kỳ] ${createdWO.orderCode} - ${schedule.title}`,
+          threadKey: createdWO.orderCode,
+          isFirstInThread: true,
+          subject: `[CMMS] [${createdWO.orderCode}] Lịch bảo trì định kỳ: ${schedule.title} - ${schedule.equipment?.name}`,
           title: 'Phiếu bảo trì định kỳ đến hạn',
           badgeText: 'BẢO TRÌ ĐỊNH KỲ',
           badgeColor: 'blue',

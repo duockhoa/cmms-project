@@ -6,6 +6,10 @@ export interface SendDkPharmaEmailDto extends Omit<BuildEmailOptions, 'actionUrl
   to: string | string[];
   subject: string;
   actionPath?: string; // e.g. '/work-orders?id=xxx' or '/fabrication/xxx'
+  threadKey?: string; // e.g. 'REQ-2026-0001', 'WO-0012', 'GC-2026-0005'
+  isFirstInThread?: boolean; // True if this email initializes the conversation thread
+  inReplyTo?: string;
+  references?: string | string[];
 }
 
 @Injectable()
@@ -69,13 +73,17 @@ export class MailService {
   }
 
   /**
-   * Send basic email
+   * Send basic email with RFC Threading headers
    */
   async sendMail(options: {
     to: string | string[];
     subject: string;
     html: string;
     text?: string;
+    messageId?: string;
+    inReplyTo?: string;
+    references?: string | string[];
+    headers?: Record<string, string>;
   }): Promise<boolean> {
     const recipients = Array.isArray(options.to) ? options.to.filter(Boolean) : [options.to];
     if (recipients.length === 0) {
@@ -84,20 +92,26 @@ export class MailService {
     }
 
     if (!this.transporter || !this.isConfigured) {
-      this.logger.log(`[MAIL SIMULATION] To: ${recipients.join(', ')} | Subject: ${options.subject}`);
+      this.logger.log(`[MAIL SIMULATION] To: ${recipients.join(', ')} | Subject: ${options.subject} | In-Reply-To: ${options.inReplyTo || 'none'}`);
       return true;
     }
 
     try {
-      const info = await this.transporter.sendMail({
+      const mailOptions: nodemailer.SendMailOptions = {
         from: this.fromAddress,
         to: recipients,
         subject: options.subject,
         html: options.html,
         text: options.text,
-      });
+        messageId: options.messageId,
+        inReplyTo: options.inReplyTo,
+        references: options.references,
+        headers: options.headers,
+      };
 
-      this.logger.log(`[MAIL SENT] MessageId: ${info.messageId} to ${recipients.join(', ')}`);
+      const info = await this.transporter.sendMail(mailOptions);
+
+      this.logger.log(`[MAIL SENT] MessageId: ${info.messageId} to ${recipients.join(', ')} | Thread In-Reply-To: ${options.inReplyTo || 'root'}`);
       return true;
     } catch (err: any) {
       this.logger.error(`[MAIL ERROR] Failed to send email to ${recipients.join(', ')}:`, err);
@@ -106,7 +120,7 @@ export class MailService {
   }
 
   /**
-   * Send high-level DK Pharma branded email
+   * Send high-level DK Pharma branded email with automatic conversation threading
    */
   async sendDkPharmaEmail(dto: SendDkPharmaEmailDto): Promise<boolean> {
     const actionUrl = dto.actionPath
@@ -125,10 +139,40 @@ export class MailService {
       actionUrl,
     });
 
+    let messageId = dto.isFirstInThread ? undefined : undefined;
+    let inReplyTo: string | undefined = dto.inReplyTo;
+    let references: string[] | undefined = Array.isArray(dto.references)
+      ? dto.references
+      : dto.references
+      ? [dto.references]
+      : undefined;
+    const customHeaders: Record<string, string> = {};
+
+    // Automatic threading calculation based on threadKey
+    if (dto.threadKey) {
+      const cleanKey = dto.threadKey.trim().replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+      const domain = 'dkpharma.io.vn';
+      const rootMessageId = `<cmms-thread-${cleanKey}@${domain}>`;
+
+      customHeaders['X-Entity-Ref-ID'] = dto.threadKey;
+
+      if (dto.isFirstInThread) {
+        messageId = rootMessageId;
+      } else {
+        messageId = `<cmms-msg-${cleanKey}-${Date.now()}@${domain}>`;
+        inReplyTo = inReplyTo || rootMessageId;
+        references = references || [rootMessageId];
+      }
+    }
+
     return this.sendMail({
       to: dto.to,
       subject: dto.subject,
       html,
+      messageId,
+      inReplyTo,
+      references,
+      headers: Object.keys(customHeaders).length > 0 ? customHeaders : undefined,
     });
   }
 }
