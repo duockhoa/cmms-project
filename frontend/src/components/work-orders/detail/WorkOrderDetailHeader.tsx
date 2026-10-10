@@ -121,8 +121,8 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
             <ActionButton onClick={() => setIsEscalateOpen(true)} disabled={actionLoading} icon={ArrowRightLeft} label="Yêu cầu hỗ trợ" color="#ef4444" />
           )}
 
-          {/* Classify */}
-          {wo.status === 'PENDING' && !wo.classificationResult && (userUnitType === 'TECHNICAL' || isManagerOrAdmin) && (
+          {/* Classify - Chỉ áp dụng cho sự cố từ xưởng cần phân loại tuyến, KHÔNG áp dụng cho lịch bảo trì định kỳ */}
+          {!wo.scheduleId && !wo.title?.startsWith('[Định kỳ]') && wo.handlingRoute !== 'TECHNICAL_MAINTENANCE_SUPPORT' && wo.status === 'PENDING' && !wo.classificationResult && (userUnitType === 'TECHNICAL' || isManagerOrAdmin) && (
             <ActionButton onClick={() => setIsClassifyOpen(true)} disabled={actionLoading} icon={ShieldCheck} label="Phân loại sự cố" color="#f59e0b" />
           )}
 

@@ -190,7 +190,11 @@ export class WorkOrdersService implements OnModuleInit {
     });
     if (!wo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
 
-    if (actorContext && actorContext.role === 'TECHNICIAN' && wo.assignedTechnicianId !== actorContext.id) {
+    const isAssigned = wo.assignedTechnicianId === actorContext?.id ||
+      (Array.isArray(wo.assignedTechnicianIds as any) && (wo.assignedTechnicianIds as string[]).includes(actorContext?.id)) ||
+      (Array.isArray(wo.supporterIds as any) && (wo.supporterIds as string[]).includes(actorContext?.id));
+
+    if (actorContext && actorContext.role === 'TECHNICIAN' && !isAssigned) {
       throw new ForbiddenException('Bạn không được phân công thực hiện công việc này.');
     }
 
@@ -275,8 +279,9 @@ export class WorkOrdersService implements OnModuleInit {
           title: data.title,
           description: data.description,
           priority: data.priority || 'MEDIUM',
-          status: 'PENDING',
+          status: data.status || (assignedTechnicianId ? 'ASSIGNED' : 'PENDING'),
           handlingRoute: data.handlingRoute ? (data.handlingRoute as HandlingRoute) : undefined,
+          classificationResult: data.classificationResult || (data.handlingRoute === HandlingRoute.TECHNICAL_MAINTENANCE_SUPPORT ? 'MAINTENANCE_REQUIRED' : null),
           technicianName: technicianName || null,
           assignedTechnicianId,
           assignedTechnicianIds: assignedTechnicianIds || undefined,
@@ -393,11 +398,15 @@ export class WorkOrdersService implements OnModuleInit {
       if (unitType === PerformerUnitType.TECHNICAL && wo.status === 'PENDING') {
         return true;
       }
+      const isAssigned = wo.assignedTechnicianId === userId ||
+        (Array.isArray(wo.assignedTechnicianIds as any) && (wo.assignedTechnicianIds as string[]).includes(userId)) ||
+        (Array.isArray(wo.supporterIds as any) && (wo.supporterIds as string[]).includes(userId));
+
       if (unitType === PerformerUnitType.WORKSHOP) {
-        return (wo.handlingRoute === HandlingRoute.WORKSHOP_SELF_HANDLE && wo.status !== 'COMPLETED') || wo.assignedTechnicianId === userId;
+        return (wo.handlingRoute === HandlingRoute.WORKSHOP_SELF_HANDLE && wo.status !== 'COMPLETED') || isAssigned;
       }
       if (unitType === PerformerUnitType.MAINTENANCE) {
-        return wo.assignedTechnicianId === userId;
+        return isAssigned;
       }
       return false;
     });
@@ -520,9 +529,13 @@ export class WorkOrdersService implements OnModuleInit {
         if (!user) throw new NotFoundException('Không tìm thấy người dùng');
         const unitType = this.getPerformerUnitType(user);
 
+        const isAssigned = wo.assignedTechnicianId === actorContext.id ||
+          (Array.isArray(wo.assignedTechnicianIds as any) && (wo.assignedTechnicianIds as string[]).includes(actorContext.id)) ||
+          (Array.isArray(wo.supporterIds as any) && (wo.supporterIds as string[]).includes(actorContext.id));
+
         if (wo.handlingRoute === HandlingRoute.WORKSHOP_SELF_HANDLE) {
           const isAllowedSelf = unitType === PerformerUnitType.WORKSHOP ||
-            wo.assignedTechnicianId === actorContext.id ||
+            isAssigned ||
             actionName === 'QA_VERIFY' || actionName === 'QA_REJECT' ||
             actionName === 'HANDOVER_ACCEPT' || actionName === 'HANDOVER_REJECT';
           if (!isAllowedSelf) {
@@ -531,7 +544,9 @@ export class WorkOrdersService implements OnModuleInit {
         } else {
           const isQaAction = actionName === 'QA_VERIFY' || actionName === 'QA_REJECT' || actionName === 'VERIFY';
           const isHandoverAction = actionName === 'HANDOVER_ACCEPT' || actionName === 'HANDOVER_REJECT';
-          if (wo.assignedTechnicianId !== actorContext.id &&
+          const isTechnicalOrMaintenance = unitType === PerformerUnitType.TECHNICAL || unitType === PerformerUnitType.MAINTENANCE;
+          if (!isAssigned &&
+            !isTechnicalOrMaintenance &&
             actionName !== 'ESCALATE' &&
             actionName !== 'CLASSIFY' &&
             actionName !== 'ASSIGN' &&

@@ -62,8 +62,13 @@ export class PermissionsGuard implements CanActivate {
       const workOrder = await this.prisma.workOrder.findUnique({
         where: { id: reqParamId },
       });
-      // Allow only if assigned or technicianName matches actor name
-      if (workOrder && workOrder.technicianName !== dbUser.name) {
+      const isAssigned =
+        workOrder?.assignedTechnicianId === dbUser.id ||
+        (Array.isArray(workOrder?.assignedTechnicianIds as any) && (workOrder?.assignedTechnicianIds as string[]).includes(dbUser.id)) ||
+        (Array.isArray(workOrder?.supporterIds as any) && (workOrder?.supporterIds as string[]).includes(dbUser.id)) ||
+        (workOrder?.technicianName && workOrder.technicianName.includes(dbUser.name));
+
+      if (workOrder && !isAssigned) {
         throw new ForbiddenException('Access denied: You are not assigned to this work order.');
       }
     }

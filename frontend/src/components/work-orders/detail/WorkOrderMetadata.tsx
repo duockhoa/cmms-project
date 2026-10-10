@@ -82,19 +82,26 @@ export const WorkOrderMetadata: React.FC<any> = ({
             <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Ngày tạo</td>
             <td style={{ padding: '12px 0' }}>{new Date(wo.createdAt).toLocaleString('vi-VN')}</td>
           </tr>
-          <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-            <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mô tả sự cố</td>
-            <td style={{ padding: '12px 0' }}>{wo.description}</td>
-          </tr>
-          {wo.classificationResult && (
-            <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-              <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Kết quả phân loại</td>
-              <td style={{ padding: '12px 0' }}>
-                <span style={{ fontWeight: 600, color: '#3b82f6' }}>{wo.classificationResult === 'WORKSHOP_CONTINUE' ? 'Tự xử lý' : 'Yêu cầu hỗ trợ'}</span>
-                {wo.classificationNotes && <div style={{ fontSize: '13px', marginTop: '4px' }}>Ghi chú: {wo.classificationNotes}</div>}
-              </td>
-            </tr>
-          )}
+          {(() => {
+            const isSchedule = Boolean(wo.scheduleId || (wo.title && wo.title.startsWith('[Định kỳ]')));
+            return (
+              <>
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>{isSchedule ? 'Mô tả công việc' : 'Mô tả sự cố'}</td>
+                  <td style={{ padding: '12px 0' }}>{wo.description}</td>
+                </tr>
+                {!isSchedule && wo.classificationResult && (
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Kết quả phân loại</td>
+                    <td style={{ padding: '12px 0' }}>
+                      <span style={{ fontWeight: 600, color: '#3b82f6' }}>{wo.classificationResult === 'WORKSHOP_CONTINUE' ? 'Tự xử lý' : 'Yêu cầu hỗ trợ'}</span>
+                      {wo.classificationNotes && <div style={{ fontSize: '13px', marginTop: '4px' }}>Ghi chú: {wo.classificationNotes}</div>}
+                    </td>
+                  </tr>
+                )}
+              </>
+            );
+          })()}
         </tbody>
       </table>
     </div>
