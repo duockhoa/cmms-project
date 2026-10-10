@@ -52,12 +52,20 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
 }) => {
   const isWorkingStatus = ['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD'].includes(wo.status);
 
+  const eqName = wo.equipment?.name?.trim() || '';
+  const eqCode = wo.equipment?.code?.trim() || '';
+  const eqInfo = eqName ? `${eqName}${eqCode ? ` (${eqCode})` : ''}` : '';
+  const hasEquipmentInTitle = eqName && wo.title?.toLowerCase().includes(eqName.toLowerCase());
+  const displayTitle = hasEquipmentInTitle
+    ? wo.title
+    : `${wo.title}${eqInfo ? ` – ${eqInfo}` : ''}`;
+
   return (
     <>
       {/* Title Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
         <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1e3a8a' }}>
-          {wo.title} <span style={{ color: 'var(--text-muted)' }}>- {wo.orderCode}</span>
+          {displayTitle} <span style={{ color: 'var(--text-muted)' }}>– {wo.orderCode}</span>
         </h2>
         {onClose && (
           <button onClick={onClose} className="btn-icon">
@@ -69,7 +77,7 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
       {/* Top Header Card - Action Grid */}
       <div className="card" style={{ padding: '24px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
         <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a8a', textAlign: 'center', marginBottom: '24px' }}>
-          {wo.title} - {wo.orderCode}
+          {displayTitle} – {wo.orderCode}
         </h3>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center', alignItems: 'center' }}>
