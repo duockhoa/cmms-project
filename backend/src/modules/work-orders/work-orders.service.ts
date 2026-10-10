@@ -276,6 +276,7 @@ export class WorkOrdersService implements OnModuleInit {
           description: data.description,
           priority: data.priority || 'MEDIUM',
           status: 'PENDING',
+          handlingRoute: data.handlingRoute ? (data.handlingRoute as HandlingRoute) : undefined,
           technicianName: technicianName || null,
           assignedTechnicianId,
           assignedTechnicianIds: assignedTechnicianIds || undefined,

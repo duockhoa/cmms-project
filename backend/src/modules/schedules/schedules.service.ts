@@ -7,6 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { HandlingRoute } from '@prisma/client';
 import {
   CreateScheduleDto,
   UpdateScheduleDto,
@@ -694,6 +695,7 @@ export class SchedulesService implements OnModuleInit {
           description: schedule.description || schedule.title,
           priority: schedule.defaultPriority || 'MEDIUM',
           status: 'PENDING',
+          handlingRoute: HandlingRoute.TECHNICAL_MAINTENANCE_SUPPORT,
           technicianName: schedule.assignedTechnician?.name || null,
           scheduleId: id,
           scheduledDueDate,

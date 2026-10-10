@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsString, IsOptional, IsInt, IsPositive, IsArray } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsInt, IsPositive, IsArray, IsEnum } from 'class-validator';
+import { HandlingRoute } from '@prisma/client';
 
 export class CreateWorkOrderDto {
   @IsString()
@@ -20,6 +21,10 @@ export class CreateWorkOrderDto {
   @IsString()
   @IsOptional()
   priority?: string;
+
+  @IsEnum(HandlingRoute, { message: 'Tuyến xử lý không hợp lệ' })
+  @IsOptional()
+  handlingRoute?: HandlingRoute;
 
   @IsString()
   @IsOptional()

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Search, X, Cpu, Wrench, Calendar, CheckSquare, User, AlertCircle, Loader2 } from 'lucide-react';
+import { Search, X, Cpu, Wrench, Calendar, CheckSquare, User, AlertCircle, Loader2, Check } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { api } from '../../services/api';
 import { useToast } from '../common/Toast';
@@ -31,7 +31,7 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
   const [equipmentId, setEquipmentId] = useState('');
   const [plannedDate, setPlannedDate] = useState(defaultDate || new Date().toISOString().split('T')[0]);
   const [priority, setPriority] = useState('MEDIUM');
-  const [assignedTechnicianId, setAssignedTechnicianId] = useState('');
+  const [assignedTechnicianIds, setAssignedTechnicianIds] = useState<string[]>([]);
 
   // Equipment search dropdown state
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,7 +67,7 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
       setEquipmentId(equipmentList[0]?.id || '');
       setPlannedDate(defaultDate || new Date().toISOString().split('T')[0]);
       setPriority('MEDIUM');
-      setAssignedTechnicianId('');
+      setAssignedTechnicianIds([]);
       setSearchQuery('');
       setIsDropdownOpen(false);
       setTechSearchQuery('');
@@ -93,9 +93,15 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
     });
   }, [equipmentList, searchQuery]);
 
-  const selectedTechnician = useMemo(() => {
-    return technicians.find((t) => t.id === assignedTechnicianId);
-  }, [technicians, assignedTechnicianId]);
+  const selectedTechnicians = useMemo(() => {
+    return technicians.filter((t) => assignedTechnicianIds.includes(t.id));
+  }, [technicians, assignedTechnicianIds]);
+
+  const handleToggleTech = (techId: string) => {
+    setAssignedTechnicianIds((prev) =>
+      prev.includes(techId) ? prev.filter((id) => id !== techId) : [...prev, techId]
+    );
+  };
 
   const filteredTechnicians = useMemo(() => {
     if (!techSearchQuery.trim()) return technicians.slice(0, 80);
@@ -129,8 +135,10 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
         equipmentId,
         plannedStartDate: new Date(plannedDate).toISOString(),
         priority,
-        assignedTechnicianId: assignedTechnicianId || undefined,
-        handlingRoute: 'WORKSHOP_SELF_HANDLE',
+        assignedTechnicianId: assignedTechnicianIds[0] || undefined,
+        assignedTechnicianIds: assignedTechnicianIds.length > 0 ? assignedTechnicianIds : undefined,
+        technicianName: selectedTechnicians.map((t) => t.name).join(', ') || undefined,
+        handlingRoute: 'TECHNICAL_MAINTENANCE_SUPPORT',
       });
 
       toast.success('Thành công', 'Tạo lịch bảo trì thành công!');
@@ -362,25 +370,32 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
           </div>
         </div>
 
-        {/* Kỹ thuật viên phụ trách (Nhập và lọc) */}
+        {/* Kỹ thuật viên phụ trách (Chọn nhiều người) */}
         <div className="form-group" ref={techDropdownRef} style={{ position: 'relative' }}>
           <label className="form-label" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>Kỹ thuật viên phụ trách</span>
-            {assignedTechnicianId && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <User size={15} color="#2563eb" />
+              <span>Kỹ thuật viên phụ trách</span>
+              <span style={{ fontSize: '12px', fontWeight: 400, color: '#64748b' }}>
+                (có thể chọn nhiều người)
+              </span>
+            </span>
+            {assignedTechnicianIds.length > 0 && (
               <button
                 type="button"
-                onClick={() => setAssignedTechnicianId('')}
+                onClick={() => setAssignedTechnicianIds([])}
                 style={{
                   border: 'none',
                   background: 'none',
-                  color: '#64748b',
+                  color: '#ef4444',
                   fontSize: '11.5px',
                   cursor: 'pointer',
                   textDecoration: 'underline',
                   padding: 0,
+                  fontWeight: 500,
                 }}
               >
-                Hủy chọn (để trống)
+                Bỏ chọn tất cả ({assignedTechnicianIds.length})
               </button>
             )}
           </label>
@@ -390,12 +405,12 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '8px 12px',
+              padding: '6px 12px',
               border: isTechDropdownOpen ? '2px solid var(--primary, #2563eb)' : '1px solid var(--border-color, #cbd5e1)',
               borderRadius: '8px',
               backgroundColor: 'var(--bg-card, #ffffff)',
               cursor: 'pointer',
-              minHeight: '40px',
+              minHeight: '42px',
               transition: 'border-color 0.15s ease',
             }}
             onClick={() => {
@@ -403,46 +418,66 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
               setTimeout(() => techSearchInputRef.current?.focus(), 50);
             }}
           >
-            {selectedTechnician ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                <span
-                  style={{
-                    backgroundColor: '#eff6ff',
-                    color: '#2563eb',
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap',
-                    border: '1px solid #bfdbfe',
-                  }}
-                >
-                  {selectedTechnician.department || selectedTechnician.specialty || selectedTechnician.role || 'KTV'}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', flex: 1, padding: '2px 0' }}>
+              {selectedTechnicians.length > 0 ? (
+                selectedTechnicians.map((t) => (
+                  <span
+                    key={t.id}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      backgroundColor: '#eff6ff',
+                      color: '#1d4ed8',
+                      border: '1px solid #bfdbfe',
+                      fontWeight: 600,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span
+                      style={{
+                        backgroundColor: '#dbeafe',
+                        color: '#1e40af',
+                        padding: '1px 5px',
+                        borderRadius: '3px',
+                        fontSize: '10.5px',
+                      }}
+                    >
+                      {t.department || t.specialty || t.role || 'Cơ Điện'}
+                    </span>
+                    <span>{t.name}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleTech(t.id);
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        color: '#1d4ed8',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      title="Bỏ chọn"
+                    >
+                      <X size={13} />
+                    </button>
+                  </span>
+                ))
+              ) : (
+                <span style={{ color: 'var(--text-muted, #94a3b8)', fontSize: '13.5px' }}>
+                  -- Nhấn để chọn kỹ thuật viên phụ trách (chọn được nhiều người) --
                 </span>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13.5px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                  {selectedTechnician.name}
-                </span>
-              </div>
-            ) : (
-              <span style={{ color: 'var(--text-muted, #94a3b8)', fontSize: '13.5px' }}>
-                -- Nhập hoặc bấm để chọn kỹ thuật viên --
-              </span>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-              {selectedTechnician && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAssignedTechnicianId('');
-                  }}
-                  style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: '#94a3b8' }}
-                  title="Bỏ chọn"
-                >
-                  <X size={14} />
-                </button>
               )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, marginLeft: '8px' }}>
               <Search size={16} style={{ color: '#94a3b8' }} />
             </div>
           </div>
@@ -496,42 +531,20 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
                 )}
               </div>
 
-              <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                <div
-                  onClick={() => {
-                    setAssignedTechnicianId('');
-                    setIsTechDropdownOpen(false);
-                    setTechSearchQuery('');
-                  }}
-                  style={{
-                    padding: '8px 12px',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    color: '#64748b',
-                    borderBottom: '1px dashed #e2e8f0',
-                    backgroundColor: assignedTechnicianId === '' ? '#f8fafc' : 'transparent',
-                    fontStyle: 'italic',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = assignedTechnicianId === '' ? '#f8fafc' : 'transparent')}
-                >
-                  -- Chưa chỉ định (Phân công sau) --
-                </div>
-
+              <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
                 {filteredTechnicians.length === 0 ? (
                   <div style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '12.5px' }}>
                     Không tìm thấy kỹ thuật viên phù hợp
                   </div>
                 ) : (
                   filteredTechnicians.map((t) => {
-                    const isSelected = t.id === assignedTechnicianId;
+                    const isSelected = assignedTechnicianIds.includes(t.id);
                     return (
                       <div
                         key={t.id}
-                        onClick={() => {
-                          setAssignedTechnicianId(t.id);
-                          setIsTechDropdownOpen(false);
-                          setTechSearchQuery('');
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleTech(t.id);
                         }}
                         style={{
                           padding: '8px 12px',
@@ -541,7 +554,7 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          transition: 'background-color 0.15s ease',
+                          transition: 'background-color 0.1s ease',
                         }}
                         onMouseEnter={(e) => {
                           if (!isSelected) e.currentTarget.style.backgroundColor = '#f8fafc';
@@ -551,44 +564,74 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span
+                            style={{
+                              backgroundColor: '#eff6ff',
+                              color: '#2563eb',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              whiteSpace: 'nowrap',
+                              border: '1px solid #bfdbfe',
+                            }}
+                          >
+                            {t.department || t.specialty || t.role || 'Cơ Điện'}
+                          </span>
                           <span style={{ fontWeight: isSelected ? 700 : 500, fontSize: '13px', color: '#1e293b' }}>
                             {t.name}
                           </span>
-                          {t.department && (
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                backgroundColor: '#eff6ff',
-                                color: '#1d4ed8',
-                                padding: '1px 6px',
-                                borderRadius: '4px',
-                                border: '1px solid #dbeafe',
-                              }}
-                            >
-                              {t.department}
-                            </span>
-                          )}
-                          {(t.specialty || t.role) && (
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                backgroundColor: '#f1f5f9',
-                                color: '#475569',
-                                padding: '1px 6px',
-                                borderRadius: '4px',
-                              }}
-                            >
-                              {t.specialty || t.role}
-                            </span>
-                          )}
                         </div>
                         {isSelected && (
-                          <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: 600 }}>✓</span>
+                          <span style={{ fontSize: '11.5px', color: '#2563eb', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <Check size={14} /> Đã chọn
+                          </span>
                         )}
                       </div>
                     );
                   })
                 )}
+              </div>
+
+              <div
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: '#f8fafc',
+                  borderTop: '1px solid #e2e8f0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  Đã chọn: <strong style={{ color: '#2563eb' }}>{assignedTechnicianIds.length}</strong> người
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsTechDropdownOpen(false);
+                  }}
+                  style={{
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    backgroundColor: '#ffffff',
+                    padding: '3px 12px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    color: '#1e293b',
+                  }}
+                >
+                  Xong
+                </button>
               </div>
             </div>
           )}
