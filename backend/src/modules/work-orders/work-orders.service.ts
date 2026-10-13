@@ -299,7 +299,7 @@ export class WorkOrdersService implements OnModuleInit {
           entityId: workOrder.id,
           action: 'CREATE',
           fromStatus: null,
-          toStatus: 'PENDING',
+          toStatus: workOrder.status,
           comment: 'Tạo phiếu bảo trì mới',
         },
       });

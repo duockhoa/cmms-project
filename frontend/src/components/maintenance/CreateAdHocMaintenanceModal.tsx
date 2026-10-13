@@ -139,8 +139,6 @@ export const CreateAdHocMaintenanceModal: React.FC<CreateAdHocMaintenanceModalPr
         assignedTechnicianIds: assignedTechnicianIds.length > 0 ? assignedTechnicianIds : undefined,
         technicianName: selectedTechnicians.map((t) => t.name).join(', ') || undefined,
         handlingRoute: 'TECHNICAL_MAINTENANCE_SUPPORT',
-        classificationResult: 'MAINTENANCE_REQUIRED',
-        status: assignedTechnicianIds.length > 0 ? 'ASSIGNED' : 'PENDING',
       });
 
       toast.success('Thành công', 'Tạo lịch bảo trì thành công!');

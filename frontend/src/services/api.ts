@@ -176,6 +176,21 @@ function toQueryString(params?: Record<string, any>): string {
   return str ? `?${str}` : '';
 }
 
+export interface CreateWorkOrderPayload {
+  title: string;
+  equipmentId: string;
+  description: string;
+  requestId?: string;
+  priority?: string;
+  handlingRoute?: 'WORKSHOP_SELF_HANDLE' | 'TECHNICAL_MAINTENANCE_SUPPORT';
+  technicianName?: string;
+  assignedTechnicianId?: string;
+  assignedTechnicianIds?: string[];
+  supporterIds?: string[];
+  plannedStartDate?: string;
+  plannedEndDate?: string;
+}
+
 export const api = {
   // Analytics
   getDashboard: () => request('/analytics/dashboard'),
@@ -268,7 +283,7 @@ export const api = {
     request(`/work-orders/${id}/execution-logs`),
   createWorkOrderRepairLog: (id: string, body: { content: string; result?: string; notes?: string; adjustedLogId?: string; adjustmentReason?: string }) =>
     request(`/work-orders/${id}/execution-logs`, { method: 'POST', body: JSON.stringify(body) }),
-  createWorkOrder: (data: any) => request('/work-orders', { method: 'POST', body: JSON.stringify(data) }),
+  createWorkOrder: (data: CreateWorkOrderPayload) => request('/work-orders', { method: 'POST', body: JSON.stringify(data) }),
   updateWorkOrderStatus: (id: string, body: { status: string; expectedVersion?: number; failureCause?: string; solution?: string; technicianName?: string; workDone?: string; equipmentStatusAfter?: string; testResult?: string; conclusion?: string; recommendation?: string }) =>
     request(`/work-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) }),
   escalateWorkOrder: (id: string, body: { expectedVersion: number; reason: string }) =>
