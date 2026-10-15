@@ -45,6 +45,10 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
   const [resubmitFields, setResubmitFields] = useState<any>({});
   const [resubmitComment, setResubmitComment] = useState('');
 
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+
   const getActiveUserId = () => {
     const active = users.find((u: any) => u.isActive);
     return active ? active.id : (users[0]?.id || 'user-id');
@@ -210,21 +214,26 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
     }
   };
 
-  const handleCancel = async () => {
-    const reason = prompt('Nhập lý do hủy:');
-    if (reason) {
-      try {
-        await api.cancelRequest(req.id, {
-          reason: reason.trim(),
-          expectedVersion: req.version,
-          actedById: getActiveUserId(),
-        });
-        toast.success('Thành công', 'Đã hủy yêu cầu.');
-        onActionSuccess();
-        loadData();
-      } catch (err: any) {
-        toast.error('Lỗi', err.message);
-      }
+  const handleConfirmCancel = async () => {
+    if (!cancelReason.trim()) {
+      toast.error('Lỗi', 'Vui lòng nhập lý do hủy bản ghi.');
+      return;
+    }
+    try {
+      setIsCancelling(true);
+      await api.cancelRequest(req.id, {
+        reason: cancelReason.trim(),
+        expectedVersion: req.version,
+      });
+      toast.success('Thành công', 'Đã đánh dấu hủy bản ghi báo sự cố.');
+      setCancelModalOpen(false);
+      setCancelReason('');
+      onActionSuccess();
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi hủy yêu cầu', err.message);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -259,7 +268,10 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
     </button>
   );
 
-  const isLocked = req.status === 'CLOSED' || (req.workOrders && req.workOrders.length > 0);
+  const hasClosedWorkOrder = Boolean(req.workOrders?.some((wo: any) => ['CLOSED', 'VERIFIED'].includes(wo.status)));
+  const isOwner = Boolean(effectiveUser?.id && req.reporterId === effectiveUser.id && ['PENDING', 'RETURNED'].includes(req.status));
+  const canCancel = !['CANCELLED', 'CLOSED'].includes(req.status) && !hasClosedWorkOrder && (isGlobalManager || (can('requests:cancel') && isDepartmentMatch) || isOwner);
+  const isLocked = req.status === 'CLOSED' || req.status === 'CANCELLED' || (req.workOrders && req.workOrders.length > 0);
 
   return (
     <div className="request-detail-view" style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -282,7 +294,37 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
              Các thao tác
            </h3>
            
-           {req.status === 'CLOSED' ? (
+           {req.status === 'CANCELLED' ? (
+             <div style={{
+               display: 'flex',
+               flexDirection: 'column',
+               alignItems: 'center',
+               gap: '10px',
+               padding: '18px 24px',
+               backgroundColor: 'rgba(239, 68, 68, 0.08)',
+               border: '1px solid rgba(239, 68, 68, 0.3)',
+               borderRadius: '10px',
+               textAlign: 'center',
+               maxWidth: '620px',
+               margin: '0 auto',
+             }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '15px', color: '#dc2626' }}>
+                 <Ban size={18} />
+                 <span>Bản ghi sự cố đã bị đánh dấu hủy</span>
+               </div>
+               <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                 {req.cancelledReason && (
+                   <div style={{ marginBottom: '6px' }}>
+                     <strong>Lý do hủy:</strong> {req.cancelledReason}
+                   </div>
+                 )}
+                 <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                   {req.cancelledBy?.name && <span>Người hủy: <strong>{req.cancelledBy.name}</strong> • </span>}
+                   {req.cancelledAt && <span>Thời gian: {new Date(req.cancelledAt).toLocaleString('vi-VN')}</span>}
+                 </div>
+               </div>
+             </div>
+           ) : req.status === 'CLOSED' ? (
              <div style={{
                display: 'flex',
                flexDirection: 'column',
@@ -317,7 +359,7 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
                        <ActionButton onClick={handleReturn} icon={RotateCcw} label="Trả lại" color="#f59e0b" />
                      </>
                    )}
-                   {!canApprove && !canReject && (
+                   {!canApprove && !canReject && !canCancel && (
                      <div style={{ 
                        display: 'inline-flex', alignItems: 'center', gap: '8px', 
                        padding: '10px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', 
@@ -333,10 +375,11 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
                )}
 
                {req.status === 'RETURNED' && (
-                 <>
-                   <ActionButton onClick={openResubmit} icon={Send} label="Tái gửi" color="#3b82f6" />
-                   <ActionButton onClick={handleCancel} icon={Ban} label="Hủy" color="#ef4444" />
-                 </>
+                 <ActionButton onClick={openResubmit} icon={Send} label="Tái gửi" color="#3b82f6" />
+               )}
+
+               {canCancel && (
+                 <ActionButton onClick={() => setCancelModalOpen(true)} icon={Ban} label="Đánh dấu hủy" color="#ef4444" />
                )}
 
                {/* Thao tác Chỉnh sửa & Xóa - Chỉ cho phép khi chưa khóa và chưa có Work Order */}
@@ -348,7 +391,7 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
                  <ActionButton onClick={() => onDelete(req)} icon={Trash2} label="Xóa sự cố" color="#dc2626" />
                )}
 
-               {['APPROVED', 'REJECTED', 'CANCELLED'].includes(req.status) && (!onEdit || isLocked) && (
+               {['APPROVED', 'REJECTED'].includes(req.status) && (!onEdit || isLocked) && !canCancel && (
                  <div style={{ color: 'var(--text-muted)', fontSize: '14px', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '6px' }}>
                    {isLocked && <Lock size={14} />} Yêu cầu này đã được phê duyệt hoặc chuyển thành phiếu sửa chữa. Thao tác đã khóa.
                  </div>
@@ -720,6 +763,71 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
               <button className="btn btn-secondary" onClick={() => setResubmitModalOpen(false)}>Hủy</button>
               <button className="btn btn-primary" onClick={handleResubmitConfirm}>
                 <Send size={14} /> Tái gửi Yêu cầu
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {cancelModalOpen && (
+        <Modal
+          isOpen={cancelModalOpen}
+          onClose={() => { setCancelModalOpen(false); setCancelReason(''); }}
+          title="Đánh dấu hủy bản ghi sự cố"
+        >
+          <div style={{ padding: '6px 0' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+              Bạn đang thực hiện đánh dấu hủy bản ghi báo sự cố <strong>{req.requestCode}</strong> ({req.title}).
+            </p>
+            {req.workOrders && req.workOrders.length > 0 && (
+              <div style={{
+                padding: '10px 14px',
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: '8px',
+                fontSize: '12.5px',
+                color: '#b91c1c',
+                marginBottom: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <ShieldAlert size={18} style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Lưu ý:</strong> Báo cáo sự cố này đã sinh phiếu sửa chữa <strong>{req.workOrders.map((w: any) => w.orderCode).join(', ')}</strong>. Khi đánh dấu hủy sự cố, các phiếu sửa chữa này cũng sẽ <strong>tự động bị hủy</strong> và không hiện trên danh sách phiếu sửa chữa nữa.
+                </span>
+              </div>
+            )}
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label className="form-label" style={{ fontWeight: 600 }}>
+                Lý do đánh dấu hủy <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <textarea
+                className="form-textarea"
+                rows={3}
+                placeholder="Nhập chi tiết lý do hủy bản ghi báo sai..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+            <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => { setCancelModalOpen(false); setCancelReason(''); }}
+                disabled={isCancelling}
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleConfirmCancel}
+                disabled={isCancelling || !cancelReason.trim()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                {isCancelling ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
+                Xác nhận hủy
               </button>
             </div>
           </div>

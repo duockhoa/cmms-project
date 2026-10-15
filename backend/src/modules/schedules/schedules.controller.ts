@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus, Req } from '@nestjs/common';
 import { SchedulesService } from './schedules.service';
 import {
   CreateScheduleDto,
@@ -63,8 +63,11 @@ export class SchedulesController {
   }
 
   @Post(':id/cancel')
-  cancel(@Param('id') id: string, @Body() dto: CancelScheduleDto) {
-    return this.schedulesService.cancel(id, dto);
+  cancel(@Param('id') id: string, @Body() dto: CancelScheduleDto, @Req() req: any) {
+    if (!dto.actedById && req?.user?.id) {
+      dto.actedById = req.user.id;
+    }
+    return this.schedulesService.cancel(id, dto, req?.user);
   }
 
   @Post(':id/generate-work-order')

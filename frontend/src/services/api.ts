@@ -313,6 +313,8 @@ export const api = {
   addWorkOrderItem: (id: string, item: { inventoryItemId: string; quantity: number }) =>
     request(`/work-orders/${id}/items`, { method: 'POST', body: JSON.stringify(item) }),
   deleteWorkOrder: (id: string) => request(`/work-orders/${id}`, { method: 'DELETE' }),
+  cancelWorkOrder: (id: string, body: { reason: string; expectedVersion: number }) =>
+    request(`/work-orders/${id}/cancel`, { method: 'POST', body: JSON.stringify(body) }),
 
   // Schedules (Phase 3.7)
   getSchedules: (params?: any) =>

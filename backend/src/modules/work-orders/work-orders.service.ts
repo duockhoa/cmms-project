@@ -81,7 +81,13 @@ export class WorkOrdersService implements OnModuleInit {
   async findAll(query?: { status?: string; priority?: string; search?: string; equipmentId?: string; page?: string; limit?: string; handlerTeam?: string; technicianId?: string }) {
     const andConditions: any[] = [];
 
-    if (query?.status) andConditions.push({ status: query.status });
+    if (query?.status) {
+      if (query.status !== 'ALL') {
+        andConditions.push({ status: query.status });
+      }
+    } else {
+      andConditions.push({ status: { not: 'CANCELLED' } });
+    }
     if (query?.priority) andConditions.push({ priority: query.priority });
     if (query?.equipmentId) andConditions.push({ equipmentId: query.equipmentId });
     if (query?.search) {
@@ -196,6 +202,19 @@ export class WorkOrdersService implements OnModuleInit {
 
     if (actorContext && actorContext.role === 'TECHNICIAN' && !isAssigned) {
       throw new ForbiddenException('Bạn không được phân công thực hiện công việc này.');
+    }
+
+    if (wo.status === 'CANCELLED') {
+      const cancelLog = await this.prisma.workflowHistory.findFirst({
+        where: { entityType: 'WorkOrder', entityId: id, action: 'CANCEL' },
+        orderBy: { createdAt: 'desc' },
+        include: { actedBy: { select: { id: true, name: true } } },
+      });
+      if (cancelLog) {
+        (wo as any).cancelledReason = cancelLog.reason || cancelLog.comment;
+        (wo as any).cancelledAt = cancelLog.createdAt;
+        (wo as any).cancelledBy = cancelLog.actedBy;
+      }
     }
 
     return wo;
@@ -712,6 +731,22 @@ export class WorkOrdersService implements OnModuleInit {
         },
       });
 
+      if (actionName === 'CANCEL' && wo.scheduleId) {
+        try {
+          await tx.scheduleHistory.create({
+            data: {
+              scheduleId: wo.scheduleId,
+              workOrderId: wo.id,
+              action: 'CANCEL_WORK_ORDER',
+              reason: reason || 'Phiếu bảo trì định kỳ bị đánh dấu hủy',
+              actedById: actorContext?.id || null,
+            },
+          });
+        } catch (schHistErr) {
+          console.warn(`Lỗi ghi nhận lịch sử hủy phiếu vào kế hoạch bảo trì ${wo.scheduleId}:`, schHistErr);
+        }
+      }
+
       return tx.workOrder.findUnique({
         where: { id },
         include: { equipment: true, items: { include: { inventoryItem: true } }, request: true },
@@ -1106,6 +1141,34 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async cancel(id: string, dto: { reason: string; expectedVersion: number }, actorContext?: { id: string; role: string }) {
+    if (!dto.reason || !dto.reason.trim()) {
+      throw new BadRequestException('Lý do hủy là bắt buộc.');
+    }
+
+    const wo = await this.findOne(id);
+    if (wo.status === 'CANCELLED') {
+      throw new BadRequestException('Phiếu bảo trì này đã được đánh dấu hủy trước đó.');
+    }
+    if (['CLOSED', 'VERIFIED'].includes(wo.status)) {
+      throw new BadRequestException('Không thể hủy phiếu bảo trì đã nghiệm thu hoặc đóng.');
+    }
+
+    const actorId = actorContext?.id;
+    let actorUser: any = null;
+    if (actorId) {
+      actorUser = await this.prisma.user.findUnique({ where: { id: actorId }, include: { customRole: true } });
+    }
+
+    const isAssigned = Boolean(actorId && (
+      wo.assignedTechnicianId === actorId ||
+      (Array.isArray(wo.assignedTechnicianIds as any) && (wo.assignedTechnicianIds as string[]).includes(actorId))
+    ));
+    const isOwnerOrAssigned = Boolean(isAssigned && ['PENDING', 'ASSIGNED'].includes(wo.status));
+    const isPrivileged = isGlobalAdmin(actorUser) || hasPermission(actorUser, 'work_orders:cancel');
+
+    if (!isOwnerOrAssigned && !isPrivileged) {
+      throw new ForbiddenException('Bạn không có quyền đánh dấu hủy phiếu bảo trì này.');
+    }
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,

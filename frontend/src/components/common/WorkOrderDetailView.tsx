@@ -53,7 +53,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
     // Work Sessions
     mySession, sessionList, isStopSessionOpen, sessionLoading,
     handleStartSession, handleOpenStopSession, handleCloseStopSession, handleStopSessionSubmit,
-    sessionTotalHours, sessionUserSummary,
+    sessionTotalHours, sessionUserSummary, loadData,
   } = detail;
 
   if (loading || !wo) {
@@ -70,6 +70,8 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         isManagerOrAdmin={isManagerOrAdmin}
         isQA={isQA}
         onClose={onClose}
+        onReload={loadData}
+        onStatusChangeSuccess={onStatusChangeSuccess}
         setIsAssignExecutorOpen={setIsAssignExecutorOpen}
         setIsClassifyOpen={setIsClassifyOpen}
         setIsCompleteFormOpen={setIsCompleteFormOpen}

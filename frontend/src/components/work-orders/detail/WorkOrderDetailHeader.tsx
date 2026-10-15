@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ArrowRightLeft, CheckCircle2, Lock, Play, Square,
-  ShieldCheck, XOctagon, Loader2
+  ShieldCheck, XOctagon, Loader2, Ban
 } from 'lucide-react';
+import { usePermissions } from '../../../hooks/usePermissions';
+import { Modal } from '../../common/Modal';
+import { api } from '../../../services/api';
+import { useToast } from '../../common/Toast';
 
 const ActionButton = ({ onClick, disabled, icon: Icon, label, color }: any) => (
   <button
@@ -43,13 +47,56 @@ const ActionButton = ({ onClick, disabled, icon: Icon, label, color }: any) => (
 
 export const WorkOrderDetailHeader: React.FC<any> = ({
   actionLoading, canModify, isManagerOrAdmin, isQA,
-  onClose, setIsAssignExecutorOpen, setIsClassifyOpen, setIsCompleteFormOpen,
+  onClose, onReload, onStatusChangeSuccess, setIsAssignExecutorOpen, setIsClassifyOpen, setIsCompleteFormOpen,
   setIsEscalateOpen, setIsQaAcceptOpen,
   setIsQaRejectOpen, setIsRejectHandoverOpen, setIsWorkshopAcceptOpen,
   setQaComment, setQaRejectReason, setWorkshopComment, userUnitType, wo,
   // Work Session props
   mySession, sessionLoading, handleStartSession, handleOpenStopSession,
 }) => {
+  const { can, isAdmin, user: authUser } = usePermissions();
+  const toast = useToast();
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const isAssigned = Boolean(
+    authUser?.id && (
+      wo.assignedTechnicianId === authUser.id ||
+      (Array.isArray(wo.assignedTechnicianIds) && wo.assignedTechnicianIds.includes(authUser.id))
+    )
+  );
+  const canCancel = !['VERIFIED', 'CLOSED', 'CANCELLED'].includes(wo.status) && (
+    isAdmin ||
+    can('work_orders:cancel') ||
+    can('ALL') ||
+    can('*') ||
+    (['PENDING', 'ASSIGNED'].includes(wo.status) && (isAssigned || isManagerOrAdmin))
+  );
+
+  const handleConfirmCancel = async () => {
+    if (!cancelReason.trim()) {
+      toast.error('Lỗi', 'Vui lòng nhập lý do đánh dấu hủy phiếu bảo trì.');
+      return;
+    }
+    try {
+      setIsCancelling(true);
+      await api.cancelWorkOrder(wo.id, {
+        reason: cancelReason.trim(),
+        expectedVersion: wo.version,
+      });
+      toast.success('Thành công', `Đã đánh dấu hủy phiếu bảo trì ${wo.orderCode}.`);
+      setIsCancelModalOpen(false);
+      setCancelReason('');
+      if (onReload) onReload();
+      if (onStatusChangeSuccess) onStatusChangeSuccess();
+    } catch (err: any) {
+      toast.error('Lỗi hủy phiếu bảo trì', err.message);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const isWorkingStatus = ['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD'].includes(wo.status);
 
   const eqName = wo.equipment?.name?.trim() || '';
@@ -203,8 +250,97 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
             </div>
           )}
 
+          {wo.status === 'CANCELLED' && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '16px 20px',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '8px',
+              textAlign: 'center',
+              width: '100%',
+              maxWidth: '600px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: '#dc2626' }}>
+                <Ban size={18} />
+                <span>Phiếu bảo trì / sửa chữa đã bị đánh dấu hủy</span>
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                {wo.cancelledReason && (
+                  <div style={{ marginBottom: '4px' }}>
+                    <strong>Lý do hủy:</strong> {wo.cancelledReason}
+                  </div>
+                )}
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {wo.cancelledBy?.name && <span>Người hủy: <strong>{wo.cancelledBy.name}</strong> • </span>}
+                  {wo.cancelledAt && <span>Thời gian: {new Date(wo.cancelledAt).toLocaleString('vi-VN')}</span>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {canCancel && (
+            <ActionButton
+              onClick={() => setIsCancelModalOpen(true)}
+              disabled={actionLoading}
+              icon={Ban}
+              label="Đánh dấu hủy"
+              color="#ef4444"
+            />
+          )}
+
         </div>
       </div>
+
+      {/* ── MODAL ĐÁNH DẤU HỦY PHIẾU BẢO TRÌ ── */}
+      {isCancelModalOpen && (
+        <Modal
+          isOpen={isCancelModalOpen}
+          onClose={() => { setIsCancelModalOpen(false); setCancelReason(''); }}
+          title="Đánh dấu hủy phiếu bảo trì / sửa chữa"
+        >
+          <div style={{ padding: '6px 0' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+              Bạn đang thực hiện đánh dấu hủy phiếu <strong>{wo.orderCode}</strong> ({wo.title}) của thiết bị <strong>{wo.equipment?.name}</strong>. Phiếu sau khi hủy sẽ bị ẩn khỏi danh sách mặc định và chỉ xuất hiện khi lọc theo trạng thái "Đã hủy".
+            </p>
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label className="form-label" style={{ fontWeight: 600 }}>
+                Lý do đánh dấu hủy <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <textarea
+                className="form-textarea"
+                rows={3}
+                placeholder="Nhập chi tiết lý do hủy phiếu tạo sai..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+            <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => { setIsCancelModalOpen(false); setCancelReason(''); }}
+                disabled={isCancelling}
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleConfirmCancel}
+                disabled={isCancelling || !cancelReason.trim()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                {isCancelling ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
+                Xác nhận hủy
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 };

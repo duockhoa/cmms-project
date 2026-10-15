@@ -73,6 +73,6 @@ export class RequestsController {
 
   @Post(':id/cancel')
   cancelRequest(@Param('id') id: string, @Body() body: CancelRequestDto, @Req() req: any) {
-    return this.requestsService.cancelRequest(id, body, req.user.id);
+    return this.requestsService.cancelRequest(id, body, req.user);
   }
 }

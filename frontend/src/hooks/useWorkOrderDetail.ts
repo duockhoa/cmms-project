@@ -649,6 +649,6 @@ export const useWorkOrderDetail = ({
     // Work Sessions
     mySession, sessionList, isStopSessionOpen, sessionLoading,
     handleStartSession, handleOpenStopSession, handleCloseStopSession, handleStopSessionSubmit,
-    sessionTotalHours, sessionUserSummary, loadSessionsData,
+    sessionTotalHours, sessionUserSummary, loadSessionsData, loadData,
   };
 };

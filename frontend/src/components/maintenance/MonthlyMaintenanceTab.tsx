@@ -16,12 +16,16 @@ import {
   Wrench,
   Sparkles,
   RefreshCw,
+  Ban,
+  Loader2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { useToast } from '../common/Toast';
 import { TableSkeleton } from '../common/Skeleton';
 import { EmptyState } from '../common';
+import { Modal } from '../common/Modal';
+import { usePermissions } from '../../hooks/usePermissions';
 import { CreateAdHocMaintenanceModal } from './CreateAdHocMaintenanceModal';
 
 interface MonthlyMaintenanceTabProps {
@@ -47,7 +51,7 @@ interface MaintenanceItem {
   priority: string;
   technicianName?: string;
   technicianId?: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'READY_TO_GENERATE';
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'READY_TO_GENERATE' | 'CANCELLED';
   statusText: string;
   workOrderId?: string;
   workOrderCode?: string;
@@ -78,6 +82,13 @@ export const MonthlyMaintenanceTab: React.FC<MonthlyMaintenanceTabProps> = ({
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'SCHEDULED' | 'ADHOC'>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [technicianFilter, setTechnicianFilter] = useState<string>('ALL');
+
+  // Permissions & Cancel Modal
+  const { can, isAdmin } = usePermissions();
+  const canCancelWorkOrder = isAdmin || can('work_orders:cancel') || can('ALL') || can('*');
+  const [cancelModalItem, setCancelModalItem] = useState<MaintenanceItem | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Ad-hoc Modal
   const [isAdHocModalOpen, setIsAdHocModalOpen] = useState(false);
@@ -113,7 +124,7 @@ export const MonthlyMaintenanceTab: React.FC<MonthlyMaintenanceTabProps> = ({
       setLoading(true);
       const [schRes, woRes] = await Promise.all([
         api.getSchedules().catch(() => []),
-        api.getWorkOrders().catch(() => []),
+        api.getWorkOrders({ status: 'ALL' }).catch(() => []),
       ]);
 
       setSchedules(Array.isArray(schRes) ? schRes : (schRes?.data || []));
@@ -149,6 +160,33 @@ export const MonthlyMaintenanceTab: React.FC<MonthlyMaintenanceTabProps> = ({
 
       const itemDate = new Date(dateField);
       if (itemDate < monthStart || itemDate > monthEnd) return;
+
+      if (wo.status === 'CANCELLED') {
+        items.push({
+          id: `wo-${wo.id}`,
+          sourceType: wo.scheduleId ? 'SCHEDULED' : 'ADHOC',
+          code: wo.orderCode,
+          title: wo.title,
+          description: wo.description,
+          equipmentId: wo.equipmentId,
+          equipmentName: wo.equipment?.name || '---',
+          equipmentCode: wo.equipment?.code || '---',
+          location: wo.equipment?.location,
+          scheduledDate: itemDate,
+          dateStr: itemDate.toLocaleDateString('vi-VN'),
+          dayOfMonth: itemDate.getDate(),
+          priority: wo.priority || 'MEDIUM',
+          technicianName: wo.technicianName || wo.assignedTechnician?.name,
+          technicianId: wo.assignedTechnicianId || wo.assignedTechnician?.id,
+          status: 'CANCELLED',
+          statusText: 'Đã hủy',
+          workOrderId: wo.id,
+          workOrderCode: wo.orderCode,
+          scheduleId: wo.scheduleId,
+          isOverdue: false,
+        });
+        return;
+      }
 
       const isCompleted = ['COMPLETED', 'VERIFIED', 'CLOSED'].includes(wo.status);
       const isInProgress = wo.status === 'IN_PROGRESS';
@@ -257,7 +295,12 @@ export const MonthlyMaintenanceTab: React.FC<MonthlyMaintenanceTabProps> = ({
       if (typeFilter !== 'ALL' && item.sourceType !== typeFilter) return false;
 
       // Status Filter
-      if (statusFilter !== 'ALL') {
+      if (statusFilter === 'ALL') {
+        if (item.status === 'CANCELLED') return false;
+      } else if (statusFilter === 'CANCELLED') {
+        if (item.status !== 'CANCELLED') return false;
+      } else {
+        if (item.status === 'CANCELLED') return false;
         if (statusFilter === 'OVERDUE' && !item.isOverdue) return false;
         if (statusFilter === 'COMPLETED' && item.status !== 'COMPLETED') return false;
         if (statusFilter === 'IN_PROGRESS' && item.status !== 'IN_PROGRESS') return false;
@@ -279,11 +322,12 @@ export const MonthlyMaintenanceTab: React.FC<MonthlyMaintenanceTabProps> = ({
 
   // KPIs for the selected month
   const stats = useMemo(() => {
-    const total = monthlyItems.length;
-    const completed = monthlyItems.filter((i) => i.status === 'COMPLETED').length;
-    const inProgress = monthlyItems.filter((i) => i.status === 'IN_PROGRESS').length;
-    const pending = monthlyItems.filter((i) => i.status === 'PENDING' || i.status === 'READY_TO_GENERATE').length;
-    const overdue = monthlyItems.filter((i) => i.isOverdue).length;
+    const activeItems = monthlyItems.filter((i) => i.status !== 'CANCELLED');
+    const total = activeItems.length;
+    const completed = activeItems.filter((i) => i.status === 'COMPLETED').length;
+    const inProgress = activeItems.filter((i) => i.status === 'IN_PROGRESS').length;
+    const pending = activeItems.filter((i) => i.status === 'PENDING' || i.status === 'READY_TO_GENERATE').length;
+    const overdue = activeItems.filter((i) => i.isOverdue).length;
     return { total, completed, inProgress, pending, overdue };
   }, [monthlyItems]);
 
@@ -322,7 +366,35 @@ export const MonthlyMaintenanceTab: React.FC<MonthlyMaintenanceTabProps> = ({
     }
   };
 
+  const handleConfirmCancel = async () => {
+    if (!cancelModalItem || !cancelModalItem.workOrderId) return;
+    if (!cancelReason.trim()) {
+      toast.error('Lỗi', 'Vui lòng nhập lý do hủy lịch bảo trì.');
+      return;
+    }
+    try {
+      setIsCancelling(true);
+      const targetWo = workOrders.find((w) => w.id === cancelModalItem.workOrderId);
+      await api.cancelWorkOrder(cancelModalItem.workOrderId, {
+        reason: cancelReason.trim(),
+        expectedVersion: targetWo?.version || 1,
+      });
+      toast.success('Thành công', `Đã đánh dấu hủy lịch bảo trì ${cancelModalItem.code}.`);
+      setCancelModalItem(null);
+      setCancelReason('');
+      loadData();
+      if (onRefreshHistory) onRefreshHistory();
+    } catch (err: any) {
+      toast.error('Lỗi hủy lịch bảo trì', err.message);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const getStatusBadge = (item: MaintenanceItem) => {
+    if (item.status === 'CANCELLED') {
+      return { text: 'Đã hủy', bg: '#fee2e2', color: '#dc2626', border: '#fca5a5' };
+    }
     if (item.status === 'COMPLETED') {
       return { text: 'Đã hoàn thành', bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' };
     }
@@ -587,6 +659,7 @@ export const MonthlyMaintenanceTab: React.FC<MonthlyMaintenanceTabProps> = ({
               <option value="IN_PROGRESS">Đang thực hiện</option>
               <option value="COMPLETED">Đã hoàn thành</option>
               <option value="OVERDUE">Quá hạn</option>
+              <option value="CANCELLED">Đã hủy</option>
             </select>
           </div>
 
@@ -792,20 +865,42 @@ export const MonthlyMaintenanceTab: React.FC<MonthlyMaintenanceTabProps> = ({
                     {/* Thao tác */}
                     <td style={{ textAlign: 'center' }}>
                       {item.workOrderId ? (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => navigate('/work-orders')}
-                          title="Xem chi tiết phiếu sửa chữa"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontSize: '12px',
-                          }}
-                        >
-                          <FileText size={13} color="#2563eb" /> Xem phiếu
-                        </button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => navigate(`/work-orders?id=${item.workOrderId}`)}
+                            title="Xem chi tiết phiếu sửa chữa"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '12px',
+                            }}
+                          >
+                            <FileText size={13} color="#2563eb" /> Xem phiếu
+                          </button>
+                          {item.status !== 'CANCELLED' && item.status !== 'COMPLETED' && canCancelWorkOrder && (
+                            <button
+                              type="button"
+                              className="btn btn-danger btn-sm"
+                              onClick={() => {
+                                setCancelModalItem(item);
+                                setCancelReason('');
+                              }}
+                              title="Đánh dấu hủy bản sai"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '12px',
+                                padding: '4px 8px',
+                              }}
+                            >
+                              <Ban size={13} /> Hủy
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <button
                           type="button"
@@ -850,6 +945,53 @@ export const MonthlyMaintenanceTab: React.FC<MonthlyMaintenanceTabProps> = ({
         checklistTemplates={checklistTemplates}
         defaultDate={`${selectedYear}-${selectedMonth < 10 ? `0${selectedMonth}` : selectedMonth}-01`}
       />
+
+      {/* ── CANCEL AD-HOC / SCHEDULED MAINTENANCE MODAL ── */}
+      {cancelModalItem && (
+        <Modal
+          isOpen={Boolean(cancelModalItem)}
+          onClose={() => { setCancelModalItem(null); setCancelReason(''); }}
+          title="Đánh dấu hủy lịch bảo trì"
+        >
+          <div style={{ padding: '6px 0' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+              Bạn đang thực hiện đánh dấu hủy công việc bảo trì <strong>{cancelModalItem.code}</strong> ({cancelModalItem.title}) của thiết bị <strong>{cancelModalItem.equipmentName}</strong>.
+            </p>
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label className="form-label" style={{ fontWeight: 600 }}>
+                Lý do đánh dấu hủy <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <textarea
+                className="form-textarea"
+                rows={3}
+                placeholder="Nhập chi tiết lý do hủy lịch bảo trì tạo sai..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+            <div className="modal-footer" style={{ padding: 0, marginTop: '20px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => { setCancelModalItem(null); setCancelReason(''); }}
+                disabled={isCancelling}
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleConfirmCancel}
+                disabled={isCancelling || !cancelReason.trim()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                {isCancelling ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
+                Xác nhận hủy
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

@@ -21,12 +21,15 @@ import { SCHEDULE_STATUS, SCHEDULE_FREQUENCY_TYPE } from './schedules.constants'
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationEvents } from '../notifications/events/notification-events.constants';
 import { ScheduleWorkOrderGeneratedEvent } from '../notifications/events/schedule.events';
+import { EquipmentStatusService } from '../equipment/equipment-status.service';
+import { isGlobalAdmin, hasPermission } from '../../common/utils/rbac.helper';
 
 @Injectable()
 export class SchedulesService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private equipmentStatus: EquipmentStatusService,
   ) {}
 
   async onModuleInit() {
@@ -468,7 +471,7 @@ export class SchedulesService implements OnModuleInit {
   }
 
   // ─── CANCEL SCHEDULE ───
-  async cancel(id: string, dto: CancelScheduleDto) {
+  async cancel(id: string, dto: CancelScheduleDto, actorUser?: any) {
     if (!dto.reason || dto.reason.trim() === '') {
       throw new BadRequestException('Lý do hủy (reason) là bắt buộc');
     }
@@ -484,23 +487,54 @@ export class SchedulesService implements OnModuleInit {
         throw new BadRequestException(`Lịch bảo trì ở trạng thái ${schedule.status} không thể hủy`);
       }
 
-      await this.validateActedBy(tx, dto.actedById);
+      const actedUser = await this.validateActedBy(tx, dto.actedById);
+      const userToCheck = actorUser || actedUser;
+      if (!isGlobalAdmin(userToCheck) && !hasPermission(userToCheck, 'schedules:cancel') && userToCheck?.role !== 'MANAGER') {
+        throw new ForbiddenException('Bạn không có quyền đánh dấu hủy kế hoạch bảo trì này.');
+      }
 
       if (schedule.version !== dto.expectedVersion) {
         throw new ConflictException('Xung đột đồng thời: Bản ghi đã bị thay đổi bởi người dùng khác.');
       }
 
-      const openWO = await tx.workOrder.findFirst({
+      const now = new Date();
+
+      // Cascade cancel all active/open work orders generated from this schedule
+      const activeWorkOrders = await tx.workOrder.findMany({
         where: {
           scheduleId: id,
-          status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'INSPECTION', 'COMPLETED', 'VERIFIED'] },
+          status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'INSPECTION'] },
         },
       });
-      if (openWO) {
-        throw new ConflictException(`Không thể hủy lịch bảo trì vì vẫn còn Work Order mở (${openWO.orderCode} - Status: ${openWO.status})`);
+
+      if (activeWorkOrders.length > 0) {
+        for (const wo of activeWorkOrders) {
+          await tx.workOrder.update({
+            where: { id: wo.id },
+            data: {
+              status: 'CANCELLED',
+              version: { increment: 1 },
+              updatedAt: now,
+            },
+          });
+
+          await tx.workflowHistory.create({
+            data: {
+              entityType: 'WorkOrder',
+              entityId: wo.id,
+              action: 'CANCEL',
+              fromStatus: wo.status,
+              toStatus: 'CANCELLED',
+              comment: `Tự động hủy do Kế hoạch bảo trì ${schedule.scheduleCode} (${schedule.title}) bị đánh dấu hủy.`,
+              reason: dto.reason.trim(),
+              actedById: dto.actedById.trim(),
+            },
+          });
+        }
       }
 
-      const now = new Date();
+      await this.equipmentStatus.calculateAndSetStatus(schedule.equipmentId, tx);
+
       const res = await tx.maintenanceSchedule.updateMany({
         where: { id, version: dto.expectedVersion },
         data: {

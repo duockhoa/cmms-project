@@ -21,9 +21,15 @@ export class RequestsService {
     private eventEmitter: EventEmitter2,
   ) {}
 
-  async findAll(query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string }) {
+  async findAll(query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string; includeCancelled?: string }) {
     const where: any = {};
-    if (query?.status) where.status = query.status;
+    if (query?.status) {
+      if (query.status !== 'ALL') {
+        where.status = query.status;
+      }
+    } else if (query?.includeCancelled !== 'true') {
+      where.status = { not: 'CANCELLED' };
+    }
     if (query?.priority) where.priority = query.priority;
     if (query?.search) {
       where.OR = [
@@ -666,10 +672,18 @@ export class RequestsService {
     });
   }
 
-  // ─── CANCEL RETURNED REQUEST ───
-  async cancelRequest(id: string, body: { reason: string; expectedVersion: number }, actorId: string) {
+  async cancelRequest(id: string, body: { reason: string; expectedVersion: number }, actor: any) {
     if (!body.reason || body.reason.trim() === '') {
       throw new BadRequestException('Lý do hủy (reason) là bắt buộc.');
+    }
+
+    const actorId = typeof actor === 'string' ? actor : actor?.id;
+    let actorUser = typeof actor === 'object' && actor?.role ? actor : null;
+    if (!actorUser && actorId) {
+      actorUser = await this.prisma.user.findUnique({
+        where: { id: actorId },
+        include: { customRole: true },
+      });
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -679,21 +693,62 @@ export class RequestsService {
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
 
-      if (request.status !== 'RETURNED') {
-        throw new BadRequestException(`Chỉ được hủy yêu cầu ở trạng thái RETURNED (trong phạm vi Pha 3.5). Trạng thái hiện tại: ${request.status}`);
+      if (request.status === 'CANCELLED') {
+        throw new BadRequestException('Yêu cầu sự cố này đã được đánh dấu hủy trước đó.');
       }
 
       if (request.version !== body.expectedVersion) {
         throw new ConflictException('Xung đột đồng thời: Yêu cầu đã bị thay đổi bởi phiên làm việc khác.');
       }
 
-      // WO linkage check by real data
-      if (request.workOrders.length > 0) {
-        throw new ConflictException('Không thể hủy yêu cầu đã sinh Work Order.');
+      const isOwner = Boolean(actorId && request.reporterId === actorId && ['PENDING', 'RETURNED'].includes(request.status));
+      const isPrivileged = isGlobalAdmin(actorUser) || hasPermission(actorUser, 'requests:cancel');
+
+      if (!isOwner && !isPrivileged) {
+        throw new ForbiddenException('Bạn không có quyền đánh dấu hủy yêu cầu sự cố này.');
       }
 
-      // Validate actorId
-      await this.validateActedBy(tx, actorId);
+      if (!isOwner && !isGlobalAdmin(actorUser)) {
+        const deptCheck = canManageDepartmentRequest(actorUser, request.department, 'requests:cancel');
+        if (!deptCheck.allowed) {
+          throw new ForbiddenException(deptCheck.reason);
+        }
+      }
+
+      for (const wo of request.workOrders) {
+        if (['CLOSED', 'VERIFIED'].includes(wo.status)) {
+          throw new BadRequestException(`Không thể hủy yêu cầu sự cố vì phiếu sửa chữa ${wo.orderCode} đã nghiệm thu / hoàn thành đóng.`);
+        }
+      }
+
+      for (const wo of request.workOrders) {
+        if (['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'INSPECTION'].includes(wo.status)) {
+          await tx.workOrder.update({
+            where: { id: wo.id },
+            data: {
+              status: 'CANCELLED',
+              version: { increment: 1 },
+            },
+          });
+
+          await tx.workflowHistory.create({
+            data: {
+              entityType: 'WorkOrder',
+              entityId: wo.id,
+              action: 'CANCEL',
+              fromStatus: wo.status,
+              toStatus: 'CANCELLED',
+              reason: body.reason.trim(),
+              comment: `Hủy tự động do báo cáo sự cố ${request.requestCode} bị đánh dấu hủy sai`,
+              actedById: actorId || null,
+            },
+          });
+        }
+      }
+
+      if (actorId) {
+        await this.validateActedBy(tx, actorId);
+      }
 
       try {
         const updated = await tx.maintenanceRequest.update({
@@ -713,17 +768,16 @@ export class RequestsService {
             entityType: 'MaintenanceRequest',
             entityId: id,
             action: 'CANCEL',
-            fromStatus: 'RETURNED',
+            fromStatus: request.status,
             toStatus: 'CANCELLED',
             reason: body.reason.trim(),
-            comment: 'Hủy yêu cầu sửa chữa',
+            comment: 'Đánh dấu hủy bản ghi báo sự cố sai',
             actedById: actorId || null,
             requestVersionBefore: body.expectedVersion,
             requestVersionAfter: body.expectedVersion + 1,
           },
         });
 
-        // Recalculate Equipment status
         await this.equipmentStatus.calculateAndSetStatus(request.equipmentId, tx);
 
         return updated;
