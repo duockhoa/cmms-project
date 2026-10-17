@@ -73,8 +73,9 @@ export class WorkOrdersController {
     @Query('limit') limit?: string,
     @Query('handlerTeam') handlerTeam?: string,
     @Query('technicianId') technicianId?: string,
+    @Req() req?: any,
   ) {
-    return this.workOrdersService.findAll({ status, priority, search, equipmentId, page, limit, handlerTeam, technicianId });
+    return this.workOrdersService.findAll({ status, priority, search, equipmentId, page, limit, handlerTeam, technicianId }, req?.user);
   }
 
   @ApiStandardResponse({ summary: 'Lấy chi tiết work order', method: 'GET', path: '/work-orders/{id}' })

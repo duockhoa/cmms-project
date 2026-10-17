@@ -19,7 +19,8 @@ import {
 } from './dto/work-orders.dto';
 import { StartWorkOrderSessionDto, StopWorkOrderSessionDto } from './dto/work-order-session.dto';
 import { ExecutionLogActionType, PerformerUnitType, HandlingRoute } from '@prisma/client';
-import { hasPermission, isGlobalAdmin } from '../../common/utils/rbac.helper';
+import { hasPermission, isGlobalAdmin, UserWithPermissions } from '../../common/utils/rbac.helper';
+import { buildWorkOrderScopeWhere } from '../../common/utils/data-scope.helper';
 
 @Injectable()
 export class WorkOrdersService implements OnModuleInit {
@@ -78,8 +79,17 @@ export class WorkOrdersService implements OnModuleInit {
     }
   }
 
-  async findAll(query?: { status?: string; priority?: string; search?: string; equipmentId?: string; page?: string; limit?: string; handlerTeam?: string; technicianId?: string }) {
+  async findAll(
+    query?: { status?: string; priority?: string; search?: string; equipmentId?: string; page?: string; limit?: string; handlerTeam?: string; technicianId?: string },
+    actor?: UserWithPermissions | null,
+  ) {
     const andConditions: any[] = [];
+
+    // 1. Áp dụng Server-enforced Scope theo vai trò và phòng ban của người dùng
+    const scopeWhere = buildWorkOrderScopeWhere(actor);
+    if (scopeWhere && Object.keys(scopeWhere).length > 0) {
+      andConditions.push(scopeWhere);
+    }
 
     if (query?.status) {
       if (query.status !== 'ALL') {
@@ -139,6 +149,43 @@ export class WorkOrdersService implements OnModuleInit {
 
     const where = andConditions.length > 0 ? { AND: andConditions } : {};
 
+    const safeInclude = {
+      equipment: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          location: true,
+          department: true,
+          status: true,
+        },
+      },
+      request: {
+        select: {
+          id: true,
+          requestCode: true,
+          title: true,
+          priority: true,
+          status: true,
+          reporterName: true,
+          department: true,
+        },
+      },
+      items: {
+        include: {
+          inventoryItem: {
+            select: {
+              id: true,
+              itemCode: true,
+              name: true,
+              unit: true,
+              category: true,
+            },
+          },
+        },
+      },
+    };
+
     if (query?.page || query?.limit) {
       const page = Math.max(1, parseInt(query.page || '1', 10));
       const limit = Math.max(1, parseInt(query.limit || '10', 10));
@@ -151,11 +198,7 @@ export class WorkOrdersService implements OnModuleInit {
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
-          include: {
-            equipment: true,
-            request: true,
-            items: { include: { inventoryItem: true } },
-          },
+          include: safeInclude,
         })
       ]);
 
@@ -173,11 +216,7 @@ export class WorkOrdersService implements OnModuleInit {
     return this.prisma.workOrder.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: {
-        equipment: true,
-        request: true,
-        items: { include: { inventoryItem: true } },
-      },
+      include: safeInclude,
     });
   }
 

@@ -64,10 +64,21 @@ export class UsersController {
   async getUsers(
     @Query('role') role?: string,
     @Query('includeInactive') includeInactive?: string,
-    @Query('department') department?: string
+    @Query('department') department?: string,
+    @Req() req?: any,
   ) {
     const isIncludeInactive = includeInactive === 'true';
-    return this.usersService.getUsers(role, isIncludeInactive, department);
+    return this.usersService.getUsers(role, isIncludeInactive, department, req?.user);
+  }
+
+  @ApiStandardResponse({
+    summary: 'Lấy danh sách người dùng cho dropdown chọn người xử lý (an toàn, không lộ quyền riêng)',
+    method: 'GET',
+    path: '/users/assignees',
+  })
+  @Get('assignees')
+  async getAssignees(@Query('department') department?: string) {
+    return this.usersService.getAssignees(department);
   }
 
   @ApiStandardResponse({

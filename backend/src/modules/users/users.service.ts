@@ -34,7 +34,26 @@ export class UsersService {
     return Array.from(deptSet).filter(Boolean).sort((a, b) => a.localeCompare(b, 'vi'));
   }
 
-  async getUsers(role?: string, includeInactive = false, department?: string) {
+  async getAssignees(department?: string) {
+    const whereClause: any = { isActive: true };
+    if (department) {
+      whereClause.department = { contains: department };
+    }
+    return this.prisma.user.findMany({
+      where: whereClause,
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        department: true,
+        specialty: true,
+        status: true,
+        avatar: true,
+      },
+    });
+  }
+
+  async getUsers(role?: string, includeInactive = false, department?: string, currentUser?: any) {
     const whereClause: any = {};
     if (role) {
       whereClause.role = role;
@@ -46,12 +65,39 @@ export class UsersService {
       whereClause.department = { contains: department };
     }
 
+    const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN';
+
     const users = await this.prisma.user.findMany({
       where: whereClause,
       orderBy: { name: 'asc' },
-      include: {
-        customRole: true,
-      }
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        department: true,
+        specialty: true,
+        status: true,
+        avatar: true,
+        isActive: true,
+        createdAt: true,
+        roleId: isAdmin ? true : false,
+        customRole: isAdmin
+          ? {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                permissions: true,
+              },
+            }
+          : {
+              select: {
+                name: true,
+              },
+            },
+        customPermissions: isAdmin ? true : false,
+      },
     });
 
     // Compute active work orders dynamically

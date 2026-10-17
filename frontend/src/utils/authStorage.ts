@@ -100,9 +100,52 @@ export function isJwtExpired(token: string): boolean {
 }
 
 /**
+ * Extracts expiration timestamp (in milliseconds) from a JWT token, or null if opaque/unparseable.
+ */
+export function getTokenExpiry(token: string): number | null {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const decoded = JSON.parse(jsonPayload);
+    return decoded.exp ? decoded.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Retrieves the raw access token without validity/expiration checks.
+ */
+export function getRawAccessToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  let token = localStorage.getItem(TOKEN_KEY);
+  if (token) return token;
+  for (const altKey of ALT_TOKEN_KEYS) {
+    token = localStorage.getItem(altKey);
+    if (token) return token;
+  }
+  token = getCookie(TOKEN_KEY);
+  if (token) return token;
+  for (const altKey of ALT_TOKEN_KEYS) {
+    token = getCookie(altKey);
+    if (token) return token;
+  }
+  return null;
+}
+
+/**
  * Retrieves the current active access token.
  * Searches localStorage, then shared domain cookies.
- * Synchronizes between storage layers automatically and discards expired tokens.
+ * Synchronizes between storage layers automatically.
+ * Returns null if expired, but NEVER wipes refresh tokens!
  */
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -111,7 +154,6 @@ export function getAccessToken(): string | null {
   let token = localStorage.getItem(TOKEN_KEY);
   if (token) {
     if (isJwtExpired(token)) {
-      clearAuthTokens();
       return null;
     }
     return token;
@@ -122,7 +164,6 @@ export function getAccessToken(): string | null {
     token = localStorage.getItem(altKey);
     if (token) {
       if (isJwtExpired(token)) {
-        clearAuthTokens();
         return null;
       }
       localStorage.setItem(TOKEN_KEY, token);
@@ -142,7 +183,6 @@ export function getAccessToken(): string | null {
   // If found in cookie, synchronize into localStorage if not expired
   if (token) {
     if (isJwtExpired(token)) {
-      clearAuthTokens();
       return null;
     }
     localStorage.setItem(TOKEN_KEY, token);

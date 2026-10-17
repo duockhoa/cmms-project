@@ -1,4 +1,12 @@
-import { getAccessToken, getRefreshToken, saveAuthTokens, clearAuthTokens } from '../utils/authStorage';
+import {
+  getAccessToken,
+  getRefreshToken,
+  saveAuthTokens,
+  clearAuthTokens,
+  getRawAccessToken,
+  getTokenExpiry,
+  isJwtExpired,
+} from '../utils/authStorage';
 import { catalogCache } from './catalogCache';
 
 export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -6,8 +14,9 @@ const API_BASE = API_HOST + '/api/v1';
 const HRM_ROOT_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
 
 let refreshPromise: Promise<string | null> | null = null;
+let silentRefreshTimer: any = null;
 
-async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<string | null> {
   if (refreshPromise) {
     return refreshPromise;
   }
@@ -19,7 +28,7 @@ async function refreshAccessToken(): Promise<string | null> {
 
   refreshPromise = (async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
       const response = await fetch(`${HRM_ROOT_URL}/auth/refresh-token`, {
         method: 'POST',
@@ -29,7 +38,10 @@ async function refreshAccessToken(): Promise<string | null> {
       });
 
       if (!response.ok) {
-        throw new Error(`Refresh token HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        const err: any = new Error(errorData?.message || `Refresh token HTTP ${response.status}`);
+        err.status = response.status;
+        throw err;
       }
 
       const data = await response.json();
@@ -40,11 +52,20 @@ async function refreshAccessToken(): Promise<string | null> {
         throw new Error('No access token returned from refresh endpoint');
       }
 
-      saveAuthTokens(newAccessToken, newRefreshToken);
+      // Preserve existing refreshToken if not returned by server
+      saveAuthTokens(newAccessToken, newRefreshToken || refreshToken);
+      setupSilentRefresh();
       return newAccessToken;
-    } catch (error) {
+    } catch (error: any) {
       console.warn('Refresh token failed:', error);
-      clearAuthTokens();
+      // Only clear tokens if the refresh token was genuinely rejected by auth server (400/401)
+      if (
+        error?.status === 400 ||
+        error?.status === 401 ||
+        (error?.message && (error.message.includes('400') || error.message.includes('401')))
+      ) {
+        clearAuthTokens();
+      }
       return null;
     } finally {
       clearTimeout(timeoutId);
@@ -53,6 +74,68 @@ async function refreshAccessToken(): Promise<string | null> {
   })();
 
   return refreshPromise;
+}
+
+/**
+ * Ensures an active, valid access token is returned.
+ * If expired or missing but refresh token exists, proactively refreshes token before issuing request.
+ */
+export async function ensureValidAccessToken(): Promise<string | null> {
+  let token = getAccessToken();
+  if (!token && getRefreshToken()) {
+    token = await refreshAccessToken();
+  }
+  return token;
+}
+
+/**
+ * Proactive background refresh timer that renews access tokens 2 minutes before expiration
+ */
+export function setupSilentRefresh() {
+  if (typeof window === 'undefined') return;
+
+  if (silentRefreshTimer) {
+    clearTimeout(silentRefreshTimer);
+    silentRefreshTimer = null;
+  }
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return;
+
+  const rawToken = getRawAccessToken();
+  if (!rawToken) {
+    refreshAccessToken();
+    return;
+  }
+
+  const expMs = getTokenExpiry(rawToken);
+  if (!expMs) return;
+
+  const now = Date.now();
+  // Refresh 2 minutes before expiration, or in 5 seconds if already near expiration
+  const delay = Math.max(5000, expMs - now - 2 * 60 * 1000);
+
+  silentRefreshTimer = setTimeout(async () => {
+    const res = await refreshAccessToken();
+    if (res) {
+      setupSilentRefresh();
+    }
+  }, delay);
+}
+
+// Proactive refresh on tab visibility change or initial module load
+if (typeof window !== 'undefined') {
+  setupSilentRefresh();
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      const refreshToken = getRefreshToken();
+      const rawToken = getRawAccessToken();
+      if (refreshToken && (!rawToken || isJwtExpired(rawToken))) {
+        refreshAccessToken().then(() => setupSilentRefresh());
+      }
+    }
+  });
 }
 
 let cachedMeData: any = null;
@@ -76,7 +159,7 @@ function handleAuthFailure() {
 }
 
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
-  let token = getAccessToken();
+  let token = await ensureValidAccessToken();
   const headers: any = {
     'Content-Type': 'application/json',
     ...options.headers
@@ -103,7 +186,7 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
-  let token = getAccessToken();
+  let token = await ensureValidAccessToken();
 
   const headers: any = {
     'Content-Type': 'application/json',
@@ -449,8 +532,8 @@ export const api = {
     request(`/attachments?entityType=${entityType}&entityId=${entityId}`),
   deleteAttachment: (id: string) =>
     request(`/attachments/${id}`, { method: 'DELETE' }),
-  uploadAttachment: (formData: FormData) => {
-    const token = getAccessToken();
+  uploadAttachment: async (formData: FormData) => {
+    const token = await ensureValidAccessToken();
     const headers: any = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;

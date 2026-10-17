@@ -21,8 +21,9 @@ export class RequestsController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Req() req?: any,
   ) {
-    return this.requestsService.findAll({ status, priority, search, page, limit });
+    return this.requestsService.findAll({ status, priority, search, page, limit }, req?.user);
   }
 
   @Get(':id')

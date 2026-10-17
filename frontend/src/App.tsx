@@ -5,7 +5,8 @@ import { Navbar } from './components/layout/Navbar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ToastProvider } from './components/common/Toast';
-import { extractAndSaveTokensFromUrl, getAccessToken } from './utils/authStorage';
+import { extractAndSaveTokensFromUrl, getAccessToken, getRefreshToken } from './utils/authStorage';
+import { refreshAccessToken } from './services/api';
 import { ProtectedRoute, SmartHomeRoute } from './components/common/ProtectedRoute';
 import { SocketProvider } from './context/SocketContext';
 
@@ -72,17 +73,49 @@ const queryClient = new QueryClient({
   },
 });
 
-// Guard: redirect to /login if not authenticated
+// Guard: redirect to /login if not authenticated, with seamless token refresh fallback
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   // Intercept incoming tokens from query param or hash fragment (e.g., from Central Portal / SSO)
   extractAndSaveTokensFromUrl();
 
+  const [isVerifying, setIsVerifying] = useState(() => {
+    const token = getAccessToken();
+    const refreshToken = getRefreshToken();
+    return !token && Boolean(refreshToken);
+  });
+
+  useEffect(() => {
+    const token = getAccessToken();
+    const refreshToken = getRefreshToken();
+
+    if (!token && refreshToken) {
+      let isMounted = true;
+      refreshAccessToken()
+        .then(() => {
+          if (isMounted) setIsVerifying(false);
+        })
+        .catch(() => {
+          if (isMounted) setIsVerifying(false);
+        });
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      setIsVerifying(false);
+    }
+  }, [location.pathname]);
+
+  if (isVerifying) {
+    return <PageLoadingFallback />;
+  }
+
   // Check active token from localStorage or shared root domain cookie (*.dkpharma.io.vn)
   const token = getAccessToken();
+  const refreshToken = getRefreshToken();
 
-  if (!token) {
+  if (!token && !refreshToken) {
     const redirectTarget = location.pathname + location.search;
     return <Navigate to={`/login?redirect=${encodeURIComponent(redirectTarget)}`} replace />;
   }

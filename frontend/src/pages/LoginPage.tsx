@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 
-import { extractAndSaveTokensFromUrl, getAccessToken, saveAuthTokens } from '../utils/authStorage';
-import { invalidateMeCache } from '../services/api';
+import { extractAndSaveTokensFromUrl, getAccessToken, getRefreshToken, saveAuthTokens } from '../utils/authStorage';
+import { invalidateMeCache, refreshAccessToken, setupSilentRefresh } from '../services/api';
 import { invalidatePermissionsCache } from '../hooks/usePermissions';
 
 const HRM_API_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
@@ -19,16 +19,38 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Auto-login if token present in URL or shared root domain cookies (*.dkpharma.io.vn)
+  // Auto-login if token present in URL or shared root domain cookies (*.dkpharma.io.vn) or refreshable
   useEffect(() => {
     extractAndSaveTokensFromUrl();
     const token = getAccessToken();
     if (token) {
       invalidateMeCache();
       invalidatePermissionsCache();
+      setupSilentRefresh();
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
       window.location.href = redirectTo;
+      return;
+    }
+
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      setIsLoading(true);
+      refreshAccessToken()
+        .then((newToken) => {
+          setIsLoading(false);
+          if (newToken) {
+            invalidateMeCache();
+            invalidatePermissionsCache();
+            setupSilentRefresh();
+            const params = new URLSearchParams(window.location.search);
+            const redirectTo = params.get('redirect') || '/';
+            window.location.href = redirectTo;
+          }
+        })
+        .catch(() => {
+          setIsLoading(false);
+        });
     }
   }, []);
 
@@ -65,6 +87,7 @@ export function LoginPage() {
 
       // Save tokens to both localStorage AND shared domain cookies (*.dkpharma.io.vn)
       saveAuthTokens(accessToken, refreshToken);
+      setupSilentRefresh();
       invalidateMeCache();
       invalidatePermissionsCache();
 

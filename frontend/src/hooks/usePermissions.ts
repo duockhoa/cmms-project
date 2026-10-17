@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
-import { getAccessToken } from '../utils/authStorage';
+import { getAccessToken, getRefreshToken } from '../utils/authStorage';
 
 interface PermissionsState {
   user: any | null;
@@ -55,25 +55,40 @@ export const usePermissions = () => {
 
   useEffect(() => {
     let isMounted = true;
-    fetchPermissionsProfile()
-      .then((data) => {
-        if (!isMounted) return;
-        const role = data.user?.role?.toUpperCase();
-        const isAdminUser = role === 'ADMIN' || role === 'SUPER_ADMIN' || data.permissions.includes('ALL');
-        setState({
-          user: data.user,
-          permissions: data.permissions,
-          isAdmin: isAdminUser,
-          loading: false,
+    let retryTimer: any = null;
+
+    const loadProfile = (attempt = 1) => {
+      fetchPermissionsProfile()
+        .then((data) => {
+          if (!isMounted) return;
+          const role = data.user?.role?.toUpperCase();
+          const isAdminUser = role === 'ADMIN' || role === 'SUPER_ADMIN' || data.permissions.includes('ALL');
+          setState({
+            user: data.user,
+            permissions: data.permissions,
+            isAdmin: isAdminUser,
+            loading: false,
+          });
+        })
+        .catch((err) => {
+          if (!isMounted) return;
+          // If tokens exist and this is attempt 1, retry once after 1.2s before giving up
+          if (attempt < 2 && (getAccessToken() || getRefreshToken())) {
+            invalidatePermissionsCache();
+            retryTimer = setTimeout(() => {
+              if (isMounted) loadProfile(attempt + 1);
+            }, 1200);
+            return;
+          }
+          setState((prev) => ({ ...prev, loading: false }));
         });
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setState((prev) => ({ ...prev, loading: false }));
-      });
+    };
+
+    loadProfile();
 
     return () => {
       isMounted = false;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, []);
 

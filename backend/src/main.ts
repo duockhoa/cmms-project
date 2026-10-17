@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { CustomLogger } from './common/logger/custom.logger';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as compression from 'compression';
+import { SanitizeResponseInterceptor } from './common/interceptors/sanitize-response.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -31,6 +32,9 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  // Global data sanitization interceptor to prevent internal/sensitive field leakage
+  app.useGlobalInterceptors(new SanitizeResponseInterceptor());
 
   // API versioning - all routes prefixed with /api/v1
   app.setGlobalPrefix('api/v1');

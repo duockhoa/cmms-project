@@ -3,7 +3,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
 import { HandlingRoute } from '@prisma/client';
 import { ApproveRequestDto } from './dto/approve-request.dto';
-import { canManageDepartmentRequest, hasPermission, isGlobalAdmin } from '../../common/utils/rbac.helper';
+import { canManageDepartmentRequest, hasPermission, isGlobalAdmin, UserWithPermissions } from '../../common/utils/rbac.helper';
+import { buildRequestScopeWhere } from '../../common/utils/data-scope.helper';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationEvents } from '../notifications/events/notification-events.constants';
 import {
@@ -21,23 +22,72 @@ export class RequestsService {
     private eventEmitter: EventEmitter2,
   ) {}
 
-  async findAll(query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string; includeCancelled?: string }) {
-    const where: any = {};
+  async findAll(
+    query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string; includeCancelled?: string },
+    actor?: UserWithPermissions | null,
+  ) {
+    const andConditions: any[] = [];
+
+    // 1. Áp dụng Server-enforced Scope theo vai trò và phòng ban của người dùng
+    const scopeWhere = buildRequestScopeWhere(actor);
+    if (scopeWhere && Object.keys(scopeWhere).length > 0) {
+      andConditions.push(scopeWhere);
+    }
+
+    // 2. Áp dụng bộ lọc từ query params của client
     if (query?.status) {
       if (query.status !== 'ALL') {
-        where.status = query.status;
+        andConditions.push({ status: query.status });
       }
     } else if (query?.includeCancelled !== 'true') {
-      where.status = { not: 'CANCELLED' };
+      andConditions.push({ status: { not: 'CANCELLED' } });
     }
-    if (query?.priority) where.priority = query.priority;
+    if (query?.priority) andConditions.push({ priority: query.priority });
     if (query?.search) {
-      where.OR = [
-        { title: { contains: query.search } },
-        { requestCode: { contains: query.search } },
-        { reporterName: { contains: query.search } },
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: query.search } },
+          { requestCode: { contains: query.search } },
+          { reporterName: { contains: query.search } },
+        ],
+      });
     }
+
+    const where: any = andConditions.length > 0 ? { AND: andConditions } : {};
+
+    // Chuẩn hóa danh sách các trường được phép trả về (Selective Projection)
+    // Loại bỏ hoàn toàn mảng UUID, mã thợ, chi phí, version nội bộ
+    const safeInclude = {
+      equipment: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          location: true,
+          department: true,
+          status: true,
+        },
+      },
+      functionalUnit: {
+        include: { libraryItem: true },
+      },
+      reporter: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          department: true,
+          avatar: true,
+        },
+      },
+      workOrders: {
+        select: {
+          id: true,
+          orderCode: true,
+          status: true,
+        },
+      },
+    };
 
     if (query?.page || query?.limit) {
       const page = Math.max(1, parseInt(query.page || '1', 10));
@@ -51,13 +101,8 @@ export class RequestsService {
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
-          include: {
-            equipment: true,
-            functionalUnit: { include: { libraryItem: true } },
-            reporter: true,
-            workOrders: true,
-          },
-        })
+          include: safeInclude,
+        }),
       ]);
 
       return {
@@ -66,31 +111,40 @@ export class RequestsService {
           total,
           page,
           limit,
-          totalPages: Math.ceil(total / limit)
-        }
+          totalPages: Math.ceil(total / limit),
+        },
       };
     }
 
     return this.prisma.maintenanceRequest.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: {
-        equipment: true,
-        functionalUnit: { include: { libraryItem: true } },
-        reporter: true,
-        workOrders: true,
-      },
+      include: safeInclude,
     });
   }
 
   async findOne(id: string) {
     const request = await this.prisma.maintenanceRequest.findUnique({
       where: { id },
-      include: { 
-        equipment: true, 
+      include: {
+        equipment: true,
         functionalUnit: { include: { libraryItem: true } },
-        reporter: true,
-        workOrders: true 
+        reporter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            department: true,
+            avatar: true,
+          },
+        },
+        workOrders: {
+          select: {
+            id: true,
+            orderCode: true,
+            status: true,
+          },
+        },
       },
     });
     if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');

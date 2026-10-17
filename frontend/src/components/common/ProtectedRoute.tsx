@@ -1,6 +1,6 @@
 import { Navigate, useNavigate } from 'react-router-dom';
 import { usePermissions } from '../../hooks/usePermissions';
-import { getAccessToken } from '../../utils/authStorage';
+import { getAccessToken, getRefreshToken } from '../../utils/authStorage';
 import { ShieldAlert, ArrowLeft, Home } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -40,7 +40,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permission, chil
     );
   }
 
-  if (!user && !getAccessToken()) {
+  if (!user && !getAccessToken() && !getRefreshToken()) {
     const currentPath = window.location.pathname + window.location.search;
     return <Navigate to={`/login?redirect=${encodeURIComponent(currentPath)}`} replace />;
   }
@@ -160,7 +160,7 @@ export const SmartHomeRoute: React.FC<{ dashboardComponent: React.ReactNode }> =
     );
   }
 
-  if (!user && !getAccessToken()) {
+  if (!user && !getAccessToken() && !getRefreshToken()) {
     const currentPath = window.location.pathname + window.location.search;
     return <Navigate to={`/login?redirect=${encodeURIComponent(currentPath)}`} replace />;
   }
