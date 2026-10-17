@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bell, CheckCheck } from 'lucide-react';
 import { api } from '../../services/api';
 import { getAccessToken } from '../../utils/authStorage';
-import { io, Socket } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
 
 interface NotificationDropdownProps {
   currentUser?: any;
@@ -27,41 +27,28 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ curr
     }
   };
 
+  const { socket } = useSocket();
+
   useEffect(() => {
-    if (currentUser?.id && getAccessToken()) {
+    if (!currentUser?.id && getAccessToken()) {
       fetchNotifications();
     }
   }, [currentUser?.id]);
 
-  // WebSocket real-time listener
+  // WebSocket real-time listener using shared socket
   useEffect(() => {
-    if (!currentUser?.id) return;
+    if (!socket) return;
 
-    // Xác định socket URL: Nếu chạy localhost thì dùng port 3001, nếu production thì dùng cùng origin qua Nginx reverse proxy
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const socketUrl = isLocalhost
-      ? `${window.location.protocol}//${window.location.hostname}:3001/notifications`
-      : `${window.location.origin}/notifications`;
-
-    const socket: Socket = io(socketUrl, {
-      query: {
-        userId: currentUser.id,
-        role: currentUser.role,
-        department: currentUser.department || '',
-      },
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 3,
-      timeout: 5000,
-    });
-
-    socket.on('notification', (newNotification: any) => {
+    const handleNotification = (newNotification: any) => {
       setNotifications((prev) => [newNotification, ...prev]);
-    });
+    };
+
+    socket.on('notification', handleNotification);
 
     return () => {
-      socket.disconnect();
+      socket.off('notification', handleNotification);
     };
-  }, [currentUser]);
+  }, [socket]);
 
   // Click outside to close
   useEffect(() => {

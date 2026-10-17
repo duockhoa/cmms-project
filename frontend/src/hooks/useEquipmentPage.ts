@@ -4,6 +4,7 @@ import { api, fetchWithAuth, API_HOST as API_BASE } from '../services/api';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { useModal } from './useModal';
 import { printBatchQRTags, printSingleQRTag } from '../utils/qrPrintHelper';
+import { useRealtimeSync } from './useRealtimeSync';
 
 export function useEquipmentPage() {
   const navigate = useNavigate();
@@ -65,6 +66,9 @@ export function useEquipmentPage() {
   useEffect(() => {
     loadEquipment();
   }, [search, categoryFilter, departmentFilter, statusFilter, page]);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['EQUIPMENT'], loadEquipment);
 
   useEffect(() => {
     // Fetch categories and departments for filter dropdown on mount

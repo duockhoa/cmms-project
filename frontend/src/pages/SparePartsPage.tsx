@@ -23,6 +23,7 @@ import { Tabs, TabItem } from '../components/common/Tabs';
 import { ReceiptsTab } from '../components/inventory/ReceiptsTab';
 import { IssuesTab } from '../components/inventory/IssuesTab';
 import { StockReportTab } from '../components/inventory/StockReportTab';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
 const DEFAULT_CATEGORIES = [
   'Linh kiện tiêu hao',
@@ -95,6 +96,9 @@ export const SparePartsPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [search]);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['INVENTORY'], loadData);
 
   useEffect(() => {
     // Nạp danh sách thiết bị để chọn liên kết BOM

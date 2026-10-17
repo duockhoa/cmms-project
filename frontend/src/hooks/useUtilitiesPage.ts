@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { usePermissions } from './usePermissions';
 import { printBatchQRTags } from '../utils/qrPrintHelper';
+import { useRealtimeSync } from './useRealtimeSync';
 
 export const useUtilitiesPage = () => {
   const navigate = useNavigate();
@@ -265,6 +266,14 @@ export const useUtilitiesPage = () => {
       loadCumulativeReport();
     }
   }, [activeTab, cumulativeType, cumulativeMonth, cumulativeYear]);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['UTILITY'], () => {
+    loadData();
+    if (activeTab === 'cumulative') {
+      loadCumulativeReport();
+    }
+  });
 
   useEffect(() => {
     if (activeTab === 'readings') {

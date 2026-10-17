@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useToast } from '../components/common/Toast';
 import { usePermissions } from './usePermissions';
+import { useRealtimeSync } from './useRealtimeSync';
 
 export function useRequestsPage() {
   const { can } = usePermissions();
@@ -227,6 +228,9 @@ export function useRequestsPage() {
       window.removeEventListener('app:navigate-menu', handleMenuClick);
     };
   }, [loadData, setSearchParams]);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['REQUEST'], loadData);
 
   const handleCreate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

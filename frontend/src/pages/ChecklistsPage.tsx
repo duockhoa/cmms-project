@@ -5,6 +5,7 @@ import { ClipboardCheck, Eye, ListChecks, Plus, ShieldCheck } from 'lucide-react
 import { useToast } from '../components/common/Toast';
 import { useNavigate } from 'react-router-dom';
 import { EmptyState, FilterBar, KpiCard, PageHeader, SearchInput } from '../components/common';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
 export const ChecklistsPage: React.FC = () => {
   const [templates, setTemplates] = useState<any[]>([]);
@@ -39,6 +40,9 @@ export const ChecklistsPage: React.FC = () => {
       .then(cats => setCategoriesList(cats || []))
       .catch(() => []);
   }, []);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['CHECKLIST'], loadTemplates);
 
   const handleCreateTemplate = async (e: React.FormEvent) => {
     e.preventDefault();

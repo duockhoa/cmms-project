@@ -56,6 +56,12 @@ export class NotificationEventListener {
 
       if (!location) return;
 
+      // Realtime Data Change notification for all clients
+      this.notifications.notifyDataChange('REQUEST', 'CREATED', {
+        id: request.id,
+        department: location.name,
+      });
+
       // In-App: Notify managers of this department
       await this.notifications.createNotification(
         null,
@@ -133,6 +139,10 @@ export class NotificationEventListener {
 
       const orderCode = workOrder.orderCode;
       const adminEmails = await this.getAdminEmails();
+
+      // Realtime Data Change notification
+      this.notifications.notifyDataChange('REQUEST', 'UPDATED', { id: requestId });
+      this.notifications.notifyDataChange('WORK_ORDER', 'CREATED', { id: workOrder.id });
 
       if (isExternalTransfer) {
         const targetDept = targetDepartment || 'Bộ phận kỹ thuật';
@@ -261,6 +271,8 @@ export class NotificationEventListener {
       });
       if (!fullReq) return;
 
+      this.notifications.notifyDataChange('REQUEST', 'UPDATED', { id: requestId });
+
       if (fullReq.reporterId) {
         await this.notifications.createNotification(
           fullReq.reporterId,
@@ -309,6 +321,8 @@ export class NotificationEventListener {
       });
       if (!fullReq) return;
 
+      this.notifications.notifyDataChange('REQUEST', 'UPDATED', { id: requestId });
+
       if (fullReq.reporterId) {
         await this.notifications.createNotification(
           fullReq.reporterId,
@@ -356,6 +370,15 @@ export class NotificationEventListener {
     try {
       const { workOrder: wo, actionName, comment, reason } = event;
       if (!wo) return;
+
+      // Realtime Data Change notification
+      this.notifications.notifyDataChange('WORK_ORDER', 'STATUS_CHANGED', {
+        id: wo.id,
+        metadata: { actionName, status: wo.status },
+      });
+      if (wo.requestId) {
+        this.notifications.notifyDataChange('REQUEST', 'UPDATED', { id: wo.requestId });
+      }
 
       const orderCode = wo.orderCode;
       const equipName = wo.equipment ? `${wo.equipment.name} (${wo.equipment.code})` : 'Thiết bị';
@@ -800,6 +823,8 @@ export class NotificationEventListener {
       const { order } = event;
       if (!order) return;
 
+      this.notifications.notifyDataChange('FABRICATION', 'UPDATED', { id: order.id });
+
       const targetUserIds = new Set<string>();
       if (order.assignedTechnicianId) targetUserIds.add(order.assignedTechnicianId);
 
@@ -876,6 +901,8 @@ export class NotificationEventListener {
     try {
       const { updated, existing, dto, auditAction, auditReason } = event;
       if (!updated) return;
+
+      this.notifications.notifyDataChange('FABRICATION', 'UPDATED', { id: updated.id });
 
       const orderCode = updated.orderCode;
       const title = updated.title;
@@ -1053,7 +1080,12 @@ export class NotificationEventListener {
   async handleScheduleWoGenerated(event: ScheduleWorkOrderGeneratedEvent) {
     try {
       const { schedule, createdWO } = event;
-      if (!createdWO || !schedule?.assignedTechnicianId) return;
+      if (!createdWO) return;
+
+      this.notifications.notifyDataChange('MAINTENANCE_SCHEDULE', 'UPDATED', { id: schedule?.id });
+      this.notifications.notifyDataChange('WORK_ORDER', 'CREATED', { id: createdWO.id });
+
+      if (!schedule?.assignedTechnicianId) return;
 
       await this.notifications.createNotification(
         schedule.assignedTechnicianId,
@@ -1151,8 +1183,28 @@ export class NotificationEventListener {
           actionPath: `/spare-parts?search=${encodeURIComponent(item.itemCode || item.name)}`,
         });
       }
+      this.notifications.notifyDataChange('INVENTORY', 'UPDATED', { id: item.id });
     } catch (err: any) {
       this.logger.error('[EVENT] Error in handleInventoryLowStock:', err);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 6. GENERIC DATA CHANGE EVENT LISTENER
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  @OnEvent('data.changed', { async: true })
+  handleGenericDataChange(event: {
+    entity: string;
+    action: string;
+    id?: string;
+    department?: string | null;
+    role?: string | null;
+    userId?: string | null;
+    metadata?: any;
+  }) {
+    if (event?.entity && event?.action) {
+      this.notifications.notifyDataChange(event.entity, event.action, event);
     }
   }
 }

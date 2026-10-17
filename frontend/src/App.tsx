@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ToastProvider } from './components/common/Toast';
 import { extractAndSaveTokensFromUrl, getAccessToken } from './utils/authStorage';
 import { ProtectedRoute, SmartHomeRoute } from './components/common/ProtectedRoute';
+import { SocketProvider } from './context/SocketContext';
 
 // Lazy loading screen-by-screen code splitting
 const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -164,7 +165,9 @@ export function App() {
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/*" element={
                   <RequireAuth>
-                    <AppLayout />
+                    <SocketProvider>
+                      <AppLayout />
+                    </SocketProvider>
                   </RequireAuth>
                 } />
               </Routes>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, fetchWithAuth, API_HOST as API_BASE } from '../services/api';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
+import { useRealtimeSync } from './useRealtimeSync';
 
 export const useMaintenancePage = () => {
   const [activeTab, setActiveTab] = useState<'schedules' | 'history'>('schedules');
@@ -148,6 +149,14 @@ export const useMaintenancePage = () => {
       loadHistory();
     }
   }, [activeTab, page]);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['MAINTENANCE_SCHEDULE', 'WORK_ORDER'], () => {
+    loadSchedules();
+    if (activeTab === 'history') {
+      loadHistory();
+    }
+  });
 
   const getActiveUserId = () => {
     const active = users.find((u: any) => u.isActive);

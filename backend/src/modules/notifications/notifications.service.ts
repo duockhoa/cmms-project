@@ -41,6 +41,32 @@ export class NotificationsService {
     return notification;
   }
 
+  notifyDataChange(
+    entity: string,
+    action: string,
+    data?: {
+      id?: string;
+      department?: string | null;
+      role?: string | null;
+      userId?: string | null;
+      metadata?: any;
+    },
+  ) {
+    try {
+      this.gateway.broadcastDataChange({
+        entity,
+        action,
+        id: data?.id,
+        department: data?.department || null,
+        role: data?.role || null,
+        userId: data?.userId || null,
+        metadata: data?.metadata,
+      });
+    } catch (err) {
+      console.error('[WEBSOCKET] Failed to broadcast data change:', err);
+    }
+  }
+
   async getNotificationsForUser(user: any) {
     // A user receives a notification if:
     // 1. It is directly targeted to their userId

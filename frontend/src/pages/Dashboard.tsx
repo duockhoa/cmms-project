@@ -1,19 +1,27 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/Badge';
 import { Cpu, AlertTriangle, Calendar, CheckCircle2, ArrowUpRight, BellRing } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardSkeleton } from '../components/common/Skeleton';
 import { KpiCard, PageHeader } from '../components/common';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadDashboard = useCallback(() => {
     api.getDashboard().then(setData).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['WORK_ORDER', 'REQUEST', 'EQUIPMENT', 'MAINTENANCE_SCHEDULE'], loadDashboard);
 
   const recentRequests = data?.recentRequests;
 

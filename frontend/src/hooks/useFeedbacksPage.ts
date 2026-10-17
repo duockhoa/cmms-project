@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
+import { useRealtimeSync } from './useRealtimeSync';
 
 export function useFeedbacksPage() {
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
@@ -32,6 +33,9 @@ export function useFeedbacksPage() {
   useEffect(() => {
     fetchFeedbacks();
   }, [fetchFeedbacks]);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['FEEDBACK'], fetchFeedbacks);
 
   const resetFilters = useCallback(() => {
     setStatusFilter('');

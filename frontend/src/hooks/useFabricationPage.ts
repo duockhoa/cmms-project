@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
+import { useRealtimeSync } from './useRealtimeSync';
 
 export interface FabricationJobItem {
   id: string;
@@ -131,6 +132,12 @@ export function useFabricationPage() {
     fetchJobs();
     fetchStats();
   }, [fetchJobs, fetchStats]);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['FABRICATION'], () => {
+    fetchJobs();
+    fetchStats();
+  });
 
   useEffect(() => {
     fetchCatalogs();

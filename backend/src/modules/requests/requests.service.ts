@@ -600,7 +600,7 @@ export class RequestsService {
   private static RESUBMIT_WHITELIST = ['title', 'description', 'priority', 'reporterName', 'department', 'images'];
 
   async resubmitRequest(id: string, body: { expectedVersion: number; comment?: string; updatedFields?: Record<string, any> }, actorId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
         include: { workOrders: true },
@@ -670,6 +670,14 @@ export class RequestsService {
         throw err;
       }
     });
+
+    this.eventEmitter.emit('data.changed', {
+      entity: 'REQUEST',
+      action: 'UPDATED',
+      id,
+    });
+
+    return result;
   }
 
   async cancelRequest(id: string, body: { reason: string; expectedVersion: number }, actor: any) {
@@ -686,7 +694,7 @@ export class RequestsService {
       });
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
         include: { workOrders: true },
@@ -788,6 +796,22 @@ export class RequestsService {
         throw err;
       }
     });
+
+    this.eventEmitter.emit('data.changed', {
+      entity: 'REQUEST',
+      action: 'CANCELLED',
+      id,
+    });
+    this.eventEmitter.emit('data.changed', {
+      entity: 'WORK_ORDER',
+      action: 'CANCELLED',
+    });
+    this.eventEmitter.emit('data.changed', {
+      entity: 'MAINTENANCE_SCHEDULE',
+      action: 'CANCELLED',
+    });
+
+    return result;
   }
 
   // ─── UPDATE REQUEST ───
@@ -861,6 +885,13 @@ export class RequestsService {
       await this.equipmentStatus.calculateAndSetStatus(existing.equipmentId);
     }
 
+    this.eventEmitter.emit('data.changed', {
+      entity: 'REQUEST',
+      action: 'UPDATED',
+      id: updated.id,
+      metadata: { requestCode: updated.requestCode },
+    });
+
     return updated;
   }
 
@@ -879,7 +910,7 @@ export class RequestsService {
       throw new ForbiddenException('Bạn không có quyền xóa yêu cầu sự cố này (yêu cầu quyền requests:delete).');
     }
 
-    return await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Dọn dẹp an toàn các Work Order con (nếu có)
       for (const wo of existing.workOrders) {
         // Tìm toàn bộ executionLogIds của work order này
@@ -984,6 +1015,21 @@ export class RequestsService {
 
       return { success: true, message: `Đã xóa yêu cầu báo hỏng ${existing.requestCode} thành công.` };
     });
+
+    this.eventEmitter.emit('data.changed', {
+      entity: 'REQUEST',
+      action: 'DELETED',
+      id,
+      metadata: { requestCode: existing.requestCode, equipmentId: existing.equipmentId },
+    });
+    if (existing.workOrders && existing.workOrders.length > 0) {
+      this.eventEmitter.emit('data.changed', {
+        entity: 'WORK_ORDER',
+        action: 'DELETED',
+      });
+    }
+
+    return result;
   }
 
   // ─── WORKFLOW HISTORY ───

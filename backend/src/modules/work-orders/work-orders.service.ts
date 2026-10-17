@@ -340,6 +340,13 @@ export class WorkOrdersService implements OnModuleInit {
       }).catch(() => { });
     }
 
+    this.eventEmitter.emit('data.changed', {
+      entity: 'WORK_ORDER',
+      action: 'CREATED',
+      id: createdWo.id,
+      metadata: { orderCode: createdWo.orderCode },
+    });
+
     return createdWo;
   }
 
@@ -1263,7 +1270,7 @@ export class WorkOrdersService implements OnModuleInit {
       throw new ForbiddenException('Bạn không có quyền xóa phiếu bảo trì này (yêu cầu quyền work_orders:delete).');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Tìm toàn bộ executionLogIds của work order này
       const execLogs = await tx.workOrderExecutionLog.findMany({
         where: { workOrderId: id },
@@ -1340,6 +1347,20 @@ export class WorkOrdersService implements OnModuleInit {
 
       return { success: true, message: `Đã xóa phiếu bảo trì ${wo.orderCode} thành công.` };
     });
+
+    this.eventEmitter.emit('data.changed', {
+      entity: 'WORK_ORDER',
+      action: 'DELETED',
+      id,
+      metadata: { orderCode: wo.orderCode, equipmentId: wo.equipmentId },
+    });
+    this.eventEmitter.emit('data.changed', {
+      entity: 'EQUIPMENT',
+      action: 'UPDATED',
+      id: wo.equipmentId,
+    });
+
+    return result;
   }
 
   // ==================== WORK ORDER WORK SESSIONS ====================

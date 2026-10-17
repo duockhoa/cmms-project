@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, fetchWithAuth, API_HOST } from '../services/api';
 import { useToast } from '../components/common/Toast';
 import { usePermissions } from './usePermissions';
+import { useRealtimeSync } from './useRealtimeSync';
 
 const API_BASE = API_HOST;
 
@@ -248,6 +249,9 @@ export const useWorkOrdersPage = () => {
       window.removeEventListener('app:navigate-menu', handleMenuClick);
     };
   }, [loadWorkOrders, setSearchParams]);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['WORK_ORDER', 'MAINTENANCE_SCHEDULE'], loadWorkOrders);
 
   const handleFilterChange = (setter: (val: string) => void, val: string) => {
     setter(val);

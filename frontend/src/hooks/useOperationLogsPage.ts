@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import { useRealtimeSync } from './useRealtimeSync';
 
 export function useOperationLogsPage() {
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
@@ -47,6 +48,9 @@ export function useOperationLogsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Real-time synchronization via WebSocket
+  useRealtimeSync(['OPERATION_LOG'], fetchData);
 
   // QR Scanner Effect: resolves equipment by code, id or URL and opens form
   useEffect(() => {

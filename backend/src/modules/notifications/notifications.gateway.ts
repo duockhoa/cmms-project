@@ -58,4 +58,29 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
       this.server.to('global').emit('notification', notification);
     }
   }
+
+  broadcastDataChange(payload: {
+    entity: string;
+    action: string;
+    id?: string;
+    department?: string | null;
+    role?: string | null;
+    userId?: string | null;
+    metadata?: any;
+  }) {
+    if (!this.server) {
+      console.warn('[WEBSOCKET] Server not initialized yet.');
+      return;
+    }
+
+    // Broadcast data change event to all connected clients in 'global'
+    this.server.to('global').emit('data:changed', payload);
+
+    if (payload.department) {
+      this.server.to(`dept:${payload.department}`).emit('data:changed', payload);
+    }
+    if (payload.userId) {
+      this.server.to(`user:${payload.userId}`).emit('data:changed', payload);
+    }
+  }
 }
