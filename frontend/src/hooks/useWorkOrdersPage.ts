@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, fetchWithAuth, API_HOST } from '../services/api';
 import { useToast } from '../components/common/Toast';
@@ -8,7 +8,7 @@ const API_BASE = API_HOST;
 
 export const useWorkOrdersPage = () => {
   const { can, isAdmin } = usePermissions();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [workOrders, setWorkOrders] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +64,7 @@ export const useWorkOrdersPage = () => {
   const [manualDeviceCode, setManualDeviceCode] = useState('');
   const [multipleWosList, setMultipleWosList] = useState<any[]>([]);
   const [isSelectWoOpen, setIsSelectWoOpen] = useState(false);
-  const [selectedDetailWoId, setSelectedDetailWoId] = useState<string | null>(searchParams.get('id') || null);
+  const [selectedDetailWoId, _setSelectedDetailWoId] = useState<string | null>(searchParams.get('id') || null);
 
   // Quick Pause & Delete modals
   const [woToPause, setWoToPause] = useState<any | null>(null);
@@ -119,7 +119,7 @@ export const useWorkOrdersPage = () => {
   };
 
   // Load Work Orders list with pagination & filters
-  const loadWorkOrders = async () => {
+  const loadWorkOrders = useCallback(async () => {
     try {
       setLoading(true);
       const url = new URL(`${API_BASE}/api/v1/work-orders`);
@@ -148,9 +148,28 @@ export const useWorkOrdersPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, limit, search, handlerTeamFilter, statusFilter, onlyMyWork, currentUser?.id]);
 
-  const loadData = () => loadWorkOrders();
+  const loadData = useCallback(() => {
+    loadWorkOrders();
+  }, [loadWorkOrders]);
+
+  const setSelectedDetailWoId = useCallback((id: string | null) => {
+    _setSelectedDetailWoId(id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) {
+        next.set('id', id);
+      } else {
+        next.delete('id');
+      }
+      return next;
+    }, { replace: true });
+
+    if (!id) {
+      loadWorkOrders();
+    }
+  }, [setSearchParams, loadWorkOrders]);
 
   const exportWorkOrders = async () => {
     const url = new URL(`${API_BASE}/api/v1/work-orders`);
@@ -197,14 +216,38 @@ export const useWorkOrdersPage = () => {
 
   useEffect(() => {
     loadWorkOrders();
-  }, [search, page, handlerTeamFilter, statusFilter, onlyMyWork, currentUser?.id]);
+  }, [loadWorkOrders]);
 
+  // Sync selectedDetailWoId with URL query param (e.g. Browser back/forward)
   useEffect(() => {
-    const idFromUrl = searchParams.get('id');
-    if (idFromUrl) {
-      setSelectedDetailWoId(idFromUrl);
+    const idFromUrl = searchParams.get('id') || null;
+    if (idFromUrl !== selectedDetailWoId) {
+      _setSelectedDetailWoId(idFromUrl);
+      if (!idFromUrl) {
+        loadWorkOrders();
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, selectedDetailWoId, loadWorkOrders]);
+
+  // Listen to menu navigation clicks (e.g. clicking "Phiếu sửa chữa" on sidebar while already on page)
+  useEffect(() => {
+    const handleMenuClick = (e: any) => {
+      if (e.detail?.id === 'work-orders' || e.detail?.path === '/work-orders') {
+        _setSelectedDetailWoId(null);
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('id');
+          return next;
+        }, { replace: true });
+        loadWorkOrders();
+      }
+    };
+
+    window.addEventListener('app:navigate-menu', handleMenuClick);
+    return () => {
+      window.removeEventListener('app:navigate-menu', handleMenuClick);
+    };
+  }, [loadWorkOrders, setSearchParams]);
 
   const handleFilterChange = (setter: (val: string) => void, val: string) => {
     setter(val);

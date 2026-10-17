@@ -8,7 +8,7 @@ export function useRequestsPage() {
   const { can } = usePermissions();
   const canEdit = can('requests:edit');
   const canDelete = can('requests:delete');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [requests, setRequests] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
@@ -19,7 +19,7 @@ export function useRequestsPage() {
   const [statusFilter, setStatusFilter] = useState('');
 
   // Selected Detail state for Split Pane layout (initialize from ?id= if present)
-  const [selectedDetailReqId, setSelectedDetailReqId] = useState<string | null>(searchParams.get('id') || null);
+  const [selectedDetailReqId, _setSelectedDetailReqId] = useState<string | null>(searchParams.get('id') || null);
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -176,16 +176,57 @@ export function useRequestsPage() {
     return active ? active.id : (users[0]?.id || 'user-id');
   }, [users]);
 
-  useEffect(() => {
-    loadData();
-  }, [statusFilter]);
+  const setSelectedDetailReqId = useCallback((id: string | null) => {
+    _setSelectedDetailReqId(id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) {
+        next.set('id', id);
+      } else {
+        next.delete('id');
+      }
+      return next;
+    }, { replace: true });
+
+    if (!id) {
+      loadData();
+    }
+  }, [setSearchParams, loadData]);
 
   useEffect(() => {
-    const idFromUrl = searchParams.get('id');
-    if (idFromUrl) {
-      setSelectedDetailReqId(idFromUrl);
+    loadData();
+  }, [loadData]);
+
+  // Sync selectedDetailReqId with URL query param (e.g. Browser back/forward)
+  useEffect(() => {
+    const idFromUrl = searchParams.get('id') || null;
+    if (idFromUrl !== selectedDetailReqId) {
+      _setSelectedDetailReqId(idFromUrl);
+      if (!idFromUrl) {
+        loadData();
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, selectedDetailReqId, loadData]);
+
+  // Listen to menu navigation clicks (e.g. clicking "Báo cáo sự cố" on sidebar while already on page)
+  useEffect(() => {
+    const handleMenuClick = (e: any) => {
+      if (e.detail?.id === 'requests' || e.detail?.path === '/requests') {
+        _setSelectedDetailReqId(null);
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('id');
+          return next;
+        }, { replace: true });
+        loadData();
+      }
+    };
+
+    window.addEventListener('app:navigate-menu', handleMenuClick);
+    return () => {
+      window.removeEventListener('app:navigate-menu', handleMenuClick);
+    };
+  }, [loadData, setSearchParams]);
 
   const handleCreate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

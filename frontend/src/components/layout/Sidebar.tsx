@@ -72,6 +72,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCloseSidebar }) =
                 if (window.innerWidth <= 768) {
                   onCloseSidebar?.();
                 }
+                window.dispatchEvent(
+                  new CustomEvent('app:navigate-menu', {
+                    detail: { id: item.id, path: targetPath },
+                  })
+                );
               }}
               style={({ isActive }) => ({
                 display: 'flex',
