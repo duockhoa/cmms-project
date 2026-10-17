@@ -795,10 +795,24 @@ export class WorkOrdersService implements OnModuleInit {
       }
     }
 
+    const currentWo = await this.prisma.workOrder.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+    if (!currentWo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
+
+    // Nếu phiếu đang IN_PROGRESS hoặc ON_HOLD thì giữ nguyên trạng thái hiện tại, không hạ về ASSIGNED
+    const targetStatus = (['IN_PROGRESS', 'ON_HOLD'].includes(currentWo.status))
+      ? (currentWo.status as WorkOrderStatus)
+      : 'ASSIGNED';
+
+    const logMessage = ['IN_PROGRESS', 'ON_HOLD'].includes(currentWo.status)
+      ? `Cập nhật / bổ sung nhân sự thực hiện: ${techName || 'Kỹ thuật viên'}`
+      : `Phân công người thực hiện: ${techName || 'Kỹ thuật viên'}`;
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
-      'ASSIGNED',
+      targetStatus,
       {
         technicianName: techName || 'Kỹ thuật viên',
         assignedTechnicianId: targetTechId || null,
@@ -806,7 +820,7 @@ export class WorkOrdersService implements OnModuleInit {
         supporterIds: dto.supporterIds || null,
       },
       'ASSIGN',
-      `Phân công người thực hiện: ${techName || 'Kỹ thuật viên'}`,
+      logMessage,
       undefined,
       undefined,
       actorContext,

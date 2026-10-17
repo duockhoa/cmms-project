@@ -183,12 +183,12 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
               color="#3b82f6"
             />
           )}
-          {['PENDING', 'ASSIGNED'].includes(wo.status) && wo.assignedTechnicianId && (isManagerOrAdmin || userUnitType === 'TECHNICAL') && (
+          {['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD'].includes(wo.status) && wo.assignedTechnicianId && (isManagerOrAdmin || userUnitType === 'TECHNICAL') && (
             <ActionButton
               onClick={() => setIsAssignExecutorOpen(true)}
               disabled={actionLoading}
               icon={ArrowRightLeft}
-              label="Đổi người phụ trách"
+              label={['IN_PROGRESS', 'ON_HOLD'].includes(wo.status) ? 'Thêm / Đổi nhân sự' : 'Đổi người phụ trách'}
               color="#6366f1"
             />
           )}
