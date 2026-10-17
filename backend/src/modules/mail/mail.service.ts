@@ -17,6 +17,7 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private isConfigured = false;
+  private readonly fromEmail: string;
   private readonly fromAddress: string;
   private readonly frontendUrl: string;
 
@@ -27,8 +28,9 @@ export class MailService {
     const user = process.env.SMTP_USER || '';
     const pass = process.env.SMTP_PASS || '';
     const fromName = process.env.SMTP_FROM_NAME || 'DK Pharma - Quản Lý Thiết Bị';
-    const fromEmail = process.env.SMTP_FROM_EMAIL || 'cmms.dkpharma@gmail.com';
+    const fromEmail = process.env.SMTP_FROM_EMAIL || user || 'cmms.dkpharma@gmail.com';
 
+    this.fromEmail = fromEmail;
     this.fromAddress = `"${fromName}" <${fromEmail}>`;
     this.frontendUrl = (process.env.APP_FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 
@@ -139,27 +141,57 @@ export class MailService {
       actionUrl,
     });
 
-    let messageId = dto.isFirstInThread ? undefined : undefined;
+    const plainText = [
+      `Kính gửi: ${dto.recipientName || 'Quý đồng nghiệp'}`,
+      '',
+      dto.title,
+      '='.repeat(40),
+      dto.summaryMessage,
+      '',
+      ...(dto.metadata && dto.metadata.length > 0
+        ? [
+            'THÔNG TIN CHI TIẾT:',
+            ...dto.metadata.map((item) => `- ${item.label}: ${item.value}`),
+            '',
+          ]
+        : []),
+      ...(dto.notes ? ['GHI CHÚ / CHỈ DẪN:', dto.notes, ''] : []),
+      actionUrl ? `Xem chi tiết trên hệ thống: ${actionUrl}` : '',
+      '',
+      '='.repeat(40),
+      'Hệ thống Quản lý Thiết bị - Công ty Cổ phần Dược Khoa',
+      'Email này được gửi tự động từ hệ thống DK Pharma CMMS.',
+    ]
+      .filter((line) => line !== undefined)
+      .join('\n');
+
+    // Anti-spam & transactional notification standard RFC headers
+    const customHeaders: Record<string, string> = {
+      'Auto-Submitted': 'auto-generated',
+      'X-Auto-Response-Suppress': 'All',
+      'Precedence': 'bulk',
+      'X-Mailer': 'DK-Pharma-CMMS',
+    };
+
+    // Sender domain resolution (matches fromEmail to avoid SPF/DKIM mismatch spam flags)
+    const senderDomain = this.fromEmail.includes('@') ? this.fromEmail.split('@')[1].trim().toLowerCase() : 'gmail.com';
+
+    let messageId: string | undefined = undefined;
     let inReplyTo: string | undefined = dto.inReplyTo;
     let references: string[] | undefined = Array.isArray(dto.references)
       ? dto.references
       : dto.references
       ? [dto.references]
       : undefined;
-    const customHeaders: Record<string, string> = {};
 
     // Automatic threading calculation based on threadKey
     if (dto.threadKey) {
       const cleanKey = dto.threadKey.trim().replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
-      const domain = 'dkpharma.io.vn';
-      const rootMessageId = `<cmms-thread-${cleanKey}@${domain}>`;
+      const rootMessageId = `<cmms-thread-${cleanKey}@${senderDomain}>`;
 
       customHeaders['X-Entity-Ref-ID'] = dto.threadKey;
 
-      if (dto.isFirstInThread) {
-        messageId = rootMessageId;
-      } else {
-        messageId = `<cmms-msg-${cleanKey}-${Date.now()}@${domain}>`;
+      if (!dto.isFirstInThread) {
         inReplyTo = inReplyTo || rootMessageId;
         references = references || [rootMessageId];
       }
@@ -169,6 +201,7 @@ export class MailService {
       to: dto.to,
       subject: dto.subject,
       html,
+      text: plainText,
       messageId,
       inReplyTo,
       references,
