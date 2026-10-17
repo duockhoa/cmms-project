@@ -488,14 +488,40 @@ export const UtilityCumulativeTrendSection: React.FC<UtilityCumulativeTrendSecti
                       </td>
 
                       {(trendData.timeColumns || []).map((col: any) => {
-                        const val = r.values?.[col.key] || 0;
-                        const isNonZero = val > 0;
+                        const val = r.values?.[col.key];
+                        const cellMeta = r.cellDetails?.[col.key];
+                        const isNull = val === null || val === undefined;
+                        const isNonZero = !isNull && val > 0;
+                        const hasUnverified = cellMeta?.hasUnverified;
+                        const hasMissingData = cellMeta?.hasMissingData;
+                        const titleText = cellMeta?.gapNote || (hasUnverified ? 'Chỉ số bất thường - Chưa xác định điện lượng' : col.label);
+
                         return (
                           <td
                             key={col.key}
-                            className={`trend-td-cell ${isNonZero ? (r.isSupplyMeter ? 'has-val-supply' : 'has-val-cons') : 'empty'}`}
+                            title={titleText}
+                            className={`trend-td-cell ${isNonZero ? (r.isSupplyMeter ? 'has-val-supply' : 'has-val-cons') : 'empty'} ${hasUnverified ? 'has-unverified' : ''}`}
+                            style={hasUnverified ? { backgroundColor: '#fef2f2', color: '#dc2626', fontWeight: 600 } : undefined}
                           >
-                            {isNonZero ? formatVN(val) : '-'}
+                            {hasUnverified ? (
+                              <span title="Chỉ số bất thường / Chưa xác định điện lượng" style={{ color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                ⚠️ N/A
+                              </span>
+                            ) : isNonZero ? (
+                              <span>
+                                {formatVN(val)}
+                                {hasMissingData && (
+                                  <span
+                                    style={{ color: '#d97706', fontWeight: 700, marginLeft: '2px', cursor: 'help' }}
+                                    title={cellMeta?.gapNote || 'Thiếu dữ liệu đo trong kỳ'}
+                                  >
+                                    *
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              '-'
+                            )}
                           </td>
                         );
                       })}

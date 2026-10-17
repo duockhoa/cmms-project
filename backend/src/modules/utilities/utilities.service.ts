@@ -713,6 +713,199 @@ export class UtilitiesService {
   // ==========================================
   // 2.1 ĐỒNG BỘ CHỈ SỐ ĐIỆN TỰ ĐỘNG TỪ AMISS (EVN)
   // ==========================================
+    /**
+   * Chuẩn hóa chuỗi thời gian về Date theo múi giờ Việt Nam (UTC+7)
+   */
+  parseVietnamDate(dateStr: any): Date | null {
+    if (!dateStr) return null;
+    if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? null : dateStr;
+    const str = String(dateStr).trim();
+    // Khớp DD/MM/YYYY HH:mm hoặc DD/MM/YYYY HH:mm:ss
+    const matchDmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+    if (matchDmy) {
+      const [, d, m, y, h, min, s] = matchDmy;
+      const year = Number(y);
+      const month = Number(m) - 1;
+      const day = Number(d);
+      const hour = Number(h || 0);
+      const minute = Number(min || 0);
+      const sec = Number(s || 0);
+      return new Date(Date.UTC(year, month, day, hour - 7, minute, sec));
+    }
+    // Khớp YYYY-MM-DD HH:mm(:ss) hoặc ISO
+    const matchYmd = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+    if (matchYmd) {
+      const [, y, m, d, h, min, s] = matchYmd;
+      const year = Number(y);
+      const month = Number(m) - 1;
+      const day = Number(d);
+      const hour = Number(h || 0);
+      const minute = Number(min || 0);
+      const sec = Number(s || 0);
+      return new Date(Date.UTC(year, month, day, hour - 7, minute, sec));
+    }
+    const parsed = new Date(str);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  /**
+   * Thực thi thao tác database với cơ chế thử lại tự động khi gặp deadlock hoặc transaction conflict
+   */
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries = 3,
+    delayMs = 100,
+  ): Promise<T> {
+    let lastError: any;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (err: any) {
+        lastError = err;
+        const isDeadlock =
+          err?.code === 'P2034' ||
+          err?.code === 'ER_LOCK_DEADLOCK' ||
+          err?.message?.includes('Deadlock') ||
+          err?.message?.includes('Lock wait timeout');
+        if (isDeadlock && attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs * Math.pow(2, attempt - 1)));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * Tính toán lại chuỗi thời gian liên hoàn cho một điểm đo từ mốc sớm nhất bị ảnh hưởng
+   */
+  async recalculatePointTimeline(
+    tx: any,
+    pointId: string,
+    minAffectedDate?: Date,
+  ): Promise<{ updatedCount: number; readingsCount: number }> {
+    const point = await tx.utilityPoint.findUnique({
+      where: { id: pointId },
+    });
+    if (!point) return { updatedCount: 0, readingsCount: 0 };
+
+    const multiplier = point.multiplier || 1.0;
+
+    // 1. Tìm mốc neo (anchor) liền trước minAffectedDate
+    let anchor: any = null;
+    if (minAffectedDate) {
+      anchor = await tx.utilityReading.findFirst({
+        where: {
+          pointId,
+          isVoided: false,
+          recordedAt: { lt: minAffectedDate },
+        },
+        orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+      });
+    }
+
+    // 2. Lấy tất cả các bản ghi từ minAffectedDate trở đi
+    const subsequentReadings = await tx.utilityReading.findMany({
+      where: {
+        pointId,
+        isVoided: false,
+        ...(minAffectedDate ? { recordedAt: { gte: minAffectedDate } } : {}),
+      },
+      orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    });
+
+    if (subsequentReadings.length === 0) {
+      return { updatedCount: 0, readingsCount: 0 };
+    }
+
+    let updatedCount = 0;
+
+    // 3. Duyệt tuần tự để tính lại previousValue và consumption
+    for (let i = 0; i < subsequentReadings.length; i++) {
+      const reading = subsequentReadings[i];
+      const prevReading = i === 0 ? anchor : subsequentReadings[i - 1];
+
+      let targetPrevVal: number | null = null;
+      let targetConsumption: number | null = null;
+      let isAbnormal = reading.isAbnormal;
+      let notes = reading.notes;
+
+      if (!prevReading) {
+        // Bản ghi đầu tiên trong lịch sử điểm đo
+        const isBaseline =
+          reading.notes?.toLowerCase().includes('đầu kỳ') ||
+          reading.previousValue === reading.readingValue;
+        if (isBaseline) {
+          targetPrevVal = reading.readingValue;
+          targetConsumption = 0;
+        } else {
+          targetPrevVal = reading.previousValue ?? reading.readingValue;
+          const diff = Math.max(0, reading.readingValue - targetPrevVal);
+          targetConsumption = Number((diff * multiplier).toFixed(2));
+        }
+      } else {
+        targetPrevVal = prevReading.readingValue;
+
+        // Kiểm tra chỉ số giảm bất thường
+        if (reading.readingValue < targetPrevVal) {
+          // BẮT BUỘC LƯU NULL THEO ĐẶC TẢ
+          targetConsumption = null;
+          isAbnormal = true;
+          if (!notes?.includes('Chỉ số giảm bất thường')) {
+            notes = `${notes ? notes + ' | ' : ''}Chỉ số giảm bất thường (từ ${targetPrevVal} xuống ${reading.readingValue}) - Cần xác minh`;
+          }
+        } else {
+          const diff = reading.readingValue - targetPrevVal;
+          targetConsumption = Number((diff * multiplier).toFixed(2));
+        }
+      }
+
+      // Kiểm tra xem có cần cập nhật bản ghi này không
+      const prevChanged = reading.previousValue !== targetPrevVal;
+      const consChanged = reading.consumption !== targetConsumption;
+      const abnChanged = reading.isAbnormal !== isAbnormal;
+      const notesChanged = reading.notes !== notes;
+
+      if (prevChanged || consChanged || abnChanged || notesChanged) {
+        await tx.utilityReading.update({
+          where: { id: reading.id },
+          data: {
+            previousValue: targetPrevVal,
+            consumption: targetConsumption,
+            isAbnormal,
+            notes,
+          },
+        });
+        updatedCount++;
+        // Cập nhật lại đối tượng trong bộ nhớ để phần tử kế tiếp lấy đúng targetPrevVal
+        reading.previousValue = targetPrevVal;
+        reading.consumption = targetConsumption;
+        reading.isAbnormal = isAbnormal;
+        reading.notes = notes;
+      }
+    }
+
+    // 4. Cập nhật lại lastReadingValue và lastReadingAt của điểm đo theo bản ghi mới nhất
+    const latestReading = await tx.utilityReading.findFirst({
+      where: { pointId, isVoided: false },
+      orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+    });
+
+    if (latestReading) {
+      await tx.utilityPoint.update({
+        where: { id: pointId },
+        data: {
+          lastReadingValue: latestReading.readingValue,
+          lastReadingAt: latestReading.recordedAt,
+        },
+      });
+    }
+
+    return { updatedCount, readingsCount: subsequentReadings.length };
+  }
+
+
   async syncEvnReadings(body: any, actor: any) {
     const rawItems = Array.isArray(body)
       ? body
@@ -745,139 +938,209 @@ export class UtilitiesService {
         : systemUser?.id || null;
     const recorderName = 'EVN Auto-Sync Bot';
 
-    const results = [];
+    // 1. Phân loại và gom nhóm theo từng điểm đo
+    interface ParsedSyncItem {
+      point: any;
+      cycleTime: Date | null;
+      meterTime: Date | null;
+      recordedAt: Date;
+      readingVal: number;
+      normalVal: number | null;
+      peakVal: number | null;
+      offPeakVal: number | null;
+      powerKw: number | null;
+      notes?: string;
+      shift?: string;
+    }
+
+    const pointMap = new Map<string, { point: any; items: ParsedSyncItem[] }>();
 
     for (const item of rawItems) {
       if (!item) continue;
-
-      // 1. Tìm điểm đo phù hợp
       const queryCode = String(item.meterCode || item.code || item.socongto || '').trim().toUpperCase();
       let targetPoint = elecPoints.find(
         (p) => p.code.toUpperCase() === queryCode || p.id === queryCode,
       );
-
-      // Nếu không khớp chính xác, tìm theo số công tơ trong mô tả hoặc code chứa số công tơ
       if (!targetPoint && queryCode) {
         targetPoint = elecPoints.find(
           (p) => p.code.toUpperCase().includes(queryCode) || p.description?.toUpperCase().includes(queryCode),
         );
       }
-
-      // Nếu vẫn không có mã, fallback vào điểm đo Nguồn tổng cấp (isSupplyMeter = true)
       if (!targetPoint) {
         targetPoint = elecPoints.find((p) => p.isSupplyMeter) || elecPoints[0];
       }
-
       if (!targetPoint) continue;
 
-      // 2. Phân tích thời gian ghi nhận (timemeter: "DD/MM/YYYY HH:mm" hoặc ISO)
-      let recordedAt = new Date();
-      if (item.timemeter) {
-        const match = String(item.timemeter).match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/);
-        if (match) {
-          const [, day, month, year, hour, minute] = match;
-          recordedAt = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), 0, 0);
-        } else {
-          const parsed = new Date(item.timemeter);
-          if (!isNaN(parsed.getTime())) recordedAt = parsed;
-        }
-      } else if (item.recordedAt) {
-        const parsed = new Date(item.recordedAt);
-        if (!isNaN(parsed.getTime())) recordedAt = parsed;
-      }
+      // Chuẩn hóa thời gian theo múi giờ Việt Nam
+      const cycleTime = this.parseVietnamDate(item.time || item.cycleTime);
+      const meterTime = this.parseVietnamDate(item.timemeter || item.meterTime);
+      const recordedAt = cycleTime || meterTime || this.parseVietnamDate(item.recordedAt) || new Date();
 
-      // 3. Trích xuất chỉ số đo đếm
       const readingVal = this.parseLocaleNumber(item.readingValue ?? item.pgiaotong);
-      if (readingVal === null || readingVal < 0) {
-        continue;
-      }
+      if (readingVal === null || readingVal < 0) continue;
 
       const normalVal = this.parseLocaleNumber(item.normalValue ?? item.pgiao1);
       const peakVal = this.parseLocaleNumber(item.peakValue ?? item.pgiao2);
       const offPeakVal = this.parseLocaleNumber(item.offPeakValue ?? item.pgiao3);
       const powerKw = this.parseLocaleNumber(item.powerKw ?? item.pmax1);
 
-      // 4. Cơ chế chống trùng lặp (Upsert): Tìm bản ghi cùng điểm đo trong cửa sổ ±5 phút
-      const windowStart = new Date(recordedAt.getTime() - 5 * 60 * 1000);
-      const windowEnd = new Date(recordedAt.getTime() + 5 * 60 * 1000);
-
-      const existingReading = await this.prisma.utilityReading.findFirst({
-        where: {
-          pointId: targetPoint.id,
-          isVoided: false,
-          recordedAt: {
-            gte: windowStart,
-            lte: windowEnd,
-          },
-        },
-      });
-
-      if (existingReading) {
-        // Cập nhật bản ghi hiện tại
-        const updated = await this.prisma.utilityReading.update({
-          where: { id: existingReading.id },
-          data: {
-            readingValue: readingVal,
-            normalValue: normalVal ?? existingReading.normalValue,
-            peakValue: peakVal ?? existingReading.peakValue,
-            offPeakValue: offPeakVal ?? existingReading.offPeakValue,
-            powerKw: powerKw ?? existingReading.powerKw,
-            notes: item.notes || existingReading.notes,
-          },
-        });
-        results.push({ action: 'updated', id: updated.id, pointCode: targetPoint.code, recordedAt });
-      } else {
-        // Tạo mới: Tìm chỉ số gần nhất trước mốc thời gian này để tính delta consumption
-        const priorReading = await this.prisma.utilityReading.findFirst({
-          where: {
-            pointId: targetPoint.id,
-            isVoided: false,
-            recordedAt: { lt: recordedAt },
-          },
-          orderBy: { recordedAt: 'desc' },
-        });
-
-        const prevVal = priorReading ? priorReading.readingValue : (targetPoint.lastReadingValue || readingVal);
-        const diff = readingVal >= prevVal ? readingVal - prevVal : 0;
-        const consumption = Number((diff * (targetPoint.multiplier || 1.0)).toFixed(2));
-
-        const created = await this.prisma.utilityReading.create({
-          data: {
-            pointId: targetPoint.id,
-            recordedAt,
-            readingValue: readingVal,
-            previousValue: prevVal,
-            consumption,
-            normalValue: normalVal,
-            peakValue: peakVal,
-            offPeakValue: offPeakVal,
-            powerKw,
-            shift: item.shift || 'Tự động EVN',
-            notes: item.notes || `Đồng bộ tự động từ AMISS (${item.timemeter || recordedAt.toISOString()})`,
-            recordedById: recorderId,
-            recordedByName: recorderName,
-          },
-        });
-        results.push({ action: 'created', id: created.id, pointCode: targetPoint.code, recordedAt, consumption });
+      if (!pointMap.has(targetPoint.id)) {
+        pointMap.set(targetPoint.id, { point: targetPoint, items: [] });
       }
 
-      // Cập nhật lastReadingValue cho điểm đo nếu mốc thời gian này là mới nhất
-      if (!targetPoint.lastReadingAt || recordedAt >= targetPoint.lastReadingAt) {
-        await this.prisma.utilityPoint.update({
-          where: { id: targetPoint.id },
-          data: {
-            lastReadingValue: readingVal,
-            lastReadingAt: recordedAt,
-          },
+      pointMap.get(targetPoint.id)!.items.push({
+        point: targetPoint,
+        cycleTime,
+        meterTime,
+        recordedAt,
+        readingVal,
+        normalVal,
+        peakVal,
+        offPeakVal,
+        powerKw,
+        notes: item.notes,
+        shift: item.shift,
+      });
+    }
+
+    // 2. Sắp xếp danh sách điểm đo theo pointId ASC để hạn chế deadlock khi khóa
+    const sortedPointEntries = Array.from(pointMap.entries()).sort(([aId], [bId]) => aId.localeCompare(bId));
+
+    const results: Array<{
+      pointId: string;
+      pointCode: string;
+      pointName: string;
+      status: 'SUCCESS' | 'FAILED';
+      syncedCount?: number;
+      createdCount?: number;
+      updatedCount?: number;
+      recalculatedCount?: number;
+      error?: string;
+    }> = [];
+
+    // 3. Xử lý Transaction độc lập theo từng điểm đo (Per-Point Transaction)
+    for (const [pointId, { point, items }] of sortedPointEntries) {
+      // Sắp xếp các mốc đo theo recordedAt ASC
+      items.sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime());
+      const minAffectedDate = items[0].recordedAt;
+
+      try {
+        const pointResult = await this.executeWithRetry(async () => {
+          return await this.prisma.$transaction(async (tx) => {
+            // Khóa dòng điểm đo để ngăn race condition giữa các luồng đồng thời
+            await tx.$executeRawUnsafe('SELECT id FROM UtilityPoint WHERE id = ? FOR UPDATE', pointId);
+
+            let createdCount = 0;
+            let updatedCount = 0;
+
+            for (const item of items) {
+              // Tìm kiếm bản ghi trùng: Ưu tiên khớp theo cycleTime, sau đó theo recordedAt trong cửa sổ nhỏ
+              let existing: any = null;
+              if (item.cycleTime) {
+                existing = await tx.utilityReading.findFirst({
+                  where: {
+                    pointId,
+                    isVoided: false,
+                    OR: [
+                      { cycleTime: item.cycleTime },
+                      { recordedAt: item.cycleTime },
+                    ],
+                  },
+                });
+              }
+
+              if (!existing) {
+                // Khớp theo recordedAt chính xác hoặc trong cửa sổ ±2 phút
+                existing = await tx.utilityReading.findFirst({
+                  where: {
+                    pointId,
+                    isVoided: false,
+                    recordedAt: {
+                      gte: new Date(item.recordedAt.getTime() - 2 * 60 * 1000),
+                      lte: new Date(item.recordedAt.getTime() + 2 * 60 * 1000),
+                    },
+                  },
+                });
+              }
+
+              if (existing) {
+                await tx.utilityReading.update({
+                  where: { id: existing.id },
+                  data: {
+                    readingValue: item.readingVal,
+                    normalValue: item.normalVal ?? existing.normalValue,
+                    peakValue: item.peakVal ?? existing.peakValue,
+                    offPeakValue: item.offPeakVal ?? existing.offPeakValue,
+                    powerKw: item.powerKw ?? existing.powerKw,
+                    cycleTime: item.cycleTime || existing.cycleTime,
+                    meterTimestamp: item.meterTime || existing.meterTimestamp,
+                    notes: item.notes || existing.notes,
+                  },
+                });
+                updatedCount++;
+              } else {
+                await tx.utilityReading.create({
+                  data: {
+                    pointId,
+                    recordedAt: item.recordedAt,
+                    cycleTime: item.cycleTime,
+                    meterTimestamp: item.meterTime,
+                    readingValue: item.readingVal,
+                    previousValue: null,
+                    consumption: null,
+                    normalValue: item.normalVal,
+                    peakValue: item.peakVal,
+                    offPeakValue: item.offPeakVal,
+                    powerKw: item.powerKw,
+                    shift: item.shift || 'Tự động EVN',
+                    notes: item.notes || `Đồng bộ từ AMISS (${item.meterTime?.toISOString() || item.recordedAt.toISOString()})`,
+                    recordedById: recorderId,
+                    recordedByName: recorderName,
+                  },
+                });
+                createdCount++;
+              }
+            }
+
+            // Kích hoạt tính lại chuỗi nối tiếp từ minAffectedDate
+            const recalc = await this.recalculatePointTimeline(tx, pointId, minAffectedDate);
+
+            return {
+              pointId,
+              pointCode: point.code,
+              pointName: point.name,
+              status: 'SUCCESS' as const,
+              syncedCount: items.length,
+              createdCount,
+              updatedCount,
+              recalculatedCount: recalc.updatedCount,
+            };
+          });
+        });
+
+        results.push(pointResult);
+      } catch (err: any) {
+        results.push({
+          pointId,
+          pointCode: point.code,
+          pointName: point.name,
+          status: 'FAILED' as const,
+          error: err.message || 'Lỗi không xác định khi đồng bộ điểm đo',
         });
       }
     }
 
+    const failedCount = results.filter((r) => r.status === 'FAILED').length;
+    const succeededCount = results.filter((r) => r.status === 'SUCCESS').length;
+
     return {
-      success: true,
-      message: `Đã xử lý đồng bộ ${results.length} mốc chỉ số từ EVN.`,
-      syncedCount: results.length,
-      details: results,
+      success: failedCount === 0 && results.length > 0,
+      summary: {
+        totalPoints: results.length,
+        succeededPoints: succeededCount,
+        failedPoints: failedCount,
+      },
+      results,
     };
   }
 
@@ -907,44 +1170,27 @@ export class UtilitiesService {
       throw new BadRequestException('Vui lòng cung cấp lý do hủy kết quả ghi sai.');
     }
 
-    // Đánh dấu hủy bản ghi (Audit trail: giữ nguyên bản ghi không xóa)
-    const updated = await this.prisma.utilityReading.update({
-      where: { id },
-      data: {
-        isVoided: true,
-        voidReason,
-        voidedAt: new Date(),
-        voidedById: actor?.id || null,
-        voidedByName: actor?.name || actor?.email || 'Người vận hành',
-      },
-    });
+    const updated = await this.executeWithRetry(async () => {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SELECT id FROM UtilityPoint WHERE id = ? FOR UPDATE', reading.pointId);
 
-    // Tự động rollback lastReadingValue của điểm đo về bản ghi hợp lệ gần nhất (nếu bản ghi bị hủy là bản ghi mới nhất)
-    const latestValid = await this.prisma.utilityReading.findFirst({
-      where: {
-        pointId: reading.pointId,
-        isVoided: false,
-      },
-      orderBy: { recordedAt: 'desc' },
-    });
+        const up = await tx.utilityReading.update({
+          where: { id },
+          data: {
+            isVoided: true,
+            voidReason,
+            voidedAt: new Date(),
+            voidedById: actor?.id || null,
+            voidedByName: actor?.name || actor?.email || 'Người vận hành',
+          },
+        });
 
-    if (latestValid) {
-      await this.prisma.utilityPoint.update({
-        where: { id: reading.pointId },
-        data: {
-          lastReadingValue: latestValid.readingValue,
-          lastReadingAt: latestValid.recordedAt,
-        },
+        // Tự động tính lại liên hoàn từ mốc bị hủy
+        await this.recalculatePointTimeline(tx, reading.pointId, reading.recordedAt);
+
+        return up;
       });
-    } else {
-      await this.prisma.utilityPoint.update({
-        where: { id: reading.pointId },
-        data: {
-          lastReadingValue: reading.previousValue,
-          lastReadingAt: null,
-        },
-      });
-    }
+    });
 
     return {
       success: true,
@@ -981,19 +1227,11 @@ export class UtilitiesService {
       throw new NotFoundException('Không tìm thấy bản ghi số điện/nước.');
     }
 
-    const multiplier = reading.point.multiplier || 1.0;
     const newReadingValue =
       data.readingValue !== undefined
         ? (this.parseLocaleNumber(data.readingValue) ?? reading.readingValue)
         : reading.readingValue;
 
-    const newPreviousValue =
-      data.previousValue !== undefined
-        ? (this.parseLocaleNumber(data.previousValue) ?? reading.previousValue)
-        : reading.previousValue;
-
-    const diff = newReadingValue - newPreviousValue;
-    const newConsumption = diff >= 0 ? Number((diff * multiplier).toFixed(2)) : 0;
     const newRecordedAt = data.recordedAt ? new Date(data.recordedAt) : reading.recordedAt;
 
     const normalVal = data.normalValue !== undefined ? this.parseLocaleNumber(data.normalValue) : reading.normalValue;
@@ -1002,61 +1240,34 @@ export class UtilitiesService {
     const powerKw = data.powerKw !== undefined ? this.parseLocaleNumber(data.powerKw) : reading.powerKw;
     const cosPhi = data.powerFactorCosPhi !== undefined ? this.parseLocaleNumber(data.powerFactorCosPhi) : reading.powerFactorCosPhi;
 
-    const updated = await this.prisma.utilityReading.update({
-      where: { id },
-      data: {
-        readingValue: newReadingValue,
-        previousValue: newPreviousValue,
-        consumption: newConsumption,
-        recordedAt: newRecordedAt,
-        shift: data.shift !== undefined ? data.shift : reading.shift,
-        notes: data.notes !== undefined ? data.notes : reading.notes,
-        normalValue: normalVal,
-        peakValue: peakVal,
-        offPeakValue: offPeakVal,
-        powerKw: powerKw,
-        powerFactorCosPhi: cosPhi,
-      },
-      include: { point: true },
-    });
+    const minAffectedDate = newRecordedAt < reading.recordedAt ? newRecordedAt : reading.recordedAt;
 
-    // Cập nhật liên hoàn: Nếu có bản ghi tiếp theo của điểm đo này, cập nhật previousValue của nó = newReadingValue
-    const nextReading = await this.prisma.utilityReading.findFirst({
-      where: {
-        pointId: reading.pointId,
-        isVoided: false,
-        recordedAt: { gt: newRecordedAt },
-      },
-      orderBy: { recordedAt: 'asc' },
-    });
+    const updated = await this.executeWithRetry(async () => {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SELECT id FROM UtilityPoint WHERE id = ? FOR UPDATE', reading.pointId);
 
-    if (nextReading) {
-      const nextDiff = nextReading.readingValue - newReadingValue;
-      const nextConsumption = nextDiff >= 0 ? Number((nextDiff * multiplier).toFixed(2)) : 0;
-      await this.prisma.utilityReading.update({
-        where: { id: nextReading.id },
-        data: {
-          previousValue: newReadingValue,
-          consumption: nextConsumption,
-        },
+        const up = await tx.utilityReading.update({
+          where: { id },
+          data: {
+            readingValue: newReadingValue,
+            recordedAt: newRecordedAt,
+            shift: data.shift !== undefined ? data.shift : reading.shift,
+            notes: data.notes !== undefined ? data.notes : reading.notes,
+            normalValue: normalVal,
+            peakValue: peakVal,
+            offPeakValue: offPeakVal,
+            powerKw: powerKw,
+            powerFactorCosPhi: cosPhi,
+          },
+          include: { point: true },
+        });
+
+        // Tự động tính lại liên hoàn từ mốc bị ảnh hưởng
+        await this.recalculatePointTimeline(tx, reading.pointId, minAffectedDate);
+
+        return up;
       });
-    }
-
-    // Nếu đây là bản ghi mới nhất, cập nhật lại lastReadingValue của điểm đo
-    const latestReading = await this.prisma.utilityReading.findFirst({
-      where: { pointId: reading.pointId, isVoided: false },
-      orderBy: { recordedAt: 'desc' },
     });
-
-    if (latestReading && latestReading.id === id) {
-      await this.prisma.utilityPoint.update({
-        where: { id: reading.pointId },
-        data: {
-          lastReadingValue: newReadingValue,
-          lastReadingAt: newRecordedAt,
-        },
-      });
-    }
 
     return {
       success: true,
@@ -2064,23 +2275,94 @@ export class UtilitiesService {
     });
 
     // 3. Tính toán sản lượng cho từng điểm đo theo từng timeColumn
+    const incompleteColumns: Record<string, boolean> = {};
+
     const pointRows = points.map((p) => {
-      const values: Record<string, number> = {};
+      const values: Record<string, number | null> = {};
+      const cellDetails: Record<
+        string,
+        {
+          value: number | null;
+          hasUnverified: boolean;
+          hasMissingData: boolean;
+          gapHours?: number;
+          gapNote?: string;
+        }
+      > = {};
       let total = 0;
       let nonZeroCount = 0;
 
       timeColumns.forEach((col) => {
         const inSlot = p.readings.filter(
-          (r) => r.recordedAt >= col.startDate && (viewMode === 'DAILY' || viewMode === 'HOURLY' ? r.recordedAt < col.endDate : r.recordedAt <= col.endDate),
+          (r) =>
+            r.recordedAt >= col.startDate &&
+            (viewMode === 'DAILY' || viewMode === 'HOURLY'
+              ? r.recordedAt < col.endDate
+              : r.recordedAt <= col.endDate),
         );
+
         let cons = 0;
+        let hasUnverified = false;
+        let hasMissingData = false;
+        let maxGapHours = 0;
+        let gapNote = '';
+
         if (inSlot.length > 0) {
-          cons = inSlot.reduce((sum, r) => sum + (r.consumption || 0), 0);
+          for (let i = 0; i < inSlot.length; i++) {
+            const r = inSlot[i];
+            if (r.consumption === null || r.consumption === undefined) {
+              hasUnverified = true;
+              incompleteColumns[col.key] = true;
+            } else {
+              cons += r.consumption;
+            }
+
+            if (r.isAbnormal || r.notes?.includes('Chỉ số giảm bất thường')) {
+              hasUnverified = true;
+              incompleteColumns[col.key] = true;
+              gapNote = r.notes || 'Chỉ số giảm bất thường - Cần xác minh';
+            }
+
+            // Kiểm tra khoảng cách đo (khoảng thiếu dữ liệu)
+            if (i === 0) {
+              // So sánh với mốc trước slot nếu có
+              const prevInHistory = p.readings
+                .filter((pr) => pr.recordedAt < r.recordedAt)
+                .pop();
+              if (prevInHistory) {
+                const diffHours = (r.recordedAt.getTime() - prevInHistory.recordedAt.getTime()) / 3600000;
+                if (diffHours > 0.75) {
+                  hasMissingData = true;
+                  maxGapHours = Math.max(maxGapHours, Number(diffHours.toFixed(1)));
+                  gapNote = `Thiếu dữ liệu đo (${maxGapHours}h)`;
+                }
+              }
+            } else {
+              const diffHours = (r.recordedAt.getTime() - inSlot[i - 1].recordedAt.getTime()) / 3600000;
+              if (diffHours > 0.75) {
+                hasMissingData = true;
+                maxGapHours = Math.max(maxGapHours, Number(diffHours.toFixed(1)));
+                gapNote = `Thiếu dữ liệu đo (${maxGapHours}h)`;
+              }
+            }
+          }
         }
+
         cons = Number(cons.toFixed(2));
-        values[col.key] = cons;
-        total += cons;
-        if (cons > 0) nonZeroCount++;
+        const finalVal = hasUnverified && cons === 0 ? null : cons;
+        values[col.key] = finalVal;
+        cellDetails[col.key] = {
+          value: finalVal,
+          hasUnverified,
+          hasMissingData,
+          gapHours: maxGapHours > 0 ? maxGapHours : undefined,
+          gapNote: gapNote || (hasMissingData ? 'Thiếu dữ liệu đo' : undefined),
+        };
+
+        if (finalVal !== null) {
+          total += finalVal;
+          if (finalVal > 0) nonZeroCount++;
+        }
       });
 
       total = Number(total.toFixed(2));
@@ -2109,6 +2391,7 @@ export class UtilitiesService {
         isRecycledWater: Boolean(p.isRecycledWater),
         isExcludedFromTotal: Boolean(p.isExcludedFromTotal),
         values,
+        cellDetails,
         total,
         average,
         trendPercent,
@@ -2159,6 +2442,7 @@ export class UtilitiesService {
 
     const colCount = timeColumns.length || 1;
     const summaryRows = {
+      incompleteColumns,
       totalSupply: {
         label: '1. TỔNG CẤP VÀO',
         values: totalSupplyValues,

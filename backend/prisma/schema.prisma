@@ -853,8 +853,10 @@ model UtilityReading {
 
   // Chỉ số đo đếm
   readingValue  Float // Chỉ số chính (hoặc tổng kWh / m3)
-  previousValue Float // Chỉ số lần trước
-  consumption   Float // Lượng tiêu thụ = (readingValue - previousValue) * multiplier
+  previousValue Float? // Chỉ số lần trước
+  consumption   Float? // Lượng tiêu thụ = (readingValue - previousValue) * multiplier (hoặc null nếu chưa xác định)
+  cycleTime     DateTime? // Mốc kỳ đo chuẩn (ví dụ 18:00)
+  meterTimestamp DateTime? // Thời điểm công tơ trả về thực tế (timemeter, ví dụ 18:02)
 
   // Áp dụng cho điện 3 biểu giá
   normalValue  Float? // T1: Bình thường
