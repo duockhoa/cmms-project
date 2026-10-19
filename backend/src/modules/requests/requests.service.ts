@@ -740,12 +740,14 @@ export class RequestsService {
     }
 
     const actorId = typeof actor === 'string' ? actor : actor?.id;
-    let actorUser = typeof actor === 'object' && actor?.role ? actor : null;
-    if (!actorUser && actorId) {
+    let actorUser: any = null;
+    if (actorId) {
       actorUser = await this.prisma.user.findUnique({
         where: { id: actorId },
         include: { customRole: true },
       });
+    } else if (typeof actor === 'object') {
+      actorUser = actor;
     }
 
     const result = await this.prisma.$transaction(async (tx) => {

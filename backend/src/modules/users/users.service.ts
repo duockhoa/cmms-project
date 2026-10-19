@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { JwtStrategy } from '../auth/jwt.strategy';
 import { UpdateTechnicalProfileDto } from './dto/update-technical-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 
@@ -221,7 +222,7 @@ export class UsersService {
       }
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id },
       data: {
         roleId,
@@ -230,6 +231,8 @@ export class UsersService {
       },
       include: { customRole: true }
     });
+    JwtStrategy.invalidateCache(id);
+    return updated;
   }
 
   async updateCustomPermissions(id: string, permissions: string[]) {
@@ -238,7 +241,7 @@ export class UsersService {
       throw new NotFoundException(`Không tìm thấy nhân viên với ID: ${id}`);
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id },
       data: {
         customPermissions: JSON.stringify(permissions || []),
@@ -246,6 +249,8 @@ export class UsersService {
       },
       include: { customRole: true },
     });
+    JwtStrategy.invalidateCache(id);
+    return updated;
   }
 
   async createUser(data: any) {

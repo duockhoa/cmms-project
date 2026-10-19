@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { JwtStrategy } from '../auth/jwt.strategy';
 
 export interface CreateRoleDto {
   name: string;
@@ -58,10 +59,12 @@ export class RolesService {
     if (dto.permissions !== undefined) data.permissions = JSON.stringify(dto.permissions);
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
-    return this.prisma.role.update({
+    const updated = await this.prisma.role.update({
       where: { id },
       data
     });
+    JwtStrategy.invalidateCache();
+    return updated;
   }
 
   async delete(id: string) {
@@ -71,8 +74,10 @@ export class RolesService {
       throw new BadRequestException(`Không thể xóa nhóm quyền này vì đang có ${usersCount} người dùng được gán.`);
     }
 
-    return this.prisma.role.delete({
+    const deleted = await this.prisma.role.delete({
       where: { id }
     });
+    JwtStrategy.invalidateCache();
+    return deleted;
   }
 }

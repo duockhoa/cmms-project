@@ -285,6 +285,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       roles: roles,
       scope: payload.scope || '',
       department: dbUser.department,
+      roleId: dbUser.roleId || null,
+      customRole: dbUser.customRole || null,
+      customPermissions: dbUser.customPermissions || null,
     };
 
     // Cache the result for subsequent requests
