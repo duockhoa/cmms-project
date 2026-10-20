@@ -118,7 +118,7 @@ export class UsersService {
   }
 
   async getAssignees(department?: string) {
-    const whereClause: any = { isActive: true };
+    const whereClause: any = { isActive: true, dataSource: 'HRM' };
     if (department) {
       whereClause.department = { contains: department };
     }

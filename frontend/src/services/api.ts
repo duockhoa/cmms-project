@@ -521,6 +521,10 @@ export const api = {
     return request(`/users?${query.toString()}`);
   },
   getUserById: (id: string) => request(`/users/${id}`),
+  getAssignees: (department?: string) => {
+    const query = department ? `?department=${encodeURIComponent(department)}` : '';
+    return request(`/users/assignees${query}`);
+  },
   getDepartments: () => request('/users/departments'),
   getEquipmentDepartments: () => catalogCache.fetchWithCache('equipment_departments', () => request('/equipment/departments')),
   updateUserTechnicalProfile: (id: string, body: { specialty?: string; isActive?: boolean; expectedVersion: number }) =>

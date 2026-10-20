@@ -33,6 +33,25 @@ describe('UsersService HRM synchronization', () => {
     }));
   });
 
+  it('returns assignees from active HRM users in the selected department', async () => {
+    const prisma: any = {
+      user: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    const service = new UsersService(prisma);
+
+    await service.getAssignees('Kỹ thuật');
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        isActive: true,
+        dataSource: 'HRM',
+        department: { contains: 'Kỹ thuật' },
+      },
+    }));
+  });
+
   it('loads every declared HRM page before returning a snapshot', async () => {
     const service = new UsersService({} as any);
     global.fetch = jest.fn()

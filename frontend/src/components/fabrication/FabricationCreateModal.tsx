@@ -32,7 +32,7 @@ export const FabricationCreateModal: React.FC<FabricationCreateModalProps> = ({
   const [specifications, setSpecifications] = useState('');
   const [location, setLocation] = useState('');
   const [targetDepartment, setTargetDepartment] = useState('');
-  const [selectedDept, setSelectedDept] = useState('xưởng cơ điện');
+  const [selectedDept, setSelectedDept] = useState('');
 
   // Thiết bị liên quan - tìm kiếm & lọc theo dữ liệu nhập
   const [selectedEquipmentId, setSelectedEquipmentId] = useState('');
@@ -40,7 +40,7 @@ export const FabricationCreateModal: React.FC<FabricationCreateModalProps> = ({
   const [isEquipmentDropdownOpen, setIsEquipmentDropdownOpen] = useState(false);
   const equipmentDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Kỹ thuật viên - Chọn nhiều người (chỉ nhân viên cơ điện)
+  // Kỹ thuật viên - Chọn nhiều người theo bộ phận HRM
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([]);
 
   const [plannedStartDate, setPlannedStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -80,6 +80,14 @@ export const FabricationCreateModal: React.FC<FabricationCreateModalProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const defaultDepartment = departments[0] || '';
+    setSelectedDept(defaultDepartment);
+    setSelectedTechIds([]);
+    onDepartmentChange?.(defaultDepartment);
+  }, [isOpen, departments, onDepartmentChange]);
 
   if (!isOpen) return null;
 
@@ -578,6 +586,7 @@ export const FabricationCreateModal: React.FC<FabricationCreateModalProps> = ({
                       value={selectedDept}
                       onChange={(e) => {
                         setSelectedDept(e.target.value);
+                        setSelectedTechIds([]);
                         onDepartmentChange?.(e.target.value);
                       }}
                       style={{
@@ -592,15 +601,17 @@ export const FabricationCreateModal: React.FC<FabricationCreateModalProps> = ({
                         width: 'auto',
                       }}
                     >
-                      <option value="xưởng cơ điện">xưởng cơ điện</option>
-                      {departments
-                        .filter((d) => d.toLowerCase() !== 'xưởng cơ điện')
-                        .map((d) => (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
-                        ))}
+                      {departments.map((department) => (
+                        <option key={department} value={department}>
+                          {department}
+                        </option>
+                      ))}
                     </select>
+                  )}
+                  {departments.length === 0 && (
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>
+                      Không có bộ phận HRM đang hoạt động
+                    </span>
                   )}
                 </div>
                 {selectedTechIds.length > 0 && (
@@ -610,7 +621,7 @@ export const FabricationCreateModal: React.FC<FabricationCreateModalProps> = ({
                 )}
               </div>
 
-              {/* Danh sách các nhân viên cơ điện dạng Check-tag dễ chọn */}
+              {/* Danh sách nhân viên thuộc bộ phận đã chọn */}
               <div
                 style={{
                   display: 'flex',
@@ -658,7 +669,9 @@ export const FabricationCreateModal: React.FC<FabricationCreateModalProps> = ({
                 })}
                 {technicians.length === 0 && (
                   <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>
-                    Chưa có nhân viên cơ điện trong hệ thống
+                    {selectedDept
+                      ? 'Chưa có nhân viên thuộc bộ phận ' + selectedDept
+                      : 'Chưa có bộ phận để phân công nhân viên'}
                   </span>
                 )}
               </div>

@@ -106,12 +106,11 @@ export function useFabricationPage() {
 
   const fetchCatalogs = useCallback(async () => {
     try {
-      const [techData, eqData, deptsData] = await Promise.all([
-        api.getUsers({ department: 'xưởng cơ điện' }),
+      const [eqData, deptsData] = await Promise.all([
         api.catalog.getEquipment(),
         api.getDepartments(),
       ]);
-      setTechnicians(Array.isArray(techData) ? techData : []);
+      setTechnicians([]);
       setEquipments(Array.isArray(eqData) ? eqData : (eqData?.items || []));
       setDepartments(Array.isArray(deptsData) ? deptsData : []);
     } catch (err) {
@@ -119,14 +118,19 @@ export function useFabricationPage() {
     }
   }, []);
 
-  const handleDepartmentChange = async (department: string) => {
+  const handleDepartmentChange = useCallback(async (department: string) => {
+    if (!department) {
+      setTechnicians([]);
+      return;
+    }
     try {
-      const data = await api.getUsers({ department: department || undefined });
+      const data = await api.getAssignees(department);
       setTechnicians(Array.isArray(data) ? data : []);
     } catch (err) {
       console.warn('Lỗi khi đổi bộ phận:', err);
+      setTechnicians([]);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchJobs();
