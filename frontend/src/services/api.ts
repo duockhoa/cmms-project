@@ -521,7 +521,7 @@ export const api = {
     return request(`/users?${query.toString()}`);
   },
   getUserById: (id: string) => request(`/users/${id}`),
-  getDepartments: () => catalogCache.fetchWithCache('departments_all', () => request('/users/departments')),
+  getDepartments: () => request('/users/departments'),
   getEquipmentDepartments: () => catalogCache.fetchWithCache('equipment_departments', () => request('/equipment/departments')),
   updateUserTechnicalProfile: (id: string, body: { specialty?: string; isActive?: boolean; expectedVersion: number }) =>
     request(`/users/${id}/technical-profile`, { method: 'PATCH', body: JSON.stringify(body) }),
@@ -940,7 +940,7 @@ export const api = {
     getEquipment: () => catalogCache.fetchWithCache('equipment_all', () => request('/equipment')),
     getInventory: () => catalogCache.fetchWithCache('inventory_all', () => request('/inventory')),
     getUsers: () => catalogCache.fetchWithCache('users_all', () => request('/users')),
-    getDepartments: () => catalogCache.fetchWithCache('departments_all', () => request('/users/departments')),
+    getDepartments: () => request('/users/departments'),
     invalidate: (key: string) => catalogCache.invalidate(key),
   },
 };

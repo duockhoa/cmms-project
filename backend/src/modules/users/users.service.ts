@@ -12,6 +12,7 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       where: {
         isActive: true,
+        dataSource: 'HRM',
         department: { not: null },
       },
       select: {

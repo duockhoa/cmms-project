@@ -27,6 +27,7 @@ describe('UsersService HRM synchronization', () => {
     expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         isActive: true,
+        dataSource: 'HRM',
         department: { not: null },
       },
     }));
