@@ -120,6 +120,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
     const emailOrUsername = payload.email || payload.username || `${sub}${dummyDomain}`;
     const subStr = String(sub);
+    let resolvedHrmId = subStr;
     const subCleanId = subStr.replace(/^0+/, '');
     const usernameStr = payload.username ? String(payload.username) : null;
     const usernameCleanId = usernameStr ? usernameStr.replace(/^0+/, '') : null;
@@ -176,6 +177,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           if (res.ok) {
             const hrmUser: any = await res.json();
             if (hrmUser) {
+              if (hrmUser.id !== undefined && hrmUser.id !== null) resolvedHrmId = String(hrmUser.id);
               department = hrmUser.department || department;
               name = hrmUser.name || name;
               specialty = hrmUser.position || specialty;
@@ -232,6 +234,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             department: department,
             specialty: specialty,
             avatar: avatar,
+            hrmId: resolvedHrmId,
+            dataSource: 'HRM',
+            lastHrmSyncedAt: new Date(),
           },
           include: {
             customRole: true

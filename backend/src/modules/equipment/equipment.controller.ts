@@ -31,6 +31,12 @@ export class EquipmentController {
     return this.equipmentService.syncStatuses();
   }
 
+  @ApiStandardResponse({ summary: 'Lấy danh sách bộ phận đang được thiết bị sử dụng', method: 'GET', path: '/equipment/departments' })
+  @Get('departments')
+  getDepartments() {
+    return this.equipmentService.getDepartments();
+  }
+
   @ApiStandardResponse({ summary: 'Lấy chi tiết thiết bị theo ID', method: 'GET', path: '/equipment/{id}' })
   @Get(':id')
   findOne(@Param('id') id: string) {

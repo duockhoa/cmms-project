@@ -77,7 +77,7 @@ export function useEquipmentPage() {
       .then(data => setCategoriesList(data))
       .catch(err => console.error(err));
 
-    api.getDepartments()
+    api.getEquipmentDepartments()
       .then((depts: string[]) => {
         setDepartmentsList(depts || []);
       })

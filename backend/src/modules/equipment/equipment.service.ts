@@ -110,6 +110,21 @@ export class EquipmentService implements OnModuleInit {
     return this.equipmentStatus.syncAllEquipmentStatuses();
   }
 
+  async getDepartments() {
+    const equipments = await this.prisma.equipment.findMany({
+      where: {
+        isActive: true,
+        department: { not: null },
+      },
+      select: { department: true },
+      distinct: ['department'],
+    });
+    return equipments
+      .map((equipment) => equipment.department?.trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'vi'));
+  }
+
   async findAll(query?: { search?: string; category?: string; department?: string; status?: string; location?: string; page?: string; limit?: string }) {
     const where: any = { isActive: true };
     if (query?.search) {

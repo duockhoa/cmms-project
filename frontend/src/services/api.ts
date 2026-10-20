@@ -522,6 +522,7 @@ export const api = {
   },
   getUserById: (id: string) => request(`/users/${id}`),
   getDepartments: () => catalogCache.fetchWithCache('departments_all', () => request('/users/departments')),
+  getEquipmentDepartments: () => catalogCache.fetchWithCache('equipment_departments', () => request('/equipment/departments')),
   updateUserTechnicalProfile: (id: string, body: { specialty?: string; isActive?: boolean; expectedVersion: number }) =>
     request(`/users/${id}/technical-profile`, { method: 'PATCH', body: JSON.stringify(body) }),
   updateUserAvailability: (id: string, body: { status: string; expectedVersion: number }) =>
@@ -681,14 +682,32 @@ export const api = {
     });
   },
 
-  createUser: (data: any) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
-  updateUser: (id: string, data: any) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteUser: (id: string) => request(`/users/${id}`, { method: 'DELETE' }),
+  createUser: async (data: any) => {
+    const result = await request('/users', { method: 'POST', body: JSON.stringify(data) });
+    catalogCache.invalidate('users');
+    catalogCache.invalidate('departments');
+    return result;
+  },
+  updateUser: async (id: string, data: any) => {
+    const result = await request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+    catalogCache.invalidate('users');
+    catalogCache.invalidate('departments');
+    return result;
+  },
+  deleteUser: async (id: string) => {
+    const result = await request(`/users/${id}`, { method: 'DELETE' });
+    catalogCache.invalidate('users');
+    catalogCache.invalidate('departments');
+    return result;
+  },
 
   syncHrmUsers: async () => {
-    return request('/users/sync-hrm', {
+    const result = await request('/users/sync-hrm', {
       method: 'POST',
     });
+    catalogCache.invalidate('users');
+    catalogCache.invalidate('departments');
+    return result;
   },
 
   // ==========================================

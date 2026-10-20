@@ -56,7 +56,11 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
       
       setCategoriesList(categories || []);
       setLocationsList(locations || []);
-      setDepartmentsList(depts || []);
+      const departmentOptions = [...(depts || [])];
+      if (initialData?.department && !departmentOptions.includes(initialData.department)) {
+        departmentOptions.push(initialData.department);
+      }
+      setDepartmentsList(departmentOptions);
       
       // Set default dynamic values if creating new equipment
       if (!initialData) {

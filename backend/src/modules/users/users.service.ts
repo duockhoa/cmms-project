@@ -9,30 +9,111 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDepartments() {
-    const [users, equipments] = await Promise.all([
-      this.prisma.user.findMany({
-        where: {
-          department: { not: null },
-        },
-        select: {
-          department: true,
-        },
-        distinct: ['department'],
-      }),
-      this.prisma.equipment.findMany({
-        where: {
-          department: { not: null },
-        },
-        select: {
-          department: true,
-        },
-        distinct: ['department'],
-      }),
-    ]);
+    const users = await this.prisma.user.findMany({
+      where: {
+        isActive: true,
+        department: { not: null },
+      },
+      select: {
+        department: true,
+      },
+      distinct: ['department'],
+    });
     const deptSet = new Set<string>();
     users.forEach((u) => u.department && deptSet.add(u.department.trim()));
-    equipments.forEach((e) => e.department && deptSet.add(e.department.trim()));
     return Array.from(deptSet).filter(Boolean).sort((a, b) => a.localeCompare(b, 'vi'));
+  }
+
+  private extractHrmUsers(rawData: any): any[] | null {
+    const candidates = [
+      rawData,
+      rawData?.data,
+      rawData?.users,
+      rawData?.items,
+      rawData?.results,
+      rawData?.data?.users,
+      rawData?.data?.items,
+      rawData?.data?.results,
+    ];
+    return candidates.find(Array.isArray) || null;
+  }
+
+  private getHrmPagination(rawData: any, itemCount: number) {
+    const sources = [rawData?.meta, rawData?.pagination, rawData?.data?.meta, rawData?.data?.pagination, rawData];
+    const valueFrom = (keys: string[]) => {
+      for (const source of sources) {
+        for (const key of keys) {
+          const value = Number(source?.[key]);
+          if (Number.isFinite(value) && value > 0) return value;
+        }
+      }
+      return undefined;
+    };
+
+    const currentPage = valueFrom(['page', 'currentPage', 'current_page']) || 1;
+    const limit = valueFrom(['limit', 'pageSize', 'page_size', 'perPage', 'per_page']) || itemCount;
+    const total = valueFrom(['total', 'totalItems', 'total_items', 'count']);
+    const declaredTotalPages = valueFrom(['totalPages', 'total_pages', 'pageCount', 'page_count']);
+    const totalPages = declaredTotalPages || (total && limit ? Math.ceil(total / limit) : 1);
+
+    return { currentPage, totalPages };
+  }
+
+  private async fetchHrmUsersSnapshot(hrmApiUrl: string, accessToken: string): Promise<any[]> {
+    const fetchPage = async (page?: number) => {
+      const url = new URL(`${hrmApiUrl.replace(/\/$/, '')}/users`);
+      if (page !== undefined) url.searchParams.set('page', String(page));
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 403 || response.status === 401) {
+          throw new HttpException('Tài khoản của bạn không có quyền lấy danh sách người dùng từ HRM', HttpStatus.FORBIDDEN);
+        }
+        throw new HttpException(`Lỗi khi gọi API HRM: ${response.statusText}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rawData = await response.json();
+      const users = this.extractHrmUsers(rawData);
+      if (!users) {
+        throw new HttpException('Dữ liệu từ HRM không đúng định dạng danh sách người dùng', HttpStatus.BAD_REQUEST);
+      }
+      return { rawData, users };
+    };
+
+    const firstPage = await fetchPage();
+    const pagination = this.getHrmPagination(firstPage.rawData, firstPage.users.length);
+    if (pagination.currentPage !== 1) {
+      throw new HttpException('HRM không trả về trang đầu tiên của danh sách nhân sự', HttpStatus.BAD_REQUEST);
+    }
+    if (pagination.totalPages > 1000) {
+      throw new HttpException('Số trang dữ liệu HRM vượt quá giới hạn an toàn', HttpStatus.BAD_REQUEST);
+    }
+
+    const allUsers = [...firstPage.users];
+    for (let page = 2; page <= pagination.totalPages; page++) {
+      const pageResult = await fetchPage(page);
+      const pagePagination = this.getHrmPagination(pageResult.rawData, pageResult.users.length);
+      if (pagePagination.currentPage !== page) {
+        throw new HttpException(`HRM trả sai dữ liệu phân trang tại trang ${page}`, HttpStatus.BAD_REQUEST);
+      }
+      allUsers.push(...pageResult.users);
+    }
+
+    const uniqueUsers = new Map<string, any>();
+    for (const user of allUsers) {
+      if (user?.id !== undefined && user?.id !== null) {
+        uniqueUsers.set(String(user.id), user);
+      }
+    }
+    if (uniqueUsers.size === 0) {
+      throw new HttpException('HRM trả về danh sách nhân sự rỗng; đã hủy đồng bộ để bảo vệ dữ liệu', HttpStatus.BAD_REQUEST);
+    }
+    return Array.from(uniqueUsers.values());
   }
 
   async getAssignees(department?: string) {
@@ -400,31 +481,8 @@ export class UsersService {
     }
 
     try {
-      // Call HRM API
-      const response = await fetch(`${hrmApiUrl}/users`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 403 || response.status === 401) {
-          throw new HttpException('Tài khoản của bạn không có quyền lấy danh sách người dùng từ HRM', HttpStatus.FORBIDDEN);
-        }
-        throw new HttpException(`Lỗi khi gọi API HRM: ${response.statusText}`, HttpStatus.BAD_REQUEST);
-      }
-
-      const rawData = await response.json();
-      const hrmUsers = Array.isArray(rawData)
-        ? rawData
-        : (rawData.data || rawData.users || rawData.items || rawData.results || []);
-      
-      if (!Array.isArray(hrmUsers) || hrmUsers.length === 0) {
-        if (!Array.isArray(rawData)) {
-          throw new HttpException('Dữ liệu từ HRM không đúng định dạng danh sách người dùng', HttpStatus.BAD_REQUEST);
-        }
-      }
+      const syncStartedAt = new Date();
+      const hrmUsers = await this.fetchHrmUsersSnapshot(hrmApiUrl, accessToken);
 
       const defaultRole = process.env.DEFAULT_SYNC_ROLE || 'USER';
       const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
@@ -433,6 +491,8 @@ export class UsersService {
 
       let syncedCount = 0;
       let mergedCount = 0;
+      let createdCount = 0;
+      let updatedCount = 0;
 
       // THUẬT TOÁN TỐI ƯU HÓA: Inverted Hash Index trong RAM
       // Thay vì gửi N x DB queries tuần tự, preload toàn bộ Users và defaultRole trong 1 câu SQL
@@ -452,17 +512,35 @@ export class UsersService {
       ]);
 
       const idMap = new Map<string, any>();
+      const hrmIdMap = new Map<string, any>();
       const emailMap = new Map<string, any>();
       const nameMap = new Map<string, any[]>();
 
       for (const u of allDbUsers) {
         idMap.set(u.id, u);
+        if (u.hrmId) hrmIdMap.set(u.hrmId, u);
         if (u.email) emailMap.set(u.email.toLowerCase(), u);
         if (u.name) {
           const cleanName = u.name.trim().toLowerCase();
           const list = nameMap.get(cleanName) || [];
           list.push(u);
           nameMap.set(cleanName, list);
+        }
+      }
+
+      const legacyHrmUserIds = allDbUsers
+        .filter((user) => user.dataSource === 'LOCAL' && (
+          user.email?.toLowerCase().endsWith(dummyDomain.toLowerCase()) || /^\d+$/.test(user.id)
+        ))
+        .map((user) => user.id);
+      if (legacyHrmUserIds.length > 0) {
+        await this.prisma.user.updateMany({
+          where: { id: { in: legacyHrmUserIds } },
+          data: { dataSource: 'HRM' },
+        });
+        const legacyHrmUserIdSet = new Set(legacyHrmUserIds);
+        for (const user of allDbUsers) {
+          if (legacyHrmUserIdSet.has(user.id)) user.dataSource = 'HRM';
         }
       }
 
@@ -499,6 +577,10 @@ export class UsersService {
         // Kiểm tra theo ID
         if (idMap.has(hrmId)) {
           const u = idMap.get(hrmId);
+          matchedMap.set(u.id, u);
+        }
+        if (hrmIdMap.has(hrmId)) {
+          const u = hrmIdMap.get(hrmId);
           matchedMap.set(u.id, u);
         }
 
@@ -553,7 +635,7 @@ export class UsersService {
             try {
               await this.prisma.user.update({
                 where: { id: dup.id },
-                data: { email: tempEmail },
+                data: { email: tempEmail, hrmId: null },
               });
               if (dup.email) emailMap.delete(dup.email.toLowerCase());
               dup.email = tempEmail;
@@ -618,6 +700,9 @@ export class UsersService {
               specialty: position || primary.specialty || null,
               avatar: avatar || primary.avatar || null,
               isActive: isUserActive,
+              hrmId,
+              dataSource: 'HRM',
+              lastHrmSyncedAt: syncStartedAt,
             },
           });
 
@@ -625,8 +710,10 @@ export class UsersService {
           if (primary.email) emailMap.delete(primary.email.toLowerCase());
           emailMap.set(targetEmail.toLowerCase(), updatedPrimary);
           idMap.set(primary.id, updatedPrimary);
+          hrmIdMap.set(hrmId, updatedPrimary);
 
           mergedCount += duplicates.length;
+          updatedCount++;
         } else if (existingUsers.length === 1) {
           // Chỉ có 1 bản ghi — cập nhật thông tin
           const existing = existingUsers[0];
@@ -636,6 +723,9 @@ export class UsersService {
             specialty: position || undefined,
             avatar: avatar || undefined,
             isActive: isUserActive,
+            hrmId,
+            dataSource: 'HRM',
+            lastHrmSyncedAt: syncStartedAt,
           };
           if (hasRealEmail && existing.email !== hrmUser.email) {
             const conflictUser = emailMap.get(hrmUser.email.toLowerCase());
@@ -654,6 +744,8 @@ export class UsersService {
             emailMap.set(updateData.email.toLowerCase(), updatedUser);
           }
           idMap.set(existing.id, updatedUser);
+          hrmIdMap.set(hrmId, updatedUser);
+          updatedCount++;
         } else {
           // Chưa có bản ghi nào — kiểm tra email trước khi tạo mới để tránh xung đột
           const conflictUser = emailMap.get(emailOrUsername.toLowerCase());
@@ -666,10 +758,15 @@ export class UsersService {
                 specialty: position || null,
                 avatar: avatar || null,
                 isActive: isUserActive,
+                hrmId,
+                dataSource: 'HRM',
+                lastHrmSyncedAt: syncStartedAt,
               },
             });
             idMap.set(updated.id, updated);
             if (updated.email) emailMap.set(updated.email.toLowerCase(), updated);
+            hrmIdMap.set(hrmId, updated);
+            updatedCount++;
           } else {
             try {
               const newUser = await this.prisma.user.create({
@@ -683,10 +780,15 @@ export class UsersService {
                   specialty: position || null,
                   avatar: avatar,
                   isActive: isUserActive,
+                  hrmId,
+                  dataSource: 'HRM',
+                  lastHrmSyncedAt: syncStartedAt,
                 },
               });
               idMap.set(newUser.id, newUser);
               if (newUser.email) emailMap.set(newUser.email.toLowerCase(), newUser);
+              hrmIdMap.set(hrmId, newUser);
+              createdCount++;
             } catch (createErr: any) {
               console.warn(`Sync create conflict for HRM user ${hrmId}: ${createErr?.message}`);
             }
@@ -695,11 +797,33 @@ export class UsersService {
         syncedCount++;
       }
 
+      const deactivatedResult = await this.prisma.user.updateMany({
+        where: {
+          dataSource: 'HRM',
+          isActive: true,
+          OR: [
+            { lastHrmSyncedAt: null },
+            { lastHrmSyncedAt: { lt: syncStartedAt } },
+          ],
+        },
+        data: {
+          isActive: false,
+          version: { increment: 1 },
+        },
+      });
+
       // Tự động quét dọn dẹp các tài khoản trùng lặp do SSO cũ
       const cleanResult = await this.cleanSsoDuplicates();
       mergedCount += cleanResult.mergedCount;
 
-      return { success: true, syncedCount, mergedCount };
+      return {
+        success: true,
+        syncedCount,
+        createdCount,
+        updatedCount,
+        deactivatedCount: deactivatedResult.count,
+        mergedCount,
+      };
     } catch (err: any) {
       if (err instanceof HttpException) throw err;
       throw new HttpException(`Lỗi kết nối tới HRM: ${err.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
