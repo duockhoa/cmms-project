@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Req, HttpCode, HttpStatus, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Req, HttpCode, HttpStatus, Patch, ForbiddenException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkOrdersService } from './work-orders.service';
 import { InventoryService } from '../inventory/inventory.service';
@@ -26,6 +26,7 @@ import {
   QaRejectWorkOrderDto,
 } from './dto/work-orders.dto';
 import { StartWorkOrderSessionDto, StopWorkOrderSessionDto } from './dto/work-order-session.dto';
+import { hasPermission } from '../../common/utils/rbac.helper';
 
 @ApiTags('Work Orders')
 @Controller('work-orders')
@@ -48,8 +49,8 @@ export class WorkOrdersController {
 
   @ApiStandardResponse({ summary: 'Lấy danh sách log thực hiện', method: 'GET', path: '/work-orders/{id}/execution-logs' })
   @Get(':id/execution-logs')
-  getExecutionLogs(@Param('id') id: string) {
-    return this.workOrdersService.getExecutionLogs(id);
+  getExecutionLogs(@Param('id') id: string, @Req() req: any) {
+    return this.workOrdersService.getExecutionLogs(id, req.user);
   }
 
   @ApiStandardResponse({ summary: 'Tạo log thực hiện mới', method: 'POST', path: '/work-orders/{id}/execution-logs' })
@@ -80,21 +81,22 @@ export class WorkOrdersController {
 
   @ApiStandardResponse({ summary: 'Lấy chi tiết work order', method: 'GET', path: '/work-orders/{id}' })
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.workOrdersService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.workOrdersService.findOne(id, req.user);
   }
 
   @ApiStandardResponse({ summary: 'Lấy lịch sử giao dịch kho của work order', method: 'GET', path: '/work-orders/{workOrderId}/inventory-transactions' })
   @Get(':workOrderId/inventory-transactions')
-  getWorkOrderTransactions(@Param('workOrderId') workOrderId: string) {
+  async getWorkOrderTransactions(@Param('workOrderId') workOrderId: string, @Req() req: any) {
+    await this.workOrdersService.findOne(workOrderId, req.user);
     return this.inventoryService.getWorkOrderTransactions(workOrderId);
   }
 
   @ApiStandardResponse({ summary: 'Tạo work order mới', method: 'POST', path: '/work-orders' })
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() data: CreateWorkOrderDto) {
-    return this.workOrdersService.create(data);
+  create(@Body() data: CreateWorkOrderDto, @Req() req: any) {
+    return this.workOrdersService.create(data, req.user);
   }
 
   /**
@@ -205,18 +207,22 @@ export class WorkOrdersController {
 
   @ApiStandardResponse({ summary: 'Thêm vật tư vào work order', method: 'POST', path: '/work-orders/{id}/items' })
   @Post(':id/items')
-  addItem(@Param('id') id: string, @Body() itemDto: AddWorkOrderItemDto) {
-    return this.workOrdersService.addItem(id, itemDto);
+  addItem(@Param('id') id: string, @Body() itemDto: AddWorkOrderItemDto, @Req() req: any) {
+    return this.workOrdersService.addItem(id, itemDto, req.user);
   }
 
   @ApiStandardResponse({ summary: 'Hoàn trả vật tư work order', method: 'POST', path: '/work-orders/{workOrderId}/material-returns' })
   @Post(':workOrderId/material-returns')
   @HttpCode(HttpStatus.CREATED)
-  materialReturn(
+  async materialReturn(
     @Param('workOrderId') workOrderId: string,
     @Body() body: MaterialReturnDto,
     @Req() req: any,
   ) {
+    if (!hasPermission(req.user, 'inventory:out') && !hasPermission(req.user, 'work_orders:edit')) {
+      throw new ForbiddenException('Bạn không có quyền hoàn trả vật tư của phiếu sửa chữa.');
+    }
+    await this.workOrdersService.findOne(workOrderId, req.user);
     return this.inventoryService.materialReturn(workOrderId, body, req.user.id);
   }
 
@@ -231,25 +237,25 @@ export class WorkOrdersController {
   @ApiStandardResponse({ summary: 'Lấy phiên làm việc đang chạy', method: 'GET', path: '/work-orders/{id}/sessions/active' })
   @Get(':id/sessions/active')
   getActiveSession(@Param('id') id: string, @Req() req: any) {
-    return this.workOrdersService.getActiveSession(id, req.user.id);
+    return this.workOrdersService.getActiveSession(id, req.user.id, req.user);
   }
 
   @ApiStandardResponse({ summary: 'Bắt đầu phiên làm việc', method: 'POST', path: '/work-orders/{id}/sessions/start' })
   @Post(':id/sessions/start')
   startSession(@Param('id') id: string, @Body() body: StartWorkOrderSessionDto, @Req() req: any) {
-    return this.workOrdersService.startWorkSession(id, req.user.id, body);
+    return this.workOrdersService.startWorkSession(id, req.user.id, body, req.user);
   }
 
   @ApiStandardResponse({ summary: 'Kết thúc phiên làm việc', method: 'POST', path: '/work-orders/{id}/sessions/stop' })
   @Post(':id/sessions/stop')
   stopSession(@Param('id') id: string, @Body() body: StopWorkOrderSessionDto, @Req() req: any) {
-    return this.workOrdersService.stopWorkSession(id, req.user.id, body);
+    return this.workOrdersService.stopWorkSession(id, req.user.id, body, req.user);
   }
 
   @ApiStandardResponse({ summary: 'Lấy danh sách các phiên làm việc của phiếu', method: 'GET', path: '/work-orders/{id}/sessions' })
   @Get(':id/sessions')
-  getSessions(@Param('id') id: string) {
-    return this.workOrdersService.getWorkSessions(id);
+  getSessions(@Param('id') id: string, @Req() req: any) {
+    return this.workOrdersService.getWorkSessions(id, req.user);
   }
 }
 

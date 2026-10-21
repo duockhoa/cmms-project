@@ -47,7 +47,7 @@ describe('UsersService HRM synchronization', () => {
       where: {
         isActive: true,
         dataSource: 'HRM',
-        department: { contains: 'Kỹ thuật' },
+        department: { equals: 'Kỹ thuật' },
       },
     }));
   });

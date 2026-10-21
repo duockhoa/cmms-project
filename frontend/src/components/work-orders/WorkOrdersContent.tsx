@@ -46,10 +46,10 @@ export const WorkOrdersContent: React.FC<WorkOrdersContentProps> = ({ model }) =
 
         {/* Filter Bar */}
         <FilterBar
-          hasActiveFilters={Boolean(search || statusFilter || handlerTeamFilter || onlyMyWork)}
+          hasActiveFilters={Boolean(search || statusFilter !== 'ALL' || handlerTeamFilter || onlyMyWork)}
           onReset={() => {
             setSearch('');
-            setStatusFilter('');
+            setStatusFilter('ALL');
             setHandlerTeamFilter('');
             setOnlyMyWork?.(false);
             setPage(1);
@@ -72,7 +72,7 @@ export const WorkOrdersContent: React.FC<WorkOrdersContentProps> = ({ model }) =
               value={statusFilter}
               onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}
             >
-              <option value="">-- Tất cả trạng thái --</option>
+              <option value="ALL">-- Tất cả trạng thái --</option>
               <option value="PENDING">Chờ phân công</option>
               <option value="ASSIGNED">Đã phân công</option>
               <option value="IN_PROGRESS">Đang thực hiện</option>

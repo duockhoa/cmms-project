@@ -76,29 +76,29 @@ export const UserCustomPermissionsModal: React.FC<UserCustomPermissionsModalProp
     if (rolePermissions.includes(code)) return;
 
     setCustomPerms(prev => {
-      if (prev.includes(code)) {
-        return prev.filter(c => c !== code);
-      } else {
-        return [...prev, code];
+      const current = prev.filter(c => c !== 'ALL' && c !== '*');
+      if (current.includes(code)) {
+        return current.filter(c => c !== code);
       }
+      return [...current, code];
     });
   };
 
   const handleSelectAllModule = (moduleCodes: string[]) => {
     const codesToAdd = moduleCodes.filter(c => !rolePermissions.includes(c));
     setCustomPerms(prev => {
-      const allSelected = codesToAdd.every(c => prev.includes(c));
+      const current = prev.filter(c => c !== 'ALL' && c !== '*');
+      const allSelected = codesToAdd.every(c => current.includes(c));
       if (allSelected) {
-        return prev.filter(c => !codesToAdd.includes(c));
-      } else {
-        return Array.from(new Set([...prev, ...codesToAdd]));
+        return current.filter(c => !codesToAdd.includes(c));
       }
+      return Array.from(new Set([...current, ...codesToAdd]));
     });
   };
 
   const handleSelectAllAvailable = () => {
     const available = ALL_PERMISSION_CODES.filter(c => !rolePermissions.includes(c));
-    setCustomPerms(available);
+    setCustomPerms(['ALL', ...available]);
   };
 
   const handleClearCustomPerms = () => {

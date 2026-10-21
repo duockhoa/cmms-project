@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { JwtStrategy } from '../auth/jwt.strategy';
 import { UpdateTechnicalProfileDto } from './dto/update-technical-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
+import { isGlobalAdmin } from '../../common/utils/rbac.helper';
 
 @Injectable()
 export class UsersService {
@@ -120,7 +121,7 @@ export class UsersService {
   async getAssignees(department?: string) {
     const whereClause: any = { isActive: true, dataSource: 'HRM' };
     if (department) {
-      whereClause.department = { contains: department };
+      whereClause.department = { equals: department };
     }
     return this.prisma.user.findMany({
       where: whereClause,
@@ -145,10 +146,10 @@ export class UsersService {
       whereClause.isActive = true;
     }
     if (department) {
-      whereClause.department = { contains: department };
+      whereClause.department = { equals: department };
     }
 
-    const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN';
+    const isAdmin = isGlobalAdmin(currentUser);
 
     const users = await this.prisma.user.findMany({
       where: whereClause,

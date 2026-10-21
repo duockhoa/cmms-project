@@ -12,6 +12,7 @@ import {
   Res,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -34,7 +35,8 @@ export class AttachmentsController {
     @Body('description') description?: string,
     @Body('workOrderId') workOrderId?: string,
     @Body('executionLogId') executionLogId?: string,
-    @Body('photoCategory') photoCategory?: string
+    @Body('photoCategory') photoCategory?: string,
+    @Req() req?: any,
   ) {
     return this.attachmentsService.uploadFile(
       file,
@@ -44,21 +46,23 @@ export class AttachmentsController {
       description,
       workOrderId,
       executionLogId,
-      photoCategory
+      photoCategory,
+      req?.user,
     );
   }
 
   @Get()
   async getAttachments(
     @Query('entityType') entityType: string,
-    @Query('entityId') entityId: string
+    @Query('entityId') entityId: string,
+    @Req() req: any,
   ) {
-    return this.attachmentsService.getAttachmentsForEntity(entityType, entityId);
+    return this.attachmentsService.getAttachmentsForEntity(entityType, entityId, req.user);
   }
 
   @Get(':id/download')
-  async downloadFile(@Param('id') id: string, @Res() res: Response) {
-    const fileInfo = await this.attachmentsService.downloadFile(id);
+  async downloadFile(@Param('id') id: string, @Req() req: any, @Res() res: Response) {
+    const fileInfo = await this.attachmentsService.downloadFile(id, req.user);
     res.setHeader('Content-Type', fileInfo.fileType);
     res.setHeader(
       'Content-Disposition',
@@ -68,8 +72,8 @@ export class AttachmentsController {
   }
 
   @Get(':id/view')
-  async viewFile(@Param('id') id: string, @Res() res: Response) {
-    const fileInfo = await this.attachmentsService.downloadFile(id);
+  async viewFile(@Param('id') id: string, @Req() req: any, @Res() res: Response) {
+    const fileInfo = await this.attachmentsService.downloadFile(id, req.user);
     res.setHeader('Content-Type', fileInfo.fileType);
     res.setHeader(
       'Content-Disposition',
@@ -82,9 +86,10 @@ export class AttachmentsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteFile(
     @Param('id') id: string,
-    @Query('expectedVersion') expectedVersionStr: string
+    @Query('expectedVersion') expectedVersionStr: string,
+    @Req() req: any,
   ) {
     const expectedVersion = parseInt(expectedVersionStr, 10);
-    await this.attachmentsService.deleteFile(id, isNaN(expectedVersion) ? 1 : expectedVersion);
+    await this.attachmentsService.deleteFile(id, isNaN(expectedVersion) ? 1 : expectedVersion, req.user);
   }
 }

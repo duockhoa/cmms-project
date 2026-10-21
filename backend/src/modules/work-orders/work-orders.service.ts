@@ -22,6 +22,28 @@ import { ExecutionLogActionType, PerformerUnitType, HandlingRoute } from '@prism
 import { hasPermission, isGlobalAdmin, UserWithPermissions } from '../../common/utils/rbac.helper';
 import { buildWorkOrderScopeWhere } from '../../common/utils/data-scope.helper';
 
+const WORK_ORDER_ACTION_PERMISSIONS: Partial<Record<string, string>> = {
+  ASSIGN: 'work_orders:assign',
+  START: 'work_orders:execute',
+  PAUSE: 'work_orders:execute',
+  RESUME: 'work_orders:execute',
+  COMPLETE: 'work_orders:execute',
+  ESCALATE: 'work_orders:execute',
+  CLASSIFY: 'work_orders:edit',
+  HANDOVER_SUBMIT: 'work_orders:execute',
+  HANDOVER_ACCEPT: 'work_orders:close',
+  HANDOVER_REJECT: 'work_orders:close',
+  QA_VERIFY: 'work_orders:close',
+  QA_REJECT: 'work_orders:close',
+  VERIFY: 'work_orders:close',
+  CLOSE: 'work_orders:close',
+  REOPEN: 'work_orders:edit',
+};
+
+const hasPermissionContext = (actor: unknown): actor is UserWithPermissions =>
+  Boolean(actor && typeof actor === 'object' && ('customRole' in actor || 'customPermissions' in actor));
+
+
 @Injectable()
 export class WorkOrdersService implements OnModuleInit {
   constructor(
@@ -83,6 +105,9 @@ export class WorkOrdersService implements OnModuleInit {
     query?: { status?: string; priority?: string; search?: string; equipmentId?: string; page?: string; limit?: string; handlerTeam?: string; technicianId?: string },
     actor?: UserWithPermissions | null,
   ) {
+    if (actor && hasPermissionContext(actor) && !hasPermission(actor, 'work_orders:view')) {
+      throw new ForbiddenException('Bạn không có quyền xem phiếu sửa chữa.');
+    }
     const andConditions: any[] = [];
 
     // 1. Áp dụng Server-enforced Scope theo vai trò và phòng ban của người dùng
@@ -220,9 +245,13 @@ export class WorkOrdersService implements OnModuleInit {
     });
   }
 
-  async findOne(id: string, actorContext?: { id: string; role: string }) {
-    const wo = await this.prisma.workOrder.findUnique({
-      where: { id },
+  async findOne(id: string, actorContext?: UserWithPermissions | null) {
+    if (actorContext && hasPermissionContext(actorContext) && !hasPermission(actorContext, 'work_orders:view')) {
+      throw new ForbiddenException('Bạn không có quyền xem phiếu sửa chữa.');
+    }
+    const scopeWhere = buildWorkOrderScopeWhere(actorContext);
+    const wo = await this.prisma.workOrder.findFirst({
+      where: { AND: [{ id }, scopeWhere] },
       include: {
         equipment: true,
         request: true,
@@ -235,13 +264,6 @@ export class WorkOrdersService implements OnModuleInit {
     });
     if (!wo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
 
-    const isAssigned = wo.assignedTechnicianId === actorContext?.id ||
-      (Array.isArray(wo.assignedTechnicianIds as any) && (wo.assignedTechnicianIds as string[]).includes(actorContext?.id)) ||
-      (Array.isArray(wo.supporterIds as any) && (wo.supporterIds as string[]).includes(actorContext?.id));
-
-    if (actorContext && actorContext.role === 'TECHNICIAN' && !isAssigned) {
-      throw new ForbiddenException('Bạn không được phân công thực hiện công việc này.');
-    }
 
     if (wo.status === 'CANCELLED') {
       const cancelLog = await this.prisma.workflowHistory.findFirst({
@@ -259,7 +281,11 @@ export class WorkOrdersService implements OnModuleInit {
     return wo;
   }
 
-  async create(data: any) {
+  async create(data: any, actor?: UserWithPermissions | null) {
+    if (actor && !hasPermission(actor, 'work_orders:create')) {
+      throw new ForbiddenException('Bạn không có quyền tạo phiếu sửa chữa.');
+    }
+
     let eqIdentifier = (data.equipmentId || data.equipmentCode || '').toString().trim();
     if (eqIdentifier.includes('$')) {
       eqIdentifier = eqIdentifier.split('$')[0].trim();
@@ -440,7 +466,7 @@ export class WorkOrdersService implements OnModuleInit {
       },
     });
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { customRole: true } });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
     const unitType = this.getPerformerUnitType(user);
 
@@ -482,7 +508,8 @@ export class WorkOrdersService implements OnModuleInit {
     };
   }
 
-  async getExecutionLogs(workOrderId: string) {
+  async getExecutionLogs(workOrderId: string, actor?: UserWithPermissions | null) {
+    await this.findOne(workOrderId, actor);
     return this.prisma.workOrderExecutionLog.findMany({
       where: { workOrderId },
       orderBy: { recordedAt: 'asc' },
@@ -501,8 +528,12 @@ export class WorkOrdersService implements OnModuleInit {
     });
     if (!wo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { customRole: true } });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+    if (!hasPermission(user, 'work_orders:execute')) {
+      throw new ForbiddenException('Bạn không có quyền ghi nhật ký thực hiện phiếu sửa chữa.');
+    }
+    await this.findOne(workOrderId, user);
     const unitType = this.getPerformerUnitType(user);
 
     const isAssigned = wo.assignedTechnicianId === userId || 
@@ -569,8 +600,13 @@ export class WorkOrdersService implements OnModuleInit {
     comment?: string,
     reason?: string,
     extraOperations?: (tx: any, wo: any) => Promise<void>,
-    actorContext?: { id: string; role: string },
+    actorContext?: UserWithPermissions & { role: string },
   ) {
+    const requiredPermission = WORK_ORDER_ACTION_PERMISSIONS[actionName];
+    if (requiredPermission && hasPermissionContext(actorContext) && !hasPermission(actorContext, requiredPermission)) {
+      throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này trên phiếu sửa chữa.');
+    }
+
     let resolvedActorUser = null;
     if (actorContext?.id) {
       resolvedActorUser = await this.prisma.user.findUnique({ where: { id: actorContext.id } });
@@ -1282,7 +1318,11 @@ export class WorkOrdersService implements OnModuleInit {
     }
   }
 
-  async addItem(id: string, itemDto: { inventoryItemId: string; quantity: number }) {
+  async addItem(id: string, itemDto: { inventoryItemId: string; quantity: number }, actor?: UserWithPermissions | null) {
+    if (actor && !hasPermission(actor, 'work_orders:edit')) {
+      throw new ForbiddenException('Bạn không có quyền cập nhật vật tư phiếu sửa chữa.');
+    }
+    await this.findOne(id, actor);
     return this.prisma.$transaction(async (tx) => {
       const wo = await tx.workOrder.findUnique({ where: { id } });
       if (!wo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
@@ -1456,7 +1496,8 @@ export class WorkOrdersService implements OnModuleInit {
     return Math.max(0, totalMinutes);
   }
 
-  async getActiveSession(workOrderId: string, userId: string) {
+  async getActiveSession(workOrderId: string, userId: string, actor?: UserWithPermissions | null) {
+    await this.findOne(workOrderId, actor);
     return this.prisma.workOrderWorkSession.findFirst({
       where: {
         workOrderId,
@@ -1469,7 +1510,11 @@ export class WorkOrdersService implements OnModuleInit {
     });
   }
 
-  async startWorkSession(workOrderId: string, userId: string, dto?: StartWorkOrderSessionDto) {
+  async startWorkSession(workOrderId: string, userId: string, dto?: StartWorkOrderSessionDto, actor?: UserWithPermissions | null) {
+    if (actor && !hasPermission(actor, 'work_orders:execute')) {
+      throw new ForbiddenException('Bạn không có quyền bắt đầu phiên làm việc.');
+    }
+    await this.findOne(workOrderId, actor);
     const wo = await this.prisma.workOrder.findUnique({
       where: { id: workOrderId },
       include: { equipment: true },
@@ -1560,7 +1605,11 @@ export class WorkOrdersService implements OnModuleInit {
     return session;
   }
 
-  async stopWorkSession(workOrderId: string, userId: string, dto?: StopWorkOrderSessionDto) {
+  async stopWorkSession(workOrderId: string, userId: string, dto?: StopWorkOrderSessionDto, actor?: UserWithPermissions | null) {
+    if (actor && !hasPermission(actor, 'work_orders:execute')) {
+      throw new ForbiddenException('Bạn không có quyền kết thúc phiên làm việc.');
+    }
+    await this.findOne(workOrderId, actor);
     const active = await this.prisma.workOrderWorkSession.findFirst({
       where: {
         workOrderId,
@@ -1643,7 +1692,8 @@ export class WorkOrdersService implements OnModuleInit {
     return updatedSession;
   }
 
-  async getWorkSessions(workOrderId: string) {
+  async getWorkSessions(workOrderId: string, actor?: UserWithPermissions | null) {
+    await this.findOne(workOrderId, actor);
     return this.prisma.workOrderWorkSession.findMany({
       where: { workOrderId },
       include: {

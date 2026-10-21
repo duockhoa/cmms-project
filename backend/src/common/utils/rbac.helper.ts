@@ -1,3 +1,5 @@
+import { ALL_PERMISSION_CODES } from '../constants/permissions.registry';
+
 export interface UserWithPermissions {
   id: string;
   role?: string | null;
@@ -55,7 +57,7 @@ export function isGlobalAdmin(user: UserWithPermissions | null | undefined): boo
   if (!user) return false;
   if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') return true;
   const perms = extractEffectivePermissions(user);
-  return perms.has('*') || perms.has('ALL');
+  return perms.has('*') || perms.has('ALL') || ALL_PERMISSION_CODES.every((permission) => perms.has(permission));
 }
 
 /**

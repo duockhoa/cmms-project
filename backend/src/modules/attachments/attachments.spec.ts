@@ -2,6 +2,7 @@ const baseDbUrl = process.env.DATABASE_URL || "mysql://root:123456@localhost:330
 process.env.DATABASE_URL = baseDbUrl.includes('?')
   ? baseDbUrl.replace(/\/([^/?]+)\?/, '/dk_cmms_test_attachments?attachments')
   : baseDbUrl.replace(/\/([^/]+)$/, '/dk_cmms_test_attachments');
+process.env.ADMIN_EMPLOYEE_CODE = 'tech-user-id';
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';

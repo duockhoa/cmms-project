@@ -26,6 +26,9 @@ export class RequestsService {
     query?: { status?: string; priority?: string; search?: string; page?: string; limit?: string; includeCancelled?: string },
     actor?: UserWithPermissions | null,
   ) {
+    if (actor && !hasPermission(actor, 'requests:view')) {
+      throw new ForbiddenException('Bạn không có quyền xem báo cáo sự cố.');
+    }
     const andConditions: any[] = [];
 
     // 1. Áp dụng Server-enforced Scope theo vai trò và phòng ban của người dùng
@@ -123,9 +126,13 @@ export class RequestsService {
     });
   }
 
-  async findOne(id: string) {
-    const request = await this.prisma.maintenanceRequest.findUnique({
-      where: { id },
+  async findOne(id: string, actor?: UserWithPermissions | null) {
+    if (actor && !hasPermission(actor, 'requests:view')) {
+      throw new ForbiddenException('Bạn không có quyền xem báo cáo sự cố.');
+    }
+    const scopeWhere = buildRequestScopeWhere(actor);
+    const request = await this.prisma.maintenanceRequest.findFirst({
+      where: { AND: [{ id }, scopeWhere] },
       include: {
         equipment: true,
         functionalUnit: { include: { libraryItem: true } },
@@ -164,7 +171,12 @@ export class RequestsService {
     return request;
   }
 
-  async create(data: any, actorId?: string) {
+  async create(data: any, actor?: UserWithPermissions | string | null) {
+    const actorId = typeof actor === 'string' ? actor : actor?.id;
+    if (actor && typeof actor !== 'string' && !hasPermission(actor, 'requests:create')) {
+      throw new ForbiddenException('Bạn không có quyền tạo báo cáo sự cố.');
+    }
+
     let eqIdentifier = (data.equipmentCode || data.equipmentId || '')
       .toString()
       .replace(/^cmms-equipment:/i, '')
@@ -653,13 +665,18 @@ export class RequestsService {
   // ─── RESUBMIT REQUEST ───
   private static RESUBMIT_WHITELIST = ['title', 'description', 'priority', 'reporterName', 'department', 'images'];
 
-  async resubmitRequest(id: string, body: { expectedVersion: number; comment?: string; updatedFields?: Record<string, any> }, actorId: string) {
+  async resubmitRequest(id: string, body: { expectedVersion: number; comment?: string; updatedFields?: Record<string, any> }, actor: UserWithPermissions | string) {
+    const actorId = typeof actor === 'string' ? actor : actor.id;
     const result = await this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
         include: { workOrders: true },
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
+
+      if (typeof actor !== 'string' && request.reporterId !== actor.id && !hasPermission(actor, 'requests:edit')) {
+        throw new ForbiddenException('Bạn không có quyền tái gửi báo cáo sự cố này.');
+      }
 
       if (request.status !== 'RETURNED') {
         throw new BadRequestException(`Chỉ được tái gửi yêu cầu ở trạng thái RETURNED. Trạng thái hiện tại: ${request.status}`);
@@ -871,9 +888,15 @@ export class RequestsService {
   }
 
   // ─── UPDATE REQUEST ───
-  async update(id: string, body: any, actorId?: string) {
-    const existing = await this.prisma.maintenanceRequest.findUnique({
-      where: { id },
+  async update(id: string, body: any, actor?: UserWithPermissions | string | null) {
+    const actorId = typeof actor === 'string' ? actor : actor?.id;
+    if (actor && typeof actor !== 'string' && !hasPermission(actor, 'requests:edit')) {
+      throw new ForbiddenException('Bạn không có quyền chỉnh sửa báo cáo sự cố.');
+    }
+
+    const scopeWhere = typeof actor === 'string' ? {} : buildRequestScopeWhere(actor);
+    const existing = await this.prisma.maintenanceRequest.findFirst({
+      where: { AND: [{ id }, scopeWhere] },
       include: { workOrders: true },
     });
     if (!existing) {
@@ -1089,7 +1112,8 @@ export class RequestsService {
   }
 
   // ─── WORKFLOW HISTORY ───
-  async getHistory(requestId: string) {
+  async getHistory(requestId: string, actor?: UserWithPermissions | null) {
+    await this.findOne(requestId, actor);
     return this.prisma.workflowHistory.findMany({
       where: {
         entityType: 'MaintenanceRequest',

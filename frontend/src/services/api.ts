@@ -335,7 +335,7 @@ export const api = {
     request(`/equipment/${equipmentId}/functional-units/clone`, { method: 'POST', body: JSON.stringify(data) }),
 
   // Maintenance Requests
-  getRequests: (params?: { status?: string; priority?: string; search?: string }) =>
+  getRequests: (params?: { status?: string; priority?: string; search?: string; page?: number; limit?: number }) =>
     request(`/requests${toQueryString(params)}`),
   getRequestById: (id: string) => request(`/requests/${id}`),
   createRequest: (data: any) => request('/requests', { method: 'POST', body: JSON.stringify(data) }),

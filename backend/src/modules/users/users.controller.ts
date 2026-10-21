@@ -1,10 +1,11 @@
-import { Controller, Get, Patch, Param, Body, Query, UseGuards, Post, Delete, Req } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, Query, UseGuards, Post, Delete, Req, ForbiddenException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateTechnicalProfileDto } from './dto/update-technical-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiResponse, ApiOperation } from '@nestjs/swagger';
 import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
+import { hasPermission } from '../../common/utils/rbac.helper';
 
 @ApiTags('Người dùng')
 @ApiBearerAuth()
@@ -13,6 +14,12 @@ import { ApiStandardResponse } from '../../common/decorators/api-standard-respon
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  private assertPermission(actor: any, permission: string) {
+    if (!hasPermission(actor, permission)) {
+      throw new ForbiddenException('Bạn không có quyền quản trị người dùng.');
+    }
+  }
+
   @Post('sync-hrm')
   @ApiStandardResponse({
     summary: 'Đồng bộ danh sách người dùng từ HRM',
@@ -20,6 +27,7 @@ export class UsersController {
     path: '/users/sync-hrm',
   })
   async syncHrmUsers(@Req() req: any) {
+    this.assertPermission(req.user, 'settings:users');
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1] || '';
     return this.usersService.syncHrmUsers(token);
@@ -31,7 +39,8 @@ export class UsersController {
     method: 'POST',
     path: '/users/clean-duplicates',
   })
-  async cleanDuplicates() {
+  async cleanDuplicates(@Req() req: any) {
+    this.assertPermission(req.user, 'settings:users');
     return this.usersService.cleanSsoDuplicates();
   }
 
@@ -135,8 +144,10 @@ export class UsersController {
   @Patch(':id/role')
   async updateRole(
     @Param('id') id: string,
-    @Body() body: { roleId: string | null }
+    @Body() body: { roleId: string | null },
+    @Req() req: any,
   ) {
+    this.assertPermission(req.user, 'settings:roles');
     return this.usersService.updateRole(id, body.roleId);
   }
 
@@ -148,14 +159,17 @@ export class UsersController {
   @Patch(':id/custom-permissions')
   async updateCustomPermissions(
     @Param('id') id: string,
-    @Body() body: { permissions: string[] }
+    @Body() body: { permissions: string[] },
+    @Req() req: any,
   ) {
+    this.assertPermission(req.user, 'settings:user_perms');
     return this.usersService.updateCustomPermissions(id, body.permissions);
   }
 
   @ApiOperation({ summary: 'Tạo mới người dùng thủ công' })
   @Post()
-  async createUser(@Body() body: any) {
+  async createUser(@Body() body: any, @Req() req: any) {
+    this.assertPermission(req.user, 'settings:users');
     return this.usersService.createUser(body);
   }
 
@@ -163,14 +177,17 @@ export class UsersController {
   @Patch(':id')
   async updateUser(
     @Param('id') id: string,
-    @Body() body: any
+    @Body() body: any,
+    @Req() req: any,
   ) {
+    this.assertPermission(req.user, 'settings:users');
     return this.usersService.updateUser(id, body);
   }
 
   @ApiOperation({ summary: 'Xóa người dùng' })
   @Delete(':id')
-  async deleteUser(@Param('id') id: string) {
+  async deleteUser(@Param('id') id: string, @Req() req: any) {
+    this.assertPermission(req.user, 'settings:users');
     return this.usersService.deleteUser(id);
   }
 }

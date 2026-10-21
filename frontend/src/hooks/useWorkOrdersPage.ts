@@ -15,7 +15,7 @@ export const useWorkOrdersPage = () => {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [handlerTeamFilter, setHandlerTeamFilter] = useState('');
   const [onlyMyWork, setOnlyMyWork] = useState(false);
   const [departments, setDepartments] = useState<string[]>([]);
@@ -138,7 +138,9 @@ export const useWorkOrdersPage = () => {
       if (result && result.data && Array.isArray(result.data)) {
         setWorkOrders(result.data);
         setTotal(result.meta.total);
-        setTotalPages(result.meta.totalPages);
+        const nextTotalPages = Math.max(1, result.meta.totalPages || 1);
+        setTotalPages(nextTotalPages);
+        if (page > nextTotalPages) setPage(nextTotalPages);
       } else if (Array.isArray(result)) {
         setWorkOrders(result);
         setTotal(result.length);
@@ -146,6 +148,7 @@ export const useWorkOrdersPage = () => {
       }
     } catch (err) {
       console.error(err);
+      toast.error('Lỗi tải dữ liệu', 'Không thể tải đầy đủ danh sách phiếu sửa chữa.');
     } finally {
       setLoading(false);
     }

@@ -17,7 +17,11 @@ export function useRequestsPage() {
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Selected Detail state for Split Pane layout (initialize from ?id= if present)
   const [selectedDetailReqId, _setSelectedDetailReqId] = useState<string | null>(searchParams.get('id') || null);
@@ -61,12 +65,19 @@ export function useRequestsPage() {
     try {
       setLoading(true);
       const [reqRes, eqRes, userRes, meRes] = await Promise.all([
-        api.getRequests({ status: statusFilter }),
+        api.getRequests({ status: statusFilter, page, limit }),
         api.getEquipment(),
         api.getUsers().catch(() => []),
         api.getMe().catch(() => null),
       ]);
-      setRequests(reqRes);
+      const requestRows = Array.isArray(reqRes?.data) ? reqRes.data : Array.isArray(reqRes) ? reqRes : [];
+      const requestMeta = reqRes?.meta;
+      setRequests(requestRows);
+      setTotal(requestMeta?.total ?? requestRows.length);
+      setTotalPages(Math.max(1, requestMeta?.totalPages ?? 1));
+      if (requestMeta?.totalPages > 0 && page > requestMeta.totalPages) {
+        setPage(requestMeta.totalPages);
+      }
       setEquipmentList(eqRes);
       setUsers(userRes);
 
@@ -87,10 +98,11 @@ export function useRequestsPage() {
       }
     } catch (err) {
       console.error(err);
+      toast.error('Lỗi tải dữ liệu', 'Không thể tải đầy đủ danh sách báo cáo sự cố.');
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, page, limit]);
 
   const handleQRScan = useCallback((decodedText: string) => {
     let rawCode = (decodedText || '')
@@ -354,6 +366,13 @@ export function useRequestsPage() {
     // Filters
     statusFilter,
     setStatusFilter,
+
+    // Pagination
+    page,
+    setPage,
+    limit,
+    total,
+    totalPages,
 
     // Detail pane
     selectedDetailReqId,

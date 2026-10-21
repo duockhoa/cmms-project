@@ -27,24 +27,24 @@ export class RequestsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.requestsService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.requestsService.findOne(id, req.user);
   }
 
   @Get(':id/history')
-  getHistory(@Param('id') id: string) {
-    return this.requestsService.getHistory(id);
+  getHistory(@Param('id') id: string, @Req() req: any) {
+    return this.requestsService.getHistory(id, req.user);
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() data: CreateMaintenanceRequestDto, @Req() req: any) {
-    return this.requestsService.create(data, req?.user?.id);
+    return this.requestsService.create(data, req?.user);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: UpdateMaintenanceRequestDto, @Req() req: any) {
-    return this.requestsService.update(id, body, req?.user?.id);
+    return this.requestsService.update(id, body, req?.user);
   }
 
   @Delete(':id')
@@ -69,7 +69,7 @@ export class RequestsController {
 
   @Post(':id/resubmit')
   resubmitRequest(@Param('id') id: string, @Body() body: ResubmitRequestDto, @Req() req: any) {
-    return this.requestsService.resubmitRequest(id, body, req.user.id);
+    return this.requestsService.resubmitRequest(id, body, req.user);
   }
 
   @Post(':id/cancel')

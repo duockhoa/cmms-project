@@ -4,6 +4,7 @@ import { Plus, Cpu, Edit2, Trash2, Eye, Lock } from 'lucide-react';
 import { RequestDetailView } from '../components/common/RequestDetailView';
 import { TableSkeleton, CardListSkeleton } from '../components/common/Skeleton';
 import { EmptyState, FilterBar, PageHeader } from '../components/common';
+import { Pagination } from '../components/common/Pagination';
 import { RequestDeleteModal } from '../components/requests/RequestDeleteModal';
 import { RequestCreateModal } from '../components/requests/RequestCreateModal';
 import { RequestEditModal } from '../components/requests/RequestEditModal';
@@ -20,6 +21,11 @@ export const RequestsPage: React.FC = () => {
     loading,
     statusFilter,
     setStatusFilter,
+    page,
+    setPage,
+    limit,
+    total,
+    totalPages,
     selectedDetailReqId,
     setSelectedDetailReqId,
     isAddOpen,
@@ -65,9 +71,9 @@ export const RequestsPage: React.FC = () => {
       />
 
       {/* Filter Bar */}
-      <FilterBar hasActiveFilters={Boolean(statusFilter)} onReset={() => setStatusFilter('')}>
-        <select className="form-select" style={{ width: '250px' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">-- Tất cả Trạng thái --</option>
+      <FilterBar hasActiveFilters={statusFilter !== 'ALL'} onReset={() => setStatusFilter('ALL')}>
+        <select className="form-select" style={{ width: '250px' }} value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
+          <option value="ALL">-- Tất cả Trạng thái --</option>
           <option value="PENDING">Chờ xử lý (Phê duyệt)</option>
           <option value="APPROVED">Đã duyệt (Đang sửa chữa)</option>
           <option value="CLOSED">Đã đóng (Đã nghiệm thu xong)</option>
@@ -291,6 +297,16 @@ export const RequestsPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          )}
+          {!selectedDetailReqId && (
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={total}
+              pageSize={limit}
+              itemName="báo cáo sự cố"
+              onPageChange={setPage}
+            />
           )}
         </div>
 

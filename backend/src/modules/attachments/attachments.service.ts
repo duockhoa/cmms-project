@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { buildRequestScopeWhere, buildWorkOrderScopeWhere } from '../../common/utils/data-scope.helper';
+import { hasPermission, UserWithPermissions } from '../../common/utils/rbac.helper';
 
 const RETENTION_POLICIES: Record<string, 'HARD_DELETE' | 'SOFT_DELETE'> = {
   Equipment: 'HARD_DELETE',
@@ -32,6 +34,90 @@ export class AttachmentsService {
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
     }
+  }
+
+  private readonly entityPermissions: Record<string, { read: string[]; write: string[] }> = {
+    Equipment: { read: ['equipment:view'], write: ['equipment:create', 'equipment:edit'] },
+    MaintenanceRequest: { read: ['requests:view'], write: ['requests:create', 'requests:edit'] },
+    WorkOrder: { read: ['work_orders:view'], write: ['work_orders:create', 'work_orders:edit', 'work_orders:execute'] },
+    ChecklistExecutionItem: { read: ['checklists:view'], write: ['checklists:edit', 'checklists:execute'] },
+    WorkOrderExecutionLog: { read: ['work_orders:view'], write: ['work_orders:execute'] },
+    FabricationOrder: { read: ['fabrication:view'], write: ['fabrication:create', 'fabrication:edit'] },
+  };
+
+  private assertPermission(entityType: string, actor: UserWithPermissions | null | undefined, mode: 'read' | 'write') {
+    const requiredPermissions = this.entityPermissions[entityType]?.[mode] || [];
+    if (!actor || !requiredPermissions.some((permission) => hasPermission(actor, permission))) {
+      throw new ForbiddenException('Bạn không có quyền truy cập tệp đính kèm này.');
+    }
+  }
+
+  private async assertWorkOrderScope(workOrderId: string, actor: UserWithPermissions) {
+    const workOrder = await this.prisma.workOrder.findFirst({
+      where: { AND: [{ id: workOrderId }, buildWorkOrderScopeWhere(actor)] },
+      select: { id: true },
+    });
+    if (!workOrder) {
+      throw new NotFoundException('Không tìm thấy phiếu sửa chữa trong phạm vi truy cập.');
+    }
+  }
+
+  private async assertEntityAccess(
+    entityType: string,
+    entityId: string,
+    actor: UserWithPermissions | null | undefined,
+    mode: 'read' | 'write',
+  ) {
+    this.assertPermission(entityType, actor, mode);
+    const scopedActor = actor as UserWithPermissions;
+
+    if (entityType === 'MaintenanceRequest') {
+      const request = await this.prisma.maintenanceRequest.findFirst({
+        where: { AND: [{ id: entityId }, buildRequestScopeWhere(scopedActor)] },
+        select: { id: true },
+      });
+      if (!request) {
+        throw new NotFoundException('Không tìm thấy báo cáo sự cố trong phạm vi truy cập.');
+      }
+      return;
+    }
+
+    if (entityType === 'WorkOrder') {
+      await this.assertWorkOrderScope(entityId, scopedActor);
+      return;
+    }
+
+    if (entityType === 'WorkOrderExecutionLog') {
+      const log = await this.prisma.workOrderExecutionLog.findUnique({
+        where: { id: entityId },
+        select: { workOrderId: true },
+      });
+      if (!log) throw new NotFoundException('Không tìm thấy nhật ký thực hiện.');
+      await this.assertWorkOrderScope(log.workOrderId, scopedActor);
+      return;
+    }
+
+    if (entityType === 'ChecklistExecutionItem') {
+      const item = await this.prisma.checklistExecutionItem.findUnique({
+        where: { id: entityId },
+        select: { execution: { select: { workOrderId: true } } },
+      });
+      if (!item) throw new NotFoundException('Không tìm thấy hạng mục checklist.');
+      await this.assertWorkOrderScope(item.execution.workOrderId, scopedActor);
+    }
+  }
+
+  private async getScopedAttachment(id: string, actor: UserWithPermissions, mode: 'read' | 'write') {
+    const attachment = await this.prisma.attachment.findFirst({ where: { id, isDeleted: false } });
+    if (!attachment) throw new NotFoundException(`Không tìm thấy tệp đính kèm với ID: ${id}`);
+
+    if (attachment.workOrderId) {
+      this.assertPermission(attachment.entityType, actor, mode);
+      await this.assertWorkOrderScope(attachment.workOrderId, actor);
+    } else {
+      await this.assertEntityAccess(attachment.entityType, attachment.entityId, actor, mode);
+    }
+    return attachment;
   }
 
   private validateMagicNumber(buffer: Buffer, mimetype: string): boolean {
@@ -119,14 +205,18 @@ export class AttachmentsService {
     description?: string,
     workOrderId?: string,
     executionLogId?: string,
-    photoCategory?: string
+    photoCategory?: string,
+    actor?: UserWithPermissions | null,
   ) {
     if (!file) {
       throw new BadRequestException('Vui lòng cung cấp tệp tải lên');
     }
 
-    // Validation: Entity
+    // Validation: Entity and caller scope
     await this.validateParentEntity(entityType, entityId);
+    await this.assertEntityAccess(entityType, entityId, actor, 'write');
+    if (workOrderId) await this.assertWorkOrderScope(workOrderId, actor as UserWithPermissions);
+    if (executionLogId) await this.assertEntityAccess('WorkOrderExecutionLog', executionLogId, actor, 'write');
 
     if (entityType === 'ChecklistExecutionItem') {
       const item = await this.prisma.checklistExecutionItem.findUnique({
@@ -181,7 +271,7 @@ export class AttachmentsService {
         fileType: file.mimetype,
         fileSize: file.size,
         storagePath: `uploads/${fileName}`,
-        uploadedById: uploadedById || null,
+        uploadedById: actor?.id || uploadedById || null,
         description: description || null,
         checksum,
         workOrderId: workOrderId || null,
@@ -191,24 +281,12 @@ export class AttachmentsService {
     });
   }
 
-  async getFileDetails(id: string) {
-    const attachment = await this.prisma.attachment.findFirst({
-      where: { id, isDeleted: false },
-    });
-    if (!attachment) {
-      throw new NotFoundException(`Không tìm thấy tệp đính kèm với ID: ${id}`);
-    }
-    return attachment;
+  async getFileDetails(id: string, actor: UserWithPermissions) {
+    return this.getScopedAttachment(id, actor, 'read');
   }
 
-  async downloadFile(id: string) {
-    const attachment = await this.prisma.attachment.findFirst({
-      where: { id, isDeleted: false },
-    });
-    if (!attachment) {
-      throw new NotFoundException(`Không tìm thấy tệp đính kèm với ID: ${id}`);
-    }
-
+  async downloadFile(id: string, actor: UserWithPermissions) {
+    const attachment = await this.getScopedAttachment(id, actor, 'read');
     const fullPath = path.join(process.cwd(), attachment.storagePath);
     if (!fs.existsSync(fullPath)) {
       throw new NotFoundException('Tệp vật lý không tồn tại trên hệ thống lưu trữ');
@@ -221,14 +299,16 @@ export class AttachmentsService {
     };
   }
 
-  async getAttachmentsForEntity(entityType: string, entityId: string) {
+  async getAttachmentsForEntity(entityType: string, entityId: string, actor: UserWithPermissions) {
+    await this.assertEntityAccess(entityType, entityId, actor, 'read');
     return this.prisma.attachment.findMany({
       where: { entityType, entityId, isDeleted: false },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async deleteFile(id: string, expectedVersion: number) {
+  async deleteFile(id: string, expectedVersion: number, actor: UserWithPermissions) {
+    await this.getScopedAttachment(id, actor, 'write');
     return this.prisma.$transaction(async (tx) => {
       const attachment = await tx.attachment.findUnique({
         where: { id },
