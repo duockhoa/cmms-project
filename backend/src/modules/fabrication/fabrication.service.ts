@@ -242,7 +242,32 @@ export class FabricationService {
       throw new NotFoundException(`Không tìm thấy công việc gia công/chế tạo với mã ${id}`);
     }
 
-    return item;
+    let supporterIds: string[] = [];
+    try {
+      const parsed = typeof item.supporterIds === 'string'
+        ? JSON.parse(item.supporterIds)
+        : item.supporterIds;
+      supporterIds = Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+    } catch {
+      supporterIds = [];
+    }
+
+    const assignedSupporters = supporterIds.length > 0
+      ? await this.prisma.user.findMany({
+          where: { id: { in: supporterIds } },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            specialty: true,
+            avatar: true,
+            department: true,
+            isActive: true,
+          },
+        })
+      : [];
+
+    return { ...item, assignedSupporters };
   }
 
   async update(id: string, dto: UpdateFabricationDto, user?: any) {

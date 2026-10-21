@@ -212,7 +212,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
       setLoading(true);
       const [jobData, usersData, historyData, pLogsData] = await Promise.all([
         api.getFabricationOrder(id),
-        api.getUsers({ department: 'xưởng cơ điện' }),
+        api.getAssignees(),
         api.getFabricationHistory(id).catch(() => []),
         api.getFabricationProgressLogs(id).catch(() => []),
       ]);
@@ -225,7 +225,14 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
       setJob(jobData);
       loadMySession(id);
-      setStaffList(Array.isArray(usersData) ? usersData : []);
+      const staffById = new Map<string, any>();
+      const addStaff = (staff: any) => {
+        if (staff?.id !== undefined && staff?.id !== null) staffById.set(String(staff.id), staff);
+      };
+      (Array.isArray(usersData) ? usersData : []).forEach(addStaff);
+      addStaff(jobData.assignedTechnician);
+      (Array.isArray(jobData.assignedSupporters) ? jobData.assignedSupporters : []).forEach(addStaff);
+      setStaffList(Array.from(staffById.values()));
       setHistory(Array.isArray(historyData) ? historyData : []);
       setProgressLogs(Array.isArray(pLogsData) && pLogsData.length > 0 ? pLogsData : (Array.isArray(jobData.progressLogs) ? jobData.progressLogs : []));
 
@@ -262,12 +269,13 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
       // Initialize technicians
       let initialTechs: string[] = [];
-      if (jobData.assignedTechnicianId) initialTechs.push(jobData.assignedTechnicianId);
+      if (jobData.assignedTechnicianId) initialTechs.push(String(jobData.assignedTechnicianId));
       if (jobData.supporterIds) {
         try {
           const parsed = typeof jobData.supporterIds === 'string' ? JSON.parse(jobData.supporterIds) : jobData.supporterIds;
           if (Array.isArray(parsed)) {
-            parsed.forEach((tId: string) => {
+            parsed.forEach((rawId: string | number) => {
+              const tId = String(rawId);
               if (tId && !initialTechs.includes(tId)) initialTechs.push(tId);
             });
           }
@@ -599,7 +607,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
 
     setSaving(true);
     try {
-      const newTechName = staffList.find((s) => s.id === newPrimaryTechId)?.name || 'Kỹ thuật viên mới';
+      const newTechName = staffList.find((s) => String(s.id) === String(newPrimaryTechId))?.name || 'Kỹ thuật viên mới';
 
       const updated = await api.updateFabricationOrder(job.id, {
         assignedTechnicianId: newPrimaryTechId,
@@ -1459,12 +1467,12 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                 <td className="meta-value" style={{ padding: '12px 0' }}>
                   {(() => {
                     const allTechNames: string[] = [];
-                    const primaryName = job.assignedTechnician?.name || (selectedTechIds.length > 0 ? staffList.find(s => s.id === selectedTechIds[0])?.name : null);
+                    const primaryName = job.assignedTechnician?.name || (selectedTechIds.length > 0 ? staffList.find(s => String(s.id) === String(selectedTechIds[0]))?.name : null);
                     if (primaryName) allTechNames.push(primaryName);
 
                     if (selectedTechIds.length > 1) {
                       selectedTechIds.slice(1).forEach(id => {
-                        const sName = staffList.find(s => s.id === id)?.name;
+                        const sName = staffList.find(s => String(s.id) === String(id))?.name;
                         if (sName && !allTechNames.includes(sName)) {
                           allTechNames.push(sName);
                         }
@@ -2240,7 +2248,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                   </span>
                 ) : (
                   [newPrimaryTechId, ...newSupporterIds].filter(Boolean).map((tId, idx) => {
-                    const staff = staffList.find((s) => s.id === tId);
+                    const staff = staffList.find((s) => String(s.id) === String(tId));
                     const isPrimary = idx === 0;
                     return (
                       <span
@@ -2307,8 +2315,9 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                 }}
               >
                 {staffList.map((s) => {
-                  const isPrimary = s.id === newPrimaryTechId;
-                  const isSupporter = newSupporterIds.includes(s.id);
+                  const staffId = String(s.id);
+                  const isPrimary = staffId === String(newPrimaryTechId);
+                  const isSupporter = newSupporterIds.map(String).includes(staffId);
                   const isSelected = isPrimary || isSupporter;
                   return (
                     <button
@@ -2323,12 +2332,12 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
                             setNewPrimaryTechId('');
                           }
                         } else if (isSupporter) {
-                          setNewSupporterIds(newSupporterIds.filter((id) => id !== s.id));
+                          setNewSupporterIds(newSupporterIds.filter((id) => String(id) !== staffId));
                         } else {
                           if (!newPrimaryTechId) {
-                            setNewPrimaryTechId(s.id);
+                            setNewPrimaryTechId(staffId);
                           } else {
-                            setNewSupporterIds([...newSupporterIds, s.id]);
+                            setNewSupporterIds([...newSupporterIds, staffId]);
                           }
                         }
                       }}
@@ -2703,7 +2712,7 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
           <div>
             <strong>NGƯỜI THỰC HIỆN</strong>
             <p style={{ fontSize: '11px', color: '#666', margin: '4px 0 50px 0' }}>(Ký và ghi rõ họ tên)</p>
-            <p style={{ margin: 0, fontWeight: 600 }}>{selectedTechIds.map(id => staffList.find(s => s.id === id)?.name).filter(Boolean).join(', ')}</p>
+            <p style={{ margin: 0, fontWeight: 600 }}>{selectedTechIds.map(id => staffList.find(s => String(s.id) === String(id))?.name).filter(Boolean).join(', ')}</p>
           </div>
           <div>
             <strong>NGHIỆM THU TIẾP NHẬN</strong>
