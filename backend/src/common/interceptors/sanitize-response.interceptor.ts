@@ -13,7 +13,6 @@ const FORBIDDEN_FIELDS = new Set([
   'passwordHash',
   'tempPassword',
   'generationKey',
-  'version',
   'classificationReporterId',
   'hashedRefreshToken',
   'refreshToken',
