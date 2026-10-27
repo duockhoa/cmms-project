@@ -92,8 +92,11 @@ export class McpController {
     };
   }
 
+  private oauthSessions = new Map<string, { redirectUri: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string; expiresAt: number }>();
+
   @Get('oauth/authorize')
-  renderLogin(
+  async handleAuthorize(
+    @Req() req: Request,
     @Query('client_id') clientId: string,
     @Query('redirect_uri') redirectUri: string,
     @Query('state') state: string,
@@ -101,66 +104,107 @@ export class McpController {
     @Query('code_challenge_method') codeChallengeMethod: string,
     @Res() res: Response,
   ) {
-    const html = `
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Đăng nhập CMMS - Cấp quyền AI</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px; width: 100%; max-width: 420px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
-    .logo-badge { display: inline-flex; align-items: center; gap: 8px; background: #0369a1; color: #e0f2fe; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
-    h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: #ffffff; }
-    p { font-size: 14px; color: #94a3b8; margin-bottom: 24px; line-height: 1.5; }
-    .form-group { margin-bottom: 18px; }
-    label { display: block; font-size: 13px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px; }
-    input { width: 100%; padding: 12px 14px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: #f8fafc; font-size: 14px; outline: none; transition: border 0.2s; }
-    input:focus { border-color: #38bdf8; ring: 2px solid #0284c7; }
-    .btn { width: 100%; padding: 12px; background: #0284c7; border: none; border-radius: 8px; color: #ffffff; font-weight: 600; font-size: 15px; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
-    .btn:hover { background: #0369a1; }
-    .footer { margin-top: 24px; text-align: center; font-size: 12px; color: #64748b; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo-badge">
-      <span>⚙️</span> CMMS Native MCP v2
-    </div>
-    <h1>Đăng nhập hệ thống</h1>
-    <p>Đăng nhập bằng tài khoản nội bộ để cấp quyền cho ChatGPT truy xuất dữ liệu thiết bị và bảo trì.</p>
-    
-    <form action="/api/v1/mcp/oauth/authorize/submit" method="POST">
-      <input type="hidden" name="redirect_uri" value="${redirectUri || ''}">
-      <input type="hidden" name="state" value="${state || ''}">
-      <input type="hidden" name="client_id" value="${clientId || ''}">
-      <input type="hidden" name="code_challenge" value="${codeChallenge || ''}">
-      <input type="hidden" name="code_challenge_method" value="${codeChallengeMethod || ''}">
-      
-      <div class="form-group">
-        <label>Tên đăng nhập / Mã NV / Email</label>
-        <input type="text" name="username" placeholder="VD: 0947 hoặc user@dkpharma.vn" required autofocus>
-      </div>
+    const hrmJwtSecret = this.configService.get<string>('HRM_JWT_SECRET') || 'Binh123456@';
 
-      <div class="form-group">
-        <label>Mật khẩu</label>
-        <input type="password" name="password" placeholder="••••••••" required>
-      </div>
+    // 1. Kiểm tra xem người dùng đã đăng nhập app từ trước trên trình duyệt chưa (qua Cookie)
+    let token: string | null = null;
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+      const match = cookieHeader.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
+      if (match) token = decodeURIComponent(match[1]);
+    }
 
-      <button type="submit" class="btn">Đăng nhập & Cấp quyền cho ChatGPT</button>
-    </form>
+    if (token) {
+      try {
+        const decoded: any = jwt.verify(token, hrmJwtSecret);
+        if (decoded) {
+          // Người dùng ĐÃ ĐĂNG NHẬP SẴN -> Sinh code và chuyển hướng về ChatGPT ngay lập tức!
+          const code = crypto.randomBytes(24).toString('hex');
+          this.oauthCodes.set(code, {
+            userId: decoded.sub || decoded.id || 'user',
+            email: decoded.email || 'user',
+            name: decoded.name || 'User',
+            accessToken: token,
+            codeChallenge,
+            codeChallengeMethod,
+            expiresAt: Date.now() + 5 * 60 * 1000,
+          });
 
-    <div class="footer">
-      Bảo mật bởi hệ thống xác thực nội bộ DK Pharma CMMS
-    </div>
-  </div>
-</body>
-</html>
-    `;
-    res.setHeader('Content-Type', 'text/html');
-    res.send(html);
+          const url = new URL(redirectUri);
+          url.searchParams.set('code', code);
+          if (state) url.searchParams.set('state', state);
+          return res.redirect(url.toString());
+        }
+      } catch (e) {
+        // Token hết hạn hoặc không hợp lệ -> Tiếp tục chuyển hướng về trang /login của app
+      }
+    }
+
+    // 2. Người dùng CHƯA ĐĂNG NHẬP -> Lưu phiên và chuyển hướng về CHÍNH TRANG /login CỦA APP
+    const sessionId = crypto.randomBytes(16).toString('hex');
+    this.oauthSessions.set(sessionId, {
+      redirectUri,
+      state,
+      codeChallenge,
+      codeChallengeMethod,
+      expiresAt: Date.now() + 10 * 60 * 1000, // 10 phút
+    });
+
+    const callbackUrl = `/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
+    const appLoginUrl = `/login?redirect=${encodeURIComponent(callbackUrl)}`;
+    return res.redirect(appLoginUrl);
+  }
+
+  // Callback sau khi người dùng đăng nhập thành công trên giao diện của app
+  @Get('oauth/callback')
+  async handleOAuthCallback(
+    @Req() req: Request,
+    @Query('session_id') sessionId: string,
+    @Query('token') queryToken: string,
+    @Res() res: Response,
+  ) {
+    const session = this.oauthSessions.get(sessionId);
+    if (!session || Date.now() > session.expiresAt) {
+      return res.status(400).send('Phiên đăng nhập đã hết hạn. Vui lòng thử lại từ ChatGPT.');
+    }
+
+    const hrmJwtSecret = this.configService.get<string>('HRM_JWT_SECRET') || 'Binh123456@';
+
+    // Lấy token từ cookie hoặc query
+    let token = queryToken;
+    if (!token && req.headers.cookie) {
+      const match = req.headers.cookie.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
+      if (match) token = decodeURIComponent(match[1]);
+    }
+
+    if (!token) {
+      // Nếu chưa có token, chuyển hướng lại trang login của app
+      const callbackUrl = `/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
+      return res.redirect(`/login?redirect=${encodeURIComponent(callbackUrl)}`);
+    }
+
+    try {
+      const decoded: any = jwt.verify(token, hrmJwtSecret);
+      const code = crypto.randomBytes(24).toString('hex');
+      this.oauthCodes.set(code, {
+        userId: decoded.sub || decoded.id || 'user',
+        email: decoded.email || 'user',
+        name: decoded.name || 'User',
+        accessToken: token,
+        codeChallenge: session.codeChallenge,
+        codeChallengeMethod: session.codeChallengeMethod,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+      });
+
+      this.oauthSessions.delete(sessionId);
+
+      const url = new URL(session.redirectUri);
+      url.searchParams.set('code', code);
+      if (session.state) url.searchParams.set('state', session.state);
+      return res.redirect(url.toString());
+    } catch (err: any) {
+      return res.status(401).send('Xác thực token thất bại. Vui lòng đăng nhập lại.');
+    }
   }
 
   @Post('oauth/authorize/submit')
