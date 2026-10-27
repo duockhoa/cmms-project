@@ -13,7 +13,131 @@ export class McpService {
       version: '2.0.0',
     });
 
-    // 1. TOOL: search_equipment
+    // =========================================================================
+    // 1. TOOL: get_incidents (TRA CỨU SỰ CỐ / BÁO HỎNG THEO NGÀY HOẶC KHOẢNG THỜI GIAN)
+    // =========================================================================
+    server.tool(
+      'get_incidents',
+      'Tra cứu danh sách và số lượng các sự cố hỏng hóc máy móc, yêu cầu sửa chữa (Maintenance Request/Incident) phát sinh trong một ngày cụ thể (hôm nay, hôm qua, hoặc ngày bất kỳ YYYY-MM-DD) hoặc theo khoảng thời gian.',
+      {
+        date: z.string().optional().describe('Ngày cần tra cứu (VD: "2026-10-26", "yesterday", "hôm qua", "today", "hôm nay")'),
+        startDate: z.string().optional().describe('Ngày bắt đầu (YYYY-MM-DD)'),
+        endDate: z.string().optional().describe('Ngày kết thúc (YYYY-MM-DD)'),
+        priority: z.enum(['ALL', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional().default('ALL'),
+        limit: z.number().optional().default(30),
+      },
+      async ({ date, startDate, endDate, priority, limit }) => {
+        let start: Date;
+        let end: Date;
+
+        const now = new Date();
+
+        if (date) {
+          const lower = date.toLowerCase().trim();
+          let target = new Date();
+
+          if (lower === 'yesterday' || lower === 'hôm qua' || lower === 'hom qua') {
+            target.setDate(now.getDate() - 1);
+          } else if (lower === 'today' || lower === 'hôm nay' || lower === 'hom nay') {
+            target = new Date();
+          } else {
+            const parsed = new Date(date);
+            if (!isNaN(parsed.getTime())) {
+              target = parsed;
+            }
+          }
+
+          start = new Date(target);
+          start.setHours(0, 0, 0, 0);
+          end = new Date(target);
+          end.setHours(23, 59, 59, 999);
+        } else if (startDate || endDate) {
+          start = startDate ? new Date(startDate) : new Date(0);
+          start.setHours(0, 0, 0, 0);
+          end = endDate ? new Date(endDate) : new Date();
+          end.setHours(23, 59, 59, 999);
+        } else {
+          // Mặc định lấy 7 ngày gần nhất
+          start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          end = now;
+        }
+
+        const whereRequest: any = {
+          createdAt: { gte: start, lte: end },
+        };
+        if (priority && priority !== 'ALL') {
+          whereRequest.priority = priority;
+        }
+
+        // Lấy danh sách sự cố từ MaintenanceRequest
+        const requests = await this.prisma.maintenanceRequest.findMany({
+          where: whereRequest,
+          take: limit || 30,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            equipment: { select: { code: true, name: true, location: true, category: true } },
+          },
+        });
+
+        // Lấy thêm các phiếu WorkOrder phát sinh dạng sự cố khẩn cấp
+        const workOrders = await this.prisma.workOrder.findMany({
+          where: {
+            createdAt: { gte: start, lte: end },
+            ...(priority && priority !== 'ALL' ? { priority } : {}),
+          },
+          take: limit || 30,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            equipment: { select: { code: true, name: true, location: true } },
+            assignedTechnician: { select: { name: true } },
+          },
+        });
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  queryDateRange: {
+                    from: start.toISOString().split('T')[0],
+                    to: end.toISOString().split('T')[0],
+                  },
+                  totalIncidentsReported: requests.length,
+                  totalWorkOrdersCreated: workOrders.length,
+                  incidents: requests.map((r) => ({
+                    requestCode: r.requestCode,
+                    equipment: `${r.equipment.name} (${r.equipment.code})`,
+                    location: r.equipment.location,
+                    title: r.title,
+                    description: r.description,
+                    priority: r.priority,
+                    status: r.status,
+                    reporter: r.reporterName,
+                    reportedAt: r.createdAt,
+                  })),
+                  workOrders: workOrders.map((w) => ({
+                    orderCode: w.orderCode,
+                    equipment: `${w.equipment.name} (${w.equipment.code})`,
+                    title: w.title,
+                    priority: w.priority,
+                    status: w.status,
+                    technician: w.assignedTechnician?.name || w.technicianName || 'Chưa phân công',
+                    createdAt: w.createdAt,
+                  })),
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      },
+    );
+
+    // =========================================================================
+    // 2. TOOL: search_equipment
+    // =========================================================================
     server.tool(
       'search_equipment',
       'Tìm kiếm danh sách thiết bị/máy móc trong nhà máy theo từ khóa, trạng thái hoặc vị trí.',
@@ -58,10 +182,12 @@ export class McpService {
       },
     );
 
-    // 2. TOOL: get_equipment_details
+    // =========================================================================
+    // 3. TOOL: get_equipment_details
+    // =========================================================================
     server.tool(
       'get_equipment_details',
-      'Lấy thông tin hồ sơ chi tiết của thiết bị, lịch sử sự cố và các phiếu sửa chữa gần nhất.',
+      'Lấy thông tin hồ sơ chi tiết của thiết bị, thông số kỹ thuật, lịch sử sự cố và các phiếu sửa chữa gần nhất.',
       {
         equipmentCodeOrId: z.string().describe('Mã máy (VD: EQ-0001) hoặc UUID của thiết bị'),
       },
@@ -96,7 +222,9 @@ export class McpService {
       },
     );
 
-    // 3. TOOL: get_active_work_orders
+    // =========================================================================
+    // 4. TOOL: get_active_work_orders
+    // =========================================================================
     server.tool(
       'get_active_work_orders',
       'Tra cứu các phiếu bảo trì/sửa chữa đang mở, đang chờ duyệt hoặc đang thực hiện trong nhà máy.',
@@ -147,7 +275,9 @@ export class McpService {
       },
     );
 
-    // 4. TOOL: get_low_stock_alerts
+    // =========================================================================
+    // 5. TOOL: get_low_stock_alerts
+    // =========================================================================
     server.tool(
       'get_low_stock_alerts',
       'Cảnh báo các vật tư/phụ tùng trong kho đang thiếu hụt (tồn kho <= tồn kho an toàn minQuantity).',
@@ -185,7 +315,9 @@ export class McpService {
       },
     );
 
-    // 5. TOOL: get_maintenance_kpis
+    // =========================================================================
+    // 6. TOOL: get_maintenance_kpis
+    // =========================================================================
     server.tool(
       'get_maintenance_kpis',
       'Báo cáo KPIs tổng thể: số lượng máy sẵn sàng, tổng số phiếu sửa chữa, chi phí vật tư đã dùng.',
@@ -228,7 +360,65 @@ export class McpService {
       },
     );
 
-    // 6. TOOL: execute_readonly_sql_query
+    // =========================================================================
+    // 7. TOOL: search_inventory_items
+    // =========================================================================
+    server.tool(
+      'search_inventory_items',
+      'Tìm kiếm vật tư, phụ tùng, linh kiện trong kho theo tên hoặc mã linh kiện.',
+      {
+        keyword: z.string().describe('Tên hoặc mã vật tư (VD: Vòng bi, Dây curoa...)'),
+        limit: z.number().optional().default(20),
+      },
+      async ({ keyword, limit }) => {
+        const items = await this.prisma.inventoryItem.findMany({
+          where: {
+            isActive: true,
+            OR: [{ itemCode: { contains: keyword } }, { name: { contains: keyword } }],
+          },
+          take: limit || 20,
+        });
+
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(items, null, 2) }],
+        };
+      },
+    );
+
+    // =========================================================================
+    // 8. TOOL: get_upcoming_schedules
+    // =========================================================================
+    server.tool(
+      'get_upcoming_schedules',
+      'Danh sách các kế hoạch bảo trì bảo dưỡng định kỳ sắp đến hạn trong N ngày tới.',
+      {
+        daysAhead: z.number().optional().default(30),
+      },
+      async ({ daysAhead }) => {
+        const target = new Date();
+        target.setDate(target.getDate() + (daysAhead || 30));
+
+        const schedules = await this.prisma.maintenanceSchedule.findMany({
+          where: {
+            status: 'ACTIVE',
+            nextDueDate: { lte: target },
+          },
+          take: 30,
+          orderBy: { nextDueDate: 'asc' },
+          include: {
+            equipment: { select: { code: true, name: true, location: true } },
+          },
+        });
+
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(schedules, null, 2) }],
+        };
+      },
+    );
+
+    // =========================================================================
+    // 9. TOOL: execute_readonly_sql_query
+    // =========================================================================
     server.tool(
       'execute_readonly_sql_query',
       'Thực thi câu truy vấn SQL SELECT an toàn (chỉ đọc) để phân tích bất kỳ dữ liệu tùy biến nào trong cơ sở dữ liệu.',
