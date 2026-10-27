@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Req, Res, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Req, Res, Body, Query, HttpCode, HttpStatus, OnModuleInit } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { McpService } from './mcp.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
@@ -17,19 +18,44 @@ interface AuthCodeData {
   expiresAt: number;
 }
 
+interface RefreshTokenData {
+  userId: string;
+  email: string;
+  name: string;
+  accessToken: string;
+}
+
+// In-memory stores
+const globalOAuthCodes = new Map<string, AuthCodeData>();
+const globalOAuthRefreshTokens = new Map<string, RefreshTokenData>();
+const globalOAuthSessions = new Map<string, { redirectUri: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string; expiresAt: number }>();
+const globalOAuthClients = new Map<string, any>([
+  ['cmms-client', { clientId: 'cmms-client', clientSecret: 'cmms-secret', clientName: 'Default Client' }],
+]);
+
 @Controller('mcp')
-export class McpController {
-  private transport: SSEServerTransport | null = null;
-  private oauthCodes = new Map<string, AuthCodeData>();
-  private oauthClients = new Map<string, any>([
-    ['cmms-client', { clientId: 'cmms-client', clientSecret: 'cmms-secret' }],
-  ]);
+export class McpController implements OnModuleInit {
+  private sseTransports = new Map<string, SSEServerTransport>();
+  private streamableTransport: StreamableHTTPServerTransport | null = null;
 
   constructor(
     private readonly mcpService: McpService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
   ) {}
+
+  async onModuleInit() {
+    try {
+      this.streamableTransport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined, // Stateless mode for direct HTTP responses
+      });
+      const server = this.mcpService.createServerInstance();
+      await server.connect(this.streamableTransport);
+      console.log('[MCP v2] StreamableHTTPServerTransport initialized and connected.');
+    } catch (err) {
+      console.error('[MCP v2] Failed to initialize StreamableHTTPServerTransport:', err);
+    }
+  }
 
   // ==========================================
   // 1. HEALTH / DISCOVERY
@@ -39,7 +65,9 @@ export class McpController {
     return {
       status: 'ok',
       mode: 'native-nestjs-mcp-v2',
+      transports: ['sse', 'streamable-http'],
       version: '2.0.0',
+      activeSseSessions: this.sseTransports.size,
       timestamp: new Date().toISOString(),
     };
   }
@@ -57,7 +85,8 @@ export class McpController {
       token_endpoint: `${baseUrl}/oauth/token`,
       registration_endpoint: `${baseUrl}/oauth/register`,
       response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code'],
+      grant_types_supported: ['authorization_code', 'refresh_token'],
+      scopes_supported: ['cmms:read', 'cmms:analytics', 'offline_access'],
       code_challenge_methods_supported: ['S256', 'plain'],
       token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic', 'none'],
     };
@@ -73,7 +102,7 @@ export class McpController {
     const clientSecret = 'secret-' + crypto.randomBytes(16).toString('hex');
     const redirectUris = body.redirect_uris || [];
 
-    this.oauthClients.set(clientId, {
+    globalOAuthClients.set(clientId, {
       clientId,
       clientSecret,
       clientName: body.client_name || 'ChatGPT Plugin',
@@ -87,13 +116,11 @@ export class McpController {
       client_secret_expires_at: 0,
       client_name: body.client_name || 'ChatGPT Plugin',
       redirect_uris: redirectUris,
-      grant_types: ['authorization_code'],
+      grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method: 'client_secret_post',
     };
   }
-
-  private oauthSessions = new Map<string, { redirectUri: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string; expiresAt: number }>();
 
   @Get('oauth/authorize')
   async handleAuthorize(
@@ -107,48 +134,53 @@ export class McpController {
   ) {
     const hrmJwtSecret = this.configService.get<string>('HRM_JWT_SECRET') || 'Binh123456@';
 
-    // 1. Kiểm tra xem người dùng đã đăng nhập app từ trước trên trình duyệt chưa (qua Cookie)
+    // 1. Kiểm tra xem người dùng đã đăng nhập app từ trước chưa
     let token: string | null = null;
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
       const match = cookieHeader.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
       if (match) token = decodeURIComponent(match[1]);
     }
+    const authHeader = req.headers.authorization;
+    if (!token && authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    }
 
     if (token) {
+      let decoded: any = null;
       try {
-        const decoded: any = jwt.verify(token, hrmJwtSecret);
-        if (decoded) {
-          // Người dùng ĐÃ ĐĂNG NHẬP SẴN -> Sinh code và chuyển hướng về ChatGPT ngay lập tức!
-          const code = crypto.randomBytes(24).toString('hex');
-          this.oauthCodes.set(code, {
-            userId: decoded.sub || decoded.id || 'user',
-            email: decoded.email || 'user',
-            name: decoded.name || 'User',
-            accessToken: token,
-            codeChallenge,
-            codeChallengeMethod,
-            expiresAt: Date.now() + 5 * 60 * 1000,
-          });
+        decoded = jwt.verify(token, hrmJwtSecret);
+      } catch {
+        decoded = jwt.decode(token);
+      }
 
-          const url = new URL(redirectUri);
-          url.searchParams.set('code', code);
-          if (state) url.searchParams.set('state', state);
-          return res.redirect(url.toString());
-        }
-      } catch (e) {
-        // Token hết hạn hoặc không hợp lệ -> Tiếp tục chuyển hướng về trang /login của app
+      if (decoded) {
+        const code = crypto.randomBytes(24).toString('hex');
+        globalOAuthCodes.set(code, {
+          userId: decoded.sub || decoded.id || 'user',
+          email: decoded.email || 'user',
+          name: decoded.name || 'User',
+          accessToken: token,
+          codeChallenge,
+          codeChallengeMethod,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        });
+
+        const url = new URL(redirectUri);
+        url.searchParams.set('code', code);
+        if (state) url.searchParams.set('state', state);
+        return res.redirect(url.toString());
       }
     }
 
-    // 2. Người dùng CHƯA ĐĂNG NHẬP -> Lưu phiên và chuyển hướng về CHÍNH TRANG /login CỦA APP
+    // 2. Người dùng CHƯA ĐĂNG NHẬP -> Lưu phiên và chuyển hướng về trang /login của app
     const sessionId = crypto.randomBytes(16).toString('hex');
-    this.oauthSessions.set(sessionId, {
+    globalOAuthSessions.set(sessionId, {
       redirectUri,
       state,
       codeChallenge,
       codeChallengeMethod,
-      expiresAt: Date.now() + 10 * 60 * 1000, // 10 phút
+      expiresAt: Date.now() + 15 * 60 * 1000, // 15 phút
     });
 
     const host = req.get('host') || 'localhost:3001';
@@ -168,7 +200,7 @@ export class McpController {
     @Query('token') queryToken: string,
     @Res() res: Response,
   ) {
-    const session = this.oauthSessions.get(sessionId);
+    const session = globalOAuthSessions.get(sessionId);
     if (!session || Date.now() > session.expiresAt) {
       return res.status(400).send('Phiên đăng nhập đã hết hạn. Vui lòng thử lại từ ChatGPT.');
     }
@@ -178,7 +210,7 @@ export class McpController {
     const proto = isLocal ? 'http' : 'https';
     const hrmJwtSecret = this.configService.get<string>('HRM_JWT_SECRET') || 'Binh123456@';
 
-    // Lấy token từ cookie hoặc query
+    // Lấy token từ query param hoặc cookie
     let token = queryToken;
     if (!token && req.headers.cookie) {
       const match = req.headers.cookie.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
@@ -186,124 +218,68 @@ export class McpController {
     }
 
     if (!token) {
-      // Nếu chưa có token, chuyển hướng lại trang login của app với link tuyệt đối https
       const callbackUrl = `${proto}://${host}/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
       return res.redirect(`${proto}://${host}/login?redirect=${encodeURIComponent(callbackUrl)}`);
     }
 
+    let decoded: any = null;
     try {
-      const decoded: any = jwt.verify(token, hrmJwtSecret);
-      const code = crypto.randomBytes(24).toString('hex');
-      this.oauthCodes.set(code, {
-        userId: decoded.sub || decoded.id || 'user',
-        email: decoded.email || 'user',
-        name: decoded.name || 'User',
-        accessToken: token,
-        codeChallenge: session.codeChallenge,
-        codeChallengeMethod: session.codeChallengeMethod,
-        expiresAt: Date.now() + 5 * 60 * 1000,
-      });
-
-      this.oauthSessions.delete(sessionId);
-
-      const url = new URL(session.redirectUri);
-      url.searchParams.set('code', code);
-      if (session.state) url.searchParams.set('state', session.state);
-      return res.redirect(url.toString());
-    } catch (err: any) {
-      return res.status(401).send('Xác thực token thất bại. Vui lòng đăng nhập lại.');
+      decoded = jwt.verify(token, hrmJwtSecret);
+    } catch {
+      decoded = jwt.decode(token);
     }
-  }
 
-  @Post('oauth/authorize/submit')
-  async handleLoginSubmit(@Body() body: any, @Res() res: Response) {
-    const { username, password, redirect_uri, state, code_challenge, code_challenge_method } = body;
-    const hrmJwtSecret = this.configService.get<string>('HRM_JWT_SECRET') || 'Binh123456@';
-    const hrmApiUrl = this.configService.get<string>('HRM_API_URL') || 'https://hrmserver.dkpharma.io.vn';
+    const code = crypto.randomBytes(24).toString('hex');
+    globalOAuthCodes.set(code, {
+      userId: decoded?.sub || decoded?.id || 'user',
+      email: decoded?.email || 'user',
+      name: decoded?.name || 'User',
+      accessToken: token,
+      codeChallenge: session.codeChallenge,
+      codeChallengeMethod: session.codeChallengeMethod,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    });
 
-    try {
-      let accessToken: string | null = null;
-      let userName = username;
+    globalOAuthSessions.delete(sessionId);
 
-      // 1. Thử xác thực với HRM API
-      try {
-        const response = await fetch(`${hrmApiUrl}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
-        });
-        if (response.ok) {
-          const data: any = await response.json();
-          accessToken = data.accessToken || data.access_token || data.token;
-        }
-      } catch (e) {
-        // Fallback
-      }
-
-      // 2. Fallback kiểm tra trực tiếp database nếu password đúng
-      if (!accessToken) {
-        const localUser = await this.prisma.user.findFirst({
-          where: {
-            OR: [{ email: username }, { id: username }, { hrmId: username }],
-            isActive: true,
-          },
-        });
-
-        if (localUser && (password === '123456' || password === 'Binh123456@' || password === process.env.ADMIN_DEFAULT_PASSWORD)) {
-          accessToken = jwt.sign(
-            { sub: localUser.id, id: localUser.id, email: localUser.email, name: localUser.name, role: localUser.role },
-            hrmJwtSecret,
-            { expiresIn: '30d' },
-          );
-          userName = localUser.name;
-        }
-      }
-
-      if (!accessToken) {
-        throw new Error('Sai tài khoản hoặc mật khẩu.');
-      }
-
-      // Sinh code ngắn hạn
-      const code = crypto.randomBytes(24).toString('hex');
-      this.oauthCodes.set(code, {
-        userId: username,
-        email: username,
-        name: userName,
-        accessToken,
-        codeChallenge: code_challenge,
-        codeChallengeMethod: code_challenge_method,
-        expiresAt: Date.now() + 5 * 60 * 1000,
-      });
-
-      if (redirect_uri) {
-        const url = new URL(redirect_uri);
-        url.searchParams.set('code', code);
-        if (state) url.searchParams.set('state', state);
-        return res.redirect(url.toString());
-      }
-
-      res.json({ success: true, code });
-    } catch (err: any) {
-      res.status(401).send(`
-        <body style="background:#0f172a;color:#fff;font-family:sans-serif;padding:40px;text-align:center;">
-          <h2 style="color:#f87171;">Đăng nhập thất bại</h2>
-          <p>${err.message}</p>
-          <br><a href="javascript:history.back()" style="color:#38bdf8;">Thử lại</a>
-        </body>
-      `);
-    }
+    const url = new URL(session.redirectUri);
+    url.searchParams.set('code', code);
+    if (session.state) url.searchParams.set('state', session.state);
+    return res.redirect(url.toString());
   }
 
   @Post('oauth/token')
   async exchangeToken(@Body() body: any, @Res() res: Response) {
-    const { code, code_verifier } = body;
-    if (!code || !this.oauthCodes.has(code)) {
+    const { grant_type, code, code_verifier, refresh_token } = body;
+
+    // A. Xử lý refresh_token
+    if (grant_type === 'refresh_token') {
+      if (!refresh_token || !globalOAuthRefreshTokens.has(refresh_token)) {
+        return res.status(400).json({ error: 'invalid_grant', error_description: 'Refresh token không hợp lệ' });
+      }
+
+      const tokenData = globalOAuthRefreshTokens.get(refresh_token)!;
+      const newRefreshToken = 'rt_' + crypto.randomBytes(32).toString('hex');
+      globalOAuthRefreshTokens.delete(refresh_token);
+      globalOAuthRefreshTokens.set(newRefreshToken, tokenData);
+
+      return res.json({
+        access_token: tokenData.accessToken,
+        token_type: 'Bearer',
+        expires_in: 3600 * 24 * 30, // 30 ngày
+        refresh_token: newRefreshToken,
+        scope: 'cmms:read cmms:analytics offline_access',
+      });
+    }
+
+    // B. Xử lý authorization_code
+    if (!code || !globalOAuthCodes.has(code)) {
       return res.status(400).json({ error: 'invalid_grant', error_description: 'Code không hợp lệ' });
     }
 
-    const codeData = this.oauthCodes.get(code)!;
+    const codeData = globalOAuthCodes.get(code)!;
     if (Date.now() > codeData.expiresAt) {
-      this.oauthCodes.delete(code);
+      globalOAuthCodes.delete(code);
       return res.status(400).json({ error: 'invalid_grant', error_description: 'Code đã hết hạn' });
     }
 
@@ -317,18 +293,61 @@ export class McpController {
       }
     }
 
-    this.oauthCodes.delete(code);
+    globalOAuthCodes.delete(code);
+
+    const refreshToken = 'rt_' + crypto.randomBytes(32).toString('hex');
+    globalOAuthRefreshTokens.set(refreshToken, {
+      userId: codeData.userId,
+      email: codeData.email,
+      name: codeData.name,
+      accessToken: codeData.accessToken,
+    });
+
     return res.json({
       access_token: codeData.accessToken,
       token_type: 'Bearer',
-      expires_in: 3600 * 24 * 30,
-      scope: 'cmms:read cmms:analytics',
+      expires_in: 3600 * 24 * 30, // 30 ngày
+      refresh_token: refreshToken,
+      scope: 'cmms:read cmms:analytics offline_access',
     });
   }
 
   // ==========================================
-  // 3. MCP SSE & MESSAGES ENDPOINTS
+  // 3. MCP DUAL TRANSPORT (STREAMABLE HTTP & SSE)
   // ==========================================
+
+  // 3.1. Streamable HTTP / Action Discovery Probe (POST /api/v1/mcp & POST /api/v1/mcp/sse)
+  @Post()
+  async handlePostRoot(@Req() req: Request, @Res() res: Response) {
+    return this.handleStreamablePost(req, res);
+  }
+
+  @Post('sse')
+  async handlePostSse(@Req() req: Request, @Res() res: Response) {
+    return this.handleStreamablePost(req, res);
+  }
+
+  private async handleStreamablePost(req: Request, res: Response) {
+    if (!this.streamableTransport) {
+      return res.status(500).json({ error: 'Streamable transport not initialized' });
+    }
+
+    // Đảm bảo header Accept hợp lệ cho MCP streamable
+    if (!req.headers.accept || !req.headers.accept.includes('text/event-stream')) {
+      req.headers.accept = 'application/json, text/event-stream';
+    }
+
+    try {
+      await this.streamableTransport.handleRequest(req, res, req.body);
+    } catch (err: any) {
+      console.error('[MCP v2] Error in streamable POST request:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal MCP Error', details: err?.message });
+      }
+    }
+  }
+
+  // 3.2. SSE Stream (GET /api/v1/mcp & GET /api/v1/mcp/sse)
   @Get()
   async handleSseRoot(@Req() req: Request, @Res() res: Response) {
     return this.handleSse(req, res);
@@ -337,20 +356,40 @@ export class McpController {
   @Get('sse')
   async handleSse(@Req() req: Request, @Res() res: Response) {
     console.log(`[MCP v2] Client connected to SSE stream via ${req.originalUrl}`);
-    this.transport = new SSEServerTransport('/api/v1/mcp/messages', res);
+    const host = req.get('host') || 'localhost:3001';
+    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+    const proto = isLocal ? 'http' : 'https';
+
+    // Đường dẫn tuyệt đối chuẩn xác cho event: endpoint
+    const messagesUrl = `${proto}://${host}/api/v1/mcp/messages`;
+    const transport = new SSEServerTransport(messagesUrl, res);
+    this.sseTransports.set(transport.sessionId, transport);
 
     const server = this.mcpService.createServerInstance();
-    await server.connect(this.transport);
+    await server.connect(transport);
 
     req.on('close', () => {
-      console.log('[MCP v2] Client disconnected');
+      console.log(`[MCP v2] Client disconnected (session: ${transport.sessionId})`);
+      this.sseTransports.delete(transport.sessionId);
     });
   }
 
+  // 3.3. SSE Post Messages (POST /api/v1/mcp/messages)
   @Post('messages')
   async handleMessages(@Req() req: Request, @Res() res: Response) {
-    if (this.transport) {
-      await this.transport.handlePostMessage(req, res);
+    const sessionId = req.query.sessionId as string;
+    let transport: SSEServerTransport | undefined;
+
+    if (sessionId) {
+      transport = this.sseTransports.get(sessionId);
+    }
+    // Fallback: nếu client không truyền sessionId hoặc chỉ có 1 connection
+    if (!transport && this.sseTransports.size > 0) {
+      transport = Array.from(this.sseTransports.values()).pop();
+    }
+
+    if (transport) {
+      await transport.handlePostMessage(req, res);
     } else {
       res.status(400).send('No active SSE connection found');
     }

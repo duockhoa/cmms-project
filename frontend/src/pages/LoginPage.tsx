@@ -9,6 +9,15 @@ import { invalidatePermissionsCache } from '../hooks/usePermissions';
 
 const HRM_API_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
 
+function performRedirect(targetUrl: string, token?: string | null) {
+  if (token && targetUrl.includes('/api/v1/mcp/oauth/callback')) {
+    const sep = targetUrl.includes('?') ? '&' : '?';
+    window.location.href = `${targetUrl}${sep}token=${encodeURIComponent(token)}`;
+    return;
+  }
+  window.location.href = targetUrl;
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -29,7 +38,7 @@ export function LoginPage() {
       setupSilentRefresh();
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
-      window.location.href = redirectTo;
+      performRedirect(redirectTo, token);
       return;
     }
 
@@ -45,7 +54,7 @@ export function LoginPage() {
             setupSilentRefresh();
             const params = new URLSearchParams(window.location.search);
             const redirectTo = params.get('redirect') || '/';
-            window.location.href = redirectTo;
+            performRedirect(redirectTo, newToken);
           }
         })
         .catch(() => {
@@ -96,7 +105,7 @@ export function LoginPage() {
       // Redirect to intended destination or home
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
-      window.location.href = redirectTo;
+      performRedirect(redirectTo, accessToken);
     } catch (error: any) {
       const msg = error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
       setErrorMessage(msg);

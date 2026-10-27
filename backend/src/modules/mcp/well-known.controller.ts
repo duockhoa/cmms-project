@@ -17,7 +17,8 @@ export class WellKnownController {
       token_endpoint: `${mcpBase}/oauth/token`,
       registration_endpoint: `${mcpBase}/oauth/register`,
       response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code'],
+      grant_types_supported: ['authorization_code', 'refresh_token'],
+      scopes_supported: ['cmms:read', 'cmms:analytics', 'offline_access'],
       code_challenge_methods_supported: ['S256', 'plain'],
       token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic', 'none'],
     };
