@@ -135,6 +135,130 @@ export class McpService {
       },
     );
 
+    // Alias cho search_incidents (hỗ trợ chính xác theo hướng dẫn của hệ thống)
+    server.tool(
+      'search_incidents',
+      'Tra cứu và tìm kiếm sự cố thiết bị/máy móc theo ngày ("hôm qua", "hôm nay", YYYY-MM-DD), từ khóa hoặc độ ưu tiên.',
+      {
+        keyword: z.string().optional().describe('Từ khóa sự cố hoặc tên thiết bị'),
+        date: z.string().optional().describe('Ngày cần tra cứu (VD: "2026-10-26", "yesterday", "hôm qua", "today", "hôm nay")'),
+        startDate: z.string().optional().describe('Ngày bắt đầu (YYYY-MM-DD)'),
+        endDate: z.string().optional().describe('Ngày kết thúc (YYYY-MM-DD)'),
+        priority: z.enum(['ALL', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional().default('ALL'),
+        limit: z.number().optional().default(30),
+      },
+      async ({ keyword, date, startDate, endDate, priority, limit }) => {
+        let start: Date;
+        let end: Date;
+        const now = new Date();
+
+        if (date) {
+          const lower = date.toLowerCase().trim();
+          let target = new Date();
+          if (lower === 'yesterday' || lower === 'hôm qua' || lower === 'hom qua') {
+            target.setDate(now.getDate() - 1);
+          } else if (lower === 'today' || lower === 'hôm nay' || lower === 'hom nay') {
+            target = new Date();
+          } else {
+            const parsed = new Date(date);
+            if (!isNaN(parsed.getTime())) target = parsed;
+          }
+          start = new Date(target);
+          start.setHours(0, 0, 0, 0);
+          end = new Date(target);
+          end.setHours(23, 59, 59, 999);
+        } else if (startDate || endDate) {
+          start = startDate ? new Date(startDate) : new Date(0);
+          start.setHours(0, 0, 0, 0);
+          end = endDate ? new Date(endDate) : new Date();
+          end.setHours(23, 59, 59, 999);
+        } else {
+          start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          end = now;
+        }
+
+        const whereRequest: any = { createdAt: { gte: start, lte: end } };
+        if (priority && priority !== 'ALL') whereRequest.priority = priority;
+        if (keyword) {
+          whereRequest.OR = [
+            { title: { contains: keyword } },
+            { description: { contains: keyword } },
+            { equipment: { name: { contains: keyword } } },
+            { equipment: { code: { contains: keyword } } },
+          ];
+        }
+
+        const requests = await this.prisma.maintenanceRequest.findMany({
+          where: whereRequest,
+          take: limit || 30,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            equipment: { select: { code: true, name: true, location: true, category: true } },
+          },
+        });
+
+        const workOrders = await this.prisma.workOrder.findMany({
+          where: {
+            createdAt: { gte: start, lte: end },
+            ...(priority && priority !== 'ALL' ? { priority } : {}),
+            ...(keyword ? {
+              OR: [
+                { title: { contains: keyword } },
+                { equipment: { name: { contains: keyword } } },
+                { equipment: { code: { contains: keyword } } },
+              ]
+            } : {}),
+          },
+          take: limit || 30,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            equipment: { select: { code: true, name: true, location: true } },
+            assignedTechnician: { select: { name: true } },
+          },
+        });
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  queryDateRange: {
+                    from: start.toISOString().split('T')[0],
+                    to: end.toISOString().split('T')[0],
+                  },
+                  totalIncidentsReported: requests.length,
+                  totalWorkOrdersCreated: workOrders.length,
+                  incidents: requests.map((r) => ({
+                    requestCode: r.requestCode,
+                    equipment: `${r.equipment.name} (${r.equipment.code})`,
+                    location: r.equipment.location,
+                    title: r.title,
+                    description: r.description,
+                    priority: r.priority,
+                    status: r.status,
+                    reporter: r.reporterName,
+                    reportedAt: r.createdAt,
+                  })),
+                  workOrders: workOrders.map((w) => ({
+                    orderCode: w.orderCode,
+                    equipment: `${w.equipment.name} (${w.equipment.code})`,
+                    title: w.title,
+                    priority: w.priority,
+                    status: w.status,
+                    technician: w.assignedTechnician?.name || w.technicianName || 'Chưa phân công',
+                    createdAt: w.createdAt,
+                  })),
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      },
+    );
+
     // =========================================================================
     // 2. TOOL: search_equipment
     // =========================================================================
