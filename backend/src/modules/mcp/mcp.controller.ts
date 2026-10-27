@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Req, Res, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Req, Res, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { McpService } from './mcp.service';
@@ -66,22 +66,26 @@ export class McpController {
   // 2. OAUTH 2.0 FLOW CHO CHATGPT
   // ==========================================
   @Post('oauth/register')
+  @HttpCode(HttpStatus.CREATED)
   registerClient(@Body() body: any) {
     const clientId = 'cmms-' + crypto.randomBytes(8).toString('hex');
     const clientSecret = 'secret-' + crypto.randomBytes(16).toString('hex');
+    const redirectUris = body.redirect_uris || [];
 
     this.oauthClients.set(clientId, {
       clientId,
       clientSecret,
       clientName: body.client_name || 'ChatGPT Plugin',
-      redirectUris: body.redirect_uris || [],
+      redirectUris,
     });
 
     return {
       client_id: clientId,
       client_secret: clientSecret,
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      client_secret_expires_at: 0,
       client_name: body.client_name || 'ChatGPT Plugin',
-      redirect_uris: body.redirect_uris || [],
+      redirect_uris: redirectUris,
       grant_types: ['authorization_code'],
       response_types: ['code'],
       token_endpoint_auth_method: 'client_secret_post',
