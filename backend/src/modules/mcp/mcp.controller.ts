@@ -47,7 +47,8 @@ export class McpController {
   @Get('.well-known/oauth-authorization-server')
   getOAuthDiscovery(@Req() req: Request) {
     const host = req.get('host') || 'localhost:3001';
-    const proto = req.get('x-forwarded-proto') || 'https';
+    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+    const proto = isLocal ? 'http' : 'https';
     const baseUrl = `${proto}://${host}/api/v1/mcp`;
 
     return {
@@ -150,8 +151,12 @@ export class McpController {
       expiresAt: Date.now() + 10 * 60 * 1000, // 10 phút
     });
 
-    const callbackUrl = `/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
-    const appLoginUrl = `/login?redirect=${encodeURIComponent(callbackUrl)}`;
+    const host = req.get('host') || 'localhost:3001';
+    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+    const proto = isLocal ? 'http' : 'https';
+
+    const callbackUrl = `${proto}://${host}/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
+    const appLoginUrl = `${proto}://${host}/login?redirect=${encodeURIComponent(callbackUrl)}`;
     return res.redirect(appLoginUrl);
   }
 
@@ -168,6 +173,9 @@ export class McpController {
       return res.status(400).send('Phiên đăng nhập đã hết hạn. Vui lòng thử lại từ ChatGPT.');
     }
 
+    const host = req.get('host') || 'localhost:3001';
+    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+    const proto = isLocal ? 'http' : 'https';
     const hrmJwtSecret = this.configService.get<string>('HRM_JWT_SECRET') || 'Binh123456@';
 
     // Lấy token từ cookie hoặc query
@@ -178,9 +186,9 @@ export class McpController {
     }
 
     if (!token) {
-      // Nếu chưa có token, chuyển hướng lại trang login của app
-      const callbackUrl = `/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
-      return res.redirect(`/login?redirect=${encodeURIComponent(callbackUrl)}`);
+      // Nếu chưa có token, chuyển hướng lại trang login của app với link tuyệt đối https
+      const callbackUrl = `${proto}://${host}/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
+      return res.redirect(`${proto}://${host}/login?redirect=${encodeURIComponent(callbackUrl)}`);
     }
 
     try {

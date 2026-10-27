@@ -6,7 +6,8 @@ export class WellKnownController {
   @Get(['oauth-authorization-server', 'openid-configuration'])
   getDiscovery(@Req() req: Request) {
     const host = req.get('host') || 'localhost:3001';
-    const proto = req.get('x-forwarded-proto') || 'https';
+    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+    const proto = isLocal ? 'http' : 'https';
     const rootUrl = `${proto}://${host}`;
     const mcpBase = `${rootUrl}/api/v1/mcp`;
 
