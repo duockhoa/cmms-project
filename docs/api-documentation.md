@@ -99,7 +99,7 @@ Controller: `AuthController`, `UsersController` | Tiền tố: `/auth`, `/users`
 | `GET` | `/api/v1/auth/me` | JWT | Lấy hồ sơ user đang đăng nhập, thông tin vai trò, danh sách quyền tổng hợp (Role + User custom permissions) và Scope truy cập. | Header Bearer Token |
 | `POST` | `/api/v1/users/sync-hrm` | JWT | Đồng bộ hóa tài khoản người dùng từ hệ thống HRM sang cơ sở dữ liệu CMMS. | Token từ HRM qua header |
 | `GET` | `/api/v1/users` | JWT | Lấy danh sách người dùng. Hỗ trợ lọc theo vai trò, phòng ban, trạng thái hoạt động. | Query: `role`, `department`, `includeInactive` |
-| `GET` | `/api/v1/users/departments` | JWT | Lấy danh sách tất cả các phòng ban đang có người dùng thuộc về. | Không |
+| `GET` | `/api/v1/users/departments` | JWT | Lấy danh sách phòng ban của người dùng đang hoạt động. | Không |
 | `GET` | `/api/v1/users/:id` | JWT | Lấy thông tin chi tiết một người dùng theo ID. | Param: `id` |
 | `POST` | `/api/v1/users` | JWT (Admin) | Thêm mới tài khoản người dùng thủ công. | Body: `{ name, email, role, department, specialty, ... }` |
 | `PATCH` | `/api/v1/users/:id` | JWT (Admin) | Cập nhật thông tin tài khoản người dùng. | Body: cập nhật các trường |
@@ -108,6 +108,7 @@ Controller: `AuthController`, `UsersController` | Tiền tố: `/auth`, `/users`
 | `PATCH` | `/api/v1/users/:id/role` | JWT (Admin) | Gán nhóm quyền vai trò (`Role`) cho người dùng. | Body: `{ roleId: string \| null }` |
 | `PATCH` | `/api/v1/users/:id/custom-permissions` | JWT (Admin) | Cập nhật danh sách quyền riêng biệt bổ sung cho người dùng. | Body: `{ permissions: string[] }` |
 | `DELETE` | `/api/v1/users/:id` | JWT (Admin) | Xóa người dùng khỏi hệ thống. | Param: `id` |
+| `GET` | `/api/v1/equipment/departments` | JWT | Lấy danh sách phòng ban đang được thiết bị hoạt động tham chiếu. | Không |
 
 ---
 

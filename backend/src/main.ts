@@ -36,8 +36,14 @@ async function bootstrap() {
   // Global data sanitization interceptor to prevent internal/sensitive field leakage
   app.useGlobalInterceptors(new SanitizeResponseInterceptor());
 
-  // API versioning - all routes prefixed with /api/v1
-  app.setGlobalPrefix('api/v1');
+  // API versioning - all routes prefixed with /api/v1, except OAuth auto-discovery
+  app.setGlobalPrefix('api/v1', {
+    exclude: [
+      '/.well-known/oauth-authorization-server',
+      '/.well-known/openid-configuration',
+      '/.well-known/oauth-protected-resource',
+    ],
+  });
 
   // Swagger Configuration (FastAPI Style)
   const config = new DocumentBuilder()

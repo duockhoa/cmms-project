@@ -20,6 +20,7 @@ import { FeedbacksModule } from './modules/feedbacks/feedbacks.module';
 import { UtilitiesModule } from './modules/utilities/utilities.module';
 import { FabricationModule } from './modules/fabrication/fabrication.module';
 import { MailModule } from './modules/mail/mail.module';
+import { McpModule } from './modules/mcp/mcp.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { MailModule } from './modules/mail/mail.module';
     UtilitiesModule,
     FabricationModule,
     MailModule,
+    McpModule,
   ],
 })
 export class AppModule {}
