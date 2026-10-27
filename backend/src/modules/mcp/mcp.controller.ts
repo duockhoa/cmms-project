@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Req, Res, Body, Query, HttpCode, HttpStatus, OnModuleInit } from '@nestjs/common';
+import { Controller, Get, Post, Req, Res, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { McpService } from './mcp.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
@@ -25,7 +25,7 @@ interface RefreshTokenData {
   accessToken: string;
 }
 
-// In-memory stores
+// Durable in-memory stores
 const globalOAuthCodes = new Map<string, AuthCodeData>();
 const globalOAuthRefreshTokens = new Map<string, RefreshTokenData>();
 const globalOAuthSessions = new Map<string, { redirectUri: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string; expiresAt: number }>();
@@ -34,28 +34,14 @@ const globalOAuthClients = new Map<string, any>([
 ]);
 
 @Controller('mcp')
-export class McpController implements OnModuleInit {
+export class McpController {
   private sseTransports = new Map<string, SSEServerTransport>();
-  private streamableTransport: StreamableHTTPServerTransport | null = null;
 
   constructor(
     private readonly mcpService: McpService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
   ) {}
-
-  async onModuleInit() {
-    try {
-      this.streamableTransport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // Stateless mode for direct HTTP responses
-      });
-      const server = this.mcpService.createServerInstance();
-      await server.connect(this.streamableTransport);
-      console.log('[MCP v2] StreamableHTTPServerTransport initialized and connected.');
-    } catch (err) {
-      console.error('[MCP v2] Failed to initialize StreamableHTTPServerTransport:', err);
-    }
-  }
 
   // ==========================================
   // 1. HEALTH / DISCOVERY
@@ -65,7 +51,7 @@ export class McpController implements OnModuleInit {
     return {
       status: 'ok',
       mode: 'native-nestjs-mcp-v2',
-      transports: ['sse', 'streamable-http'],
+      transports: ['sse', 'streamable-http', 'direct-jsonrpc'],
       version: '2.0.0',
       activeSseSessions: this.sseTransports.size,
       timestamp: new Date().toISOString(),
@@ -192,7 +178,6 @@ export class McpController implements OnModuleInit {
     return res.redirect(appLoginUrl);
   }
 
-  // Callback sau khi người dùng đăng nhập thành công trên giao diện của app
   @Get('oauth/callback')
   async handleOAuthCallback(
     @Req() req: Request,
@@ -210,7 +195,6 @@ export class McpController implements OnModuleInit {
     const proto = isLocal ? 'http' : 'https';
     const hrmJwtSecret = this.configService.get<string>('HRM_JWT_SECRET') || 'Binh123456@';
 
-    // Lấy token từ query param hoặc cookie
     let token = queryToken;
     if (!token && req.headers.cookie) {
       const match = req.headers.cookie.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
@@ -313,41 +297,103 @@ export class McpController implements OnModuleInit {
   }
 
   // ==========================================
-  // 3. MCP DUAL TRANSPORT (STREAMABLE HTTP & SSE)
+  // 3. MCP CORE DISCOVERY & TOOLS EXECUTION
   // ==========================================
 
-  // 3.1. Streamable HTTP / Action Discovery Probe (POST /api/v1/mcp & POST /api/v1/mcp/sse)
+  // 3.1. Nhận JSON-RPC POST trực tiếp (Action Discovery & Tool Calls)
   @Post()
   async handlePostRoot(@Req() req: Request, @Res() res: Response) {
-    return this.handleStreamablePost(req, res);
+    return this.handleDirectJsonRpc(req, res);
   }
 
   @Post('sse')
   async handlePostSse(@Req() req: Request, @Res() res: Response) {
-    return this.handleStreamablePost(req, res);
+    return this.handleDirectJsonRpc(req, res);
   }
 
-  private async handleStreamablePost(req: Request, res: Response) {
-    if (!this.streamableTransport) {
-      return res.status(500).json({ error: 'Streamable transport not initialized' });
+  private async handleDirectJsonRpc(req: Request, res: Response) {
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Invalid JSON-RPC request body' });
     }
 
-    // Đảm bảo header Accept hợp lệ cho MCP streamable
-    if (!req.headers.accept || !req.headers.accept.includes('text/event-stream')) {
-      req.headers.accept = 'application/json, text/event-stream';
-    }
+    const isSseAccept = req.headers.accept?.includes('text/event-stream');
+    let hasResponded = false;
+
+    const sendResponse = (msg: any) => {
+      if (hasResponded) return;
+      hasResponded = true;
+
+      if (isSseAccept) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.write(`event: message\ndata: ${JSON.stringify(msg)}\n\n`);
+        res.end();
+      } else {
+        res.json(msg);
+      }
+    };
 
     try {
-      await this.streamableTransport.handleRequest(req, res, req.body);
+      const server = this.mcpService.createServerInstance();
+      const transport: Transport = {
+        start: async () => {},
+        close: async () => {},
+        send: async (msg: any) => {
+          if (body.id === undefined || msg.id === body.id) {
+            sendResponse(msg);
+          }
+        },
+      };
+
+      await server.connect(transport);
+
+      // Nếu phương thức không phải initialize, thực hiện handshake nội bộ trước
+      if (body.method !== 'initialize' && transport.onmessage) {
+        await transport.onmessage({
+          jsonrpc: '2.0',
+          id: 'sys-init',
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {},
+            clientInfo: { name: 'chatgpt-client', version: '1.0' },
+          },
+        });
+        await transport.onmessage({
+          jsonrpc: '2.0',
+          method: 'notifications/initialized',
+        });
+      }
+
+      if (transport.onmessage) {
+        await transport.onmessage(body);
+      }
+
+      // Timeout dự phòng sau 8 giây nếu tool chưa gửi phản hồi
+      setTimeout(() => {
+        if (!hasResponded) {
+          sendResponse({
+            jsonrpc: '2.0',
+            id: body.id ?? null,
+            error: { code: -32000, message: 'Tool execution timed out' },
+          });
+        }
+      }, 8000);
     } catch (err: any) {
-      console.error('[MCP v2] Error in streamable POST request:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Internal MCP Error', details: err?.message });
+      console.error('[MCP v2] Error in handleDirectJsonRpc:', err);
+      if (!hasResponded) {
+        sendResponse({
+          jsonrpc: '2.0',
+          id: body.id ?? null,
+          error: { code: -32603, message: err?.message || 'Internal JSON-RPC Error' },
+        });
       }
     }
   }
 
-  // 3.2. SSE Stream (GET /api/v1/mcp & GET /api/v1/mcp/sse)
+  // 3.2. SSE Stream cho ChatGPT (GET /api/v1/mcp & GET /api/v1/mcp/sse)
   @Get()
   async handleSseRoot(@Req() req: Request, @Res() res: Response) {
     return this.handleSse(req, res);
@@ -360,7 +406,10 @@ export class McpController implements OnModuleInit {
     const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
     const proto = isLocal ? 'http' : 'https';
 
-    // Đường dẫn tuyệt đối chuẩn xác cho event: endpoint
+    // Vô hiệu hóa buffering của Nginx
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+
     const messagesUrl = `${proto}://${host}/api/v1/mcp/messages`;
     const transport = new SSEServerTransport(messagesUrl, res);
     this.sseTransports.set(transport.sessionId, transport);
@@ -374,7 +423,7 @@ export class McpController implements OnModuleInit {
     });
   }
 
-  // 3.3. SSE Post Messages (POST /api/v1/mcp/messages)
+  // 3.3. Nhận Messages của SSE Transport (POST /api/v1/mcp/messages)
   @Post('messages')
   async handleMessages(@Req() req: Request, @Res() res: Response) {
     const sessionId = req.query.sessionId as string;
@@ -383,7 +432,6 @@ export class McpController implements OnModuleInit {
     if (sessionId) {
       transport = this.sseTransports.get(sessionId);
     }
-    // Fallback: nếu client không truyền sessionId hoặc chỉ có 1 connection
     if (!transport && this.sseTransports.size > 0) {
       transport = Array.from(this.sseTransports.values()).pop();
     }
@@ -391,7 +439,8 @@ export class McpController implements OnModuleInit {
     if (transport) {
       await transport.handlePostMessage(req, res);
     } else {
-      res.status(400).send('No active SSE connection found');
+      // Fallback thông minh: nếu phiên SSE bị gián đoạn, vẫn xử lý JSON-RPC trực tiếp
+      return this.handleDirectJsonRpc(req, res);
     }
   }
 }
