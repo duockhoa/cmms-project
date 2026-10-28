@@ -373,7 +373,7 @@ export const api = {
     request(`/work-orders/${id}/escalate`, { method: 'POST', body: JSON.stringify(body) }),
   classifyWorkOrder: (id: string, body: { expectedVersion: number; classificationResult: string; classificationNotes?: string }) =>
     request(`/work-orders/${id}/classify`, { method: 'POST', body: JSON.stringify(body) }),
-  assignExecutor: (id: string, body: { expectedVersion: number; assignedTechnicianId: string; technicianName?: string }) =>
+  assignExecutor: (id: string, body: { expectedVersion: number; assignedTechnicianId?: string; assignedTechnicianIds?: string[]; technicianName?: string; targetDepartment?: string }) =>
     request(`/work-orders/${id}/assign-executor`, { method: 'POST', body: JSON.stringify(body) }),
   submitHandover: (id: string, body: { expectedVersion: number; workDone: string; equipmentStatusAfter: string; testResult: string; conclusion: string; recommendation?: string }) =>
     request(`/work-orders/${id}/submit-handover`, { method: 'POST', body: JSON.stringify(body) }),

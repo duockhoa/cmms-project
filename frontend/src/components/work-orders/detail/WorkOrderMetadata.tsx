@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const WorkOrderMetadata: React.FC<any> = ({
-  allUsers, getStatusColor, getStatusLabel, wo,
+  allUsers, getStatusColor, getStatusLabel, targetDeptLabel, wo,
 }) => (
   <>
     {/* Metadata Table */}
@@ -27,8 +27,14 @@ export const WorkOrderMetadata: React.FC<any> = ({
           </tr>
           <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
             <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Tuyến xử lý</td>
-            <td style={{ padding: '12px 0', fontWeight: 600 }}>{wo?.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? 'Xưởng tự xử lý' : 'Cơ điện sửa chữa'}</td>
+            <td style={{ padding: '12px 0', fontWeight: 600 }}>{wo?.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? 'Xưởng tự xử lý' : 'Cơ điện / Bộ phận hỗ trợ'}</td>
           </tr>
+          {targetDeptLabel && (
+            <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+              <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Bộ phận phụ trách</td>
+              <td style={{ padding: '12px 0', fontWeight: 700, color: '#1d4ed8' }}>{targetDeptLabel}</td>
+            </tr>
+          )}
           <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
             <td style={{ padding: '12px 0', color: 'var(--text-secondary)' }}>Mức độ ưu tiên</td>
             <td style={{ padding: '12px 0' }}>

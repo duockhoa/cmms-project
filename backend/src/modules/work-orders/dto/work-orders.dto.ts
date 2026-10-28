@@ -54,6 +54,10 @@ export class CreateWorkOrderDto {
 export class AssignWorkOrderDto {
   @IsString()
   @IsOptional()
+  targetDepartment?: string;
+
+  @IsString()
+  @IsOptional()
   technicianName?: string;
 
   @IsString()

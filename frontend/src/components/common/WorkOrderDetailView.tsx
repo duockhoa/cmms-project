@@ -27,6 +27,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
   const detail = useWorkOrderDetail({ workOrderId, currentUser, onClose, onStatusChangeSuccess });
   const {
     actionLoading, allUsers, assignableUsers, assignedExecutorId, canModify,
+    availableDepartments, selectedDepartment, handleDepartmentChange,
     classificationNotes, classificationResult, cleanlinessResult, completeConclusion,
     completeEquipmentStatus, completePhotos, completeRecommendation, completeTestResult,
     completeWorkDone, customPauseReason, escalateReason, gmpImpactAssessment,
@@ -100,6 +101,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
           allUsers={allUsers}
           getStatusColor={getWorkOrderStatusColor}
           getStatusLabel={getWorkOrderStatusLabel}
+          targetDeptLabel={targetDeptLabel}
           wo={wo}
         />
 
@@ -178,6 +180,9 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         assignedExecutorId={assignedExecutorId}
         assignedExecutorIds={assignedExecutorIds}
         setAssignedExecutorIds={setAssignedExecutorIds}
+        availableDepartments={availableDepartments}
+        selectedDepartment={selectedDepartment}
+        handleDepartmentChange={handleDepartmentChange}
         classificationNotes={classificationNotes}
         classificationResult={classificationResult}
         escalateReason={escalateReason}

@@ -57,6 +57,8 @@ export function buildWorkOrderScopeWhere(actor?: UserWithPermissions | null): an
       OR: [
         { equipment: { department: sameDepartment(department) } },
         { request: { department: sameDepartment(department) } },
+        { title: { contains: department } },
+        { assignedTechnician: { department: sameDepartment(department) } },
       ],
     };
   }

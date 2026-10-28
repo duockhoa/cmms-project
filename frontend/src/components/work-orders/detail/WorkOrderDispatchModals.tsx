@@ -1,15 +1,23 @@
 import React from 'react';
-import { Loader2, Users, Check, Plus, X } from 'lucide-react';
+import { Loader2, Users, Check, Plus, X, Building2 } from 'lucide-react';
 import { Modal } from '../../common/Modal';
 
 export const WorkOrderDispatchModals: React.FC<any> = ({
   actionLoading, assignableUsers, assignedExecutorId, assignedExecutorIds = [],
+  availableDepartments = [], selectedDepartment = '', handleDepartmentChange,
   classificationNotes, classificationResult, escalateReason, handleAssignExecutorSubmit,
   handleClassifySubmit, handleEscalateSubmit, isAssignExecutorOpen,
   isClassifyOpen, isEscalateOpen, setAssignedExecutorId, setAssignedExecutorIds,
   setClassificationNotes, setClassificationResult, setEscalateReason,
   setIsAssignExecutorOpen, setIsClassifyOpen, setIsEscalateOpen, targetDeptLabel,
 }) => {
+  const activeDept = selectedDepartment || targetDeptLabel || '';
+  const isDeptChanged = Boolean(
+    activeDept &&
+    targetDeptLabel &&
+    activeDept.trim().toLowerCase() !== targetDeptLabel.trim().toLowerCase()
+  );
+
   const currentSelectedIds: string[] = Array.isArray(assignedExecutorIds) && assignedExecutorIds.length > 0
     ? assignedExecutorIds
     : (assignedExecutorId ? [assignedExecutorId] : []);
@@ -116,19 +124,65 @@ export const WorkOrderDispatchModals: React.FC<any> = ({
         </Modal>
       )}
 
-      {/* 6. Modal Phân công nhân sự phụ trách (Hỗ trợ nhiều người cùng làm) */}
+      {/* 6. Modal Phân công / Đổi bộ phận & nhân sự phụ trách (Hỗ trợ chọn bộ phận trước, nhân sự sau) */}
       {isAssignExecutorOpen && (
         <Modal
           isOpen={isAssignExecutorOpen}
           onClose={() => setIsAssignExecutorOpen(false)}
-          title={`Phân công nhân sự (${targetDeptLabel})`}
-          maxWidth="600px"
+          title={`Đổi bộ phận & Phân công nhân sự (${activeDept || targetDeptLabel})`}
+          maxWidth="620px"
         >
           <form onSubmit={handleAssignExecutorSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group">
+            {/* Bước 1: Chọn Bộ phận phụ trách */}
+            <div
+              className="form-group"
+              style={{
+                padding: '12px 14px',
+                backgroundColor: isDeptChanged ? '#eff6ff' : '#f8fafc',
+                borderRadius: '8px',
+                border: isDeptChanged ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+                marginBottom: 0,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                <label className="form-label" style={{ marginBottom: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', color: '#1e293b' }}>
+                  <Building2 size={15} color="#2563eb" /> 1. Chọn Bộ phận phụ trách *
+                </label>
+                {targetDeptLabel && (
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    Hiện tại: <strong style={{ color: '#0f172a' }}>{targetDeptLabel}</strong>
+                  </span>
+                )}
+              </div>
+
+              <select
+                className="form-select"
+                value={activeDept}
+                onChange={(e) => handleDepartmentChange && handleDepartmentChange(e.target.value)}
+                style={{ fontWeight: 600 }}
+              >
+                {availableDepartments.map((dept: string) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+                {availableDepartments.length === 0 && activeDept && (
+                  <option value={activeDept}>{activeDept}</option>
+                )}
+              </select>
+
+              {isDeptChanged && (
+                <div style={{ marginTop: '8px', fontSize: '12px', color: '#1d4ed8', fontWeight: 500 }}>
+                  Đang chuyển bộ phận phụ trách từ <strong>{targetDeptLabel}</strong> sang <strong>{activeDept}</strong>. Vui lòng chọn nhân sự thuộc bộ phận mới bên dưới (hoặc để trống nếu muốn chuyển về trạng thái Chờ bộ phận mới phân công).
+                </div>
+              )}
+            </div>
+
+            {/* Bước 2: Chọn Nhân sự thực hiện thuộc bộ phận đã chọn */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label className="form-label" style={{ marginBottom: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Users size={15} color="#2563eb" /> Nhân sự thực hiện (Có thể chọn nhiều người) *
+                  <Users size={15} color="#2563eb" /> 2. Nhân sự thực hiện thuộc "{activeDept}" (Có thể chọn nhiều người) {!isDeptChanged && '*'}
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
@@ -166,7 +220,9 @@ export const WorkOrderDispatchModals: React.FC<any> = ({
               >
                 {currentSelectedIds.length === 0 ? (
                   <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', alignSelf: 'center' }}>
-                    Chưa chọn nhân sự nào — Vui lòng tick chọn ít nhất 1 người bên dưới
+                    {isDeptChanged
+                      ? 'Chưa chọn nhân sự — Có thể tick chọn người bên dưới hoặc bấm xác nhận để chuyển giao cho bộ phận mới tự phân công'
+                      : 'Chưa chọn nhân sự nào — Vui lòng tick chọn ít nhất 1 người bên dưới'}
                   </span>
                 ) : (
                   currentSelectedIds.map((userId) => {
@@ -259,15 +315,21 @@ export const WorkOrderDispatchModals: React.FC<any> = ({
                 </div>
               ) : (
                 <div style={{ fontSize: '13px', color: '#b45309', padding: '8px 10px', backgroundColor: '#fffbeb', borderRadius: '6px', border: '1px solid #fef3c7' }}>
-                  Không tìm thấy nhân sự thuộc bộ phận "{targetDeptLabel}".
+                  Không tìm thấy nhân sự thuộc bộ phận "{activeDept}". {isDeptChanged && 'Bạn vẫn có thể xác nhận chuyển sang bộ phận này ở trạng thái Chờ phân công.'}
                 </div>
               )}
             </div>
 
             <div className="modal-footer" style={{ padding: 0, marginTop: '16px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setIsAssignExecutorOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-primary" disabled={actionLoading || currentSelectedIds.length === 0}>
-                {actionLoading ? <Loader2 className="animate-spin" size={14} /> : "Xác nhận phân công"}
+              <button type="submit" className="btn btn-primary" disabled={actionLoading || (currentSelectedIds.length === 0 && !isDeptChanged)}>
+                {actionLoading ? (
+                  <Loader2 className="animate-spin" size={14} />
+                ) : isDeptChanged ? (
+                  currentSelectedIds.length > 0 ? 'Xác nhận đổi bộ phận & phân công' : 'Xác nhận chuyển bộ phận'
+                ) : (
+                  'Xác nhận phân công'
+                )}
               </button>
             </div>
           </form>

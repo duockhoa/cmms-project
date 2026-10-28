@@ -56,6 +56,8 @@ export const useWorkOrderDetail = ({
   // Assign Executor Modal State
   const [isAssignExecutorOpen, setIsAssignExecutorOpen] = useState(false);
   const [assignedExecutorId, setAssignedExecutorId] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
   // Reject Handover Modal State
@@ -102,14 +104,16 @@ export const useWorkOrderDetail = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const [woData, logData, usersData] = await Promise.all([
+      const [woData, logData, usersData, deptsData] = await Promise.all([
         api.getWorkOrderById(workOrderId),
         api.getWorkOrderRepairLogs(workOrderId),
         api.getUsers().catch(() => []),
+        api.getDepartments().catch(() => []),
       ]);
       setWo(woData);
       setLogs(logData);
       setAllUsers(usersData);
+      setDepartmentsList(Array.isArray(deptsData) ? deptsData : []);
       loadSessionsData(workOrderId);
     } catch (err: any) {
       toast.error('Lỗi tải dữ liệu', err.message || 'Không thể tải chi tiết Work Order');
@@ -119,47 +123,110 @@ export const useWorkOrderDetail = ({
     }
   };
 
-  // Xác định bộ phận tiếp nhận / xử lý của Work Order
+  // Xác định bộ phận tiếp nhận / xử lý hiện tại của Work Order
   const targetDeptLabel = useMemo(() => {
     if (!wo) return '';
-    if (wo.handlingRoute === 'WORKSHOP_SELF_HANDLE') {
-      return wo.request?.department || wo.equipment?.location || 'Phân xưởng';
-    }
-    // Tuyến kỹ thuật/cơ điện: trích xuất bộ phận từ tiêu đề "[... xử lý]" hoặc mặc định Cơ điện
-    const titleMatch = wo.title?.match(/\[(.*?) xử lý\]/);
+    // Ưu tiên trích xuất bộ phận từ tiêu đề "[... xử lý]" nếu có
+    const titleMatch = wo.title?.match(/^\[(.*?) xử lý\]/);
     if (titleMatch && titleMatch[1]) {
       return titleMatch[1];
     }
+    if (wo.handlingRoute === 'WORKSHOP_SELF_HANDLE') {
+      return wo.request?.department || wo.equipment?.department || wo.equipment?.location || 'Phân xưởng';
+    }
+    // Nếu đã có kỹ thuật viên được gán, lấy theo bộ phận của kỹ thuật viên đó
+    if (wo.assignedTechnicianId && Array.isArray(allUsers) && allUsers.length > 0) {
+      const assignedUser = allUsers.find((u: any) => u.id === wo.assignedTechnicianId);
+      if (assignedUser?.department) {
+        return assignedUser.department;
+      }
+    }
     return 'xưởng cơ điện';
-  }, [wo]);
+  }, [wo, allUsers]);
 
-  // LỌC NGHIÊM NGẶT: Chỉ phân công người thuộc đúng phòng ban đó, tuyệt đối không load toàn bộ người
+  // Danh sách toàn bộ các bộ phận có thể chọn khi đổi bộ phận / người phụ trách
+  const availableDepartments = useMemo(() => {
+    const deptSet = new Map<string, string>();
+    const addDept = (d?: string | null) => {
+      const trimmed = (d || '').trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!deptSet.has(key)) {
+        deptSet.set(key, trimmed);
+      }
+    };
+
+    if (targetDeptLabel) addDept(targetDeptLabel);
+    if (wo?.request?.department) addDept(wo.request.department);
+    if (wo?.equipment?.department) addDept(wo.equipment.department);
+    departmentsList.forEach((d) => addDept(d));
+    if (Array.isArray(allUsers)) {
+      allUsers.forEach((u: any) => {
+        if (u.isActive !== false && u.department) {
+          addDept(u.department);
+        }
+      });
+    }
+
+    return Array.from(deptSet.values());
+  }, [departmentsList, allUsers, targetDeptLabel, wo]);
+
+  // Bộ phận đang được chọn trong Modal Phân công / Đổi người phụ trách
+  const activeAssignDept = useMemo(() => {
+    return (selectedDepartment || targetDeptLabel || '').trim();
+  }, [selectedDepartment, targetDeptLabel]);
+
+  // Lọc nhân sự theo đúng bộ phận đang được chọn trong Modal
   const assignableUsers = useMemo(() => {
-    if (!allUsers || !Array.isArray(allUsers) || !targetDeptLabel) return [];
-    const target = targetDeptLabel.trim().toLowerCase();
+    if (!allUsers || !Array.isArray(allUsers) || !activeAssignDept) return [];
+    const target = activeAssignDept.toLowerCase();
     return allUsers.filter((u: any) => {
       if (u.isActive === false) return false;
       if (!u.department) return false;
       const uDept = u.department.trim().toLowerCase();
       return uDept === target || target.includes(uDept) || uDept.includes(target);
     });
-  }, [allUsers, targetDeptLabel]);
+  }, [allUsers, activeAssignDept]);
 
   const [assignedExecutorIds, setAssignedExecutorIds] = useState<string[]>([]);
 
+  // Xử lý khi người dùng đổi Bộ phận trước rồi chọn Người phụ trách sau
+  const handleDepartmentChange = (newDept: string) => {
+    setSelectedDepartment(newDept);
+    const target = (newDept || '').trim().toLowerCase();
+    const usersInNewDept = (allUsers || []).filter((u: any) => {
+      if (u.isActive === false || !u.department) return false;
+      const uDept = u.department.trim().toLowerCase();
+      return uDept === target || target.includes(uDept) || uDept.includes(target);
+    });
+    const validIdsInNewDept = new Set(usersInNewDept.map((u: any) => u.id));
+    // Loại bỏ những nhân sự đã chọn của bộ phận cũ để chọn lại nhân sự thuộc bộ phận mới
+    setAssignedExecutorIds((prev) => {
+      const filtered = prev.filter((id) => validIdsInNewDept.has(id));
+      setAssignedExecutorId(filtered[0] || '');
+      return filtered;
+    });
+  };
+
   useEffect(() => {
     if (wo) {
+      // Đồng bộ bộ phận mặc định về bộ phận hiện tại của phiếu khi mở modal
+      const matchDept = availableDepartments.find(
+        (d) => d.trim().toLowerCase() === targetDeptLabel.trim().toLowerCase()
+      );
+      setSelectedDepartment(matchDept || targetDeptLabel);
+
       const ids: string[] = Array.isArray(wo.assignedTechnicianIds)
         ? wo.assignedTechnicianIds
         : (wo.assignedTechnicianId ? [wo.assignedTechnicianId] : []);
       setAssignedExecutorIds(ids);
       if (ids.length > 0) {
         setAssignedExecutorId(ids[0]);
-      } else if (assignableUsers.length > 0) {
-        setAssignedExecutorId(assignableUsers[0].id);
+      } else {
+        setAssignedExecutorId('');
       }
     }
-  }, [wo, isAssignExecutorOpen]);
+  }, [wo, isAssignExecutorOpen, targetDeptLabel]);
 
   useEffect(() => {
     if (workOrderId) {
@@ -426,8 +493,15 @@ export const useWorkOrderDetail = ({
   const handleAssignExecutorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const ids = assignedExecutorIds.length > 0 ? assignedExecutorIds : (assignedExecutorId ? [assignedExecutorId] : []);
-    if (ids.length === 0) {
-      toast.error('Yêu cầu dữ liệu', 'Vui lòng chọn ít nhất 1 kỹ thuật viên để phân công.');
+    const chosenDept = (selectedDepartment || targetDeptLabel || '').trim();
+    const isDeptChanged = Boolean(
+      chosenDept &&
+      targetDeptLabel &&
+      chosenDept.toLowerCase() !== targetDeptLabel.trim().toLowerCase()
+    );
+
+    if (ids.length === 0 && !isDeptChanged) {
+      toast.error('Yêu cầu dữ liệu', 'Vui lòng chọn ít nhất 1 nhân sự phụ trách hoặc chọn bộ phận mới.');
       return;
     }
 
@@ -437,13 +511,26 @@ export const useWorkOrderDetail = ({
 
     try {
       setActionLoading(true);
-      await (api as any).assignExecutor(wo.id, {
+      await api.assignExecutor(wo.id, {
         expectedVersion: wo.version,
-        assignedTechnicianId: ids[0],
+        targetDepartment: chosenDept || undefined,
+        assignedTechnicianId: ids[0] || undefined,
         assignedTechnicianIds: ids,
-        technicianName: techNames.join(', '),
+        technicianName: techNames.length > 0 ? techNames.join(', ') : undefined,
       });
-      toast.success('Phân công thành công', `Đã phân công: ${techNames.join(', ')}.`);
+      if (ids.length > 0) {
+        toast.success(
+          isDeptChanged ? 'Đổi bộ phận & phân công thành công' : 'Phân công thành công',
+          isDeptChanged
+            ? `Đã chuyển sang bộ phận [${chosenDept}] và phân công: ${techNames.join(', ')}.`
+            : `Đã phân công: ${techNames.join(', ')}.`
+        );
+      } else {
+        toast.success(
+          'Đổi bộ phận phụ trách thành công',
+          `Đã chuyển phiếu sang bộ phận [${chosenDept}] (Chờ phân công nhân sự).`
+        );
+      }
       setIsAssignExecutorOpen(false);
       if (onStatusChangeSuccess) onStatusChangeSuccess();
       loadData();
@@ -622,7 +709,8 @@ export const useWorkOrderDetail = ({
   }, [sessionList]);
 
   return {
-    actionLoading, allUsers, assignableUsers, assignedExecutorId, assignedExecutorIds, setAssignedExecutorIds, canModify,
+    actionLoading, allUsers, assignableUsers, assignedExecutorId, assignedExecutorIds, setAssignedExecutorIds,
+    availableDepartments, selectedDepartment, setSelectedDepartment, handleDepartmentChange, canModify,
     classificationNotes, classificationResult, cleanlinessResult, completeConclusion,
     completeEquipmentStatus, completePhotos, completeRecommendation, completeTestResult,
     completeWorkDone, customPauseReason, escalateReason, gmpImpactAssessment,

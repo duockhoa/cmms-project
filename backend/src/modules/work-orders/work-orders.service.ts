@@ -872,26 +872,73 @@ export class WorkOrdersService implements OnModuleInit {
 
     const currentWo = await this.prisma.workOrder.findUnique({
       where: { id },
-      select: { status: true },
+      include: {
+        request: { select: { department: true, title: true } },
+        equipment: { select: { department: true, location: true } },
+      },
     });
     if (!currentWo) throw new NotFoundException('Không tìm thấy phiếu bảo trì');
 
-    // Nếu phiếu đang IN_PROGRESS hoặc ON_HOLD thì giữ nguyên trạng thái hiện tại, không hạ về ASSIGNED
-    const targetStatus = (['IN_PROGRESS', 'ON_HOLD'].includes(currentWo.status))
-      ? (currentWo.status as WorkOrderStatus)
-      : 'ASSIGNED';
+    const extraUpdateData: Record<string, any> = {};
+    const targetDept = dto.targetDepartment?.trim();
+    if (targetDept) {
+      const originDept = (currentWo.request?.department || currentWo.equipment?.department || '').trim();
+      const isInternalWorkshop = Boolean(
+        originDept &&
+        targetDept.toLowerCase() === originDept.toLowerCase() &&
+        !targetDept.toLowerCase().includes('cơ điện') &&
+        !targetDept.toLowerCase().includes('kỹ thuật')
+      );
 
-    const logMessage = ['IN_PROGRESS', 'ON_HOLD'].includes(currentWo.status)
-      ? `Cập nhật / bổ sung nhân sự thực hiện: ${techName || 'Kỹ thuật viên'}`
-      : `Phân công người thực hiện: ${techName || 'Kỹ thuật viên'}`;
+      if (isInternalWorkshop) {
+        extraUpdateData.handlingRoute = HandlingRoute.WORKSHOP_SELF_HANDLE;
+        extraUpdateData.classificationResult = 'WORKSHOP_CONTINUE';
+        if (!currentWo.title.startsWith('[Định kỳ]')) {
+          if (/^\[.*?\]\s*/.test(currentWo.title)) {
+            extraUpdateData.title = currentWo.title.replace(/^\[.*?\]\s*/, '[Sửa chữa nội bộ] ');
+          } else {
+            extraUpdateData.title = `[Sửa chữa nội bộ] ${currentWo.title}`;
+          }
+        }
+      } else {
+        extraUpdateData.handlingRoute = HandlingRoute.TECHNICAL_MAINTENANCE_SUPPORT;
+        extraUpdateData.classificationResult = 'MAINTENANCE_REQUIRED';
+        if (!currentWo.title.startsWith('[Định kỳ]')) {
+          if (/^\[.*?\]\s*/.test(currentWo.title)) {
+            extraUpdateData.title = currentWo.title.replace(/^\[.*?\]\s*/, `[${targetDept} xử lý] `);
+          } else {
+            extraUpdateData.title = `[${targetDept} xử lý] ${currentWo.title}`;
+          }
+        }
+      }
+    }
+
+    const hasAssignee = Boolean(targetTechId || techIds.length > 0 || techName);
+
+    // Nếu chỉ đổi bộ phận mà chưa chọn người cụ thể -> Chuyển về PENDING (Chờ phân công)
+    // Nếu có chọn người và đang IN_PROGRESS / ON_HOLD -> Giữ nguyên trạng thái hiện tại
+    const targetStatus: WorkOrderStatus = !hasAssignee
+      ? 'PENDING'
+      : (['IN_PROGRESS', 'ON_HOLD'].includes(currentWo.status)
+        ? (currentWo.status as WorkOrderStatus)
+        : 'ASSIGNED');
+
+    const deptPrefixLog = targetDept ? `[Bộ phận: ${targetDept}] ` : '';
+    const logMessage = !hasAssignee
+      ? `${deptPrefixLog}Chuyển giao bộ phận phụ trách (Chờ phân công nhân sự)`
+      : (['IN_PROGRESS', 'ON_HOLD'].includes(currentWo.status)
+        ? `${deptPrefixLog}Cập nhật / đổi nhân sự thực hiện: ${techName || 'Kỹ thuật viên'}`
+        : `${deptPrefixLog}Phân công người thực hiện: ${techName || 'Kỹ thuật viên'}`);
+
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
       targetStatus,
       {
-        technicianName: techName || 'Kỹ thuật viên',
-        assignedTechnicianId: targetTechId || null,
-        assignedTechnicianIds: techIds.length > 0 ? techIds : null,
+        ...extraUpdateData,
+        technicianName: hasAssignee ? (techName || 'Kỹ thuật viên') : null,
+        assignedTechnicianId: hasAssignee ? (targetTechId || null) : null,
+        assignedTechnicianIds: hasAssignee && techIds.length > 0 ? techIds : null,
         supporterIds: dto.supporterIds || null,
       },
       'ASSIGN',

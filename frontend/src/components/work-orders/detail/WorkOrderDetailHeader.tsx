@@ -173,17 +173,17 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
             <ActionButton onClick={() => setIsClassifyOpen(true)} disabled={actionLoading} icon={ShieldCheck} label="Phân loại sự cố" color="#f59e0b" />
           )}
 
-          {/* Assign */}
+          {/* Assign / Reassign Department & Executor */}
           {wo.status === 'PENDING' && !wo.assignedTechnicianId && (
             <ActionButton
               onClick={() => setIsAssignExecutorOpen(true)}
               disabled={actionLoading}
               icon={Play}
-              label={wo?.handlingRoute === 'WORKSHOP_SELF_HANDLE' ? "Phân công nội bộ xưởng" : "Phân công Kỹ thuật / Cơ điện"}
+              label="Phân công / Đổi bộ phận"
               color="#3b82f6"
             />
           )}
-          {['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD'].includes(wo.status) && wo.assignedTechnicianId && (isManagerOrAdmin || userUnitType === 'TECHNICAL') && (
+          {['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD'].includes(wo.status) && wo.assignedTechnicianId && (isManagerOrAdmin || isAdmin || can('work_orders:assign') || can('work_orders:edit') || userUnitType === 'TECHNICAL' || userUnitType === 'WORKSHOP') && (
             <ActionButton
               onClick={() => setIsAssignExecutorOpen(true)}
               disabled={actionLoading}
