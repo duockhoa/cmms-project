@@ -29,6 +29,7 @@ export const UsersSettingsTab: React.FC = () => {
     name: '',
     email: '',
     department: '',
+    managedDepartments: '',
     role: 'USER',
     roleId: '',
     specialty: '',
@@ -119,6 +120,7 @@ export const UsersSettingsTab: React.FC = () => {
       name: '',
       email: '',
       department: '',
+      managedDepartments: '',
       role: 'USER',
       roleId: '',
       specialty: '',
@@ -129,10 +131,14 @@ export const UsersSettingsTab: React.FC = () => {
 
   const handleOpenEdit = (user: any) => {
     setSelectedUser(user);
+    const managedList = Array.isArray(user.managedDepartments)
+      ? user.managedDepartments.join(', ')
+      : (user.department || '');
     setUserForm({
       name: user.name || '',
       email: user.email || '',
       department: user.department || '',
+      managedDepartments: managedList,
       role: user.role || 'USER',
       roleId: user.roleId || '',
       specialty: user.specialty || '',
@@ -198,10 +204,12 @@ export const UsersSettingsTab: React.FC = () => {
   };
 
   const filteredUsers = users.filter(u => {
+    const managedStr = Array.isArray(u.managedDepartments) ? u.managedDepartments.join(' ') : '';
     const matchSearch = searchTerm === '' || 
       (u.name && u.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (u.department && u.department.toLowerCase().includes(searchTerm.toLowerCase()));
+      (u.department && u.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (managedStr && managedStr.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchRole = roleFilter === '' || u.role === roleFilter;
 
@@ -307,7 +315,32 @@ export const UsersSettingsTab: React.FC = () => {
                       {u.specialty && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{u.specialty}</div>}
                     </td>
                     <td style={{ fontSize: '12.5px' }}>{u.email}</td>
-                    <td style={{ fontSize: '12.5px' }}>{u.department || '---'}</td>
+                    <td style={{ fontSize: '12.5px' }}>
+                      <div>{u.department || '---'}</div>
+                      {Array.isArray(u.managedDepartments) && u.managedDepartments.filter((d: string) => d.toLowerCase() !== (u.department || '').trim().toLowerCase()).length > 0 && (
+                        <div style={{ marginTop: '3px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {u.managedDepartments
+                            .filter((d: string) => d.toLowerCase() !== (u.department || '').trim().toLowerCase())
+                            .map((d: string) => (
+                              <span
+                                key={d}
+                                style={{
+                                  fontSize: '10.5px',
+                                  padding: '1px 6px',
+                                  borderRadius: '4px',
+                                  backgroundColor: '#fef3c7',
+                                  color: '#92400e',
+                                  fontWeight: 600,
+                                  border: '1px solid #fde68a',
+                                }}
+                                title="Bộ phận quản lý kiêm nhiệm (đồng bộ từ HRM hoặc gán thêm)"
+                              >
+                                +{d}
+                              </span>
+                            ))}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       <span className={`badge badge-${u.role === 'ADMIN' ? 'danger' : u.role === 'MANAGER' ? 'warning' : u.role === 'TECHNICIAN' ? 'info' : 'neutral'}`} style={{ fontSize: '11px' }}>
                         {u.role === 'ADMIN' ? 'Quản trị viên' : u.role === 'MANAGER' ? 'Quản lý' : u.role === 'TECHNICIAN' ? 'Kỹ thuật viên' : 'Người dùng'}
@@ -460,14 +493,14 @@ export const UsersSettingsTab: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
               <label className="form-label" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, marginBottom: '4px' }}>
-                Phòng ban / Phân xưởng
+                Phòng ban / Phân xưởng gốc
               </label>
               <input
                 type="text"
                 className="form-input"
                 value={userForm.department}
                 onChange={e => setUserForm({ ...userForm, department: e.target.value })}
-                placeholder="VD: Xưởng Cơ điện"
+                placeholder="VD: PX1"
               />
             </div>
             <div>
@@ -479,9 +512,22 @@ export const UsersSettingsTab: React.FC = () => {
                 className="form-input"
                 value={userForm.specialty}
                 onChange={e => setUserForm({ ...userForm, specialty: e.target.value })}
-                placeholder="VD: Kỹ sư Điện"
+                placeholder="VD: QĐ / TP"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="form-label" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, marginBottom: '4px' }}>
+              Tất cả bộ phận quản lý / kiêm nhiệm (phân cách bằng dấu phẩy)
+            </label>
+            <input
+              type="text"
+              className="form-input"
+              value={userForm.managedDepartments}
+              onChange={e => setUserForm({ ...userForm, managedDepartments: e.target.value })}
+              placeholder="VD: PX1, PX3 (tự động đồng bộ từ HRM hoặc nhập thêm)"
+            />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

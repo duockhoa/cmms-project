@@ -44,6 +44,7 @@ model User {
   specialty             String?
   status                TechnicianStatus         @default(AVAILABLE)
   department            String?
+  managedDepartments    String?                  @db.Text // JSON array hoặc danh sách các bộ phận quản lý kiêm nhiệm (đồng bộ từ HRM team_lead hoặc gán thêm)
   avatar                String?
   isActive              Boolean                  @default(true)
   hrmId                 String?                  @unique
@@ -70,6 +71,8 @@ model User {
   classifiedWorkOrders  WorkOrder[]              @relation("WorkOrderClassificationReporter")
   operationLogs         OperationLog[]           @relation("UserOperationLogs")
   voidedOperationLogs   OperationLog[]           @relation("UserVoidedOperationLogs")
+  oeeRecords            EquipmentOeeRecord[]     @relation("UserOeeRecords")
+  voidedOeeRecords      EquipmentOeeRecord[]     @relation("UserVoidedOeeRecords")
   utilityReadings       UtilityReading[]         @relation("UserUtilityReadings")
   utilityStatusLogs     UtilitySystemStatusLog[] @relation("UserUtilityStatusLogs")
   assignedFabrications  FabricationOrder[]       @relation("FabricationAssignedLead")
@@ -118,6 +121,12 @@ model Equipment {
   notes                 String?
   functionalUnit        String? // Cụm chức năng chính/khái quát
   currentOperatingHours Float                     @default(0)
+  // Cấu hình chuẩn hóa đo lường OEE cho thiết bị trọng yếu (KH.DK-SX.2026.03)
+  isCritical            Boolean                   @default(false) // Đánh dấu thiết bị trọng yếu cần đo OEE
+  standardSpeedPerHour  Float? // Công suất / tốc độ định mức lý thuyết (đơn vị sản phẩm / giờ chạy máy)
+  outputUnit            String? // Đơn vị sản lượng (Viên, Vỉ, Chai, Lọ, Hộp, Gói, Kg...)
+  plannedShiftMinutes   Int                       @default(480) // Thời gian ca chuẩn (phút), mặc định 480p (8h)
+  oeeTarget             Float                     @default(85) // Mục tiêu OEE chuẩn (%) của thiết bị
   isActive              Boolean                   @default(true)
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
@@ -129,6 +138,7 @@ model Equipment {
   parameters            EquipmentParameter[]
   technicalSpecs        EquipmentTechnicalSpec[]
   operationLogs         OperationLog[]
+  oeeRecords            EquipmentOeeRecord[]
   functionalUnits       EquipmentFunctionalUnit[]
   fabricationOrders     FabricationOrder[]
   spareParts            EquipmentSparePart[]
@@ -137,6 +147,7 @@ model Equipment {
   @@index([category])
   @@index([department])
   @@index([oldCode])
+  @@index([isCritical])
 }
 
 model MaintenanceRequest {
@@ -783,6 +794,60 @@ model OperationLog {
   voidedAt   DateTime?
   voidedById String?
   voidedBy   User?     @relation("UserVoidedOperationLogs", fields: [voidedById], references: [id], onDelete: SetNull)
+}
+
+model EquipmentOeeRecord {
+  id                           String    @id @default(uuid())
+  recordCode                   String    @unique // Mã phiếu OEE: OEE-20261028-001
+  equipmentId                  String
+  equipment                    Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  recordDate                   DateTime // Ngày sản xuất / ca vận hành
+  shift                        String    @default("CA_1") // CA_1, CA_2, CA_3, HANH_CHINH
+  batchNumber                  String? // Số lô sản xuất / Lệnh sản xuất
+  productName                  String? // Tên sản phẩm chạy trên máy trong ca
+
+  // 1. Trụ cột Availability (A - Thời gian chạy máy, tính bằng phút)
+  shiftDurationMinutes         Float     @default(480) // Tổng thời gian ca làm việc (VD: 480 phút)
+  plannedDowntimeMinutes       Float     @default(0) // Thời gian dừng có kế hoạch (Vệ sinh, chuyển lô, bảo dưỡng định kỳ)
+  plannedProductionMinutes     Float     @default(480) // Thời gian sản xuất kế hoạch (PPT = shiftDuration - plannedDowntime)
+  unplannedDowntimeMinutes     Float     @default(0) // Thời gian dừng sự cố / không kế hoạch (Hỏng máy, căn chỉnh, chờ BTP/vật tư...)
+  autoWorkOrderDowntimeMinutes Float     @default(0) // Số phút dừng sự cố tự động lấy từ Phiếu sửa chữa (WorkOrder) để đối chiếu
+  runTimeMinutes               Float     @default(480) // Thời gian chạy máy thực tế (Run Time = PPT - unplannedDowntime)
+  downtimeBreakdown            String?   @db.Text // JSON chi tiết các khoản dừng máy theo 6 tổn thất lớn (Six Big Losses)
+
+  // 2. Trụ cột Performance (P - Hiệu suất tốc độ & Sản lượng)
+  standardSpeedPerHour         Float // Tốc độ định mức lý thuyết (đơn vị/giờ) áp dụng cho ca
+  outputUnit                   String    @default("Đơn vị") // Đơn vị tính (Viên, Vỉ, Chai, Hộp...)
+  totalOutput                  Float // Tổng sản lượng thực tế trong ca (Chính phẩm + Phế phẩm)
+
+  // 3. Trụ cột Quality (Q - Tỷ lệ chất lượng)
+  goodOutput                   Float // Sản lượng đạt tiêu chuẩn (Chính phẩm)
+  defectOutput                 Float     @default(0) // Sản lượng phế phẩm / hàng lỗi / tái chế
+  defectReasons                String?   @db.Text // Ghi chú / nguyên nhân phế phẩm
+
+  // 4. Chỉ số kết quả xử lý (%)
+  availability                 Float // A (%) = (runTimeMinutes / plannedProductionMinutes) * 100
+  performance                  Float // P (%) = (totalOutput / ((runTimeMinutes / 60) * standardSpeedPerHour)) * 100
+  quality                      Float // Q (%) = (goodOutput / totalOutput) * 100
+  oee                          Float // OEE (%) = (A * P * Q) / 10000
+
+  // Metadata & Audit
+  recordedVia                  String    @default("QR_APP") // QR_APP, WEB_APP
+  notes                        String?   @db.Text
+  recordedById                 String
+  recordedBy                   User      @relation("UserOeeRecords", fields: [recordedById], references: [id], onDelete: Restrict)
+  isVoided                     Boolean   @default(false)
+  voidReason                   String?   @db.Text
+  voidedAt                     DateTime?
+  voidedById                   String?
+  voidedBy                     User?     @relation("UserVoidedOeeRecords", fields: [voidedById], references: [id], onDelete: SetNull)
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+
+  @@index([equipmentId, recordDate])
+  @@index([recordDate])
+  @@index([shift])
+  @@index([isVoided])
 }
 
 model AppFeedback {

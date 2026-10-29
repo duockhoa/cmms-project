@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsGateway } from './notifications.gateway';
+import { getUserDepartments } from '../../common/utils/rbac.helper';
 
 @Injectable()
 export class NotificationsService {
@@ -81,8 +82,11 @@ export class NotificationsService {
       orConditions.push({ role: user.role });
     }
 
-    if (user.department) {
-      orConditions.push({ department: user.department });
+    const userDepartments = getUserDepartments(user);
+    if (userDepartments.length === 1) {
+      orConditions.push({ department: userDepartments[0] });
+    } else if (userDepartments.length > 1) {
+      orConditions.push({ department: { in: userDepartments } });
     }
 
     // Add global notification criteria

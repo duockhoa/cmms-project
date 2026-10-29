@@ -44,6 +44,31 @@ describe('data scope helpers', () => {
     });
   });
 
+  it('includes all managedDepartments for multi-department managers', () => {
+    const multiDeptManager = actor({
+      role: 'MANAGER',
+      department: 'PX1',
+      managedDepartments: JSON.stringify(['PX1', 'PX3']),
+    });
+
+    expect(buildRequestScopeWhere(multiDeptManager)).toEqual({
+      OR: [
+        { department: { in: ['PX1', 'PX3'] } },
+        { equipment: { department: { in: ['PX1', 'PX3'] } } },
+      ],
+    });
+
+    expect(buildWorkOrderScopeWhere(multiDeptManager)).toEqual({
+      OR: [
+        { equipment: { department: { in: ['PX1', 'PX3'] } } },
+        { request: { department: { in: ['PX1', 'PX3'] } } },
+        { title: { contains: 'PX1' } },
+        { title: { contains: 'PX3' } },
+        { assignedTechnician: { department: { in: ['PX1', 'PX3'] } } },
+      ],
+    });
+  });
+
   it('limits ordinary users to their own or department records', () => {
     expect(buildRequestScopeWhere(actor())).toEqual({
       OR: [

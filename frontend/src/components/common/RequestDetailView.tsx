@@ -94,24 +94,49 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
   // Vị trí địa lý đặt thiết bị trong nhà máy
   const equipmentLocation = req?.equipment?.location || 'Chưa cập nhật vị trí';
 
-  // Xác định thẩm quyền phê duyệt: Quản trị viên (Toàn quyền) HOẶC Quản lý cùng bộ phận
+  // Xác định thẩm quyền phê duyệt: Quản trị viên (Toàn quyền) HOẶC Quản lý thuộc/kiêm nhiệm bộ phận sự cố
   const isGlobalManager = isAdmin || can('ALL') || can('*');
-  const userDept = (effectiveUser?.department || '').trim().toLowerCase();
-  const requestDeptLower = reqDepartment.toLowerCase();
-  const isDepartmentMatch = Boolean(userDept && requestDeptLower && userDept === requestDeptLower);
+  const extractDepts = (u: any): string[] => {
+    if (!u) return [];
+    const raw: string[] = [];
+    if (typeof u.department === 'string' && u.department.trim()) {
+      raw.push(...u.department.split(/[,;|]+/).map((s: string) => s.trim()).filter(Boolean));
+    }
+    if (Array.isArray(u.managedDepartments)) {
+      raw.push(...u.managedDepartments.map((s: any) => String(s || '').trim()).filter(Boolean));
+    } else if (typeof u.managedDepartments === 'string' && u.managedDepartments.trim()) {
+      try {
+        const parsed = JSON.parse(u.managedDepartments);
+        if (Array.isArray(parsed)) raw.push(...parsed.map((s: any) => String(s || '').trim()).filter(Boolean));
+      } catch {
+        raw.push(...u.managedDepartments.split(/[,;|]+/).map((s: string) => s.trim()).filter(Boolean));
+      }
+    }
+    return Array.from(new Set(raw.map((d) => d.toLowerCase())));
+  };
+
+  const userDeptList = extractDepts(effectiveUser);
+  const candidateReqDepts = [req?.department, req?.equipment?.department, internalDepartment]
+    .map((d) => (d || '').trim().toLowerCase())
+    .filter(Boolean);
+  const isDepartmentMatch = Boolean(
+    userDeptList.length > 0 &&
+    candidateReqDepts.length > 0 &&
+    candidateReqDepts.some((rd) => userDeptList.includes(rd))
+  );
 
   const canApprove = isGlobalManager || (can('requests:approve') && isDepartmentMatch);
   const canReject = isGlobalManager || (can('requests:reject') && isDepartmentMatch);
 
-  // Chỉ lấy nhân sự thuộc đúng bộ phận sở tại khi xử lý nội bộ - Không lấy nhầm người xưởng khác
+  // Chỉ lấy nhân sự thuộc hoặc kiêm nhiệm bộ phận sở tại khi xử lý nội bộ
   const internalUsers = React.useMemo(() => {
     if (!users || !Array.isArray(users)) return [];
     if (!reqDepartment) return [];
     const target = reqDepartment.toLowerCase();
     return users.filter((u: any) => {
       if (u.isActive === false) return false;
-      if (!u.department) return false;
-      return u.department.trim().toLowerCase() === target;
+      const uDepts = extractDepts(u);
+      return uDepts.includes(target);
     });
   }, [users, reqDepartment]);
 

@@ -342,13 +342,13 @@ export class RequestsService {
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
 
-      // Dynamic RBAC Authorization Check by Reporter's Department
+      // Dynamic RBAC Authorization Check by Reporter's or Equipment's Department
       if (actorId) {
         const actor = await tx.user.findUnique({ 
           where: { id: actorId },
           include: { customRole: true }
         });
-        const authCheck = canManageDepartmentRequest(actor, request.department, 'requests:approve');
+        const authCheck = canManageDepartmentRequest(actor, request.department, 'requests:approve', request.equipment?.department);
         if (!authCheck.allowed) {
           throw new ForbiddenException(authCheck.reason);
         }
@@ -504,13 +504,13 @@ export class RequestsService {
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
 
-      // Dynamic RBAC Authorization Check by Reporter's Department
+      // Dynamic RBAC Authorization Check by Reporter's or Equipment's Department
       if (actorId) {
         const actor = await tx.user.findUnique({ 
           where: { id: actorId },
           include: { customRole: true }
         });
-        const authCheck = canManageDepartmentRequest(actor, request.department, 'requests:reject');
+        const authCheck = canManageDepartmentRequest(actor, request.department, 'requests:reject', request.equipment?.department);
         if (!authCheck.allowed) {
           throw new ForbiddenException(authCheck.reason);
         }
@@ -587,13 +587,13 @@ export class RequestsService {
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
 
-      // Dynamic RBAC Authorization Check by Reporter's Department
+      // Dynamic RBAC Authorization Check by Reporter's or Equipment's Department
       if (actorId) {
         const actor = await tx.user.findUnique({ 
           where: { id: actorId },
           include: { customRole: true }
         });
-        const authCheck = canManageDepartmentRequest(actor, request.department, 'requests:reject');
+        const authCheck = canManageDepartmentRequest(actor, request.department, 'requests:reject', request.equipment?.department);
         if (!authCheck.allowed) {
           throw new ForbiddenException(authCheck.reason);
         }
@@ -770,7 +770,7 @@ export class RequestsService {
     const result = await this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.findUnique({
         where: { id },
-        include: { workOrders: true },
+        include: { workOrders: true, equipment: true },
       });
       if (!request) throw new NotFoundException('Không tìm thấy yêu cầu sửa chữa');
 
@@ -790,7 +790,7 @@ export class RequestsService {
       }
 
       if (!isOwner && !isGlobalAdmin(actorUser)) {
-        const deptCheck = canManageDepartmentRequest(actorUser, request.department, 'requests:cancel');
+        const deptCheck = canManageDepartmentRequest(actorUser, request.department, 'requests:cancel', request.equipment?.department);
         if (!deptCheck.allowed) {
           throw new ForbiddenException(deptCheck.reason);
         }

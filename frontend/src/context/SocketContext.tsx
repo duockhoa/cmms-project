@@ -50,11 +50,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ? `${window.location.protocol}//${window.location.hostname}:3001/notifications`
       : `${window.location.origin}/notifications`;
 
+    const userManagedDepts = Array.isArray((user as any).managedDepartments) && (user as any).managedDepartments.length > 0
+      ? (user as any).managedDepartments.join(',')
+      : (user.department || '');
+
     const s = io(socketUrl, {
       query: {
         userId: user.id,
         role: user.role || '',
-        department: user.department || '',
+        department: userManagedDepts,
       },
       transports: ['websocket', 'polling'],
       reconnection: true,

@@ -4,6 +4,7 @@ import { AnalyticsDateWindowService } from './analytics-date-window.service';
 import { AnalyticsScopeService, UserContext } from './analytics-scope.service';
 import { AnalyticsQueryService } from './analytics-query.service';
 import { KpiQueryDto } from '../dto/kpi-query.dto';
+import { getUserDepartments } from '../../../common/utils/rbac.helper';
 import {
   COMPLETED_WORK_ORDER_STATUSES,
   WORK_ORDER_CLASSIFICATION,
@@ -84,7 +85,7 @@ export function transformScopeForEquipment(scope: any): any {
       transformed.requests = {
         some: val,
       };
-    } else if (key === 'department' && typeof val === 'string') {
+    } else if (key === 'department' && (typeof val === 'string' || (val && typeof val === 'object'))) {
       transformed.requests = {
         some: {
           department: val,
@@ -123,10 +124,12 @@ export class KpiEngineService {
 
     let serverScope: any = {};
     if (user) {
-      if (user.role === 'MANAGER' && user.department && user.department.trim()) {
-        const dept = user.department.trim();
+      const managerDepts = user.role === 'MANAGER' ? getUserDepartments(user) : [];
+      if (user.role === 'MANAGER' && managerDepts.length > 0) {
         serverScope = {
-          request: { department: dept },
+          request: {
+            department: managerDepts.length === 1 ? managerDepts[0] : { in: managerDepts },
+          },
         };
       } else {
         serverScope = this.scopeService.buildServerEnforcedScope(user);
@@ -203,8 +206,13 @@ export class KpiEngineService {
         reqWhere.workOrders = {
           some: serverScope,
         };
-      } else if (user.role === 'MANAGER' && user.department && user.department.trim()) {
-        reqWhere.department = user.department.trim();
+      } else if (user.role === 'MANAGER') {
+        const managerDepts = getUserDepartments(user);
+        if (managerDepts.length === 1) {
+          reqWhere.department = managerDepts[0];
+        } else if (managerDepts.length > 1) {
+          reqWhere.department = { in: managerDepts };
+        }
       }
     }
 

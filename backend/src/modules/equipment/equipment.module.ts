@@ -8,6 +8,8 @@ import { EquipmentTechnicalSpecsService } from './equipment-technical-specs.serv
 import { EquipmentTechnicalSpecsController } from './equipment-technical-specs.controller';
 import { OperationLogsService } from './operation-logs.service';
 import { OperationLogsController, GlobalOperationLogsController } from './operation-logs.controller';
+import { OeeRecordsService } from './oee-records.service';
+import { EquipmentOeeRecordsController, GlobalOeeRecordsController } from './oee-records.controller';
 import { FunctionalUnitsService } from './functional-units.service';
 import { FunctionalUnitsController, FunctionalUnitLibraryController } from './functional-units.controller';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -19,6 +21,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     EquipmentTechnicalSpecsController,
     OperationLogsController, 
     GlobalOperationLogsController,
+    EquipmentOeeRecordsController,
+    GlobalOeeRecordsController,
     FunctionalUnitsController,
     FunctionalUnitLibraryController,
   ],
@@ -28,6 +32,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     EquipmentParametersService, 
     EquipmentTechnicalSpecsService,
     OperationLogsService,
+    OeeRecordsService,
     FunctionalUnitsService,
     PermissionsGuard,
   ],
@@ -37,6 +42,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
     EquipmentParametersService, 
     EquipmentTechnicalSpecsService,
     OperationLogsService,
+    OeeRecordsService,
     FunctionalUnitsService,
   ],
 })

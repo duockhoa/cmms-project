@@ -69,7 +69,10 @@ export default function UserCard({ user }: { user: any }) {
             {user?.name || 'Đang tải...'}
           </span>
           <span style={{ fontSize: '11.5px', color: 'var(--text-secondary, #64748b)' }}>
-            {user?.position ? `${user.position} ` : ''}{user?.department || (user?.role === 'ADMIN' ? 'Quản trị viên' : user?.role === 'MANAGER' ? 'Quản lý' : user?.role === 'TECHNICIAN' ? 'Kỹ thuật viên' : '')}
+            {user?.position ? `${user.position} ` : ''}
+            {(Array.isArray(user?.managedDepartments) && user.managedDepartments.length > 0
+              ? user.managedDepartments.join(', ')
+              : user?.department) || (user?.role === 'ADMIN' ? 'Quản trị viên' : user?.role === 'MANAGER' ? 'Quản lý' : user?.role === 'TECHNICIAN' ? 'Kỹ thuật viên' : '')}
           </span>
         </div>
 

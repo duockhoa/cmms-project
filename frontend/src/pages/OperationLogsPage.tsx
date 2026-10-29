@@ -1,14 +1,27 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Camera, X, Search, ChevronLeft, ChevronRight, 
-  MapPin, RefreshCw
+  MapPin, RefreshCw, Gauge, Sliders
 } from 'lucide-react';
 import { EquipmentOperationDetailView } from '../components/common/OperationLogDetailView';
 import { PageHeader } from '../components/common';
 import { useOperationLogsPage } from '../hooks/useOperationLogsPage';
+import { OeeManagementSection } from '../components/operation-logs/OeeManagementSection';
 import './operationLogs.css';
 
 export const OperationLogsPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeMode, setActiveMode] = useState<'OEE' | 'PARAMS'>(
+    searchParams.get('tab') === 'params' ? 'PARAMS' : 'OEE',
+  );
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'oee') setActiveMode('OEE');
+    else if (tab === 'params') setActiveMode('PARAMS');
+  }, [searchParams]);
+
   const {
     locations,
     loading,
@@ -30,8 +43,8 @@ export const OperationLogsPage: React.FC = () => {
     <div className="op-logs-container">
       {/* Top Page Header */}
       <PageHeader
-        title="Sổ Vận Hành & Nhật Ký Giám Sát Thiết Bị"
-        subtitle="Quản lý và tra cứu bảng nhật ký thông số vận hành theo từng phiên ghi nhận / ca làm việc."
+        title="Sổ Vận Hành & Đo Lường OEE"
+        subtitle="Ghi nhận hiệu suất OEE theo ca và theo dõi thông số kỹ thuật thiết bị"
         actions={(
           <>
           <button
@@ -48,14 +61,79 @@ export const OperationLogsPage: React.FC = () => {
             onClick={() => setShowScanner(true)}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
           >
-            <Camera size={15} /> Quét mã QR (Nhập ca)
+            <Camera size={15} /> Quét mã QR
           </button>
           </>
         )}
       />
 
-      {/* Main Workspace: Left Collapsible Sidebar (Desktop) + Right Full-Width Logbook */}
-      <div className="op-logs-workspace">
+      {/* Tab Switcher: OEE vs Thông số kỹ thuật */}
+      <div
+        style={{
+          display: 'inline-flex',
+          gap: '8px',
+          padding: '5px',
+          backgroundColor: '#e2e8f0',
+          borderRadius: '10px',
+          marginBottom: '16px',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setActiveMode('OEE');
+            setSearchParams({ tab: 'oee' });
+          }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            fontSize: '13px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            backgroundColor: activeMode === 'OEE' ? '#2563eb' : 'transparent',
+            color: activeMode === 'OEE' ? '#ffffff' : '#475569',
+            boxShadow: activeMode === 'OEE' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none',
+          }}
+        >
+          <Gauge size={16} />
+          <span>Đo lường OEE</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveMode('PARAMS');
+            setSearchParams({ tab: 'params' });
+          }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            fontSize: '13px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            backgroundColor: activeMode === 'PARAMS' ? '#ffffff' : 'transparent',
+            color: activeMode === 'PARAMS' ? '#0f172a' : '#475569',
+            boxShadow: activeMode === 'PARAMS' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+          }}
+        >
+          <Sliders size={16} />
+          <span>Thông số vận hành ({filteredEquipment.length})</span>
+        </button>
+      </div>
+
+      {activeMode === 'OEE' ? (
+        <OeeManagementSection />
+      ) : (
+        /* Main Workspace: Left Collapsible Sidebar (Desktop) + Right Full-Width Logbook */
+        <div className="op-logs-workspace">
         {/* Left: Collapsible Equipment List Panel (Desktop only) */}
         {!isSidebarCollapsed && (
           <div className="op-logs-sidebar">
@@ -222,6 +300,7 @@ export const OperationLogsPage: React.FC = () => {
           )}
         </div>
       </div>
+      )}
 
       {/* QR Scanner Modal */}
       {showScanner && (

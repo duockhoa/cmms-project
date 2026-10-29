@@ -2,6 +2,7 @@ import { Controller, Get, UseGuards, Req, NotFoundException } from '@nestjs/comm
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ALL_PERMISSION_CODES } from '../../common/constants/permissions.registry';
+import { getUserDepartments } from '../../common/utils/rbac.helper';
 
 @Controller('auth')
 export class AuthController {
@@ -84,6 +85,8 @@ export class AuthController {
       permissions = Array.from(expanded);
     }
 
+    const userDepartments = getUserDepartments(dbUser);
+
     return {
       authenticated: true,
       user: {
@@ -97,14 +100,16 @@ export class AuthController {
         status: dbUser.status,
         isActive: dbUser.isActive,
         department: dbUser.department,
+        managedDepartments: userDepartments,
         position: dbUser.specialty,
         avatar: dbUser.avatar,
       },
       permissions: permissions,
       scope: {
         department: (dbUser.role === 'MANAGER' || permissions.includes('requests:approve') || dbUser.customRole?.name?.toLowerCase().includes('quản lý')) 
-          ? (dbUser.department || 'ALL') 
+          ? (userDepartments.length > 0 ? userDepartments.join(', ') : (dbUser.department || 'ALL')) 
           : 'ALL',
+        departments: userDepartments,
         assignedOnly: dbUser.role === 'TECHNICIAN' && !permissions.includes('requests:approve'),
       },
     };

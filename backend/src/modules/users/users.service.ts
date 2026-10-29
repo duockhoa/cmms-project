@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { JwtStrategy } from '../auth/jwt.strategy';
 import { UpdateTechnicalProfileDto } from './dto/update-technical-profile.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
-import { isGlobalAdmin } from '../../common/utils/rbac.helper';
+import { getUserDepartments, isGlobalAdmin, isUserInDepartment } from '../../common/utils/rbac.helper';
 
 @Injectable()
 export class UsersService {
@@ -18,11 +18,14 @@ export class UsersService {
       },
       select: {
         department: true,
+        managedDepartments: true,
       },
       distinct: ['department'],
     });
     const deptSet = new Set<string>();
-    users.forEach((u) => u.department && deptSet.add(u.department.trim()));
+    users.forEach((u) => {
+      getUserDepartments(u).forEach((d) => deptSet.add(d));
+    });
     return Array.from(deptSet).filter(Boolean).sort((a, b) => a.localeCompare(b, 'vi'));
   }
 
@@ -118,23 +121,58 @@ export class UsersService {
     return Array.from(uniqueUsers.values());
   }
 
+  private async fetchHrmDepartmentsSnapshot(hrmApiUrl: string, accessToken: string): Promise<any[]> {
+    try {
+      const url = new URL(`${hrmApiUrl.replace(/\/$/, '')}/departments`);
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json',
+        },
+      });
+      if (!response.ok) return [];
+      const rawData = await response.json();
+      const candidates = [
+        rawData,
+        rawData?.data,
+        rawData?.departments,
+        rawData?.items,
+        rawData?.results,
+      ];
+      return candidates.find(Array.isArray) || [];
+    } catch {
+      return [];
+    }
+  }
+
   async getAssignees(department?: string) {
     const whereClause: any = { isActive: true, dataSource: 'HRM' };
     if (department) {
-      whereClause.department = { equals: department };
+      whereClause.OR = [
+        { department: { equals: department } },
+        { managedDepartments: { contains: department } },
+      ];
     }
-    return this.prisma.user.findMany({
+    const list = await this.prisma.user.findMany({
       where: whereClause,
       orderBy: { name: 'asc' },
       select: {
         id: true,
         name: true,
         department: true,
+        managedDepartments: true,
         specialty: true,
         status: true,
         avatar: true,
       },
     });
+    const filtered = department
+      ? list.filter((u) => isUserInDepartment(u, department))
+      : list;
+    return filtered.map((u) => ({
+      ...u,
+      managedDepartments: getUserDepartments(u),
+    }));
   }
 
   async getUsers(role?: string, includeInactive = false, department?: string, currentUser?: any) {
@@ -146,12 +184,15 @@ export class UsersService {
       whereClause.isActive = true;
     }
     if (department) {
-      whereClause.department = { equals: department };
+      whereClause.OR = [
+        { department: { equals: department } },
+        { managedDepartments: { contains: department } },
+      ];
     }
 
     const isAdmin = isGlobalAdmin(currentUser);
 
-    const users = await this.prisma.user.findMany({
+    const rawUsers = await this.prisma.user.findMany({
       where: whereClause,
       orderBy: { name: 'asc' },
       select: {
@@ -160,6 +201,7 @@ export class UsersService {
         email: true,
         role: true,
         department: true,
+        managedDepartments: true,
         specialty: true,
         status: true,
         avatar: true,
@@ -184,6 +226,10 @@ export class UsersService {
       },
     });
 
+    const users = department
+      ? rawUsers.filter((u) => isUserInDepartment(u, department))
+      : rawUsers;
+
     // Compute active work orders dynamically
     const usersWithWorkload = await Promise.all(
       users.map(async (user) => {
@@ -197,6 +243,7 @@ export class UsersService {
         });
         return {
           ...user,
+          managedDepartments: getUserDepartments(user),
           activeWorkOrderCount,
         };
       })
@@ -337,13 +384,18 @@ export class UsersService {
   }
 
   async createUser(data: any) {
+    const depts = getUserDepartments({
+      department: data.department,
+      managedDepartments: data.managedDepartments,
+    });
     return this.prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
         role: data.role || 'USER',
         roleId: data.roleId || null,
-        department: data.department || null,
+        department: data.department || depts[0] || null,
+        managedDepartments: depts.length > 0 ? JSON.stringify(depts) : null,
         specialty: data.specialty || null,
         isActive: data.isActive !== undefined ? data.isActive : true,
       },
@@ -363,10 +415,17 @@ export class UsersService {
     if (data.role !== undefined) updateData.role = data.role;
     if (data.roleId !== undefined) updateData.roleId = data.roleId || null;
     if (data.department !== undefined) updateData.department = data.department;
+    if (data.managedDepartments !== undefined || data.department !== undefined) {
+      const depts = getUserDepartments({
+        department: data.department !== undefined ? data.department : user.department,
+        managedDepartments: data.managedDepartments !== undefined ? data.managedDepartments : user.managedDepartments,
+      });
+      updateData.managedDepartments = depts.length > 0 ? JSON.stringify(depts) : null;
+    }
     if (data.specialty !== undefined) updateData.specialty = data.specialty;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id },
       data: {
         ...updateData,
@@ -374,6 +433,11 @@ export class UsersService {
       },
       include: { customRole: true }
     });
+    JwtStrategy.invalidateCache(id);
+    return {
+      ...updated,
+      managedDepartments: getUserDepartments(updated),
+    };
   }
 
   async deleteUser(id: string) {
@@ -484,7 +548,52 @@ export class UsersService {
 
     try {
       const syncStartedAt = new Date();
-      const hrmUsers = await this.fetchHrmUsersSnapshot(hrmApiUrl, accessToken);
+      const [hrmUsers, hrmDepartments] = await Promise.all([
+        this.fetchHrmUsersSnapshot(hrmApiUrl, accessToken),
+        this.fetchHrmDepartmentsSnapshot(hrmApiUrl, accessToken),
+      ]);
+
+      // Xây dựng bản đồ bộ phận quản lý / kiêm nhiệm từ API /departments (trường team_lead & users) của HRM
+      const deptMapByHrmId = new Map<string, Set<string>>();
+      const deptMapByEmail = new Map<string, Set<string>>();
+      const deptMapByName = new Map<string, Set<string>>();
+      const teamLeadHrmIds = new Set<string>();
+
+      const addDeptToMap = (map: Map<string, Set<string>>, key: string | null | undefined, deptName: string) => {
+        const cleanKey = (key || '').trim().toLowerCase();
+        if (!cleanKey || !deptName) return;
+        const set = map.get(cleanKey) || new Set<string>();
+        set.add(deptName);
+        map.set(cleanKey, set);
+      };
+
+      for (const dept of hrmDepartments) {
+        if (!dept || dept.deleted_at || !dept.name) continue;
+        const deptName = String(dept.name).trim();
+        if (!deptName) continue;
+
+        if (dept.team_lead !== undefined && dept.team_lead !== null) {
+          const leadId = String(dept.team_lead).trim();
+          teamLeadHrmIds.add(leadId);
+          addDeptToMap(deptMapByHrmId, leadId, deptName);
+        }
+        if (dept.team_lead_user) {
+          if (dept.team_lead_user.id !== undefined && dept.team_lead_user.id !== null) {
+            const leadId = String(dept.team_lead_user.id).trim();
+            teamLeadHrmIds.add(leadId);
+            addDeptToMap(deptMapByHrmId, leadId, deptName);
+          }
+          addDeptToMap(deptMapByEmail, dept.team_lead_user.email, deptName);
+          addDeptToMap(deptMapByName, dept.team_lead_user.name, deptName);
+        }
+        if (Array.isArray(dept.users)) {
+          for (const member of dept.users) {
+            if (member?.id !== undefined && member?.id !== null) {
+              addDeptToMap(deptMapByHrmId, String(member.id), deptName);
+            }
+          }
+        }
+      }
 
       const defaultRole = process.env.DEFAULT_SYNC_ROLE || 'USER';
       const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
@@ -498,7 +607,7 @@ export class UsersService {
 
       // THUẬT TOÁN TỐI ƯU HÓA: Inverted Hash Index trong RAM
       // Thay vì gửi N x DB queries tuần tự, preload toàn bộ Users và defaultRole trong 1 câu SQL
-      const [allDbUsers, defaultUserRole] = await Promise.all([
+      const [allDbUsers, defaultUserRole, managerUserRole] = await Promise.all([
         this.prisma.user.findMany({ orderBy: { createdAt: 'asc' } }),
         this.prisma.role.findFirst({
           where: {
@@ -511,6 +620,15 @@ export class UsersService {
             ],
           },
         }),
+        this.prisma.role ? this.prisma.role.findFirst({
+          where: {
+            OR: [
+              { name: 'Quản lý' },
+              { name: { contains: 'Quản lý' } },
+              { name: 'MANAGER' },
+            ],
+          },
+        }) : Promise.resolve(null),
       ]);
 
       const idMap = new Map<string, any>();
@@ -594,17 +712,34 @@ export class UsersService {
           }
         }
 
-        // Kiểm tra theo Tên
-        if (name && name !== `User ${hrmId}`) {
+        // Kiểm tra theo Tên: CHỈ áp dụng khi chưa khớp ID/Email và bản ghi trong DB không phải là một mã nhân viên HRM khác (tránh gộp nhầm 2 nhân viên trùng họ tên trên HRM)
+        if (matchedMap.size === 0 && name && name !== `User ${hrmId}`) {
           const nameList = nameMap.get(name.trim().toLowerCase());
           if (nameList) {
-            for (const u of nameList) matchedMap.set(u.id, u);
+            for (const u of nameList) {
+              const hasDifferentHrmId = u.hrmId && String(u.hrmId) !== hrmId;
+              const isDifferentNumericId = /^\d+$/.test(String(u.id)) && String(u.id) !== hrmId;
+              if (!hasDifferentHrmId && !isDifferentNumericId) {
+                matchedMap.set(u.id, u);
+              }
+            }
           }
         }
 
         const existingUsers = Array.from(matchedMap.values()).sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
+
+        // Tập hợp toàn bộ bộ phận quản lý / kiêm nhiệm của nhân sự này từ HRM (/users + /departments)
+        const hrmDeptCandidates: string[] = [];
+        if (hrmUser.department) hrmDeptCandidates.push(String(hrmUser.department).trim());
+        const byIdDepts = deptMapByHrmId.get(hrmId.toLowerCase());
+        if (byIdDepts) hrmDeptCandidates.push(...byIdDepts);
+        if (hasRealEmail) {
+          const byEmailDepts = deptMapByEmail.get(hrmUser.email.trim().toLowerCase());
+          if (byEmailDepts) hrmDeptCandidates.push(...byEmailDepts);
+        }
+        const isHrmTeamLead = teamLeadHrmIds.has(hrmId);
 
         if (existingUsers.length > 1) {
           // MERGE duplicates:
@@ -622,9 +757,25 @@ export class UsersService {
           let bestCustomPerms = primary.customPermissions;
           for (const dup of duplicates) {
             if (dup.role === 'ADMIN') bestRole = 'ADMIN';
+            else if (dup.role === 'MANAGER' && bestRole === 'USER') bestRole = 'MANAGER';
             if (dup.roleId && !bestRoleId) bestRoleId = dup.roleId;
             if (dup.customPermissions && !bestCustomPerms) bestCustomPerms = dup.customPermissions;
           }
+          if (isHrmTeamLead && (!bestRole || bestRole === 'USER')) {
+            bestRole = 'MANAGER';
+            if (managerUserRole?.id && (!bestRoleId || bestRoleId === defaultUserRole?.id)) {
+              bestRoleId = managerUserRole.id;
+            }
+          }
+
+          const mergedDepts = getUserDepartments({
+            department: hrmUser.department || primary.department,
+            managedDepartments: [
+              ...hrmDeptCandidates,
+              ...getUserDepartments(primary),
+              ...duplicates.flatMap((d) => getUserDepartments(d)),
+            ],
+          });
 
           const targetEmail = (primary.email && !primary.email.endsWith(dummyDomain) && primary.email.includes('@'))
             ? primary.email
@@ -699,6 +850,7 @@ export class UsersService {
               roleId: bestRoleId,
               customPermissions: bestCustomPerms,
               department: hrmUser.department || primary.department || null,
+              managedDepartments: mergedDepts.length > 0 ? JSON.stringify(mergedDepts) : null,
               specialty: position || primary.specialty || null,
               avatar: avatar || primary.avatar || null,
               isActive: isUserActive,
@@ -719,9 +871,19 @@ export class UsersService {
         } else if (existingUsers.length === 1) {
           // Chỉ có 1 bản ghi — cập nhật thông tin
           const existing = existingUsers[0];
+          const resolvedDepts = getUserDepartments({
+            department: hrmUser.department || existing.department,
+            managedDepartments: hrmDepartments.length > 0
+              ? hrmDeptCandidates
+              : [
+                  ...hrmDeptCandidates,
+                  ...getUserDepartments(existing),
+                ],
+          });
           const updateData: any = {
             name: name,
             department: hrmUser.department || null,
+            managedDepartments: resolvedDepts.length > 0 ? JSON.stringify(resolvedDepts) : null,
             specialty: position || undefined,
             avatar: avatar || undefined,
             isActive: isUserActive,
@@ -729,6 +891,12 @@ export class UsersService {
             dataSource: 'HRM',
             lastHrmSyncedAt: syncStartedAt,
           };
+          if (isHrmTeamLead && (!existing.role || existing.role === 'USER')) {
+            updateData.role = 'MANAGER';
+            if (managerUserRole?.id && (!existing.roleId || existing.roleId === defaultUserRole?.id)) {
+              updateData.roleId = managerUserRole.id;
+            }
+          }
           if (hasRealEmail && existing.email !== hrmUser.email) {
             const conflictUser = emailMap.get(hrmUser.email.toLowerCase());
             if (!conflictUser || conflictUser.id === existing.id) {
@@ -750,6 +918,13 @@ export class UsersService {
           updatedCount++;
         } else {
           // Chưa có bản ghi nào — kiểm tra email trước khi tạo mới để tránh xung đột
+          const resolvedDepts = getUserDepartments({
+            department: hrmUser.department,
+            managedDepartments: hrmDeptCandidates,
+          });
+          const targetNewRole = isHrmTeamLead ? 'MANAGER' : defaultRole;
+          const targetNewRoleId = isHrmTeamLead && managerUserRole?.id ? managerUserRole.id : (defaultUserRole?.id || null);
+
           const conflictUser = emailMap.get(emailOrUsername.toLowerCase());
           if (conflictUser) {
             const updated = await this.prisma.user.update({
@@ -757,6 +932,7 @@ export class UsersService {
               data: {
                 name: name,
                 department: hrmUser.department || null,
+                managedDepartments: resolvedDepts.length > 0 ? JSON.stringify(resolvedDepts) : null,
                 specialty: position || null,
                 avatar: avatar || null,
                 isActive: isUserActive,
@@ -776,9 +952,10 @@ export class UsersService {
                   id: hrmId,
                   email: emailOrUsername,
                   name: name,
-                  role: defaultRole,
-                  roleId: defaultUserRole?.id || null,
+                  role: targetNewRole,
+                  roleId: targetNewRoleId,
                   department: hrmUser.department || null,
+                  managedDepartments: resolvedDepts.length > 0 ? JSON.stringify(resolvedDepts) : null,
                   specialty: position || null,
                   avatar: avatar,
                   isActive: isUserActive,
@@ -817,6 +994,7 @@ export class UsersService {
       // Tự động quét dọn dẹp các tài khoản trùng lặp do SSO cũ
       const cleanResult = await this.cleanSsoDuplicates();
       mergedCount += cleanResult.mergedCount;
+      JwtStrategy.invalidateCache();
 
       return {
         success: true,

@@ -3,17 +3,18 @@ import { BarChart3, RefreshCw, ClipboardList, CheckCircle2, Wrench, Activity, Wa
 import { api } from '../services/api';
 import { DashboardSkeleton } from '../components/common/Skeleton';
 import { ExportButton, KpiCard, PageHeader, Tabs } from '../components/common';
+import { OeeManagementSection } from '../components/operation-logs/OeeManagementSection';
 
 export const ReportsPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState('Tháng này');
-  const [activeTab, setActiveTab] = useState('Tổng quan');
+  const [activeTab, setActiveTab] = useState('Đo lường OEE');
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [kpiData, setKpiData] = useState<any>(null);
   const [opLogsReport, setOpLogsReport] = useState<any>(null);
 
   const ranges = ['7 ngày', '30 ngày', 'Tháng này', 'Quý này', 'Năm nay', 'Tùy chọn'];
-  const tabs = ['Tổng quan', 'Thiết bị', 'Bảo trì định kỳ', 'Chi phí', 'Kỹ thuật viên', 'Phụ tùng', 'Sổ vận hành'];
+  const tabs = ['Đo lường OEE', 'Tổng quan', 'Thiết bị', 'Bảo trì định kỳ', 'Chi phí', 'Kỹ thuật viên', 'Phụ tùng', 'Sổ vận hành'];
 
   const loadReportData = async () => {
     try {
@@ -126,7 +127,11 @@ export const ReportsPage: React.FC = () => {
           style={{ marginBottom: '20px' }}
         />
 
-        {activeTab === 'Sổ vận hành' ? (
+        {activeTab === 'Đo lường OEE' ? (
+          <div style={{ padding: '4px 0' }}>
+            <OeeManagementSection />
+          </div>
+        ) : activeTab === 'Sổ vận hành' ? (
           <div style={{ padding: '20px' }}>
             <h3 style={{ marginBottom: 16 }}>Thống kê cảnh báo thông số vượt tiêu chuẩn</h3>
             {opLogsReport?.equipmentIssueCounts?.length > 0 ? (

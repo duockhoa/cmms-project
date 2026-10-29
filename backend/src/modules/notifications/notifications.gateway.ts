@@ -1,5 +1,6 @@
 import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { parseDepartmentList } from '../../common/utils/rbac.helper';
 
 @WebSocketGateway({
   cors: {
@@ -23,7 +24,9 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     if (department) {
       // Decode URI parameter just in case of Vietnamese accents in query string
       const deptStr = decodeURIComponent(department as string);
-      client.join(`dept:${deptStr}`);
+      for (const dept of parseDepartmentList(deptStr)) {
+        client.join(`dept:${dept}`);
+      }
     }
     client.join('global');
 

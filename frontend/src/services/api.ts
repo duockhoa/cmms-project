@@ -939,6 +939,72 @@ export const api = {
     });
   },
 
+  // ==========================================
+  // OEE MEASUREMENT & ANALYTICS (KH.DK-SX.2026.03)
+  // ==========================================
+  getOeeShiftContext: (equipmentId: string, params?: { recordDate?: string; shift?: string }) => {
+    return request(`/equipment/${equipmentId}/oee-records/shift-context${toQueryString(params)}`);
+  },
+
+  getEquipmentOeeRecords: (equipmentId: string, params?: { limit?: number }) => {
+    return request(`/equipment/${equipmentId}/oee-records${toQueryString(params)}`);
+  },
+
+  submitEquipmentOeeRecord: async (equipmentId: string, data: any) => {
+    const res = await request(`/equipment/${equipmentId}/oee-records`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    catalogCache.invalidate('equipment');
+    return res;
+  },
+
+  updateEquipmentOeeConfig: async (
+    equipmentId: string,
+    data: {
+      isCritical: boolean;
+      standardSpeedPerHour?: number;
+      outputUnit?: string;
+      plannedShiftMinutes?: number;
+      oeeTarget?: number;
+    },
+  ) => {
+    const res = await request(`/equipment/${equipmentId}/oee-records/config`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    catalogCache.invalidate('equipment');
+    return res;
+  },
+
+  getAllOeeRecords: (params?: {
+    equipmentId?: string;
+    department?: string;
+    shift?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }) => {
+    return request(`/oee-records${toQueryString(params)}`);
+  },
+
+  getOeeAnalytics: (params?: {
+    startDate?: string;
+    endDate?: string;
+    department?: string;
+    equipmentId?: string;
+    criticalOnly?: string;
+  }) => {
+    return request(`/oee-records/analytics${toQueryString(params)}`);
+  },
+
+  voidOeeRecord: (recordId: string, reason: string) => {
+    return request(`/oee-records/${recordId}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   // Master Catalog Cache Interface
   catalog: {
     getEquipment: () => catalogCache.fetchWithCache('equipment_all', () => request('/equipment')),

@@ -51,6 +51,7 @@ export class AnalyticsPermissionGuard implements CanActivate {
       role: user.role,
       roles: request.user?.roles || [user.role],
       department: user.department,
+      managedDepartments: user.managedDepartments,
       isActive: user.isActive,
     };
 

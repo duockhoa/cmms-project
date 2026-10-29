@@ -1,10 +1,12 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
+import { getUserDepartments } from '../../../common/utils/rbac.helper';
 
 export interface UserContext {
   id: string;
   name?: string;
   role: string; // ADMIN, MANAGER, TECHNICIAN, OPERATOR
   department?: string;
+  managedDepartments?: string | string[] | null;
   isActive: boolean;
 }
 
@@ -23,14 +25,16 @@ export class AnalyticsScopeService {
       case 'ADMIN':
         return {};
 
-      case 'MANAGER':
-        // Preserve existing system policy for MANAGER:
-        // If department string exists on user, restrict by department where applicable,
-        // otherwise default to full manager system access according to existing policy.
-        if (user.department && user.department.trim()) {
-          return { department: user.department.trim() };
+      case 'MANAGER': {
+        const depts = getUserDepartments(user);
+        if (depts.length === 1) {
+          return { department: depts[0] };
+        }
+        if (depts.length > 1) {
+          return { department: { in: depts } };
         }
         return {};
+      }
 
       case 'TECHNICIAN':
         // TECHNICIAN is strictly authorized by User ID relation on MaintenanceSchedule.

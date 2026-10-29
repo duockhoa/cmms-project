@@ -162,8 +162,11 @@ export const useWorkOrderDetail = ({
     departmentsList.forEach((d) => addDept(d));
     if (Array.isArray(allUsers)) {
       allUsers.forEach((u: any) => {
-        if (u.isActive !== false && u.department) {
-          addDept(u.department);
+        if (u.isActive !== false) {
+          if (u.department) addDept(u.department);
+          if (Array.isArray(u.managedDepartments)) {
+            u.managedDepartments.forEach((md: string) => addDept(md));
+          }
         }
       });
     }
@@ -176,16 +179,24 @@ export const useWorkOrderDetail = ({
     return (selectedDepartment || targetDeptLabel || '').trim();
   }, [selectedDepartment, targetDeptLabel]);
 
-  // Lọc nhân sự theo đúng bộ phận đang được chọn trong Modal
+  const userMatchesDepartment = (u: any, targetLower: string): boolean => {
+    if (!u || u.isActive === false || !targetLower) return false;
+    const uDepts: string[] = [];
+    if (u.department) uDepts.push(String(u.department).trim().toLowerCase());
+    if (Array.isArray(u.managedDepartments)) {
+      u.managedDepartments.forEach((d: any) => {
+        const s = String(d || '').trim().toLowerCase();
+        if (s) uDepts.push(s);
+      });
+    }
+    return uDepts.some((uDept) => uDept === targetLower || targetLower.includes(uDept) || uDept.includes(targetLower));
+  };
+
+  // Lọc nhân sự theo đúng bộ phận đang được chọn trong Modal (kể cả quản lý kiêm nhiệm)
   const assignableUsers = useMemo(() => {
     if (!allUsers || !Array.isArray(allUsers) || !activeAssignDept) return [];
     const target = activeAssignDept.toLowerCase();
-    return allUsers.filter((u: any) => {
-      if (u.isActive === false) return false;
-      if (!u.department) return false;
-      const uDept = u.department.trim().toLowerCase();
-      return uDept === target || target.includes(uDept) || uDept.includes(target);
-    });
+    return allUsers.filter((u: any) => userMatchesDepartment(u, target));
   }, [allUsers, activeAssignDept]);
 
   const [assignedExecutorIds, setAssignedExecutorIds] = useState<string[]>([]);
@@ -194,11 +205,7 @@ export const useWorkOrderDetail = ({
   const handleDepartmentChange = (newDept: string) => {
     setSelectedDepartment(newDept);
     const target = (newDept || '').trim().toLowerCase();
-    const usersInNewDept = (allUsers || []).filter((u: any) => {
-      if (u.isActive === false || !u.department) return false;
-      const uDept = u.department.trim().toLowerCase();
-      return uDept === target || target.includes(uDept) || uDept.includes(target);
-    });
+    const usersInNewDept = (allUsers || []).filter((u: any) => userMatchesDepartment(u, target));
     const validIdsInNewDept = new Set(usersInNewDept.map((u: any) => u.id));
     // Loại bỏ những nhân sự đã chọn của bộ phận cũ để chọn lại nhân sự thuộc bộ phận mới
     setAssignedExecutorIds((prev) => {

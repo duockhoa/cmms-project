@@ -90,7 +90,11 @@ export class NotificationEventListener {
       }
       const managers = await this.prisma.user.findMany({
         where: {
-          OR: [{ role: 'MANAGER', department: location.name }, { role: 'ADMIN' }],
+          OR: [
+            { role: 'MANAGER', department: location.name },
+            { role: 'MANAGER', managedDepartments: { contains: location.name } },
+            { role: 'ADMIN' },
+          ],
           isActive: true,
         },
         select: { email: true },
@@ -156,7 +160,11 @@ export class NotificationEventListener {
 
         const targetManagers = await this.prisma.user.findMany({
           where: {
-            OR: [{ role: 'MANAGER', department: { contains: targetDept } }, { role: 'ADMIN' }],
+            OR: [
+              { role: 'MANAGER', department: { contains: targetDept } },
+              { role: 'MANAGER', managedDepartments: { contains: targetDept } },
+              { role: 'ADMIN' },
+            ],
             isActive: true,
           },
           select: { email: true },
@@ -515,7 +523,11 @@ export class NotificationEventListener {
 
         const managers = await this.prisma.user.findMany({
           where: {
-            OR: [{ role: 'MANAGER', department: locationName }, { role: 'ADMIN' }],
+            OR: [
+              { role: 'MANAGER', department: locationName },
+              { role: 'MANAGER', managedDepartments: { contains: locationName } },
+              { role: 'ADMIN' },
+            ],
             isActive: true,
           },
           select: { email: true },
@@ -661,7 +673,11 @@ export class NotificationEventListener {
 
         const managers = await this.prisma.user.findMany({
           where: {
-            OR: [{ role: 'MANAGER', department: locationName }, { role: 'ADMIN' }],
+            OR: [
+              { role: 'MANAGER', department: locationName },
+              { role: 'MANAGER', managedDepartments: { contains: locationName } },
+              { role: 'ADMIN' },
+            ],
             isActive: true,
           },
           select: { email: true },
@@ -967,7 +983,11 @@ export class NotificationEventListener {
 
         const managers = await this.prisma.user.findMany({
           where: {
-            OR: [{ role: 'MANAGER', department: location }, { role: 'ADMIN' }],
+            OR: [
+              { role: 'MANAGER', department: location },
+              { role: 'MANAGER', managedDepartments: { contains: location } },
+              { role: 'ADMIN' },
+            ],
             isActive: true,
           },
           select: { email: true },

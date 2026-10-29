@@ -25,6 +25,7 @@ interface CachedUserAuth {
     roles: string[];
     scope: string;
     department: string | null;
+    managedDepartments?: string | null;
   };
   cachedAt: number;
 }
@@ -290,6 +291,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       roles: roles,
       scope: payload.scope || '',
       department: dbUser.department,
+      managedDepartments: dbUser.managedDepartments || null,
       roleId: dbUser.roleId || null,
       customRole: dbUser.customRole || null,
       customPermissions: dbUser.customPermissions || null,
