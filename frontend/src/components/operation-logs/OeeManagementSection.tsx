@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Gauge,
@@ -43,6 +43,21 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
 
   const [showRecordModal, setShowRecordModal] = useState<boolean>(defaultOpenRecordModal);
   const [selectedEquipmentForOee, setSelectedEquipmentForOee] = useState<any>(null);
+  const [equipmentSearchQuery, setEquipmentSearchQuery] = useState<string>('');
+  const [isEquipmentDropdownOpen, setIsEquipmentDropdownOpen] = useState<boolean>(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsEquipmentDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
   const [configSearch, setConfigSearch] = useState<string>('');
@@ -108,8 +123,27 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
   const handleOpenRecordModal = (eq?: any) => {
     const target = eq || criticalEquipments[0] || allEquipments[0] || null;
     setSelectedEquipmentForOee(target);
+    setEquipmentSearchQuery(target ? `${target.code} — ${target.name}` : '');
+    setIsEquipmentDropdownOpen(false);
     setShowRecordModal(true);
   };
+
+  const filteredModalEquipments = useMemo(() => {
+    if (!equipmentSearchQuery.trim()) {
+      return allEquipments.slice(0, 30);
+    }
+    const q = equipmentSearchQuery.toLowerCase().trim();
+    return allEquipments
+      .filter(
+        (eq) =>
+          eq.code?.toLowerCase().includes(q) ||
+          eq.oldCode?.toLowerCase().includes(q) ||
+          eq.name?.toLowerCase().includes(q) ||
+          eq.department?.toLowerCase().includes(q) ||
+          eq.location?.toLowerCase().includes(q),
+      )
+      .slice(0, 30);
+  }, [allEquipments, equipmentSearchQuery]);
 
   const handleSaveEquipmentConfig = async (eqId: string) => {
     const cfg = editingConfigs[eqId];
@@ -778,29 +812,160 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
               </button>
             </div>
 
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
-                Thiết bị
+            {/* Bộ tìm kiếm & chọn Thiết bị */}
+            <div ref={searchContainerRef} style={{ marginBottom: '16px', position: 'relative' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
+                Chọn thiết bị ghi nhận OEE *
               </label>
-              <select
-                className="form-input"
-                value={selectedEquipmentForOee?.id || ''}
-                onChange={(e) => {
-                  const found = allEquipments.find((item) => item.id === e.target.value);
-                  setSelectedEquipmentForOee(found || null);
-                }}
-                style={{ width: '100%', fontWeight: 600 }}
-              >
-                {allEquipments.map((eq) => (
-                  <option key={eq.id} value={eq.id}>
-                    {eq.isCritical ? '★ ' : ''}
-                    {eq.code} — {eq.name} ({eq.department || eq.location})
-                  </option>
-                ))}
-              </select>
+
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <Search
+                  size={15}
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    color: '#64748b',
+                    pointerEvents: 'none',
+                  }}
+                />
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Tìm theo mã máy (VD: TBSX 607), tên thiết bị hoặc phân xưởng..."
+                  value={equipmentSearchQuery}
+                  onChange={(e) => {
+                    setEquipmentSearchQuery(e.target.value);
+                    setIsEquipmentDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsEquipmentDropdownOpen(true)}
+                  style={{
+                    width: '100%',
+                    paddingLeft: '34px',
+                    paddingRight: equipmentSearchQuery ? '32px' : '12px',
+                    fontWeight: selectedEquipmentForOee ? 600 : 400,
+                  }}
+                />
+                {equipmentSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEquipmentSearchQuery('');
+                      setSelectedEquipmentForOee(null);
+                      setIsEquipmentDropdownOpen(true);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#94a3b8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: 0,
+                    }}
+                    title="Xóa để tìm máy khác"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+
+              {/* Danh sách kết quả gợi ý tìm kiếm */}
+              {isEquipmentDropdownOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 1200,
+                    marginTop: '4px',
+                    maxHeight: '260px',
+                    overflowY: 'auto',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                  }}
+                >
+                  {filteredModalEquipments.length === 0 ? (
+                    <div style={{ padding: '12px 14px', fontSize: '12.5px', color: '#64748b', textAlign: 'center' }}>
+                      Không tìm thấy thiết bị phù hợp với "{equipmentSearchQuery}"
+                    </div>
+                  ) : (
+                    filteredModalEquipments.map((eq) => {
+                      const isSelected = selectedEquipmentForOee?.id === eq.id;
+                      return (
+                        <div
+                          key={eq.id}
+                          onClick={() => {
+                            setSelectedEquipmentForOee(eq);
+                            setEquipmentSearchQuery(`${eq.code} — ${eq.name}`);
+                            setIsEquipmentDropdownOpen(false);
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: isSelected ? '#eff6ff' : 'transparent',
+                            borderBottom: '1px solid #f1f5f9',
+                            transition: 'background-color 0.1s',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) e.currentTarget.style.backgroundColor = '#f8fafc';
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontWeight: 700, fontSize: '13px', color: '#2563eb' }}>
+                                {eq.code}
+                              </span>
+                              {eq.oldCode && (
+                                <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+                                  ({eq.oldCode})
+                                </span>
+                              )}
+                              <span style={{ fontWeight: 600, fontSize: '12.5px', color: '#0f172a' }}>
+                                {eq.name}
+                              </span>
+                              {eq.isCritical && (
+                                <span
+                                  style={{
+                                    fontSize: '10px',
+                                    fontWeight: 700,
+                                    padding: '1px 6px',
+                                    borderRadius: '999px',
+                                    backgroundColor: '#fef08a',
+                                    color: '#854d0e',
+                                  }}
+                                >
+                                  ★ Trọng yếu
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                              {eq.department ? `Bộ phận: ${eq.department}` : ''}
+                              {eq.location ? ` • Khu vực: ${eq.location}` : ''}
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#2563eb' }}>Đang chọn</span>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
 
-            {selectedEquipmentForOee && (
+            {selectedEquipmentForOee ? (
               <OeeShiftInputForm
                 equipment={selectedEquipmentForOee}
                 recordedVia="WEB_APP"
@@ -810,6 +975,20 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
                 }}
                 onCancel={() => setShowRecordModal(false)}
               />
+            ) : (
+              <div
+                style={{
+                  padding: '36px 20px',
+                  textAlign: 'center',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '8px',
+                  border: '1px dashed #cbd5e1',
+                  color: '#64748b',
+                  fontSize: '13px',
+                }}
+              >
+                Vui lòng tìm kiếm và chọn thiết bị ở ô trên để nhập dữ liệu OEE.
+              </div>
             )}
           </div>
         </div>
