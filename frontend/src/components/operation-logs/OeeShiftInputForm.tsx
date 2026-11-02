@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../common/Toast';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface OeeShiftInputFormProps {
   equipment: any;
@@ -177,6 +178,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
   onCancel,
 }) => {
   const { showToast } = useToast();
+  const { user } = usePermissions();
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const [recordDate, setRecordDate] = useState<string>(todayIso);
@@ -202,6 +204,16 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
   const [endCounterNt, setEndCounterNt] = useState<string>('');
   const [goodOutputEnd, setGoodOutputEnd] = useState<string>('');
   const [operatorSignName, setOperatorSignName] = useState<string>('');
+
+  // Tự động điền Người ghi nhận theo tài khoản đăng nhập nếu chưa nhập
+  useEffect(() => {
+    if (user && !operatorSignName) {
+      const displayName = user.name || user.fullName || user.username || '';
+      if (displayName) {
+        setOperatorSignName(displayName);
+      }
+    }
+  }, [user]);
 
   const [autoWorkOrderDowntime, setAutoWorkOrderDowntime] = useState<number>(0);
   const [matchedIncidents, setMatchedIncidents] = useState<any[]>([]);
@@ -565,7 +577,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
                 type="number"
                 min={0.1}
                 step="any"
-                className="form-input"
+                className="form-input no-spinner"
                 placeholder="VD: 50"
                 value={machineSpeedPerMin}
                 onChange={(e) => setMachineSpeedPerMin(e.target.value)}
@@ -609,7 +621,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
               <input
                 type="number"
                 min={0}
-                className="form-input"
+                className="form-input no-spinner"
                 placeholder="0"
                 value={startOutputCount}
                 onChange={(e) => setStartOutputCount(e.target.value)}
@@ -750,7 +762,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
                         <input
                           type="number"
                           min={0}
-                          className="form-input"
+                          className="form-input no-spinner"
                           placeholder="0"
                           value={
                             calcIntervalMinutes(row.start1, row.end1) +
@@ -850,7 +862,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
                       <input
                         type="number"
                         min={0}
-                        className="form-input"
+                        className="form-input no-spinner"
                         placeholder="0"
                         value={dRow.quantity}
                         onChange={(e) => handleDefectRowChange(idx, 'quantity', e.target.value)}
@@ -909,7 +921,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
               <input
                 type="number"
                 min={0}
-                className="form-input"
+                className="form-input no-spinner"
                 placeholder="Nhập chỉ số NT"
                 value={endCounterNt}
                 onChange={(e) => setEndCounterNt(e.target.value)}
@@ -920,12 +932,12 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
 
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#15803d', marginBottom: '4px' }}>
-                Sản lượng đạt
+                Sản lượng đạt (hoàn thiện)
               </label>
               <input
                 type="number"
                 min={0}
-                className="form-input"
+                className="form-input no-spinner"
                 placeholder="Nhập sản lượng đạt"
                 value={goodOutputEnd}
                 onChange={(e) => setGoodOutputEnd(e.target.value)}
