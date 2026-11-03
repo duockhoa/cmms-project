@@ -10,6 +10,7 @@ import {
 import { api } from '../../services/api';
 import { useToast } from '../common/Toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { buildBatchOeeId, businessDateKey, calculateOee, calculateOeeTimeMetrics, calcIntervalMinutes, calcRowMinutes, validateTimeRows } from '../../utils/oee-calculations';
 
 interface OeeShiftInputFormProps {
   equipment: any;
@@ -38,47 +39,6 @@ interface DefectLogRow {
   reason: string;
 }
 
-function parseFlexibleTime(str: string): number | null {
-  if (!str || !str.trim()) return null;
-  const cleaned = str.trim().toLowerCase().replace(/['’p\s]/g, '');
-  if (cleaned.includes('h')) {
-    const [hPart, mPart] = cleaned.split('h');
-    const h = parseInt(hPart, 10);
-    const m = mPart ? parseInt(mPart, 10) : 0;
-    if (!isNaN(h) && !isNaN(m) && h >= 0 && h <= 24 && m >= 0 && m < 60) {
-      return h * 60 + m;
-    }
-  }
-  if (cleaned.includes(':')) {
-    const [hPart, mPart] = cleaned.split(':');
-    const h = parseInt(hPart, 10);
-    const m = mPart ? parseInt(mPart, 10) : 0;
-    if (!isNaN(h) && !isNaN(m) && h >= 0 && h <= 24 && m >= 0 && m < 60) {
-      return h * 60 + m;
-    }
-  }
-  const num = Number(cleaned);
-  if (!isNaN(num) && num >= 0 && num <= 24) {
-    return Math.round(num * 60);
-  }
-  return null;
-}
-
-function calcIntervalMinutes(startStr: string, endStr: string): number {
-  const s = parseFlexibleTime(startStr);
-  const e = parseFlexibleTime(endStr);
-  if (s === null || e === null) return 0;
-  if (e >= s) return e - s;
-  return 24 * 60 - s + e;
-}
-
-function calcRowMinutes(row: TimeEntryRow): number {
-  const d1 = calcIntervalMinutes(row.start1, row.end1);
-  const d2 = calcIntervalMinutes(row.start2, row.end2);
-  const fromIntervals = d1 + d2;
-  if (fromIntervals > 0) return fromIntervals;
-  return Math.max(0, Number(row.manualMinutes) || 0);
-}
 
 const INITIAL_ROWS: TimeEntryRow[] = [
   {
@@ -179,16 +139,20 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
 }) => {
   const { showToast } = useToast();
   const { user } = usePermissions();
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = businessDateKey(new Date());
 
   const [recordDate, setRecordDate] = useState<string>(todayIso);
   const [shift, setShift] = useState<string>('HANH_CHINH');
   const [workshop, setWorkshop] = useState<string>(equipment?.department || equipment?.location || 'HT');
   const [machineSpeedPerMin, setMachineSpeedPerMin] = useState<string>(
-    equipment?.standardSpeedPerHour ? String(Math.round((equipment.standardSpeedPerHour / 60) * 10) / 10) : '50',
+    equipment?.standardSpeedPerHour ? String(Number((equipment.standardSpeedPerHour / 60).toFixed(6))) : '50',
   );
   const [outputUnit] = useState<string>(equipment?.outputUnit || 'SP');
   const [productCode, setProductCode] = useState<string>('');
+  const [productGroup, setProductGroup] = useState('');
+  const [productSpeedConfigs, setProductSpeedConfigs] = useState<Array<{ productGroup: string; speedPerHour: number }>>([]);
+  const [contextSpeed, setContextSpeed] = useState<number>(equipment?.standardSpeedPerHour || 3000);
+  const [contextReady, setContextReady] = useState(false);
   const [batchNumber, setBatchNumber] = useState<string>('');
   const [startOutputCount, setStartOutputCount] = useState<string>('0');
 
@@ -222,6 +186,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
   useEffect(() => {
     if (!equipment?.id) return;
     let isMounted = true;
+    setContextReady(false);
     api
       .getOeeShiftContext(equipment.id, { recordDate, shift })
       .then((ctx: any) => {
@@ -229,6 +194,9 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
         const autoMin = Number(ctx.autoWorkOrderDowntimeMinutes) || 0;
         setAutoWorkOrderDowntime(autoMin);
         setMatchedIncidents(Array.isArray(ctx.matchedIncidents) ? ctx.matchedIncidents : []);
+        setProductSpeedConfigs(Array.isArray(ctx.productSpeedConfigs) ? ctx.productSpeedConfigs : []);
+        setContextSpeed(ctx.equipment?.standardSpeedPerHour || 2400);
+        setContextReady(true);
       })
       .catch(() => {});
 
@@ -266,10 +234,9 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
   };
 
   const processedMetrics = useMemo(() => {
-    const minutesByKey: Record<string, number> = {};
-    for (const row of timeRows) {
-      minutesByKey[row.key] = calcRowMinutes(row);
-    }
+    const times = calculateOeeTimeMetrics(timeRows, shift, equipment?.plannedShiftMinutes || 480);
+    const { minutesByKey, plannedDowntimeMinutes, unplannedDowntimeMinutes,
+      runTimeMinutes, shiftDurationMinutes, plannedProductionMinutes, pa2PlanTimeMinutes } = times;
 
     const cleaningMin = minutesByKey.cleaning || 0;
     const adjustmentMin = minutesByKey.adjustment || 0;
@@ -279,22 +246,6 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
     const noOperatorMin = minutesByKey.noOperator || 0;
     const qualityProcessMin = minutesByKey.qualityProcess || 0;
     const otherWaitingMin = minutesByKey.otherWaiting || 0;
-
-    const plannedDowntimeMinutes = cleaningMin + breakShiftMin;
-    const unplannedDowntimeMinutes =
-      adjustmentMin + breakdownMin + noOperatorMin + qualityProcessMin + otherWaitingMin;
-
-    const runTimeMinutes =
-      runningMinFromRow > 0
-        ? runningMinFromRow
-        : Math.max(0, 480 - plannedDowntimeMinutes - unplannedDowntimeMinutes);
-
-    const shiftDurationMinutes =
-      runningMinFromRow > 0
-        ? runningMinFromRow + plannedDowntimeMinutes + unplannedDowntimeMinutes
-        : 480;
-
-    const plannedProductionMinutes = Math.max(1, shiftDurationMinutes - plannedDowntimeMinutes);
 
     const startQty = Math.max(0, Number(startOutputCount) || 0);
     const ntEndQty = Math.max(0, Number(endCounterNt) || 0);
@@ -318,30 +269,14 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
     const totalOutput = Math.max(0, shiftProducedOutput);
     const goodOutput = Math.max(0, totalOutput - defectOutput);
 
-    const speedPerMin = Math.max(0.1, Number(machineSpeedPerMin) || 50);
-    const standardSpeedPerHour = Math.round(speedPerMin * 60 * 100) / 100;
-    const theoreticalOutput = Math.round(runTimeMinutes * speedPerMin);
+    const configuredSpeed = productSpeedConfigs.find((config) => config.productGroup.localeCompare(productGroup.trim(), 'vi', { sensitivity: 'base' }) === 0)?.speedPerHour;
+    const standardSpeedPerHour = productGroup ? (configuredSpeed || contextSpeed)
+      : Math.round(Math.max(0.01, Number(machineSpeedPerMin) || 50) * 60 * 100) / 100;
+    const speedPerMin = standardSpeedPerHour / 60;
+    const theoreticalOutput = runTimeMinutes / 60 * standardSpeedPerHour;
 
-    const availability =
-      plannedProductionMinutes > 0
-        ? Math.min(100, Math.round(((runTimeMinutes / plannedProductionMinutes) * 100) * 100) / 100)
-        : 0;
-
-    const rawPerformance =
-      theoreticalOutput > 0
-        ? Math.round(((totalOutput / theoreticalOutput) * 100) * 100) / 100
-        : 0;
-    const performance = Math.min(120, Math.max(0, rawPerformance));
-
-    const quality =
-      totalOutput > 0
-        ? Math.min(100, Math.round(((goodOutput / totalOutput) * 100) * 100) / 100)
-        : 100;
-
-    const oee =
-      totalOutput > 0
-        ? Math.round(((availability * Math.min(100, performance) * quality) / 10000) * 100) / 100
-        : 0;
+    const { availability, performance, quality, oee } = calculateOee({ runTimeMinutes,
+      planTimeMinutes: plannedProductionMinutes, theoreticalOutput, totalOutput, goodOutput, count: 1 });
 
     return {
       cleaningMin,
@@ -357,6 +292,8 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
       shiftDurationMinutes,
       plannedProductionMinutes,
       runTimeMinutes,
+      pa2PlanTimeMinutes,
+      breakOverlapMinutes: times.breakOverlapMinutes,
       startQty,
       ntEndQty,
       goodEndQty,
@@ -378,16 +315,30 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
     goodOutputEnd,
     defectRows,
     machineSpeedPerMin,
+    shift, equipment?.plannedShiftMinutes, productGroup, productSpeedConfigs, contextSpeed,
   ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (processedMetrics.runTimeMinutes <= 0) {
-      showToast('error', 'Vui lòng nhập thời gian mục "Chạy máy"');
+    if (productGroup.trim() && !contextReady) {
+      showToast('error', 'Chưa tải được định mức nhóm sản phẩm. Vui lòng thử lại.');
       return;
     }
-    if (processedMetrics.totalOutput <= 0) {
-      showToast('error', 'Vui lòng nhập "Chỉ số bộ đếm cuối ca (NT)" hợp lệ');
+    if (!timeRows.some((row) => row.start1 || row.end1 || row.start2 || row.end2 || row.manualMinutes !== '')) {
+      showToast('error', 'Vui lòng nhập thời gian vận hành hoặc dừng máy.');
+      return;
+    }
+    if (endCounterNt === '') {
+      showToast('error', 'Vui lòng nhập chỉ số bộ đếm cuối ca; nhập 0 nếu không có sản lượng.');
+      return;
+    }
+    const timeError = validateTimeRows(timeRows);
+    if (timeError) {
+      showToast('error', timeError);
+      return;
+    }
+    if (processedMetrics.defectOutput > processedMetrics.totalOutput) {
+      showToast('error', 'Sản lượng lỗi không thể lớn hơn tổng sản lượng.');
       return;
     }
 
@@ -406,6 +357,8 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
         workshop,
         batchNumber: batchNumber.trim() || undefined,
         productName: productCode.trim() || undefined,
+        productCode: productCode.trim() || undefined,
+        productGroup: productGroup.trim() || undefined,
         machineSpeed: processedMetrics.speedPerMin,
         isMultiDayBatch,
         startOutputCount: processedMetrics.startQty,
@@ -551,6 +504,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
               >
                 <option value="CA_1">Ca 1</option>
                 <option value="CA_2">Ca 2</option>
+                <option value="CA_3">Ca 3 (22:00–06:00)</option>
                 <option value="HANH_CHINH">Ca hành chính</option>
               </select>
             </div>
@@ -579,13 +533,25 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
                 step="any"
                 className="form-input no-spinner"
                 placeholder="VD: 50"
-                value={machineSpeedPerMin}
+                value={productGroup ? Number((processedMetrics.standardSpeedPerHour / 60).toFixed(6)) : machineSpeedPerMin}
+                readOnly={Boolean(productGroup)}
                 onChange={(e) => setMachineSpeedPerMin(e.target.value)}
                 required
                 style={{ width: '100%', fontWeight: 700 }}
               />
             </div>
 
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                Nhóm sản phẩm
+              </label>
+              <input className="form-input" list={`oee-product-groups-${equipment.id}`} value={productGroup}
+                onChange={(e) => setProductGroup(e.target.value)} placeholder="Chọn hoặc nhập nhóm" style={{ width: '100%' }} />
+              <datalist id={`oee-product-groups-${equipment.id}`}>
+                {productSpeedConfigs.map((config) => <option key={config.productGroup} value={config.productGroup} />)}
+              </datalist>
+              {productGroup && <small style={{ color: '#64748b' }}>Tốc độ theo nhóm; dùng định mức thiết bị nếu chưa cấu hình.</small>}
+            </div>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
                 Mã sản phẩm
@@ -629,6 +595,9 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
               />
             </div>
           </div>
+          {buildBatchOeeId(equipment.code, productCode, batchNumber) && <div style={{ marginTop: '8px', fontSize: '12px', color: '#475569' }}>
+            Mã lô OEE: <strong>{buildBatchOeeId(equipment.code, productCode, batchNumber)}</strong>
+          </div>}
         </div>
 
         {/* MỤC 2. THỜI GIAN VẬN HÀNH & DỪNG MÁY */}
@@ -647,7 +616,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
               2. Thời gian vận hành & dừng máy
             </div>
             <div style={{ fontSize: '12px', color: '#475569' }}>
-              Chạy máy: <strong style={{ color: '#15803d' }}>{processedMetrics.runTimeMinutes}p</strong> • Dừng KH:{' '}
+              Chạy máy: <strong style={{ color: '#15803d' }}>{processedMetrics.runTimeMinutes}p</strong> • PA2: {processedMetrics.pa2PlanTimeMinutes}p • Dừng KH:{' '}
               <strong>{processedMetrics.plannedDowntimeMinutes}p</strong> • Dừng sự cố:{' '}
               <strong style={{ color: '#dc2626' }}>{processedMetrics.unplannedDowntimeMinutes}p</strong>
             </div>
@@ -702,7 +671,7 @@ export const OeeShiftInputForm: React.FC<OeeShiftInputFormProps> = ({
               </thead>
               <tbody>
                 {timeRows.map((row, idx) => {
-                  const mins = calcRowMinutes(row);
+                  const mins = calcRowMinutes(row, shift);
                   const isRunRow = row.categoryType === 'RUN';
                   return (
                     <tr

@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsObject, IsArray, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsObject, IsArray, Min, MaxLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class DowntimeLossBreakdownDto {
   // 8 Đầu mục chuẩn theo PHIẾU THU THẬP DỮ LIỆU HIỆN TRƯỜNG OEE (VER2)
@@ -72,6 +73,16 @@ export class CreateOeeRecordDto {
   @IsOptional()
   productName?: string; // Mã sản phẩm (VD: TP00201)
 
+  @IsString()
+  @MaxLength(191)
+  @IsOptional()
+  productCode?: string;
+
+  @IsString()
+  @MaxLength(191)
+  @IsOptional()
+  productGroup?: string;
+
   @IsNumber()
   @IsOptional()
   machineSpeed?: number; // Tốc độ máy ghi trên phiếu (VD: 50 SP/phút)
@@ -113,6 +124,7 @@ export class CreateOeeRecordDto {
   unplannedDowntimeMinutes: number;
 
   @IsNumber()
+  @Min(0)
   @IsOptional()
   runTimeMinutesOverride?: number; // Thời gian chạy máy thực tế tính trực tiếp từ mục "Chạy máy" trên phiếu VER2
 
@@ -126,7 +138,8 @@ export class CreateOeeRecordDto {
 
   @IsNumber()
   @Min(0.01)
-  standardSpeedPerHour: number;
+  @IsOptional()
+  standardSpeedPerHour?: number;
 
   @IsString()
   @IsOptional()
@@ -168,6 +181,7 @@ export class UpdateEquipmentOeeConfigDto {
   isCritical: boolean;
 
   @IsNumber()
+  @Min(0.01)
   @IsOptional()
   standardSpeedPerHour?: number;
 
@@ -176,10 +190,28 @@ export class UpdateEquipmentOeeConfigDto {
   outputUnit?: string;
 
   @IsNumber()
+  @Min(1)
   @IsOptional()
   plannedShiftMinutes?: number;
 
   @IsNumber()
   @IsOptional()
   oeeTarget?: number;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductSpeedConfigDto)
+  @IsOptional()
+  productSpeedConfigs?: ProductSpeedConfigDto[];
+}
+
+export class ProductSpeedConfigDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(191)
+  productGroup: string;
+
+  @IsNumber()
+  @Min(0.01)
+  speedPerHour: number;
 }

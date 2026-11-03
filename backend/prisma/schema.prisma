@@ -139,6 +139,7 @@ model Equipment {
   technicalSpecs        EquipmentTechnicalSpec[]
   operationLogs         OperationLog[]
   oeeRecords            EquipmentOeeRecord[]
+  productSpeedConfigs   ProductSpeedConfig[]
   functionalUnits       EquipmentFunctionalUnit[]
   fabricationOrders     FabricationOrder[]
   spareParts            EquipmentSparePart[]
@@ -796,6 +797,18 @@ model OperationLog {
   voidedBy   User?     @relation("UserVoidedOperationLogs", fields: [voidedById], references: [id], onDelete: SetNull)
 }
 
+model ProductSpeedConfig {
+  id           String    @id @default(uuid())
+  equipmentId  String
+  equipment    Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  productGroup String
+  speedPerHour Float
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([equipmentId, productGroup])
+}
+
 model EquipmentOeeRecord {
   id                           String    @id @default(uuid())
   recordCode                   String    @unique // Mã phiếu OEE: OEE-20261028-001
@@ -805,6 +818,10 @@ model EquipmentOeeRecord {
   shift                        String    @default("CA_1") // CA_1, CA_2, CA_3, HANH_CHINH
   batchNumber                  String? // Số lô sản xuất / Lệnh sản xuất
   productName                  String? // Tên sản phẩm chạy trên máy trong ca
+  productCode                  String?
+  productGroup                 String?
+  batchOeeId                   String?   @db.Text
+  pa2PlanTimeMinutes           Float?
 
   // 1. Trụ cột Availability (A - Thời gian chạy máy, tính bằng phút)
   shiftDurationMinutes         Float     @default(480) // Tổng thời gian ca làm việc (VD: 480 phút)
@@ -848,6 +865,7 @@ model EquipmentOeeRecord {
   @@index([recordDate])
   @@index([shift])
   @@index([isVoided])
+  @@index([batchOeeId(length: 191)])
 }
 
 model AppFeedback {

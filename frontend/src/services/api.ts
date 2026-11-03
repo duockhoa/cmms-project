@@ -884,6 +884,7 @@ export const api = {
       outputUnit?: string;
       plannedShiftMinutes?: number;
       oeeTarget?: number;
+      productSpeedConfigs?: Array<{ productGroup: string; speedPerHour: number }>;
     },
   ) => {
     const res = await request(`/equipment/${equipmentId}/oee-records/config`, {
@@ -895,6 +896,7 @@ export const api = {
   },
 
   getAllOeeRecords: (params?: {
+    batchOeeId?: string;
     equipmentId?: string;
     department?: string;
     shift?: string;
@@ -906,6 +908,8 @@ export const api = {
   },
 
   getOeeAnalytics: (params?: {
+    calculationMethod?: 'PA1' | 'PA2' | 'PA3';
+    batchOeeId?: string;
     startDate?: string;
     endDate?: string;
     department?: string;

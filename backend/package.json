@@ -11,6 +11,9 @@
     "db:push": "prisma db push",
     "db:seed": "ts-node prisma/seed.ts",
     "db:seed:parts": "ts-node prisma/seed-spare-parts-bom.ts",
+    "oee:backfill": "node --env-file=.env -r ts-node/register scripts/backfill-oee-records.ts",
+    "oee:audit": "node --env-file=.env -r ts-node/register scripts/audit-oee-records.ts",
+    "oee:verify": "node --env-file=.env -r ts-node/register scripts/verify-oee-records.ts",
     "test": "npx jest --runInBand"
   },
   "dependencies": {

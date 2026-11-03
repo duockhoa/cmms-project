@@ -18,6 +18,7 @@ import {
 import { api } from '../../services/api';
 import { useToast } from '../common/Toast';
 import { OeeShiftInputForm } from './OeeShiftInputForm';
+import { businessDateKey } from '../../utils/oee-calculations';
 
 interface OeeManagementSectionProps {
   defaultOpenRecordModal?: boolean;
@@ -32,14 +33,20 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
   const [analytics, setAnalytics] = useState<any>(null);
   const [allEquipments, setAllEquipments] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const fetchSequence = useRef(0);
 
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [calculationMethod, setCalculationMethod] = useState<'PA1' | 'PA2' | 'PA3'>('PA1');
+  const [activityEquipmentId, setActivityEquipmentId] = useState('');
+  const [activityStatus, setActivityStatus] = useState('');
+  const [activityPage, setActivityPage] = useState(0);
+  const [batchOeeFilter, setBatchOeeFilter] = useState('');
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
-    return d.toISOString().slice(0, 10);
+    return businessDateKey(d);
   });
-  const [endDate, setEndDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState<string>(() => businessDateKey(new Date()));
 
   const [showRecordModal, setShowRecordModal] = useState<boolean>(defaultOpenRecordModal);
   const [selectedEquipmentForOee, setSelectedEquipmentForOee] = useState<any>(null);
@@ -62,6 +69,9 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
   const [configSearch, setConfigSearch] = useState<string>('');
   const [savingConfigId, setSavingConfigId] = useState<string | null>(null);
+  const [speedConfigEquipmentId, setSpeedConfigEquipmentId] = useState('');
+  const [speedConfigRows, setSpeedConfigRows] = useState<Array<{ productGroup: string; speedPerHour: string }>>([]);
+  const [loadingSpeedConfigs, setLoadingSpeedConfigs] = useState(false);
   const [editingConfigs, setEditingConfigs] = useState<
     Record<
       string,
@@ -76,6 +86,7 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
   >({});
 
   const fetchData = async () => {
+    const sequence = ++fetchSequence.current;
     setLoading(true);
     try {
       const [analyticsRes, eqRes] = await Promise.all([
@@ -84,10 +95,13 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
           endDate,
           department: selectedDepartment || undefined,
           criticalOnly: 'true',
+          calculationMethod,
+          batchOeeId: batchOeeFilter || undefined,
         }),
         api.getEquipment(),
       ]);
 
+      if (sequence !== fetchSequence.current) return;
       setAnalytics(analyticsRes);
       const eqList = Array.isArray(eqRes) ? eqRes : eqRes?.data || [];
       setAllEquipments(eqList);
@@ -104,15 +118,15 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
       }
       setEditingConfigs(cfgMap);
     } catch (err: any) {
-      showToast('error', err?.message || 'Không thể tải dữ liệu OEE');
+      if (sequence === fetchSequence.current) showToast('error', err?.message || 'Không thể tải dữ liệu OEE');
     } finally {
-      setLoading(false);
+      if (sequence === fetchSequence.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
-  }, [startDate, endDate, selectedDepartment]);
+  }, [startDate, endDate, selectedDepartment, calculationMethod, batchOeeFilter]);
 
   const departments = Array.from(
     new Set(allEquipments.map((e) => e.department).filter(Boolean)),
@@ -181,14 +195,49 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
     }
   };
 
+  const openProductSpeeds = async (equipmentId: string) => {
+    setLoadingSpeedConfigs(true);
+    setSpeedConfigEquipmentId('');
+    try {
+      const context = await api.getOeeShiftContext(equipmentId);
+      setSpeedConfigRows((context.productSpeedConfigs || []).map((config: any) => ({
+        productGroup: config.productGroup, speedPerHour: String(config.speedPerHour),
+      })));
+      setSpeedConfigEquipmentId(equipmentId);
+    } catch (err: any) {
+      showToast('error', err?.message || 'Không thể tải định mức nhóm sản phẩm');
+    } finally { setLoadingSpeedConfigs(false); }
+  };
+
+  const saveProductSpeeds = async () => {
+    const equipment = allEquipments.find((eq) => eq.id === speedConfigEquipmentId);
+    if (!equipment) return;
+    if (speedConfigRows.some((row) => !row.productGroup.trim() || !Number.isFinite(Number(row.speedPerHour)) || Number(row.speedPerHour) <= 0)) {
+      showToast('error', 'Nhập tên nhóm và tốc độ lớn hơn 0 cho từng dòng.');
+      return;
+    }
+    setSavingConfigId(equipment.id);
+    try {
+      await api.updateEquipmentOeeConfig(equipment.id, {
+        isCritical: Boolean(equipment.isCritical),
+        productSpeedConfigs: speedConfigRows.map((row) => ({ productGroup: row.productGroup.trim(), speedPerHour: Number(row.speedPerHour) })),
+      });
+      showToast('success', 'Đã lưu định mức theo nhóm sản phẩm');
+      setSpeedConfigEquipmentId('');
+    } catch (err: any) { showToast('error', err?.message || 'Không thể lưu định mức'); }
+    finally { setSavingConfigId(null); }
+  };
+
   const handleExportExcelCsv = () => {
     if (!analytics) return;
     const rows: string[][] = [
       ['BÁO CÁO ĐO LƯỜNG OEE THIẾT BỊ'],
-      [`Kỳ báo cáo: ${startDate} đến ${endDate}`, `Ngày xuất: ${new Date().toLocaleString('vi-VN')}`],
+      [`Kỳ báo cáo: ${startDate} đến ${endDate}`, `Phương án: ${calculationMethod}`, `Ngày xuất: ${new Date().toLocaleString('vi-VN')}`],
+      [`Ngày thực tính: ${analytics.startDate} đến ${analytics.endDate}`, 'Múi giờ: Asia/Bangkok',
+        `Phiếu ước tính giờ: ${analytics.dataQuality?.estimatedTimeRecords || 0}`, `Phiếu ước tính sản lượng: ${analytics.dataQuality?.estimatedOutputRecords || 0}`],
       [],
       ['I. TỔNG HỢP CHỈ SỐ OEE'],
-      ['OEE TB (%)', 'Availability TB (%)', 'Performance TB (%)', 'Quality TB (%)', 'Mục tiêu (%)', 'Số ca ghi nhận'],
+      ['OEE tổng hợp (%)', 'Availability (%)', 'Performance (%)', 'Quality (%)', 'Mục tiêu (%)', 'Số ca ghi nhận'],
       [
         String(analytics.summary?.avgOee || 0),
         String(analytics.summary?.avgAvailability || 0),
@@ -238,6 +287,7 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
         'Mã máy',
         'Tên thiết bị',
         'Số lô',
+        'Mã lô OEE', 'Mã sản phẩm', 'Nhóm sản phẩm',
         'TG Kế hoạch (Phút)',
         'TG Chạy (Phút)',
         'TG Dừng KH (Phút)',
@@ -250,6 +300,7 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
         'Q (%)',
         'OEE (%)',
         'Người ghi',
+        'Chạy ghi gốc (phút)', 'Sản lượng ghi gốc', 'Có số liệu ước tính',
       ],
       ...(analytics.recentRecords || []).map((r: any) => [
         r.recordCode || '',
@@ -258,7 +309,8 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
         r.equipment?.code || '',
         r.equipment?.name || '',
         r.batchNumber || '',
-        String(r.plannedProductionMinutes || 0),
+        r.batchOeeId || '', r.productCode || '', r.productGroup || '',
+        String(r.planTimeMinutes ?? r.plannedProductionMinutes ?? 0),
         String(r.runTimeMinutes || 0),
         String(r.plannedDowntimeMinutes || 0),
         String(r.unplannedDowntimeMinutes || 0),
@@ -270,7 +322,20 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
         String(r.quality || 0),
         String(r.oee || 0),
         r.recordedBy?.name || '',
+        String(r.recordedRunTimeMinutes ?? r.runTimeMinutes ?? 0), String(r.recordedTotalOutput ?? r.totalOutput ?? 0), r.allocationEstimated ? 'Có' : 'Không',
       ]),
+      [],
+      ['IV. TỔNG HỢP THEO LÔ OEE'],
+      ['Mã lô OEE', 'Mã SP', 'Số lô', 'Số ca', 'Chạy (phút)', 'Kế hoạch (phút)', 'A (%)', 'P (%)', 'Q (%)', 'OEE (%)'],
+      ...(analytics.batchSummary || []).map((batch: any) => [batch.batchOeeId, batch.productCode, batch.batchNumber,
+        String(batch.shiftsCount), String(batch.runTimeMinutes), String(batch.planTimeMinutes),
+        String(batch.availability), String(batch.performance), String(batch.quality), String(batch.oee)]),
+      [],
+      ['V. LỊCH THIẾT BỊ (KHÔNG PHỤ THUỘC LỌC LÔ)'],
+      ['Ngày', 'Mã máy', 'Trạng thái', 'Số phiếu', 'Chạy cả ngày (phút)', 'Chạy 06:00–22:00 (phút)', 'Kế hoạch PA3 (phút)'],
+      ...(analytics.equipmentDays || []).map((day: any) => [day.date,
+        (analytics.equipmentLeaderboard || []).find((eq: any) => eq.id === day.equipmentId)?.code || day.equipmentId,
+        activityLabels[day.status], String(day.recordsCount), String(day.runTimeMinutes), String(day.frameRunTimeMinutes), String(day.pa3PlanTimeMinutes)]),
     ];
 
     const csvContent =
@@ -310,6 +375,12 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
   const leaderboard: any[] = analytics?.equipmentLeaderboard || [];
   const downtimePareto: any[] = analytics?.downtimePareto || [];
   const recentRecords: any[] = analytics?.recentRecords || [];
+  const activityRows: any[] = (analytics?.equipmentDays || []).filter((day: any) =>
+    (!activityEquipmentId || day.equipmentId === activityEquipmentId) && (!activityStatus || day.status === activityStatus))
+    .sort((left: any, right: any) => right.date.localeCompare(left.date) || left.equipmentId.localeCompare(right.equipmentId));
+  useEffect(() => { setActivityPage(0); }, [activityEquipmentId, activityStatus, startDate, endDate, selectedDepartment]);
+  const activityLabels: Record<string, string> = { RUNNING: 'Có chạy máy', RECORDED_STOP: 'Có phiếu, không chạy', NO_RECORD: 'Không có phiếu' };
+  const minutes = (value: number) => Number((Number(value) || 0).toFixed(2)).toLocaleString('vi-VN');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -327,6 +398,19 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <select aria-label="Phương án OEE" className="form-input" value={calculationMethod}
+            onChange={(e) => setCalculationMethod(e.target.value as 'PA1' | 'PA2' | 'PA3')}>
+            <option value="PA1">PA1 — Thời gian ghi nhận</option>
+            <option value="PA2">PA2 — Toàn ca mở rộng</option>
+            <option value="PA3">PA3 — 06:00–22:00 mỗi ngày</option>
+          </select>
+          <select aria-label="Lọc mã lô OEE" className="form-input" value={batchOeeFilter}
+            onChange={(e) => setBatchOeeFilter(e.target.value)}>
+            <option value="">Tất cả lô OEE</option>
+            {batchOeeFilter && !(analytics?.batchOptions || []).includes(batchOeeFilter) &&
+              <option value={batchOeeFilter}>{batchOeeFilter}</option>}
+            {(analytics?.batchOptions || []).map((batch: string) => <option key={batch} value={batch}>{batch}</option>)}
+          </select>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Từ ngày:</span>
             <input
@@ -404,6 +488,27 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
         </div>
       </div>
 
+      <div className="card" style={{ padding: '12px 18px', fontSize: '12px', color: '#475569' }}>
+        Thời gian ca/ngày được phân bổ giữa các lô trước khi lọc; các khoảng trùng chỉ tính một lần.
+        {calculationMethod === 'PA3' && <> PA3 tính 960 phút/ngày từ ngày đầu có dữ liệu đến ngày báo cáo, gồm cả ngày không có phiếu.
+          Sản lượng ngoài khung 06:00–22:00 được loại theo tỷ lệ thời gian chạy. Phần thời gian ngày không có phiếu không gán cho lô cụ thể.</>}
+        {Boolean(analytics?.dataQuality?.estimatedTimeRecords) && <div style={{ marginTop: '5px', color: '#92400e' }}>
+          {analytics.dataQuality.estimatedTimeRecords} phiếu thiếu khung giờ đầy đủ; vị trí thời gian đang được ước tính theo ca.
+        </div>}
+        {Boolean(analytics?.dataQuality?.estimatedOutputRecords) && <div style={{ marginTop: '5px', color: '#92400e' }}>
+          {analytics.dataQuality.estimatedOutputRecords} phiếu có sản lượng trong PA3 được quy đổi theo thời gian chạy.
+        </div>}
+        {Boolean(analytics?.dataQuality?.reconciledRuntimeRecords) && <div style={{ marginTop: '5px', color: '#92400e' }}>
+          {analytics.dataQuality.reconciledRuntimeRecords} phiếu cũ có runtime lưu khác bảng giờ; báo cáo dùng hợp khoảng chạy đã ghi.
+        </div>}
+        {analytics?.dataQuality?.overlappingRunMinutes > 0 && <div style={{ marginTop: '5px', color: '#92400e' }}>
+          Dữ liệu có {minutes(analytics.dataQuality.overlappingRunMinutes)} phút chạy chồng nhau; đã chia thời gian trùng, giữ sản lượng khai báo. Cần đối chiếu các phiếu cũ.
+        </div>}
+        {analytics?.dataQuality?.estimatedRuntimeReductionMinutes > 0 && <div style={{ marginTop: '5px', color: '#92400e' }}>
+          Các phiếu thiếu giờ ghi tổng thời gian chạy vượt sức chứa khung ca {minutes(analytics.dataQuality.estimatedRuntimeReductionMinutes)} phút; đã giới hạn và phân bổ theo tỷ lệ. Cần đối chiếu giờ thực tế.
+        </div>}
+      </div>
+
       {/* 4 THẺ CHỈ SỐ OEE */}
       <div
         style={{
@@ -421,7 +526,7 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>OEE TRUNG BÌNH</span>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>OEE TỔNG HỢP ({calculationMethod})</span>
             <Award size={18} color="#2563eb" />
           </div>
           <div style={{ fontSize: '26px', fontWeight: 800, color: '#0f172a', margin: '6px 0 2px 0' }}>
@@ -525,8 +630,9 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
                 </tr>
               ) : (
                 leaderboard.map((eq: any) => {
+                  const hasData = eq.shiftsCount > 0 || calculationMethod === 'PA3' && eq.trackedDays > 0;
                   const badgeBg =
-                    eq.shiftsCount === 0
+                    !hasData
                       ? '#f1f5f9'
                       : eq.oee >= (eq.oeeTarget || 85)
                       ? '#dcfce7'
@@ -534,7 +640,7 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
                       ? '#fef3c7'
                       : '#fee2e2';
                   const badgeColor =
-                    eq.shiftsCount === 0
+                    !hasData
                       ? '#64748b'
                       : eq.oee >= (eq.oeeTarget || 85)
                       ? '#15803d'
@@ -558,9 +664,9 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
                         <span style={{ color: '#64748b' }}>{eq.outputUnit || 'SP'}/h</span>
                       </td>
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>{eq.shiftsCount}</td>
-                      <td style={{ textAlign: 'center' }}>{eq.shiftsCount > 0 ? `${eq.availability}%` : '—'}</td>
-                      <td style={{ textAlign: 'center' }}>{eq.shiftsCount > 0 ? `${eq.performance}%` : '—'}</td>
-                      <td style={{ textAlign: 'center' }}>{eq.shiftsCount > 0 ? `${eq.quality}%` : '—'}</td>
+                      <td style={{ textAlign: 'center' }}>{hasData ? `${eq.availability}%` : '—'}</td>
+                      <td style={{ textAlign: 'center' }}>{hasData ? `${eq.performance}%` : '—'}</td>
+                      <td style={{ textAlign: 'center' }}>{hasData ? `${eq.quality}%` : '—'}</td>
                       <td style={{ textAlign: 'center' }}>
                         <span
                           style={{
@@ -571,7 +677,7 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
                             color: badgeColor,
                           }}
                         >
-                          {eq.shiftsCount > 0 ? `${eq.oee}%` : 'Chưa nhập'}
+                          {hasData ? `${eq.oee}%` : 'Chưa nhập'}
                         </span>
                       </td>
                       <td>
@@ -664,6 +770,51 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
         </div>
       </div>
 
+      <div className="card" style={{ padding: '18px 20px' }}>
+        <h4 style={{ margin: '0 0 8px' }}>Lịch thiết bị từ ngày đầu có dữ liệu</h4>
+        <div style={{ fontSize: '12px', color: '#475569', marginBottom: '10px' }}>
+          {summary.trackedEquipmentDays || 0} ngày thiết bị • {summary.noRecordDays || 0} ngày không có phiếu • {summary.recordedStopDays || 0} ngày có phiếu nhưng không chạy.
+          Lịch này không phụ thuộc bộ lọc lô. Ngày chưa có phiếu cần đối chiếu thực tế; chưa đủ căn cứ kết luận máy không hoạt động.
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+          <select className="form-input" aria-label="Thiết bị trong lịch" value={activityEquipmentId} onChange={(e) => setActivityEquipmentId(e.target.value)}>
+            <option value="">Tất cả thiết bị</option>
+            {leaderboard.map((eq: any) => <option key={eq.id} value={eq.id}>{eq.code} — {eq.name}</option>)}
+          </select>
+          <select className="form-input" aria-label="Trạng thái ngày thiết bị" value={activityStatus} onChange={(e) => setActivityStatus(e.target.value)}>
+            <option value="">Tất cả trạng thái</option>
+            {Object.entries(activityLabels).map(([status, label]) => <option key={status} value={status}>{label}</option>)}
+          </select>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table" style={{ width: '100%', fontSize: '12.5px' }}>
+            <thead><tr><th>Ngày</th><th>Thiết bị</th><th>Trạng thái</th><th>Số phiếu</th><th>Chạy cả ngày (phút)</th><th>Chạy 06:00–22:00 (phút)</th><th>Kế hoạch PA3 (phút)</th></tr></thead>
+            <tbody>{activityRows.slice(activityPage * 30, (activityPage + 1) * 30).map((day: any) => <tr key={`${day.equipmentId}-${day.date}`}>
+              <td>{day.date}</td><td>{leaderboard.find((eq: any) => eq.id === day.equipmentId)?.code || day.equipmentId}</td>
+              <td style={{ color: day.status === 'RUNNING' ? '#15803d' : day.status === 'NO_RECORD' ? '#92400e' : '#dc2626' }}>{activityLabels[day.status]}</td>
+              <td>{day.recordsCount}</td><td>{minutes(day.runTimeMinutes)}</td><td>{minutes(day.frameRunTimeMinutes)}</td><td>{day.pa3PlanTimeMinutes}</td>
+            </tr>)}</tbody>
+          </table>
+          {activityRows.length === 0 && <div style={{ padding: '15px', color: '#64748b' }}>Chưa có ngày theo dõi trong bộ lọc này.</div>}
+        </div>
+        {activityRows.length > 30 && <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+          <button type="button" className="btn btn-secondary" disabled={activityPage === 0} onClick={() => setActivityPage((page) => page - 1)}>Trước</button>
+          <span style={{ fontSize: '12px' }}>Trang {activityPage + 1} / {Math.ceil(activityRows.length / 30)}</span>
+          <button type="button" className="btn btn-secondary" disabled={(activityPage + 1) * 30 >= activityRows.length} onClick={() => setActivityPage((page) => page + 1)}>Sau</button>
+        </div>}
+      </div>
+
+      {(analytics?.batchSummary || []).length > 0 && <div className="card" style={{ padding: '18px 20px', overflowX: 'auto' }}>
+        <h4 style={{ margin: '0 0 12px' }}>OEE theo lô ({calculationMethod})</h4>
+        <table className="table" style={{ width: '100%', fontSize: '12.5px' }}>
+          <thead><tr><th>Mã lô OEE</th><th>Mã SP</th><th>Số lô</th><th>Số ca</th><th>Chạy / KH (phút)</th><th>A (%)</th><th>P (%)</th><th>Q (%)</th><th>OEE (%)</th></tr></thead>
+          <tbody>{analytics.batchSummary.map((batch: any) => <tr key={batch.batchOeeId}>
+            <td>{batch.batchOeeId}</td><td>{batch.productCode}</td><td>{batch.batchNumber}</td><td>{batch.shiftsCount}</td>
+            <td>{minutes(batch.runTimeMinutes)} / {minutes(batch.planTimeMinutes)}</td><td>{batch.availability}</td><td>{batch.performance}</td><td>{batch.quality}</td><td>{batch.oee}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+
       {/* NHẬT KÝ GHI NHẬN OEE */}
       <div className="card" style={{ padding: '18px 20px', borderRadius: '10px' }}>
         <h4 style={{ fontSize: '14.5px', fontWeight: 700, color: '#0f172a', margin: '0 0 12px 0' }}>
@@ -709,9 +860,11 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
                     <td>
                       <div style={{ fontWeight: 600 }}>{r.batchNumber || '—'}</div>
                       {r.productName && <div style={{ fontSize: '11px', color: '#64748b' }}>{r.productName}</div>}
+                      {r.batchOeeId && <div style={{ fontSize: '11px', color: '#64748b' }}>{r.batchOeeId}</div>}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <strong>{r.runTimeMinutes}p</strong> / {r.plannedProductionMinutes}p
+                      <strong>{minutes(r.runTimeMinutes)}p</strong> / {minutes(r.planTimeMinutes ?? r.plannedProductionMinutes)}p
+                      {r.allocationEstimated && <div style={{ fontSize: '10px', color: '#92400e' }}>Có số liệu ước tính</div>}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span style={{ color: '#2563eb' }}>{r.plannedDowntimeMinutes}p</span> /{' '}
@@ -1054,6 +1207,21 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
               />
             </div>
 
+            {speedConfigEquipmentId && <div style={{ padding: '12px', marginBottom: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+              <strong>Định mức nhóm sản phẩm — {allEquipments.find((eq) => eq.id === speedConfigEquipmentId)?.code}</strong>
+              {speedConfigRows.map((row, index) => <div key={index} style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <input className="form-input" aria-label="Tên nhóm sản phẩm" placeholder="Nhóm sản phẩm" value={row.productGroup}
+                  onChange={(e) => setSpeedConfigRows((rows) => rows.map((r, i) => i === index ? { ...r, productGroup: e.target.value } : r))} />
+                <input className="form-input" type="number" min="0.01" step="any" aria-label="Tốc độ theo giờ" placeholder="SP/giờ" value={row.speedPerHour}
+                  onChange={(e) => setSpeedConfigRows((rows) => rows.map((r, i) => i === index ? { ...r, speedPerHour: e.target.value } : r))} />
+                <button type="button" className="btn btn-secondary" onClick={() => setSpeedConfigRows((rows) => rows.filter((_, i) => i !== index))}>Xóa</button>
+              </div>)}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setSpeedConfigRows((rows) => [...rows, { productGroup: '', speedPerHour: '' }])}>Thêm nhóm</button>
+                <button type="button" className="btn btn-primary" disabled={savingConfigId === speedConfigEquipmentId} onClick={saveProductSpeeds}>Lưu nhóm</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setSpeedConfigEquipmentId('')}>Đóng</button>
+              </div>
+            </div>}
             <div style={{ overflowX: 'auto', maxHeight: '60vh' }}>
               <table className="table" style={{ width: '100%', fontSize: '12.5px' }}>
                 <thead>
@@ -1115,6 +1283,8 @@ export const OeeManagementSection: React.FC<OeeManagementSectionProps> = ({
                               {eq.code} — {eq.name}
                             </div>
                             <div style={{ fontSize: '11px', color: '#64748b' }}>{eq.category}</div>
+                            <button type="button" className="btn btn-secondary" disabled={loadingSpeedConfigs}
+                              onClick={() => openProductSpeeds(eq.id)} style={{ padding: '3px 6px', fontSize: '11px' }}>Định mức nhóm SP</button>
                           </td>
                           <td>{eq.department || eq.location}</td>
                           <td>
