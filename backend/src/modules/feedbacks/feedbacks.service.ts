@@ -28,8 +28,8 @@ export class FeedbacksService {
 
   async create(dto: CreateFeedbackDto, user?: any) {
     const code = await this.generateFeedbackCode();
-    const requesterName = dto.requesterName || user?.name || user?.username || 'Người dùng';
-    const department = dto.department || user?.department || null;
+    const requesterName = user?.name || user?.username || dto.requesterName || 'Người dùng';
+    const department = user?.department || dto.department || null;
 
     return this.prisma.appFeedback.create({
       data: {

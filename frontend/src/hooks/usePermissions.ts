@@ -1,97 +1,87 @@
-import { useState, useEffect, useCallback } from 'react';
-import { api } from '../services/api';
-import { getAccessToken, getRefreshToken } from '../utils/authStorage';
+import { useCallback, useSyncExternalStore } from 'react';
+import { api, invalidateMeCache, setupSilentRefresh } from '../services/api';
+import {
+  getAccessToken, getRawAccessToken, getRefreshToken, getSessionVersion,
+  markSessionVerified, markSessionUnverified, subscribeSession,
+} from '../utils/authStorage';
 
 interface PermissionsState {
   user: any | null;
   permissions: string[];
   isAdmin: boolean;
   loading: boolean;
+  error: string | null;
+  sessionVersion: number;
 }
-
-// Global cached auth profile to avoid redundant API calls across pages
-let cachedProfile: { user: any; permissions: string[] } | null = null;
+let state: PermissionsState = { user: null, permissions: [], isAdmin: false, loading: true, error: null, sessionVersion: -1 };
+let generation = 0;
 let profilePromise: Promise<{ user: any; permissions: string[] }> | null = null;
+const listeners = new Set<() => void>();
+if (typeof window !== 'undefined') markSessionUnverified();
+const publish = (next: PermissionsState) => { state = next; listeners.forEach(listener => listener()); };
 
 export const invalidatePermissionsCache = () => {
-  cachedProfile = null;
+  generation++;
   profilePromise = null;
+  invalidateMeCache();
+  markSessionUnverified();
+  publish({ user: null, permissions: [], isAdmin: false, loading: true, error: null, sessionVersion: getSessionVersion() });
 };
 
 export const fetchPermissionsProfile = async (): Promise<{ user: any; permissions: string[] }> => {
-  if (cachedProfile) return cachedProfile;
-  if (!profilePromise) {
-    const timeoutPromise = new Promise<{ user: any; permissions: string[] }>((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout loading permissions profile')), 6000)
-    );
-
-    profilePromise = Promise.race([
-      api.getMe().then((res: any) => {
-        const u = res?.user || res;
-        const perms: string[] = Array.isArray(res?.permissions) ? res.permissions : [];
-        cachedProfile = { user: u, permissions: perms };
-        return cachedProfile;
-      }),
-      timeoutPromise,
-    ]).catch((err) => {
-      profilePromise = null;
-      throw err;
-    });
-  }
-  return profilePromise;
+  if (profilePromise) return profilePromise;
+  const currentGeneration = generation;
+  const version = getSessionVersion();
+  const pending = (async () => {
+    try {
+      const res = await api.getMe();
+      if (currentGeneration !== generation || version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
+      if (!res?.authenticated || !res.user?.id) throw new Error('AUTH_REQUIRED');
+      const token = getRawAccessToken();
+      if (!token) throw new Error('AUTH_REQUIRED');
+      markSessionVerified(token, res.identity?.provider === 'hrm' ? res.identity.subject : undefined);
+      const permissions: string[] = Array.isArray(res.permissions) ? res.permissions : [];
+      publish({ user: res.user, permissions, loading: false, error: null, sessionVersion: version,
+        isAdmin: ['ADMIN', 'SUPER_ADMIN'].includes(res.user.role) || permissions.includes('ALL') || permissions.includes('*'),
+      });
+      setupSilentRefresh();
+      return { user: res.user, permissions };
+    } catch (error: any) {
+      if (currentGeneration === generation) {
+        publish({ user: null, permissions: [], isAdmin: false, loading: false, error: error.message, sessionVersion: getSessionVersion() });
+      }
+      throw error;
+    }
+  })();
+  profilePromise = pending;
+  try { return await pending; } finally { if (profilePromise === pending) profilePromise = null; }
 };
-
+function load() {
+  if (!getAccessToken() && !getRefreshToken()) {
+    publish({ user: null, permissions: [], isAdmin: false, loading: false, error: null, sessionVersion: getSessionVersion() });
+    return;
+  }
+  void fetchPermissionsProfile().catch(() => {});
+}
+subscribeSession(() => { invalidatePermissionsCache(); if (listeners.size) load(); });
+if (typeof window !== 'undefined') {
+  let lastCheck = 0;
+  const check = () => {
+    if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 500) return;
+    lastCheck = Date.now();
+    invalidatePermissionsCache();
+    if (listeners.size) load();
+  };
+  window.addEventListener('focus', check);
+  document.addEventListener('visibilitychange', check);
+}
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  if (state.sessionVersion !== getSessionVersion() || state.loading) queueMicrotask(load);
+  return () => { listeners.delete(listener); };
+};
 export const usePermissions = () => {
-  const [state, setState] = useState<PermissionsState>({
-    user: cachedProfile?.user || null,
-    permissions: cachedProfile?.permissions || [],
-    isAdmin: Boolean(
-      cachedProfile?.user?.role === 'ADMIN' ||
-      cachedProfile?.user?.role === 'SUPER_ADMIN' ||
-      cachedProfile?.permissions?.includes('ALL')
-    ),
-    loading: !cachedProfile,
-  });
-
-  useEffect(() => {
-    let isMounted = true;
-    let retryTimer: any = null;
-
-    const loadProfile = (attempt = 1) => {
-      fetchPermissionsProfile()
-        .then((data) => {
-          if (!isMounted) return;
-          const role = data.user?.role?.toUpperCase();
-          const isAdminUser = role === 'ADMIN' || role === 'SUPER_ADMIN' || data.permissions.includes('ALL');
-          setState({
-            user: data.user,
-            permissions: data.permissions,
-            isAdmin: isAdminUser,
-            loading: false,
-          });
-        })
-        .catch((err) => {
-          if (!isMounted) return;
-          // If tokens exist and this is attempt 1, retry once after 1.2s before giving up
-          if (attempt < 2 && (getAccessToken() || getRefreshToken())) {
-            invalidatePermissionsCache();
-            retryTimer = setTimeout(() => {
-              if (isMounted) loadProfile(attempt + 1);
-            }, 1200);
-            return;
-          }
-          setState((prev) => ({ ...prev, loading: false }));
-        });
-    };
-
-    loadProfile();
-
-    return () => {
-      isMounted = false;
-      if (retryTimer) clearTimeout(retryTimer);
-    };
-  }, []);
-
+  const state = useSyncExternalStore(subscribe, () => stateSnapshot(), () => stateSnapshot());
   const checkSinglePermission = useCallback(
     (code: string): boolean => {
       if (state.isAdmin) return true;
@@ -125,21 +115,19 @@ export const usePermissions = () => {
   );
 
   return {
-    ...state,
-    can,
-    canAny,
-    canAll,
+    ...state, can, canAny, canAll,
     refreshPermissions: async () => {
       invalidatePermissionsCache();
-      const data = await fetchPermissionsProfile();
-      const role = data.user?.role?.toUpperCase();
-      const isAdminUser = role === 'ADMIN' || role === 'SUPER_ADMIN' || data.permissions.includes('ALL') || data.permissions.includes('*');
-      setState({
-        user: data.user,
-        permissions: data.permissions,
-        isAdmin: isAdminUser,
-        loading: false,
-      });
+      return fetchPermissionsProfile();
     },
   };
 };
+let blockedSnapshot: PermissionsState | null = null;
+function stateSnapshot() {
+  const version = getSessionVersion();
+  if (state.sessionVersion === version) return state;
+  if (!blockedSnapshot || blockedSnapshot.sessionVersion !== version) {
+    blockedSnapshot = { user: null, permissions: [], isAdmin: false, loading: true, error: null, sessionVersion: version };
+  }
+  return blockedSnapshot;
+}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 
-import { extractAndSaveTokensFromUrl, getAccessToken, getRefreshToken, saveAuthTokens } from '../utils/authStorage';
+import { extractAndSaveTokensFromUrl, getAccessToken, getRefreshToken, saveAuthTokens, getSessionError } from '../utils/authStorage';
 import { invalidateMeCache, refreshAccessToken, setupSilentRefresh } from '../services/api';
 import { invalidatePermissionsCache } from '../hooks/usePermissions';
 
@@ -31,6 +31,7 @@ export function LoginPage() {
   // Auto-login if token present in URL or shared root domain cookies (*.dkpharma.io.vn) or refreshable
   useEffect(() => {
     extractAndSaveTokensFromUrl();
+    if (getSessionError()) setErrorMessage('Các phiên đăng nhập đang mâu thuẫn. Vui lòng đăng nhập lại để xác nhận đúng tài khoản.');
     const token = getAccessToken();
     if (token) {
       invalidateMeCache();

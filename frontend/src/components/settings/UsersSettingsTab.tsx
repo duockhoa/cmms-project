@@ -13,6 +13,8 @@ export const UsersSettingsTab: React.FC = () => {
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [identityIssues, setIdentityIssues] = useState<any[] | null>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
 
@@ -191,16 +193,33 @@ export const UsersSettingsTab: React.FC = () => {
     setIsSyncing(true);
     try {
       const res = await api.syncHrmUsers();
-      toast.success(
-        'Thành công',
-        `Đã đồng bộ ${res.syncedCount || 0} người dùng từ HRM, vô hiệu hóa ${res.deactivatedCount || 0}${res.mergedCount ? `, gộp ${res.mergedCount} bản ghi trùng` : ''}`,
-      );
+      if (res.reviewRequiredCount) {
+        setIdentityIssues(res.conflicts.map((item: any) => ({ ...item, code: item.reason })));
+        toast.warning('Cần đối soát tài khoản', `Đã đồng bộ ${res.syncedCount || 0} người dùng. ${res.reviewRequiredCount} trường hợp có liên kết mâu thuẫn được giữ lại để kiểm tra.`);
+      } else {
+        toast.success('Thành công', `Đã đồng bộ ${res.syncedCount || 0} người dùng từ HRM, vô hiệu hóa ${res.deactivatedCount || 0}.`);
+      }
       loadData();
     } catch (err: any) {
       toast.error('Lỗi đồng bộ', err.message || 'Không thể đồng bộ người dùng từ HRM');
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handleIdentityAudit = async () => {
+    setIsAuditing(true);
+    try {
+      const report = await api.getUserIdentityAudit();
+      setIdentityIssues(report.issues);
+    } catch (error: any) { toast.error('Không tải được báo cáo đối soát', error.message); }
+    finally { setIsAuditing(false); }
+  };
+  const issueLabels: Record<string, string> = {
+    MISSING_HRM_LINK: 'Chưa có liên kết nhân sự được xác nhận',
+    LEGACY_ID_COLLISION: 'Mã liên kết trùng với tài khoản khác',
+    SAME_NAME_REVIEW_ONLY: 'Trùng họ tên — cần kiểm tra, không tự gộp',
+    IDENTITY_RECONCILIATION_REQUIRED: 'Liên kết nhân sự mâu thuẫn',
   };
 
   const filteredUsers = users.filter(u => {
@@ -244,11 +263,30 @@ export const UsersSettingsTab: React.FC = () => {
           <button className="btn btn-secondary" onClick={handleSyncHrm} disabled={isSyncing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} /> Đồng bộ từ HRM
           </button>
+          <button className="btn btn-secondary" onClick={handleIdentityAudit} disabled={isAuditing}>
+            {isAuditing ? 'Đang kiểm tra...' : 'Đối soát tài khoản'}
+          </button>
           <button className="btn btn-secondary" onClick={loadData} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Làm mới
           </button>
         </div>
       </div>
+
+      {identityIssues !== null && <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+        <strong>Báo cáo đối soát tài khoản</strong>
+        <p>Báo cáo chỉ kiểm tra liên kết tài khoản. Không gộp người dùng hoặc thay đổi lịch sử thao tác.</p>
+        {identityIssues.length === 0 ? <p>Chưa phát hiện vấn đề liên kết trong dữ liệu QLTB.</p> :
+          <div className="table-wrapper"><table className="custom-table">
+            <thead><tr><th>Vấn đề cần kiểm tra</th><th>Tài khoản liên quan</th></tr></thead>
+            <tbody>{identityIssues.map((issue, index) => <tr key={index}>
+              <td>{issueLabels[issue.code] || 'Cần đối soát liên kết nhân sự'}{issue.hrmId ? ` (HRM: ${issue.hrmId})` : ''}</td>
+              <td>{issue.userIds.map((id: string) => {
+                const user = users.find(item => item.id === id);
+                return user ? `${user.name} (${user.email})` : id;
+              }).join('; ')}</td>
+            </tr>)}</tbody>
+          </table></div>}
+      </div>}
 
       {/* Filter & Search Bar */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>

@@ -1,14 +1,23 @@
-import { Controller, Get, UseGuards, Req, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Header, SetMetadata, UseGuards, Req, NotFoundException } from '@nestjs/common';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ALL_PERMISSION_CODES } from '../../common/constants/permissions.registry';
 import { getUserDepartments } from '../../common/utils/rbac.helper';
+import { HrmIdentityService } from './hrm-identity.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private identities: HrmIdentityService) {}
+
+  @Post('refresh')
+  @Header('Cache-Control', 'no-store')
+  @SetMetadata('auth:session-token-response', true)
+  refresh(@Body() body: { refreshToken: string; expectedHrmId: string }) {
+    return this.identities.refreshSession(body.refreshToken, body.expectedHrmId);
+  }
 
   @Get('me')
+  @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard)
   async getMe(@Req() req: any) {
     const actor = req.user;
@@ -19,16 +28,8 @@ export class AuthController {
       include: { customRole: true },
     });
 
-    // Fallback search by email if subject id doesn't match directly
-    if (!dbUser && actor.email) {
-      dbUser = await this.prisma.user.findFirst({
-        where: { email: actor.email },
-        include: { customRole: true },
-      });
-    }
-
-    if (!dbUser) {
-      throw new NotFoundException('User profile is not synchronized with CMMS database.');
+    if (!dbUser || !dbUser.isActive) {
+      throw new NotFoundException('Tài khoản QLTB không tồn tại hoặc đã ngừng hoạt động.');
     }
 
     // Parse role-based permissions
@@ -55,15 +56,7 @@ export class AuthController {
     const merged = new Set<string>([...rolePerms, ...customPerms]);
 
     // Backward-compatibility & Security: ADMIN or SUPER_ADMIN always has full permissions
-    const adminCodes = [
-      process.env.ADMIN_EMPLOYEE_CODE,
-      ...(process.env.SUPER_ADMIN_EMPLOYEE_CODES ? process.env.SUPER_ADMIN_EMPLOYEE_CODES.split(',') : [])
-    ].filter(Boolean).map(c => c!.trim().toLowerCase());
-
-    const isGlobalAdmin = dbUser.role === 'ADMIN' || dbUser.role === 'SUPER_ADMIN' || adminCodes.some(code =>
-      (dbUser.id && dbUser.id.toLowerCase() === code) ||
-      (dbUser.email && dbUser.email.toLowerCase().includes(code))
-    );
+    const isGlobalAdmin = dbUser.role === 'ADMIN' || dbUser.role === 'SUPER_ADMIN';
     if (isGlobalAdmin) {
       merged.add('*');
     }
@@ -89,10 +82,12 @@ export class AuthController {
 
     return {
       authenticated: true,
+      identity: actor.identity,
       user: {
         id: dbUser.id,
-        name: dbUser.name,
-        email: dbUser.email,
+        hrmId: dbUser.hrmId,
+        name: actor.name || dbUser.name,
+        email: actor.email || dbUser.email,
         role: dbUser.role,
         customRole: dbUser.customRole ? {
           name: dbUser.customRole.name,
@@ -101,8 +96,8 @@ export class AuthController {
         isActive: dbUser.isActive,
         department: dbUser.department,
         managedDepartments: userDepartments,
-        position: dbUser.specialty,
-        avatar: dbUser.avatar,
+        position: actor.position || dbUser.specialty,
+        avatar: actor.identity?.provider === 'hrm' ? actor.avatar : dbUser.avatar,
       },
       permissions: permissions,
       scope: {

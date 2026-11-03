@@ -6,7 +6,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ToastProvider } from './components/common/Toast';
 import { extractAndSaveTokensFromUrl, getAccessToken, getRefreshToken } from './utils/authStorage';
-import { refreshAccessToken } from './services/api';
+import { usePermissions } from './hooks/usePermissions';
+import { clearAuthTokens, startSessionMonitor, getSessionError, subscribeSession } from './utils/authStorage';
 import { ProtectedRoute, SmartHomeRoute } from './components/common/ProtectedRoute';
 import { SocketProvider } from './context/SocketContext';
 
@@ -64,6 +65,8 @@ function PageLoadingFallback() {
   );
 }
 
+extractAndSaveTokensFromUrl();
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -76,51 +79,27 @@ const queryClient = new QueryClient({
 // Guard: redirect to /login if not authenticated, with seamless token refresh fallback
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-
-  // Intercept incoming tokens from query param or hash fragment (e.g., from Central Portal / SSO)
-  extractAndSaveTokensFromUrl();
-
-  const [isVerifying, setIsVerifying] = useState(() => {
-    const token = getAccessToken();
-    const refreshToken = getRefreshToken();
-    return !token && Boolean(refreshToken);
-  });
-
-  useEffect(() => {
-    const token = getAccessToken();
-    const refreshToken = getRefreshToken();
-
-    if (!token && refreshToken) {
-      let isMounted = true;
-      refreshAccessToken()
-        .then(() => {
-          if (isMounted) setIsVerifying(false);
-        })
-        .catch(() => {
-          if (isMounted) setIsVerifying(false);
-        });
-      return () => {
-        isMounted = false;
-      };
-    } else {
-      setIsVerifying(false);
-    }
-  }, [location.pathname]);
-
-  if (isVerifying) {
-    return <PageLoadingFallback />;
-  }
-
-  // Check active token from localStorage or shared root domain cookie (*.dkpharma.io.vn)
+  const { user, loading, error, sessionVersion, refreshPermissions } = usePermissions();
   const token = getAccessToken();
   const refreshToken = getRefreshToken();
-
   if (!token && !refreshToken) {
-    const redirectTarget = location.pathname + location.search;
-    return <Navigate to={`/login?redirect=${encodeURIComponent(redirectTarget)}`} replace />;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
-
-  return <>{children}</>;
+  if (loading) return <PageLoadingFallback />;
+  if (!user || error) {
+    const messages: Record<string, string> = {
+      AUTH_REQUIRED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+      SESSION_CHANGED: 'Phiên đăng nhập đã thay đổi. Vui lòng kiểm tra lại.',
+      SSO_SESSION_CONFLICT: 'Các phiên đăng nhập đang mâu thuẫn. Vui lòng đăng nhập lại.',
+      'Failed to fetch': 'Không kết nối được máy chủ. Vui lòng thử lại.',
+    };
+    return <div role="alert" style={{ padding: 32, textAlign: 'center' }}>
+      <p>{messages[error || getSessionError() || ''] || error || 'Chưa xác minh được người dùng. Vui lòng thử lại.'}</p>
+      <button onClick={() => { void refreshPermissions().catch(() => {}); }}>Kiểm tra lại</button>
+      <button onClick={() => { clearAuthTokens(); window.location.href = '/login'; }}>Đăng nhập lại</button>
+    </div>;
+  }
+  return <React.Fragment key={sessionVersion}>{children}</React.Fragment>;
 }
 
 function AppLayout() {
@@ -188,6 +167,12 @@ function AppLayout() {
 }
 
 export function App() {
+  useEffect(() => {
+    extractAndSaveTokensFromUrl();
+    const stop = startSessionMonitor();
+    const unsubscribe = subscribeSession(() => queryClient.clear());
+    return () => { stop(); unsubscribe(); };
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>

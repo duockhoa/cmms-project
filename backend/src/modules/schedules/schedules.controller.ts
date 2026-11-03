@@ -22,8 +22,8 @@ export class SchedulesController {
   }
 
   @Post('process-due')
-  processDueSchedules(@Body('actedById') actedById?: string, @Body('referenceTime') referenceTime?: string) {
-    return this.schedulesService.processDueSchedules(actedById, referenceTime);
+  processDueSchedules(@Req() req: any, @Body('referenceTime') referenceTime?: string) {
+    return this.schedulesService.processDueSchedules(req.user.id, referenceTime);
   }
 
   @Get(':id')
@@ -38,42 +38,39 @@ export class SchedulesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateScheduleDto) {
-    return this.schedulesService.create(dto);
+  create(@Body() dto: CreateScheduleDto, @Req() req: any) {
+    return this.schedulesService.create({ ...dto, createdById: req.user.id });
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateScheduleDto) {
-    return this.schedulesService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateScheduleDto, @Req() req: any) {
+    return this.schedulesService.update(id, { ...dto, actedById: req.user.id });
   }
 
   @Post(':id/activate')
-  activate(@Param('id') id: string, @Body() dto: ActivateScheduleDto) {
-    return this.schedulesService.activate(id, dto);
+  activate(@Param('id') id: string, @Body() dto: ActivateScheduleDto, @Req() req: any) {
+    return this.schedulesService.activate(id, { ...dto, actedById: req.user.id });
   }
 
   @Post(':id/pause')
-  pause(@Param('id') id: string, @Body() dto: PauseScheduleDto) {
-    return this.schedulesService.pause(id, dto);
+  pause(@Param('id') id: string, @Body() dto: PauseScheduleDto, @Req() req: any) {
+    return this.schedulesService.pause(id, { ...dto, actedById: req.user.id });
   }
 
   @Post(':id/complete')
-  complete(@Param('id') id: string, @Body() dto: CompleteScheduleDto) {
-    return this.schedulesService.complete(id, dto);
+  complete(@Param('id') id: string, @Body() dto: CompleteScheduleDto, @Req() req: any) {
+    return this.schedulesService.complete(id, { ...dto, actedById: req.user.id });
   }
 
   @Post(':id/cancel')
   cancel(@Param('id') id: string, @Body() dto: CancelScheduleDto, @Req() req: any) {
-    if (!dto.actedById && req?.user?.id) {
-      dto.actedById = req.user.id;
-    }
-    return this.schedulesService.cancel(id, dto, req?.user);
+    return this.schedulesService.cancel(id, { ...dto, actedById: req.user.id }, req.user);
   }
 
   @Post(':id/generate-work-order')
   @HttpCode(HttpStatus.CREATED)
-  generateWorkOrder(@Param('id') id: string, @Body() dto: GenerateWorkOrderDto) {
-    return this.schedulesService.generateWorkOrder(id, dto);
+  generateWorkOrder(@Param('id') id: string, @Body() dto: GenerateWorkOrderDto, @Req() req: any) {
+    return this.schedulesService.generateWorkOrder(id, { ...dto, actedById: req.user.id });
   }
 
   @Delete(':id')

@@ -38,8 +38,8 @@ export class CreateScheduleDto {
   assignedTechnicianId?: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Người tạo (createdById) là bắt buộc' })
-  createdById: string;
+  @IsOptional()
+  createdById?: string;
 
   @IsBoolean()
   @IsOptional()
@@ -111,8 +111,8 @@ export class UpdateScheduleDto {
   expectedVersion: number;
 
   @IsString()
-  @IsNotEmpty({ message: 'actedById là bắt buộc' })
-  actedById: string;
+  @IsOptional()
+  actedById?: string;
 }
 
 export class ActivateScheduleDto {
@@ -121,8 +121,8 @@ export class ActivateScheduleDto {
   expectedVersion: number;
 
   @IsString()
-  @IsNotEmpty({ message: 'actedById là bắt buộc' })
-  actedById: string;
+  @IsOptional()
+  actedById?: string;
 }
 
 export class PauseScheduleDto {
@@ -135,8 +135,8 @@ export class PauseScheduleDto {
   expectedVersion: number;
 
   @IsString()
-  @IsNotEmpty({ message: 'actedById là bắt buộc' })
-  actedById: string;
+  @IsOptional()
+  actedById?: string;
 }
 
 export class CompleteScheduleDto {
@@ -149,8 +149,8 @@ export class CompleteScheduleDto {
   expectedVersion: number;
 
   @IsString()
-  @IsNotEmpty({ message: 'actedById là bắt buộc' })
-  actedById: string;
+  @IsOptional()
+  actedById?: string;
 }
 
 export class CancelScheduleDto {
@@ -163,8 +163,8 @@ export class CancelScheduleDto {
   expectedVersion: number;
 
   @IsString()
-  @IsNotEmpty({ message: 'actedById là bắt buộc' })
-  actedById: string;
+  @IsOptional()
+  actedById?: string;
 }
 
 export class GenerateWorkOrderDto {
@@ -173,8 +173,8 @@ export class GenerateWorkOrderDto {
   expectedVersion: number;
 
   @IsString()
-  @IsNotEmpty({ message: 'actedById là bắt buộc' })
-  actedById: string;
+  @IsOptional()
+  actedById?: string;
 
   @IsString()
   @IsOptional()

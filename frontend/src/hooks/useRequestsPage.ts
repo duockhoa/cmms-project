@@ -185,9 +185,9 @@ export function useRequestsPage() {
   }, [editFormData.equipmentId]);
 
   const getActiveUserId = useCallback(() => {
-    const active = users.find((u: any) => u.isActive);
-    return active ? active.id : (users[0]?.id || 'user-id');
-  }, [users]);
+    if (!currentUser?.id) throw new Error('AUTH_REQUIRED');
+    return currentUser.id;
+  }, [currentUser?.id]);
 
   const setSelectedDetailReqId = useCallback((id: string | null) => {
     _setSelectedDetailReqId(id);

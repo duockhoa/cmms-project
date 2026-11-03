@@ -220,14 +220,14 @@ export class RequestsService {
       }
     }
 
-    // Lấy thông tin người báo cáo từ tài khoản đăng nhập (actorId hoặc data.reporterId)
-    const effectiveUserId = data.reporterId || actorId;
+    // Người báo cáo và người thao tác phải thuộc phiên đã xác thực.
+    const effectiveUserId = actorId;
     let reporterUser: any = null;
     if (effectiveUserId) {
       reporterUser = await this.prisma.user.findUnique({ where: { id: effectiveUserId } });
     }
 
-    const reporterName = reporterUser?.name || data.reporterName || 'Nhân viên vận hành';
+    const reporterName = (typeof actor === 'object' && actor?.name) || reporterUser?.name || data.reporterName || 'Nhân viên vận hành';
     const department = reporterUser?.department || data.department || equipment.department || null;
     const reporterId = reporterUser?.id || null;
 
@@ -303,6 +303,7 @@ export class RequestsService {
           entityType: 'MaintenanceRequest',
           entityId: request.id,
           action: 'CREATE',
+          actedById: actorId || null,
           fromStatus: null,
           toStatus: 'PENDING',
           comment,

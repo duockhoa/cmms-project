@@ -7,7 +7,7 @@ import {
   Timer, History, RefreshCw, Lock, XOctagon, Loader2, ArrowRightLeft,
   Pause, Square, Users
 } from 'lucide-react';
-import { api, API_HOST as API_BASE } from '../../services/api';
+import { api, fetchWithAuth, API_HOST as API_BASE } from '../../services/api';
 import { useToast, useConfirmDialog } from '../common/Toast';
 import { StatusBadge, PriorityBadge } from '../common/Badge';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -713,11 +713,8 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
           formData.append('file', file);
           formData.append('entityType', 'FabricationOrder');
           formData.append('entityId', job.id);
-
-          const token = localStorage.getItem('token');
-          const res = await fetch(`${API_BASE}/api/upload`, {
+          const res = await fetchWithAuth(`${API_BASE}/api/upload`, {
             method: 'POST',
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
             body: formData,
           });
 
@@ -951,11 +948,8 @@ export const FabricationDetailView: React.FC<FabricationDetailViewProps> = ({
         formData.append('file', file);
         formData.append('entityType', 'FabricationOrder');
         formData.append('entityId', job.id);
-
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE}/api/upload`, {
+        const res = await fetchWithAuth(`${API_BASE}/api/upload`, {
           method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData,
         });
 

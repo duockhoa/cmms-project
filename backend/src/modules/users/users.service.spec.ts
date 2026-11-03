@@ -153,10 +153,7 @@ describe('UsersService HRM synchronization', () => {
       where: {
         dataSource: 'HRM',
         isActive: true,
-        OR: [
-          { lastHrmSyncedAt: null },
-          { lastHrmSyncedAt: { lt: expect.any(Date) } },
-        ],
+        hrmId: { not: null, notIn: ['1'] },
       },
       data: {
         isActive: false,
@@ -164,4 +161,41 @@ describe('UsersService HRM synchronization', () => {
       },
     });
   });
+  it('reports conflicting identities without merging, deleting or moving history', async () => {
+    process.env.HRM_API_URL = 'https://hrm.example.test';
+    const users = [
+      { id: 'local-a', hrmId: 'A', email: 'shared@example.test', name: 'Same Name' },
+      { id: 'local-b', hrmId: 'B', email: 'b@example.test', name: 'Same Name' },
+    ];
+    const prisma: any = { user: {
+      findMany: jest.fn().mockResolvedValue(users), update: jest.fn(), create: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }), delete: jest.fn(), deleteMany: jest.fn(),
+    }, role: { findFirst: jest.fn().mockResolvedValue(null) } };
+    const service = new UsersService(prisma);
+    jest.spyOn(service as any, 'fetchHrmUsersSnapshot').mockResolvedValue([{ id: 'B', email: 'shared@example.test' }]);
+    jest.spyOn(service as any, 'fetchHrmDepartmentsSnapshot').mockResolvedValue([]);
+    const result = await service.syncHrmUsers('token');
+    expect(result.reviewRequiredCount).toBe(1);
+    expect(result.mergedCount).toBe(0);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(prisma.user.delete).not.toHaveBeenCalled();
+    expect(prisma.user.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany.mock.calls[0][0].where.hrmId.notIn).toEqual(['B']);
+  });
+
+  it('duplicate cleanup produces a read-only report even for equal names', async () => {
+    const prisma: any = { user: { findMany: jest.fn().mockResolvedValue([
+      { id: 'a', hrmId: null, email: 'a@local.hrm', name: 'Same Name', dataSource: 'HRM' },
+      { id: 'b', hrmId: 'B', email: 'b@example.test', name: 'Same Name', dataSource: 'HRM' },
+    ]), update: jest.fn(), delete: jest.fn() } };
+    const service = new UsersService(prisma);
+    const result = await service.cleanSsoDuplicates();
+    expect(result.mergedCount).toBe(0);
+    expect(result.details.some(detail => detail.includes('MISSING_HRM_LINK'))).toBe(true);
+    expect(result.details.some(detail => detail.includes('SAME_NAME_REVIEW_ONLY'))).toBe(true);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.user.delete).not.toHaveBeenCalled();
+  });
+
 });

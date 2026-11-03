@@ -28,7 +28,7 @@ const SocketContext = createContext<SocketContextType>({
 });
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = usePermissions();
+  const { user, sessionVersion, refreshPermissions } = usePermissions();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const listenersMapRef = useRef<Map<string, Set<DataChangeListener>>>(new Map());
@@ -50,16 +50,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ? `${window.location.protocol}//${window.location.hostname}:3001/notifications`
       : `${window.location.origin}/notifications`;
 
-    const userManagedDepts = Array.isArray((user as any).managedDepartments) && (user as any).managedDepartments.length > 0
-      ? (user as any).managedDepartments.join(',')
-      : (user.department || '');
-
     const s = io(socketUrl, {
-      query: {
-        userId: user.id,
-        role: user.role || '',
-        department: userManagedDepts,
-      },
+      auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 10,
@@ -71,8 +63,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setIsConnected(true);
     });
 
-    s.on('disconnect', () => {
+    s.on('disconnect', (reason) => {
       setIsConnected(false);
+      if (reason === 'io server disconnect') void refreshPermissions().catch(() => {});
     });
 
     s.on('data:changed', (payload: DataChangePayload) => {
@@ -106,7 +99,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       s.disconnect();
     };
-  }, [user?.id, user?.role, user?.department]);
+  }, [user?.id, user?.role, user?.department, sessionVersion]);
 
   // Subscribe helper
   const subscribeDataChange = useCallback(

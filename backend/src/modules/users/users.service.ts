@@ -1,3 +1,4 @@
+import { selectHrmIdentity, isHrmProfileActive, buildIdentityAudit } from '../auth/identity-resolution';
 import { Injectable, NotFoundException, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtStrategy } from '../auth/jwt.strategy';
@@ -69,6 +70,7 @@ export class UsersService {
       const url = new URL(`${hrmApiUrl.replace(/\/$/, '')}/users`);
       if (page !== undefined) url.searchParams.set('page', String(page));
       const response = await fetch(url, {
+        signal: AbortSignal.timeout(10000),
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Accept': 'application/json',
@@ -112,6 +114,7 @@ export class UsersService {
     const uniqueUsers = new Map<string, any>();
     for (const user of allUsers) {
       if (user?.id !== undefined && user?.id !== null) {
+        if (uniqueUsers.has(String(user.id))) throw new HttpException('Duplicate HRM identity. Synchronization aborted.', HttpStatus.CONFLICT);
         uniqueUsers.set(String(user.id), user);
       }
     }
@@ -125,6 +128,7 @@ export class UsersService {
     try {
       const url = new URL(`${hrmApiUrl.replace(/\/$/, '')}/departments`);
       const response = await fetch(url, {
+        signal: AbortSignal.timeout(10000),
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Accept': 'application/json',
@@ -555,8 +559,6 @@ export class UsersService {
 
       // Xây dựng bản đồ bộ phận quản lý / kiêm nhiệm từ API /departments (trường team_lead & users) của HRM
       const deptMapByHrmId = new Map<string, Set<string>>();
-      const deptMapByEmail = new Map<string, Set<string>>();
-      const deptMapByName = new Map<string, Set<string>>();
       const teamLeadHrmIds = new Set<string>();
 
       const addDeptToMap = (map: Map<string, Set<string>>, key: string | null | undefined, deptName: string) => {
@@ -583,8 +585,6 @@ export class UsersService {
             teamLeadHrmIds.add(leadId);
             addDeptToMap(deptMapByHrmId, leadId, deptName);
           }
-          addDeptToMap(deptMapByEmail, dept.team_lead_user.email, deptName);
-          addDeptToMap(deptMapByName, dept.team_lead_user.name, deptName);
         }
         if (Array.isArray(dept.users)) {
           for (const member of dept.users) {
@@ -597,11 +597,8 @@ export class UsersService {
 
       const defaultRole = process.env.DEFAULT_SYNC_ROLE || 'USER';
       const dummyDomain = process.env.HRM_DUMMY_EMAIL_DOMAIN || '@local.hrm';
-      const inactiveStatusesStr = process.env.HRM_INACTIVE_STATUSES || 'INACTIVE,BANNED,0';
-      const inactiveStatuses = inactiveStatusesStr.split(',').map(s => s.trim().toUpperCase());
 
       let syncedCount = 0;
-      let mergedCount = 0;
       let createdCount = 0;
       let updatedCount = 0;
 
@@ -631,378 +628,63 @@ export class UsersService {
         }) : Promise.resolve(null),
       ]);
 
-      const idMap = new Map<string, any>();
-      const hrmIdMap = new Map<string, any>();
-      const emailMap = new Map<string, any>();
-      const nameMap = new Map<string, any[]>();
-
-      for (const u of allDbUsers) {
-        idMap.set(u.id, u);
-        if (u.hrmId) hrmIdMap.set(u.hrmId, u);
-        if (u.email) emailMap.set(u.email.toLowerCase(), u);
-        if (u.name) {
-          const cleanName = u.name.trim().toLowerCase();
-          const list = nameMap.get(cleanName) || [];
-          list.push(u);
-          nameMap.set(cleanName, list);
-        }
+      // Preflight the complete HRM snapshot before changing any records.
+      const ids = hrmUsers.map(user => String(user.id));
+      if (new Set(ids).size !== ids.length) {
+        throw new HttpException('Duplicate HRM ids. Synchronization aborted.', HttpStatus.CONFLICT);
       }
-
-      const legacyHrmUserIds = allDbUsers
-        .filter((user) => user.dataSource === 'LOCAL' && (
-          user.email?.toLowerCase().endsWith(dummyDomain.toLowerCase()) || /^\d+$/.test(user.id)
-        ))
-        .map((user) => user.id);
-      if (legacyHrmUserIds.length > 0) {
-        await this.prisma.user.updateMany({
-          where: { id: { in: legacyHrmUserIds } },
-          data: { dataSource: 'HRM' },
-        });
-        const legacyHrmUserIdSet = new Set(legacyHrmUserIds);
-        for (const user of allDbUsers) {
-          if (legacyHrmUserIdSet.has(user.id)) user.dataSource = 'HRM';
-        }
-      }
-
-      // Upsert each user — O(1) in-memory lookup thay vì truy vấn DB lặp
+      const conflicts: { hrmId: string; userIds: string[]; reason: string }[] = [];
       for (const hrmUser of hrmUsers) {
-        // Skip users without id or username/email
-        if (!hrmUser.id || (!hrmUser.email && !hrmUser.username)) continue;
-        
+        if (hrmUser.id === undefined || hrmUser.id === null) continue;
         const hrmId = String(hrmUser.id);
-        const hrmUsername = hrmUser.username ? String(hrmUser.username) : null;
-        const hasRealEmail = hrmUser.email && hrmUser.email.includes('@');
-        const dummyEmail = `${hrmUsername || hrmId}${dummyDomain}`;
-        const emailOrUsername = hasRealEmail ? hrmUser.email : dummyEmail;
-        const name = hrmUser.name || hrmUser.username || `User ${hrmId}`;
-        const isUserActive = !inactiveStatuses.includes(String(hrmUser.status || '').toUpperCase());
-        const position = hrmUser.position || hrmUser.role || null;
-        const avatar = hrmUser.avatar || null;
-
-        // O(1) in-memory lookup tập hợp tất cả các bản ghi có thể trùng lặp
-        const matchedMap = new Map<string, any>();
-        const checkKeys: string[] = [
-          emailOrUsername.toLowerCase(),
-          dummyEmail.toLowerCase(),
-        ];
-        if (hasRealEmail) checkKeys.push(hrmUser.email.toLowerCase());
-        if (hrmUsername) {
-          checkKeys.push(hrmUsername.toLowerCase());
-          checkKeys.push(`${hrmUsername}${dummyDomain}`.toLowerCase());
-          checkKeys.push(`${hrmId}${dummyDomain}`.toLowerCase());
+        const selected = selectHrmIdentity(allDbUsers, hrmUser);
+        if (selected.reason) {
+          conflicts.push({ hrmId, userIds: selected.candidates.map(user => user.id), reason: selected.reason });
+          continue;
         }
-        checkKeys.push(hrmId.toLowerCase());
-        checkKeys.push(`0${hrmId}`.toLowerCase());
-
-        // Kiểm tra theo ID
-        if (idMap.has(hrmId)) {
-          const u = idMap.get(hrmId);
-          matchedMap.set(u.id, u);
-        }
-        if (hrmIdMap.has(hrmId)) {
-          const u = hrmIdMap.get(hrmId);
-          matchedMap.set(u.id, u);
-        }
-
-        // Kiểm tra theo Email biến thể
-        for (const k of checkKeys) {
-          if (emailMap.has(k)) {
-            const u = emailMap.get(k);
-            matchedMap.set(u.id, u);
-          }
-        }
-
-        // Kiểm tra theo Tên: CHỈ áp dụng khi chưa khớp ID/Email và bản ghi trong DB không phải là một mã nhân viên HRM khác (tránh gộp nhầm 2 nhân viên trùng họ tên trên HRM)
-        if (matchedMap.size === 0 && name && name !== `User ${hrmId}`) {
-          const nameList = nameMap.get(name.trim().toLowerCase());
-          if (nameList) {
-            for (const u of nameList) {
-              const hasDifferentHrmId = u.hrmId && String(u.hrmId) !== hrmId;
-              const isDifferentNumericId = /^\d+$/.test(String(u.id)) && String(u.id) !== hrmId;
-              if (!hasDifferentHrmId && !isDifferentNumericId) {
-                matchedMap.set(u.id, u);
-              }
-            }
-          }
-        }
-
-        const existingUsers = Array.from(matchedMap.values()).sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-
-        // Tập hợp toàn bộ bộ phận quản lý / kiêm nhiệm của nhân sự này từ HRM (/users + /departments)
-        const hrmDeptCandidates: string[] = [];
-        if (hrmUser.department) hrmDeptCandidates.push(String(hrmUser.department).trim());
-        const byIdDepts = deptMapByHrmId.get(hrmId.toLowerCase());
-        if (byIdDepts) hrmDeptCandidates.push(...byIdDepts);
-        if (hasRealEmail) {
-          const byEmailDepts = deptMapByEmail.get(hrmUser.email.trim().toLowerCase());
-          if (byEmailDepts) hrmDeptCandidates.push(...byEmailDepts);
-        }
-        const isHrmTeamLead = teamLeadHrmIds.has(hrmId);
-
-        if (existingUsers.length > 1) {
-          // MERGE duplicates:
-          const primary = existingUsers.find((u) => u.email && !u.email.endsWith(dummyDomain) && u.email.includes('@'))
-            || existingUsers.find((u) => u.roleId !== null)
-            || existingUsers.find((u) => u.role === 'ADMIN')
-            || existingUsers.find((u) => u.id === hrmId)
-            || existingUsers[0];
-          const duplicates = existingUsers.filter((u) => u.id !== primary.id);
-          const dupIds = duplicates.map((u) => u.id);
-
-          // Thu thập thông tin tốt nhất
-          let bestRole = primary.role;
-          let bestRoleId = primary.roleId;
-          let bestCustomPerms = primary.customPermissions;
-          for (const dup of duplicates) {
-            if (dup.role === 'ADMIN') bestRole = 'ADMIN';
-            else if (dup.role === 'MANAGER' && bestRole === 'USER') bestRole = 'MANAGER';
-            if (dup.roleId && !bestRoleId) bestRoleId = dup.roleId;
-            if (dup.customPermissions && !bestCustomPerms) bestCustomPerms = dup.customPermissions;
-          }
-          if (isHrmTeamLead && (!bestRole || bestRole === 'USER')) {
-            bestRole = 'MANAGER';
-            if (managerUserRole?.id && (!bestRoleId || bestRoleId === defaultUserRole?.id)) {
-              bestRoleId = managerUserRole.id;
-            }
-          }
-
-          const mergedDepts = getUserDepartments({
-            department: hrmUser.department || primary.department,
-            managedDepartments: [
-              ...hrmDeptCandidates,
-              ...getUserDepartments(primary),
-              ...duplicates.flatMap((d) => getUserDepartments(d)),
-            ],
-          });
-
-          const targetEmail = (primary.email && !primary.email.endsWith(dummyDomain) && primary.email.includes('@'))
-            ? primary.email
-            : (hasRealEmail ? hrmUser.email : (primary.email.includes('@') && !primary.email.endsWith(dummyDomain) ? primary.email : dummyEmail));
-
-          // BƯỚC 1: Đổi email của tất cả bản ghi trùng sang email tạm thời
-          for (let i = 0; i < duplicates.length; i++) {
-            const dup = duplicates[i];
-            const tempEmail = `merged_${dup.id}_${Date.now()}_${i}@merge.local`;
-            try {
-              await this.prisma.user.update({
-                where: { id: dup.id },
-                data: { email: tempEmail, hrmId: null },
-              });
-              if (dup.email) emailMap.delete(dup.email.toLowerCase());
-              dup.email = tempEmail;
-              emailMap.set(tempEmail.toLowerCase(), dup);
-            } catch (tempErr: any) {
-              console.warn(`Không thể đổi email tạm cho dup ${dup.id}:`, tempErr?.message);
-            }
-          }
-
-          // BƯỚC 2: Batching toàn bộ foreign key updates với { in: dupIds } chạy song song
-          await Promise.allSettled([
-            this.prisma.maintenanceRequest.updateMany({ where: { reporterId: { in: dupIds } }, data: { reporterId: primary.id } }),
-            this.prisma.maintenanceRequest.updateMany({ where: { cancelledById: { in: dupIds } }, data: { cancelledById: primary.id } }),
-            this.prisma.operationLog.updateMany({ where: { recordedById: { in: dupIds } }, data: { recordedById: primary.id } }),
-            this.prisma.operationLog.updateMany({ where: { voidedById: { in: dupIds } }, data: { voidedById: primary.id } }),
-            this.prisma.utilityReading.updateMany({ where: { recordedById: { in: dupIds } }, data: { recordedById: primary.id } }),
-            this.prisma.utilitySystemStatusLog.updateMany({ where: { recordedById: { in: dupIds } }, data: { recordedById: primary.id } }),
-            this.prisma.workOrder.updateMany({ where: { assignedTechnicianId: { in: dupIds } }, data: { assignedTechnicianId: primary.id } }),
-            this.prisma.workOrder.updateMany({ where: { watcherId: { in: dupIds } }, data: { watcherId: primary.id } }),
-            this.prisma.workOrder.updateMany({ where: { classificationReporterId: { in: dupIds } }, data: { classificationReporterId: primary.id } }),
-            this.prisma.workOrderExecutionLog.updateMany({ where: { performedById: { in: dupIds } }, data: { performedById: primary.id } }),
-            this.prisma.checklistExecution.updateMany({ where: { executedById: { in: dupIds } }, data: { executedById: primary.id } }),
-            this.prisma.checklistExecution.updateMany({ where: { cancelledById: { in: dupIds } }, data: { cancelledById: primary.id } }),
-            this.prisma.maintenanceSchedule.updateMany({ where: { createdById: { in: dupIds } }, data: { createdById: primary.id } }),
-            this.prisma.maintenanceSchedule.updateMany({ where: { assignedTechnicianId: { in: dupIds } }, data: { assignedTechnicianId: primary.id } }),
-            this.prisma.maintenanceSchedule.updateMany({ where: { pausedById: { in: dupIds } }, data: { pausedById: primary.id } }),
-            this.prisma.maintenanceSchedule.updateMany({ where: { cancelledById: { in: dupIds } }, data: { cancelledById: primary.id } }),
-            this.prisma.workflowHistory.updateMany({ where: { actedById: { in: dupIds } }, data: { actedById: primary.id } }),
-            this.prisma.scheduleHistory.updateMany({ where: { actedById: { in: dupIds } }, data: { actedById: primary.id } }),
-            this.prisma.inventoryTransaction.updateMany({ where: { actedById: { in: dupIds } }, data: { actedById: primary.id } }),
-            this.prisma.location.updateMany({ where: { responsibleTechId: { in: dupIds } }, data: { responsibleTechId: primary.id } }),
-            this.prisma.attachment.updateMany({ where: { uploadedById: { in: dupIds } }, data: { uploadedById: primary.id } }),
-            this.prisma.notification.updateMany({ where: { userId: { in: dupIds } }, data: { userId: primary.id } }),
-          ]);
-
-          // BƯỚC 3: Xóa các bản ghi duplicate (Batch Delete)
-          try {
-            await this.prisma.user.deleteMany({ where: { id: { in: dupIds } } });
-            for (const dup of duplicates) {
-              idMap.delete(dup.id);
-              if (dup.email) emailMap.delete(dup.email.toLowerCase());
-            }
-          } catch (delErr: any) {
-            console.warn(`Không thể xóa hàng loạt dup:`, delErr?.message);
-            // Fallback vô hiệu hóa
-            await this.prisma.user.updateMany({
-              where: { id: { in: dupIds } },
-              data: { isActive: false },
-            });
-          }
-
-          // BƯỚC 4: Cập nhật bản ghi chính (primary) với dữ liệu đã gộp
-          const updatedPrimary = await this.prisma.user.update({
-            where: { id: primary.id },
-            data: {
-              email: targetEmail,
-              name: name,
-              role: bestRole,
-              roleId: bestRoleId,
-              customPermissions: bestCustomPerms,
-              department: hrmUser.department || primary.department || null,
-              managedDepartments: mergedDepts.length > 0 ? JSON.stringify(mergedDepts) : null,
-              specialty: position || primary.specialty || null,
-              avatar: avatar || primary.avatar || null,
-              isActive: isUserActive,
-              hrmId,
-              dataSource: 'HRM',
-              lastHrmSyncedAt: syncStartedAt,
-            },
-          });
-
-          // Cập nhật lại cache maps
-          if (primary.email) emailMap.delete(primary.email.toLowerCase());
-          emailMap.set(targetEmail.toLowerCase(), updatedPrimary);
-          idMap.set(primary.id, updatedPrimary);
-          hrmIdMap.set(hrmId, updatedPrimary);
-
-          mergedCount += duplicates.length;
-          updatedCount++;
-        } else if (existingUsers.length === 1) {
-          // Chỉ có 1 bản ghi — cập nhật thông tin
-          const existing = existingUsers[0];
-          const resolvedDepts = getUserDepartments({
-            department: hrmUser.department || existing.department,
-            managedDepartments: hrmDepartments.length > 0
-              ? hrmDeptCandidates
-              : [
-                  ...hrmDeptCandidates,
-                  ...getUserDepartments(existing),
-                ],
-          });
-          const updateData: any = {
-            name: name,
-            department: hrmUser.department || null,
-            managedDepartments: resolvedDepts.length > 0 ? JSON.stringify(resolvedDepts) : null,
-            specialty: position || undefined,
-            avatar: avatar || undefined,
-            isActive: isUserActive,
-            hrmId,
-            dataSource: 'HRM',
-            lastHrmSyncedAt: syncStartedAt,
-          };
-          if (isHrmTeamLead && (!existing.role || existing.role === 'USER')) {
-            updateData.role = 'MANAGER';
-            if (managerUserRole?.id && (!existing.roleId || existing.roleId === defaultUserRole?.id)) {
-              updateData.roleId = managerUserRole.id;
-            }
-          }
-          if (hasRealEmail && existing.email !== hrmUser.email) {
-            const conflictUser = emailMap.get(hrmUser.email.toLowerCase());
-            if (!conflictUser || conflictUser.id === existing.id) {
-              updateData.email = hrmUser.email;
-            }
-          }
-          const updatedUser = await this.prisma.user.update({
-            where: { id: existing.id },
-            data: updateData,
-          });
-
-          // Cập nhật cache maps
-          if (existing.email && updateData.email && existing.email !== updateData.email) {
-            emailMap.delete(existing.email.toLowerCase());
-            emailMap.set(updateData.email.toLowerCase(), updatedUser);
-          }
-          idMap.set(existing.id, updatedUser);
-          hrmIdMap.set(hrmId, updatedUser);
+        const existing = selected.user;
+        const hrmDeptCandidates = [hrmUser.department, ...(deptMapByHrmId.get(hrmId.toLowerCase()) || [])].filter(Boolean);
+        const resolvedDepts = getUserDepartments({
+          department: hrmUser.department || existing?.department,
+          managedDepartments: hrmDepartments.length > 0 ? hrmDeptCandidates : [
+            ...hrmDeptCandidates, ...getUserDepartments(existing),
+          ],
+        });
+        const data: any = {
+          name: hrmUser.name || hrmUser.username || `HRM ${hrmId}`,
+          department: hrmUser.department || null,
+          managedDepartments: resolvedDepts.length ? JSON.stringify(resolvedDepts) : null,
+          specialty: hrmUser.position || undefined, avatar: hrmUser.avatar || undefined,
+          isActive: isHrmProfileActive(hrmUser), hrmId, dataSource: 'HRM', lastHrmSyncedAt: syncStartedAt,
+        };
+        if (hrmUser.email?.includes('@')) data.email = hrmUser.email;
+        if (existing) {
+          // Keep ids, permissions, assignments and historical authors unchanged.
+          const updated = await this.prisma.user.update({ where: { id: existing.id }, data });
+          Object.assign(existing, updated);
           updatedCount++;
         } else {
-          // Chưa có bản ghi nào — kiểm tra email trước khi tạo mới để tránh xung đột
-          const resolvedDepts = getUserDepartments({
-            department: hrmUser.department,
-            managedDepartments: hrmDeptCandidates,
-          });
-          const targetNewRole = isHrmTeamLead ? 'MANAGER' : defaultRole;
-          const targetNewRoleId = isHrmTeamLead && managerUserRole?.id ? managerUserRole.id : (defaultUserRole?.id || null);
-
-          const conflictUser = emailMap.get(emailOrUsername.toLowerCase());
-          if (conflictUser) {
-            const updated = await this.prisma.user.update({
-              where: { id: conflictUser.id },
-              data: {
-                name: name,
-                department: hrmUser.department || null,
-                managedDepartments: resolvedDepts.length > 0 ? JSON.stringify(resolvedDepts) : null,
-                specialty: position || null,
-                avatar: avatar || null,
-                isActive: isUserActive,
-                hrmId,
-                dataSource: 'HRM',
-                lastHrmSyncedAt: syncStartedAt,
-              },
-            });
-            idMap.set(updated.id, updated);
-            if (updated.email) emailMap.set(updated.email.toLowerCase(), updated);
-            hrmIdMap.set(hrmId, updated);
-            updatedCount++;
-          } else {
-            try {
-              const newUser = await this.prisma.user.create({
-                data: {
-                  id: hrmId,
-                  email: emailOrUsername,
-                  name: name,
-                  role: targetNewRole,
-                  roleId: targetNewRoleId,
-                  department: hrmUser.department || null,
-                  managedDepartments: resolvedDepts.length > 0 ? JSON.stringify(resolvedDepts) : null,
-                  specialty: position || null,
-                  avatar: avatar,
-                  isActive: isUserActive,
-                  hrmId,
-                  dataSource: 'HRM',
-                  lastHrmSyncedAt: syncStartedAt,
-                },
-              });
-              idMap.set(newUser.id, newUser);
-              if (newUser.email) emailMap.set(newUser.email.toLowerCase(), newUser);
-              hrmIdMap.set(hrmId, newUser);
-              createdCount++;
-            } catch (createErr: any) {
-              console.warn(`Sync create conflict for HRM user ${hrmId}: ${createErr?.message}`);
-            }
-          }
+          const isLead = teamLeadHrmIds.has(hrmId);
+          const created = await this.prisma.user.create({ data: {
+            ...data, email: data.email || `${hrmId}${dummyDomain}`,
+            role: isLead ? 'MANAGER' : defaultRole,
+            roleId: (isLead ? managerUserRole?.id : defaultUserRole?.id) || null,
+          } });
+          allDbUsers.push(created);
+          createdCount++;
         }
         syncedCount++;
       }
-
+      // Present but conflicting entries are never deactivated as a side effect.
       const deactivatedResult = await this.prisma.user.updateMany({
-        where: {
-          dataSource: 'HRM',
-          isActive: true,
-          OR: [
-            { lastHrmSyncedAt: null },
-            { lastHrmSyncedAt: { lt: syncStartedAt } },
-          ],
-        },
-        data: {
-          isActive: false,
-          version: { increment: 1 },
-        },
+        where: { dataSource: 'HRM', isActive: true, hrmId: { not: null, notIn: ids } },
+        data: { isActive: false, version: { increment: 1 } },
       });
-
-      // Tự động quét dọn dẹp các tài khoản trùng lặp do SSO cũ
-      const cleanResult = await this.cleanSsoDuplicates();
-      mergedCount += cleanResult.mergedCount;
       JwtStrategy.invalidateCache();
-
       return {
-        success: true,
-        syncedCount,
-        createdCount,
-        updatedCount,
-        deactivatedCount: deactivatedResult.count,
-        mergedCount,
+        success: conflicts.length === 0, syncedCount, createdCount, updatedCount,
+        deactivatedCount: deactivatedResult.count, mergedCount: 0,
+        reviewRequiredCount: conflicts.length, conflicts,
       };
     } catch (err: any) {
       if (err instanceof HttpException) throw err;
@@ -1010,122 +692,17 @@ export class UsersService {
     }
   }
 
-  /**
-   * Tự động rà soát và gộp an toàn các tài khoản phụ sinh ra do SSO đăng nhập cũ hoặc đồng bộ trùng lặp
-   * Nhận diện: Tài khoản có email kết thúc bằng '@local.hrm' trùng họ tên hoặc mã nhân viên với tài khoản chính thức.
-   */
+  /** Read-only reconciliation: never merge users or rewrite historical authors. */
+  async auditHrmIdentities() {
+    const users = await this.prisma.user.findMany({
+      select: { id: true, hrmId: true, email: true, name: true, dataSource: true, isActive: true },
+      orderBy: { id: 'asc' },
+    });
+    return buildIdentityAudit(users);
+  }
+
   async cleanSsoDuplicates(): Promise<{ mergedCount: number; details: string[] }> {
-    const details: string[] = [];
-    let mergedCount = 0;
-
-    try {
-      // Lấy toàn bộ người dùng có email dạng dummy (@local.hrm)
-      const dummyUsers = await this.prisma.user.findMany({
-        where: { email: { endsWith: '@local.hrm' } },
-      });
-
-      for (const dummyUser of dummyUsers) {
-        // Kiểm tra xem dummyUser này đã bị gộp/xóa ở vòng trước chưa
-        const currentDummy = await this.prisma.user.findUnique({ where: { id: dummyUser.id } });
-        if (!currentDummy) continue;
-
-        const prefix = currentDummy.email.replace('@local.hrm', '').trim();
-        const cleanPrefix = prefix.replace(/^0+/, '');
-        const candidateCodes = [prefix, cleanPrefix].filter(Boolean);
-
-        // Tìm tài khoản chính thức có EMAIL THẬT và trùng họ tên
-        const primary = await this.prisma.user.findFirst({
-          where: {
-            id: { not: currentDummy.id },
-            name: currentDummy.name,
-            email: { not: { endsWith: '@local.hrm' } },
-          },
-          include: { customRole: true },
-        });
-
-        // Nếu không có tài khoản email thật trùng tên -> đây là nhân viên HRM bình thường, bỏ qua
-        if (!primary) continue;
-
-        const targetPrimary = primary;
-        const targetDup = currentDummy;
-
-        console.log(`[AUTO-CLEANUP] Gộp tài khoản trùng: "${targetDup.name}" (${targetDup.email}, ID: ${targetDup.id}) -> Tài khoản chính: ${targetPrimary.name} (${targetPrimary.email}, ID: ${targetPrimary.id})`);
-
-        await this.prisma.$transaction(async (tx) => {
-          // 1. Đổi email tạm cho bản ghi trùng để tránh xung đột unique key
-          await tx.user.update({
-            where: { id: targetDup.id },
-            data: { email: `merged_${targetDup.id}_${Date.now()}@merge.local` },
-          });
-
-          // 2. Chuyển toàn bộ quan hệ foreign key sang targetPrimary
-          await tx.maintenanceRequest.updateMany({ where: { reporterId: targetDup.id }, data: { reporterId: targetPrimary.id } });
-          await tx.maintenanceRequest.updateMany({ where: { cancelledById: targetDup.id }, data: { cancelledById: targetPrimary.id } });
-          await tx.operationLog.updateMany({ where: { recordedById: targetDup.id }, data: { recordedById: targetPrimary.id } });
-          await tx.operationLog.updateMany({ where: { voidedById: targetDup.id }, data: { voidedById: targetPrimary.id } });
-          await tx.utilityReading.updateMany({ where: { recordedById: targetDup.id }, data: { recordedById: targetPrimary.id } });
-          await tx.utilitySystemStatusLog.updateMany({ where: { recordedById: targetDup.id }, data: { recordedById: targetPrimary.id } });
-          await tx.workOrder.updateMany({ where: { assignedTechnicianId: targetDup.id }, data: { assignedTechnicianId: targetPrimary.id } });
-          await tx.workOrder.updateMany({ where: { watcherId: targetDup.id }, data: { watcherId: targetPrimary.id } });
-          await tx.workOrder.updateMany({ where: { classificationReporterId: targetDup.id }, data: { classificationReporterId: targetPrimary.id } });
-          await tx.workOrderExecutionLog.updateMany({ where: { performedById: targetDup.id }, data: { performedById: targetPrimary.id } });
-          await tx.checklistExecution.updateMany({ where: { executedById: targetDup.id }, data: { executedById: targetPrimary.id } });
-          await tx.checklistExecution.updateMany({ where: { cancelledById: targetDup.id }, data: { cancelledById: targetPrimary.id } });
-          await tx.maintenanceSchedule.updateMany({ where: { createdById: targetDup.id }, data: { createdById: targetPrimary.id } });
-          await tx.maintenanceSchedule.updateMany({ where: { assignedTechnicianId: targetDup.id }, data: { assignedTechnicianId: targetPrimary.id } });
-          await tx.maintenanceSchedule.updateMany({ where: { pausedById: targetDup.id }, data: { pausedById: targetPrimary.id } });
-          await tx.maintenanceSchedule.updateMany({ where: { cancelledById: targetDup.id }, data: { cancelledById: targetPrimary.id } });
-          await tx.workflowHistory.updateMany({ where: { actedById: targetDup.id }, data: { actedById: targetPrimary.id } });
-          await tx.scheduleHistory.updateMany({ where: { actedById: targetDup.id }, data: { actedById: targetPrimary.id } });
-          await tx.inventoryTransaction.updateMany({ where: { actedById: targetDup.id }, data: { actedById: targetPrimary.id } });
-          await tx.location.updateMany({ where: { responsibleTechId: targetDup.id }, data: { responsibleTechId: targetPrimary.id } });
-          await tx.attachment.updateMany({ where: { uploadedById: targetDup.id }, data: { uploadedById: targetPrimary.id } });
-          await tx.notification.updateMany({ where: { userId: targetDup.id }, data: { userId: targetPrimary.id } });
-
-          // 3. Xóa tài khoản trùng lặp
-          try {
-            await tx.user.delete({ where: { id: targetDup.id } });
-          } catch (delErr: any) {
-            console.warn(`[AUTO-CLEANUP] Không thể xóa bản ghi ${targetDup.id}, vô hiệu hóa:`, delErr?.message);
-            await tx.user.update({
-              where: { id: targetDup.id },
-              data: { isActive: false, email: `disabled_${targetDup.id}_${Date.now()}@disabled.local` },
-            });
-          }
-
-          // 4. Cập nhật quyền hạn và dữ liệu tốt nhất cho targetPrimary
-          const bestRole = (targetDup.role === 'ADMIN' || targetPrimary.role === 'ADMIN') ? 'ADMIN' : targetPrimary.role;
-          const bestRoleId = targetPrimary.roleId || targetDup.roleId || null;
-          const bestCustomPerms = targetPrimary.customPermissions || targetDup.customPermissions || null;
-          const bestAvatar = targetPrimary.avatar || targetDup.avatar || null;
-          const bestDepartment = targetPrimary.department || targetDup.department || null;
-          const bestSpecialty = targetPrimary.specialty || targetDup.specialty || null;
-
-          await tx.user.update({
-            where: { id: targetPrimary.id },
-            data: {
-              role: bestRole,
-              roleId: bestRoleId,
-              customPermissions: bestCustomPerms,
-              avatar: bestAvatar,
-              department: bestDepartment,
-              specialty: bestSpecialty,
-              isActive: true,
-            },
-          });
-        });
-
-        details.push(`Gộp thành công: ${targetDup.name} (${targetDup.email}) -> ${targetPrimary.email} (ID: ${targetPrimary.id})`);
-        mergedCount++;
-      }
-    } catch (err: any) {
-      console.error('[AUTO-CLEANUP] Lỗi trong quá trình dọn dẹp tài khoản trùng SSO:', err);
-    }
-
-    if (mergedCount > 0) {
-      console.log(`[AUTO-CLEANUP] Đã hoàn tất tự động dọn dẹp và gộp ${mergedCount} tài khoản trùng lặp.`);
-    }
-
-    return { mergedCount, details };
+    const report = await this.auditHrmIdentities();
+    return { mergedCount: 0, details: report.issues.map(issue => `${issue.code}: ${issue.userIds.join(', ')}`) };
   }
 }

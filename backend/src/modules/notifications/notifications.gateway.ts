@@ -1,3 +1,4 @@
+import * as passport from 'passport';
 import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { parseDepartmentList } from '../../common/utils/rbac.helper';
@@ -12,29 +13,45 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   @WebSocketServer()
   server: Server;
 
-  handleConnection(client: Socket) {
-    const { userId, role, department } = client.handshake.query;
+  private sessions = new Map<string, ReturnType<typeof setInterval>>();
 
-    if (userId) {
-      client.join(`user:${userId}`);
-    }
-    if (role) {
-      client.join(`role:${role}`);
-    }
-    if (department) {
-      // Decode URI parameter just in case of Vietnamese accents in query string
-      const deptStr = decodeURIComponent(department as string);
-      for (const dept of parseDepartmentList(deptStr)) {
-        client.join(`dept:${dept}`);
-      }
-    }
-    client.join('global');
+  private authenticateToken(token: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      passport.authenticate('jwt', { session: false }, (error: any, user: any) => {
+        if (error || !user) reject(error || new Error('Unauthorized socket'));
+        else resolve(user);
+      })({ headers: { authorization: `Bearer ${token}` } } as any, {} as any, reject);
+    });
+  }
 
-    console.log(`[WEBSOCKET] Client connected: ${client.id}. Query: userId=${userId}, role=${role}, department=${department}`);
+  async handleConnection(client: Socket) {
+    const token = client.handshake.auth?.token;
+    if (typeof token !== 'string' || !token) { client.disconnect(true); return; }
+    try {
+      const user = await this.authenticateToken(token);
+      if (!client.connected) return;
+      client.join(`user:${user.id}`);
+      client.join(`role:${user.role}`);
+      for (const department of parseDepartmentList(user.managedDepartments || user.department)) client.join(`dept:${department}`);
+      client.join('global');
+      const signature = JSON.stringify([user.id, user.role, user.managedDepartments, user.department]);
+      let verifying = false;
+      this.sessions.set(client.id, setInterval(async () => {
+        if (verifying) return;
+        verifying = true;
+        try {
+          const current = await this.authenticateToken(token);
+          if (JSON.stringify([current.id, current.role, current.managedDepartments, current.department]) !== signature) client.disconnect(true);
+        } catch { client.disconnect(true); }
+        finally { verifying = false; }
+      }, 30000));
+    } catch { client.disconnect(true); }
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`[WEBSOCKET] Client disconnected: ${client.id}`);
+    const timer = this.sessions.get(client.id);
+    if (timer) clearInterval(timer);
+    this.sessions.delete(client.id);
   }
 
   sendNotificationToRooms(

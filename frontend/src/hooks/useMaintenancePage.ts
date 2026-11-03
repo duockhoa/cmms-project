@@ -1,9 +1,11 @@
+import { usePermissions } from './usePermissions';
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, fetchWithAuth, API_HOST as API_BASE } from '../services/api';
 import { useToast, useConfirmDialog } from '../components/common/Toast';
 import { useRealtimeSync } from './useRealtimeSync';
 
 export const useMaintenancePage = () => {
+  const { user: authUser } = usePermissions();
   const [activeTab, setActiveTab] = useState<'schedules' | 'history'>('schedules');
 
   // --- STATE FOR TAB 1: SCHEDULES ---
@@ -159,8 +161,8 @@ export const useMaintenancePage = () => {
   });
 
   const getActiveUserId = () => {
-    const active = users.find((u: any) => u.isActive);
-    return active ? active.id : (users[0]?.id || 'user-id');
+    if (!authUser?.id) throw new Error('AUTH_REQUIRED');
+    return authUser.id;
   };
 
   // --- ACTIONS FOR SCHEDULES ---

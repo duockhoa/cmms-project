@@ -33,9 +33,15 @@ export class UsersController {
     return this.usersService.syncHrmUsers(token);
   }
 
+  @Get('identity-audit')
+  async identityAudit(@Req() req: any) {
+    this.assertPermission(req.user, 'settings:users');
+    return this.usersService.auditHrmIdentities();
+  }
+
   @Post('clean-duplicates')
   @ApiStandardResponse({
-    summary: 'Tự động rà soát và dọn dẹp tài khoản trùng lặp do SSO cũ',
+    summary: 'Báo cáo đối soát SSO, chỉ đọc, không tự gộp tài khoản',
     method: 'POST',
     path: '/users/clean-duplicates',
   })

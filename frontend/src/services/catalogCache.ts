@@ -1,3 +1,4 @@
+import { getRawAccessToken, getSessionVersion } from '../utils/authStorage';
 /**
  * Master Catalog Data Cache Service
  * Provides in-memory + sessionStorage caching with Stale-While-Revalidate and TTL.
@@ -13,6 +14,7 @@ const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const CACHE_PREFIX = 'dk_cmms_catalog_';
 
 class CatalogCacheService {
+  constructor() { this.invalidate('all'); }
   private memoryCache = new Map<string, CacheEntry<any>>();
 
   /**
@@ -79,6 +81,10 @@ class CatalogCacheService {
     fetcher: () => Promise<T>,
     ttlMs: number = DEFAULT_TTL_MS
   ): Promise<T> {
+    const version = getSessionVersion();
+    const token = getRawAccessToken();
+    key = `${version}:${key}`;
+    const assertCurrent = () => { if (version !== getSessionVersion() || token !== getRawAccessToken()) throw new Error('SESSION_CHANGED'); };
     const cached = this.get<T>(key);
 
     if (cached) {
@@ -86,6 +92,7 @@ class CatalogCacheService {
         // Revalidate in background without blocking
         fetcher()
           .then((freshData) => {
+            assertCurrent();
             this.set(key, freshData, ttlMs);
           })
           .catch((err) => {
@@ -97,6 +104,7 @@ class CatalogCacheService {
 
     // No cache: fetch synchronously
     const freshData = await fetcher();
+    assertCurrent();
     this.set(key, freshData, ttlMs);
     return freshData;
   }
@@ -120,7 +128,7 @@ class CatalogCacheService {
     // Invalidate keys that start with or match keyPattern
     const keysToDelete: string[] = [];
     this.memoryCache.forEach((_, k) => {
-      if (k.startsWith(keyPattern) || k === keyPattern) {
+      if (k.startsWith(keyPattern) || k === keyPattern || k.slice(k.indexOf(':') + 1).startsWith(keyPattern)) {
         keysToDelete.push(k);
       }
     });
@@ -129,7 +137,7 @@ class CatalogCacheService {
 
     if (typeof window !== 'undefined' && window.sessionStorage) {
       Object.keys(sessionStorage).forEach((k) => {
-        if (k.startsWith(`${CACHE_PREFIX}${keyPattern}`)) {
+        if (k.startsWith(CACHE_PREFIX) && (k.slice(CACHE_PREFIX.length).split(':').slice(1).join(':').startsWith(keyPattern) || k.startsWith(`${CACHE_PREFIX}${keyPattern}`))) {
           sessionStorage.removeItem(k);
         }
       });

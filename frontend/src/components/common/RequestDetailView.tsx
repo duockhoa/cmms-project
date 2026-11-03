@@ -49,13 +49,14 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
 
-  const getActiveUserId = () => {
-    const active = users.find((u: any) => u.isActive);
-    return active ? active.id : (users[0]?.id || 'user-id');
-  };
+
 
   const { can, isAdmin, user: authUser } = usePermissions();
-  const effectiveUser = currentUser || authUser;
+  const effectiveUser = authUser;
+  const getActiveUserId = () => {
+    if (!authUser?.id) throw new Error('AUTH_REQUIRED');
+    return authUser.id;
+  };
 
   const loadData = async () => {
     try {

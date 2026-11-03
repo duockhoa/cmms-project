@@ -2,6 +2,7 @@ import { ALL_PERMISSION_CODES } from '../constants/permissions.registry';
 
 export interface UserWithPermissions {
   id: string;
+  name?: string | null;
   role?: string | null;
   department?: string | null;
   managedDepartments?: string | string[] | null;

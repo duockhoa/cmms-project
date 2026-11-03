@@ -1,334 +1,207 @@
-/**
- * Authentication Storage & Single Sign-On (SSO) Helper
- * Manages tokens across localStorage and shared root domain cookies (*.dkpharma.io.vn).
- */
+/** Browser hints select a session; only the backend can authenticate its identity. */
+const TOKEN_KEYS = ['accessToken', 'access_token', 'token', 'jwt', 'auth_token'];
+const REFRESH_KEYS = ['refreshToken', 'refresh_token'];
+const BINDING_KEY = 'qltb.auth.session.v2';
+export const AUTH_CHANGED_EVENT = 'qltb:auth-changed';
+let revision = 0;
+let lastSnapshot: string | undefined;
+let sessionError: string | null = null;
+let handoffError: string | null = null;
+const listeners = new Set<() => void>();
 
-const TOKEN_KEY = 'accessToken';
-const REFRESH_TOKEN_KEY = 'refreshToken';
-
-// Backward compatibility keys
-const ALT_TOKEN_KEYS = ['access_token', 'token', 'jwt', 'auth_token'];
-const ALT_REFRESH_KEYS = ['refresh_token'];
-
-/**
- * Calculates the top-level cookie domain for cross-subdomain SSO.
- * e.g., "qltb.dkpharma.io.vn" -> ".dkpharma.io.vn"
- */
 export function getCookieDomain(): string | undefined {
   if (typeof window === 'undefined') return undefined;
-  const hostname = window.location.hostname;
-
-  // Local development or raw IP addresses
-  if (hostname === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
-    return undefined;
-  }
-
-  // DK Pharma ecosystem
-  if (hostname.endsWith('dkpharma.io.vn')) {
-    return '.dkpharma.io.vn';
-  }
-
-  // Generic multi-level domain fallback
-  const parts = hostname.split('.');
-  if (parts.length > 2) {
-    return '.' + parts.slice(-2).join('.');
-  }
-
-  return undefined;
+  const host = window.location.hostname;
+  return host === 'dkpharma.io.vn' || host.endsWith('.dkpharma.io.vn') ? '.dkpharma.io.vn' : undefined;
 }
 
-/**
- * Read a cookie by name
- */
+function cookieValues(name: string): string[] {
+  if (typeof document === 'undefined') return [];
+  return document.cookie.split(';').flatMap(part => {
+    const index = part.indexOf('=');
+    if (part.slice(0, index).trim() !== encodeURIComponent(name)) return [];
+    try { return [decodeURIComponent(part.slice(index + 1))].filter(Boolean); } catch { return []; }
+  });
+}
 export function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + encodeURIComponent(name) + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]) : null;
+  const values = [...new Set(cookieValues(name))];
+  return values.length === 1 ? values[0] : null;
 }
-
-/**
- * Write a cookie to the shared domain
- */
 export function setCookie(name: string, value: string, days = 7) {
-  if (typeof document === 'undefined') return;
   const domain = getCookieDomain();
-  const domainPart = domain ? `; domain=${domain}` : '';
-  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-  const maxAge = days * 24 * 60 * 60;
-  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}${domainPart}; SameSite=Lax${secure}`;
+  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${days * 86400}${domain ? `; domain=${domain}` : ''}; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
 }
-
-/**
- * Delete a cookie across both root domain and current host
- */
-export function removeCookie(name: string) {
-  if (typeof document === 'undefined') return;
-  const domain = getCookieDomain();
-  const domainPart = domain ? `; domain=${domain}` : '';
-  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-  const pastDate = 'expires=Thu, 01 Jan 1970 00:00:00 GMT';
-  // Clear with parent domain
-  if (domainPart) {
-    document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; ${pastDate}${domainPart}; SameSite=Lax${secure}`;
+function deleteCookie(name: string, shared: boolean) {
+  const domain = shared ? getCookieDomain() : undefined;
+  const paths = new Set(['/']);
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  for (let i = 1; i <= parts.length; i++) {
+    paths.add('/' + parts.slice(0, i).join('/'));
+    paths.add('/' + parts.slice(0, i).join('/') + '/');
   }
-  // Clear with current host (in case host-only cookie was set)
-  document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; ${pastDate}; SameSite=Lax${secure}`;
+  for (const path of paths) document.cookie = `${encodeURIComponent(name)}=; path=${path}; max-age=0${domain ? `; domain=${domain}` : ''}; SameSite=Lax`;
 }
+export function removeCookie(name: string) { deleteCookie(name, true); deleteCookie(name, false); }
 
-/**
- * Checks if a JWT token string is structurally invalid or expired.
- */
-export function isJwtExpired(token: string): boolean {
-  if (!token || typeof token !== 'string') return true;
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return false; // Non-JWT opaque token fallback
-    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    const decoded = JSON.parse(jsonPayload);
-    if (!decoded.exp) return false;
-    // Add 10s leeway
-    return decoded.exp * 1000 <= Date.now() + 10000;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Extracts expiration timestamp (in milliseconds) from a JWT token, or null if opaque/unparseable.
- */
-export function getTokenExpiry(token: string): number | null {
-  if (!token || typeof token !== 'string') return null;
+function claims(token: string): any | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    const decoded = JSON.parse(jsonPayload);
-    return decoded.exp ? decoded.exp * 1000 : null;
-  } catch {
-    return null;
-  }
+    const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(decodeURIComponent(Array.from(json, char => '%' + char.charCodeAt(0).toString(16).padStart(2, '0')).join('')));
+  } catch { return null; }
 }
-
-/**
- * Retrieves the raw access token without validity/expiration checks.
- */
-export function getRawAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  let token = localStorage.getItem(TOKEN_KEY);
-  if (token) return token;
-  for (const altKey of ALT_TOKEN_KEYS) {
-    token = localStorage.getItem(altKey);
-    if (token) return token;
-  }
-  token = getCookie(TOKEN_KEY);
-  if (token) return token;
-  for (const altKey of ALT_TOKEN_KEYS) {
-    token = getCookie(altKey);
-    if (token) return token;
-  }
-  return null;
+export function getTokenExpiry(token: string): number | null {
+  const exp = claims(token)?.exp;
+  return typeof exp === 'number' ? exp * 1000 : null;
 }
-
-/**
- * Retrieves the current active access token.
- * Searches localStorage, then shared domain cookies.
- * Synchronizes between storage layers automatically.
- * Returns null if expired, but NEVER wipes refresh tokens!
- */
-export function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  // 1. Check primary localStorage
-  let token = localStorage.getItem(TOKEN_KEY);
-  if (token) {
-    if (isJwtExpired(token)) {
-      return null;
-    }
-    return token;
-  }
-
-  // 2. Check alternative localStorage keys
-  for (const altKey of ALT_TOKEN_KEYS) {
-    token = localStorage.getItem(altKey);
-    if (token) {
-      if (isJwtExpired(token)) {
-        return null;
-      }
-      localStorage.setItem(TOKEN_KEY, token);
-      return token;
-    }
-  }
-
-  // 3. Check shared domain cookies
-  token = getCookie(TOKEN_KEY);
-  if (!token) {
-    for (const altKey of ALT_TOKEN_KEYS) {
-      token = getCookie(altKey);
-      if (token) break;
-    }
-  }
-
-  // If found in cookie, synchronize into localStorage if not expired
-  if (token) {
-    if (isJwtExpired(token)) {
-      return null;
-    }
-    localStorage.setItem(TOKEN_KEY, token);
-    return token;
-  }
-
-  return null;
+export function isJwtExpired(token: string): boolean {
+  const decoded = claims(token);
+  return !decoded || (typeof decoded.exp === 'number' && decoded.exp * 1000 <= Date.now() + 10000);
 }
-
-/**
- * Retrieves the refresh token from localStorage or shared domain cookies.
- */
-export function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  let refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-  if (refreshToken) return refreshToken;
-
-  for (const altKey of ALT_REFRESH_KEYS) {
-    refreshToken = localStorage.getItem(altKey);
-    if (refreshToken) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-      return refreshToken;
-    }
-  }
-
-  refreshToken = getCookie(REFRESH_TOKEN_KEY);
-  if (!refreshToken) {
-    for (const altKey of ALT_REFRESH_KEYS) {
-      refreshToken = getCookie(altKey);
-      if (refreshToken) break;
-    }
-  }
-
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    return refreshToken;
-  }
-
-  return null;
+function binding(): any {
+  try { return JSON.parse(localStorage.getItem(BINDING_KEY) || 'null'); } catch { return null; }
 }
-
-/**
- * Persists auth tokens to both localStorage AND shared root domain cookies.
- */
-export function saveAuthTokens(accessToken: string, refreshToken?: string | null) {
-  if (typeof window === 'undefined') return;
-
-  // Save access token
-  localStorage.setItem(TOKEN_KEY, accessToken);
-  setCookie(TOKEN_KEY, accessToken, 7);
-  // Also set access_token cookie for apps expecting snake_case
-  setCookie('access_token', accessToken, 7);
-
-  // Save refresh token if provided
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    setCookie(REFRESH_TOKEN_KEY, refreshToken, 30);
-    setCookie('refresh_token', refreshToken, 30);
-  }
-}
-
-/**
- * Clears all auth tokens from localStorage and shared cookies.
- */
-export function clearAuthTokens() {
-  if (typeof window === 'undefined') return;
-
-  const allKeys = [TOKEN_KEY, REFRESH_TOKEN_KEY, ...ALT_TOKEN_KEYS, ...ALT_REFRESH_KEYS];
-
-  allKeys.forEach((key) => {
-    localStorage.removeItem(key);
-    removeCookie(key);
+function notify() {
+  revision++;
+  queueMicrotask(() => {
+    listeners.forEach(listener => listener());
+    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   });
 }
+function readSession(): { accessToken: string | null; refreshToken: string | null } {
+  if (typeof window === 'undefined') return { accessToken: null, refreshToken: null };
+  const previous = binding();
+  const accessValues = [...new Set(TOKEN_KEYS.flatMap(cookieValues))];
+  const refreshValues = [...new Set(REFRESH_KEYS.flatMap(cookieValues))];
+  let accessToken: string | null = null;
+  let refreshToken: string | null = null;
+  sessionError = handoffError;
+  if (accessValues.length) {
+    // Different aliases/host cookies cannot establish which session is current.
+    if (accessValues.length !== 1 || refreshValues.length > 1) {
+      sessionError = 'SSO_SESSION_CONFLICT';
+    } else {
+      accessToken = accessValues[0];
+      refreshToken = refreshValues[0] || null;
+    }
+  } else if (!getCookieDomain() && previous?.accessToken) {
+    // Local development only. Shared-domain deployments never resurrect local legacy tokens.
+    accessToken = previous.accessToken;
+    refreshToken = previous.refreshToken || null;
+  }
+  const snapshot = JSON.stringify([accessToken, refreshToken, sessionError]);
+  if (lastSnapshot !== snapshot) {
+    const sameAccess = previous?.accessToken === accessToken;
+    localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken, refreshToken,
+      ...(sameAccess ? { hrmId: previous?.hrmId, verified: previous?.verified } : {}),
+    }));
+    TOKEN_KEYS.forEach(key => localStorage.removeItem(key));
+    REFRESH_KEYS.forEach(key => localStorage.removeItem(key));
+    if (accessToken) localStorage.setItem('accessToken', accessToken);
+    if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+    const changed = lastSnapshot !== undefined;
+    lastSnapshot = snapshot;
+    if (changed) notify();
+  }
+  return { accessToken, refreshToken };
+}
+export function getRawAccessToken() { return readSession().accessToken; }
+export function getAccessToken(): string | null {
+  const token = getRawAccessToken();
+  return token && !isJwtExpired(token) ? token : null;
+}
+export function getRefreshToken() { return readSession().refreshToken; }
+export function getSessionVersion() { readSession(); return revision; }
+export function getSessionError() { readSession(); return sessionError; }
+export function getVerifiedHrmId(): string | null {
+  const token = getRawAccessToken();
+  const saved = binding();
+  return token && saved?.accessToken === token ? saved.hrmId || null : null;
+}
+export function markSessionVerified(token: string, hrmId?: string) {
+  if (token !== getRawAccessToken()) throw new Error('SESSION_CHANGED');
+  const saved = binding();
+  localStorage.setItem(BINDING_KEY, JSON.stringify({ ...saved, hrmId: hrmId || null, verified: true }));
+}
+export function isSessionVerified() {
+  const token = getAccessToken();
+  const saved = binding();
+  return Boolean(token && saved?.accessToken === token && saved?.verified);
+}
+export function markSessionUnverified() {
+  const saved = binding();
+  if (saved) localStorage.setItem(BINDING_KEY, JSON.stringify({ ...saved, verified: false }));
+}
+export function subscribeSession(listener: () => void) {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+export function saveAuthTokens(accessToken: string, refreshToken?: string | null, verifiedHrmId?: string | null) {
+  handoffError = null;
+  // Clear both host-only and shared aliases before publishing one consistent pair.
+  [...TOKEN_KEYS, ...REFRESH_KEYS].forEach(removeCookie);
+  setCookie('accessToken', accessToken);
+  setCookie('access_token', accessToken);
+  if (refreshToken) {
+    setCookie('refreshToken', refreshToken, 30);
+    setCookie('refresh_token', refreshToken, 30);
+  }
+  localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken, refreshToken: refreshToken || null, hrmId: verifiedHrmId || null, verified: Boolean(verifiedHrmId) }));
+  readSession();
+}
+export function clearAuthTokens() {
+  [...TOKEN_KEYS, ...REFRESH_KEYS].forEach(removeCookie);
+  localStorage.removeItem(BINDING_KEY);
+  readSession();
+}
+export function startSessionMonitor() {
+  readSession();
+  const check = () => { readSession(); };
+  const visible = () => { if (document.visibilityState === 'visible') check(); };
+  window.addEventListener('storage', check);
+  window.addEventListener('focus', check);
+  document.addEventListener('visibilitychange', visible);
+  const timer = window.setInterval(check, 1000);
+  return () => {
+    clearInterval(timer);
+    window.removeEventListener('storage', check);
+    window.removeEventListener('focus', check);
+    document.removeEventListener('visibilitychange', visible);
+  };
+}
 
-/**
- * Intercepts and captures tokens from URL search params or hash fragment (e.g. from Central Portal SSO redirection).
- * Cleans the URL query/hash to prevent token exposure in browser history.
- * Returns true if a valid token was found and stored.
- */
 export function extractAndSaveTokensFromUrl(): boolean {
   if (typeof window === 'undefined') return false;
-
-  let foundToken: string | null = null;
-  let foundRefreshToken: string | null = null;
-
-  // Check URL search parameters (?token=... or ?accessToken=...)
-  const searchParams = new URLSearchParams(window.location.search);
-  const searchTokenKeys = ['token', 'accessToken', 'access_token', 'jwt', 'auth_token', 'sso_token'];
-  const searchRefreshKeys = ['refreshToken', 'refresh_token'];
-
-  for (const key of searchTokenKeys) {
-    const val = searchParams.get(key);
-    if (val) {
-      foundToken = val;
-      searchParams.delete(key);
-      break;
-    }
-  }
-
-  for (const key of searchRefreshKeys) {
-    const val = searchParams.get(key);
-    if (val) {
-      foundRefreshToken = val;
-      searchParams.delete(key);
-      break;
-    }
-  }
-
-  // Check URL hash fragment (#token=... or #accessToken=...)
-  if (!foundToken && window.location.hash.length > 1) {
-    const rawHash = window.location.hash.startsWith('#')
-      ? window.location.hash.slice(1)
-      : window.location.hash;
-    const hashParams = new URLSearchParams(rawHash.includes('?') ? rawHash.split('?')[1] : rawHash);
-
-    for (const key of searchTokenKeys) {
-      const val = hashParams.get(key);
-      if (val) {
-        foundToken = val;
-        break;
+  const accessKeys = [...TOKEN_KEYS, 'sso_token'];
+  const allKeys = [...accessKeys, ...REFRESH_KEYS];
+  const query = new URLSearchParams(window.location.search);
+  const rawHash = window.location.hash.replace(/^#/, '');
+  const hashPath = rawHash.includes('?') ? rawHash.slice(0, rawHash.indexOf('?')) : '';
+  const hash = new URLSearchParams(rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : rawHash);
+  const access = new Set<string>();
+  const refresh = new Set<string>();
+  let found = false;
+  for (const params of [query, hash]) {
+    for (const key of allKeys) {
+      for (const value of params.getAll(key)) {
+        if (value) (accessKeys.includes(key) ? access : refresh).add(value);
+        found = true;
       }
-    }
-    for (const key of searchRefreshKeys) {
-      const val = hashParams.get(key);
-      if (val) {
-        foundRefreshToken = val;
-        break;
-      }
+      params.delete(key);
     }
   }
-
-  if (foundToken) {
-    saveAuthTokens(foundToken, foundRefreshToken);
-
-    // Clean URL query parameters without refreshing the page
-    const newSearch = searchParams.toString();
-    const cleanUrl =
-      window.location.pathname +
-      (newSearch ? `?${newSearch}` : '') +
-      (window.location.hash.includes('token') ? '' : window.location.hash);
-
-    window.history.replaceState({}, document.title, cleanUrl);
-    return true;
+  if (!found) return false;
+  const remainingHash = hash.toString();
+  const cleanHash = hashPath ? '#' + hashPath + (remainingHash ? '?' + remainingHash : '') : (remainingHash ? '#' + remainingHash : '');
+  const cleanUrl = window.location.pathname + (query.size ? '?' + query.toString() : '') + cleanHash;
+  window.history.replaceState({}, document.title, cleanUrl);
+  if (access.size !== 1 || refresh.size > 1 || isJwtExpired([...access][0])) {
+    clearAuthTokens();
+    handoffError = 'SSO_SESSION_CONFLICT';
+    readSession();
+    return false;
   }
-
-  return false;
+  saveAuthTokens([...access][0], [...refresh][0] || null);
+  return true;
 }

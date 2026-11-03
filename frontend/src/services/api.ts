@@ -5,75 +5,49 @@ import {
   clearAuthTokens,
   getRawAccessToken,
   getTokenExpiry,
-  isJwtExpired,
+  getSessionVersion, getVerifiedHrmId, isSessionVerified, AUTH_CHANGED_EVENT,
 } from '../utils/authStorage';
 import { catalogCache } from './catalogCache';
 
 export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_BASE = API_HOST + '/api/v1';
-const HRM_ROOT_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
 
 let refreshPromise: Promise<string | null> | null = null;
+let refreshVersion = -1;
 let silentRefreshTimer: any = null;
 
 export async function refreshAccessToken(): Promise<string | null> {
-  if (refreshPromise) {
-    return refreshPromise;
-  }
-
+  const version = getSessionVersion();
+  if (refreshPromise && refreshVersion === version) return refreshPromise;
   const refreshToken = getRefreshToken();
-  if (!refreshToken) {
-    return null;
-  }
-
-  refreshPromise = (async () => {
+  const expectedHrmId = getVerifiedHrmId();
+  if (!refreshToken || !expectedHrmId) return null;
+  const pending = (async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
     try {
-      const response = await fetch(`${HRM_ROOT_URL}/auth/refresh-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-        signal: controller.signal,
+      // The backend verifies that the refreshed access token still belongs to this HRM user.
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken, expectedHrmId }), signal: controller.signal,
       });
-
+      if (getSessionVersion() !== version) throw new Error('SESSION_CHANGED');
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        const err: any = new Error(errorData?.message || `Refresh token HTTP ${response.status}`);
-        err.status = response.status;
-        throw err;
+        if (response.status === 401) clearAuthTokens();
+        throw new Error('SESSION_REFRESH_FAILED');
       }
-
       const data = await response.json();
-      const newAccessToken = data.accessToken || data.access_token || data.token;
-      const newRefreshToken = data.refreshToken || data.refresh_token;
-
-      if (!newAccessToken) {
-        throw new Error('No access token returned from refresh endpoint');
-      }
-
-      // Preserve existing refreshToken if not returned by server
-      saveAuthTokens(newAccessToken, newRefreshToken || refreshToken);
+      if (getSessionVersion() !== version) throw new Error('SESSION_CHANGED');
+      saveAuthTokens(data.accessToken, data.refreshToken, expectedHrmId);
       setupSilentRefresh();
-      return newAccessToken;
-    } catch (error: any) {
-      console.warn('Refresh token failed:', error);
-      // Only clear tokens if the refresh token was genuinely rejected by auth server (400/401)
-      if (
-        error?.status === 400 ||
-        error?.status === 401 ||
-        (error?.message && (error.message.includes('400') || error.message.includes('401')))
-      ) {
-        clearAuthTokens();
-      }
+      return data.accessToken;
+    } catch {
       return null;
-    } finally {
-      clearTimeout(timeoutId);
-      refreshPromise = null;
-    }
+    } finally { clearTimeout(timeoutId); }
   })();
-
-  return refreshPromise;
+  refreshPromise = pending;
+  refreshVersion = version;
+  try { return await pending; } finally { if (refreshPromise === pending) refreshPromise = null; }
 }
 
 /**
@@ -100,7 +74,7 @@ export function setupSilentRefresh() {
   }
 
   const refreshToken = getRefreshToken();
-  if (!refreshToken) return;
+  if (!refreshToken || !getVerifiedHrmId()) return;
 
   const rawToken = getRawAccessToken();
   if (!rawToken) {
@@ -123,23 +97,9 @@ export function setupSilentRefresh() {
   }, delay);
 }
 
-// Proactive refresh on tab visibility change or initial module load
-if (typeof window !== 'undefined') {
-  setupSilentRefresh();
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      const refreshToken = getRefreshToken();
-      const rawToken = getRawAccessToken();
-      if (refreshToken && (!rawToken || isJwtExpired(rawToken))) {
-        refreshAccessToken().then(() => setupSilentRefresh());
-      }
-    }
-  });
-}
-
 let cachedMeData: any = null;
 let cachedMeTimestamp = 0;
+let cachedMeVersion = -1;
 let inFlightMePromise: Promise<any> | null = null;
 const ME_CACHE_TTL_MS = 5 * 60 * 1000; // 5 mins
 
@@ -158,93 +118,56 @@ function handleAuthFailure() {
   }
 }
 
+const responseVersions = new WeakMap<Response, number>();
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
   let token = await ensureValidAccessToken();
-  const headers: any = {
-    'Content-Type': 'application/json',
-    ...options.headers
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  let res = await fetch(url, { credentials: 'include', ...options, headers });
-
-  if (res.status === 401) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      headers['Authorization'] = `Bearer ${newToken}`;
-      res = await fetch(url, { credentials: 'include', ...options, headers });
-    } else {
-      handleAuthFailure();
+  if (!token) throw new Error('AUTH_REQUIRED');
+  let version = getSessionVersion();
+  const isProfile = String(url) === `${API_BASE}/auth/me`;
+  if (!isProfile && !isSessionVerified()) throw new Error('SESSION_NOT_VERIFIED');
+  const headers = new Headers(options.headers);
+  if (!(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  headers.set('Authorization', `Bearer ${token}`);
+  const signal = options.signal || AbortSignal.timeout(15000);
+  let response = await fetch(url, { ...options, cache: 'no-store', signal, credentials: 'include', headers });
+  if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
+  if (response.status === 401) {
+    const nextToken = await refreshAccessToken();
+    if (!nextToken) {
+      if (version === getSessionVersion()) handleAuthFailure();
+      throw new Error('AUTH_REQUIRED');
     }
+    version = getSessionVersion();
+    headers.set('Authorization', `Bearer ${nextToken}`);
+    response = await fetch(url, { ...options, cache: 'no-store', signal, credentials: 'include', headers });
   }
-
-  return res;
+  if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
+  if (response.status === 401) { handleAuthFailure(); throw new Error('AUTH_REQUIRED'); }
+  responseVersions.set(response, version);
+  return response;
 };
 
 async function request(endpoint: string, options: RequestInit = {}) {
-  const url = `${API_BASE}${endpoint}`;
-  let token = await ensureValidAccessToken();
-
-  const headers: any = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  const response = await fetchWithAuth(`${API_BASE}${endpoint}`, options);
+  const version = responseVersions.get(response);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'API request failed');
   }
+  if (response.status === 204) return null;
+  const text = await response.text();
+  if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
+  if (!text.trim()) return null;
+  return JSON.parse(text);
+}
 
-  const config: RequestInit = {
-    credentials: 'include',
-    headers,
-    ...options,
-  };
-
-  try {
-    let res = await fetch(url, config);
-
-    if (res.status === 401) {
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        headers['Authorization'] = `Bearer ${newToken}`;
-        res = await fetch(url, config);
-      } else {
-        handleAuthFailure();
-        throw new Error('Unauthorized');
-      }
-    }
-
-    if (res.status === 401) {
-      handleAuthFailure();
-      throw new Error('Unauthorized');
-    }
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: res.statusText }));
-      throw new Error(err.message || 'API request failed');
-    }
-
-    if (res.status === 204) {
-      return null;
-    }
-
-    const text = await res.text();
-    if (!text || !text.trim()) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
-  } catch (error) {
-    console.error(`API Error on ${endpoint}:`, error);
-    throw error;
-  }
+if (typeof window !== 'undefined') {
+  window.addEventListener(AUTH_CHANGED_EVENT, () => {
+    invalidateMeCache();
+    catalogCache.invalidate('all');
+    if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
+    refreshPromise = null;
+  });
 }
 
 function toQueryString(params?: Record<string, any>): string {
@@ -538,23 +461,18 @@ export const api = {
   deleteAttachment: (id: string) =>
     request(`/attachments/${id}`, { method: 'DELETE' }),
   uploadAttachment: async (formData: FormData) => {
-    const token = await ensureValidAccessToken();
-    const headers: any = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    return fetch(`${API_BASE}/attachments`, {
+    return fetchWithAuth(`${API_BASE}/attachments`, {
       method: 'POST',
-      credentials: 'include',
-      headers,
       body: formData,
     }).then(async (res) => {
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: res.statusText }));
         throw new Error(err.message || 'Upload failed');
       }
-      return res.json();
+      const version = responseVersions.get(res);
+      const data = await res.json();
+      if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
+      return data;
     });
   },
 
@@ -571,23 +489,21 @@ export const api = {
     request(`/checklist-executions/${executionId}/complete`, { method: 'POST', body: JSON.stringify(body) }),
   cancelChecklistExecution: (executionId: string, body: any) =>
     request(`/checklist-executions/${executionId}/cancel`, { method: 'POST', body: JSON.stringify(body) }),
-  getMe: async () => {
-    if (cachedMeData && Date.now() - cachedMeTimestamp < ME_CACHE_TTL_MS) {
-      return cachedMeData;
-    }
-    if (inFlightMePromise) {
-      return inFlightMePromise;
-    }
-    inFlightMePromise = request('/auth/me')
-      .then((res) => {
-        cachedMeData = res;
-        cachedMeTimestamp = Date.now();
-        return res;
-      })
-      .finally(() => {
-        inFlightMePromise = null;
-      });
-    return inFlightMePromise;
+  getMe: async (force = false) => {
+    await ensureValidAccessToken();
+    const version = getSessionVersion();
+    if (force) invalidateMeCache();
+    if (cachedMeData && cachedMeVersion === version && Date.now() - cachedMeTimestamp < ME_CACHE_TTL_MS) return cachedMeData;
+    if (inFlightMePromise && cachedMeVersion === version) return inFlightMePromise;
+    cachedMeVersion = version;
+    const pending = request('/auth/me').then(res => {
+      if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
+      cachedMeData = res;
+      cachedMeTimestamp = Date.now();
+      return res;
+    });
+    inFlightMePromise = pending;
+    try { return await pending; } finally { if (inFlightMePromise === pending) inFlightMePromise = null; }
   },
   getNotifications: () => request('/notifications'),
   markNotificationRead: (id: string) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
@@ -713,6 +629,7 @@ export const api = {
     catalogCache.invalidate('departments');
     return result;
   },
+  getUserIdentityAudit: () => request('/users/identity-audit'),
 
   // ==========================================
   // CHECKLIST TEMPLATES & LIBRARY
