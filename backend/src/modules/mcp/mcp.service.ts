@@ -1,3 +1,4 @@
+import { scopedReader } from '../../common/auth/scoped-reader';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -7,7 +8,8 @@ import { z } from 'zod';
 export class McpService {
   constructor(private readonly prisma: PrismaService) {}
 
-  public createServerInstance(): McpServer {
+  public createServerInstance(actor: any): McpServer {
+    const db = scopedReader(this.prisma, actor);
     const server = new McpServer({
       name: 'cmms-native-mcp-v2',
       version: '2.0.0',
@@ -70,7 +72,7 @@ export class McpService {
         }
 
         // Lấy danh sách sự cố từ MaintenanceRequest
-        const requests = await this.prisma.maintenanceRequest.findMany({
+        const requests = await db.maintenanceRequest.findMany({
           where: whereRequest,
           take: limit || 30,
           orderBy: { createdAt: 'desc' },
@@ -80,7 +82,7 @@ export class McpService {
         });
 
         // Lấy thêm các phiếu WorkOrder phát sinh dạng sự cố khẩn cấp
-        const workOrders = await this.prisma.workOrder.findMany({
+        const workOrders = await db.workOrder.findMany({
           where: {
             createdAt: { gte: start, lte: end },
             ...(priority && priority !== 'ALL' ? { priority } : {}),
@@ -188,7 +190,7 @@ export class McpService {
           ];
         }
 
-        const requests = await this.prisma.maintenanceRequest.findMany({
+        const requests = await db.maintenanceRequest.findMany({
           where: whereRequest,
           take: limit || 30,
           orderBy: { createdAt: 'desc' },
@@ -197,7 +199,7 @@ export class McpService {
           },
         });
 
-        const workOrders = await this.prisma.workOrder.findMany({
+        const workOrders = await db.workOrder.findMany({
           where: {
             createdAt: { gte: start, lte: end },
             ...(priority && priority !== 'ALL' ? { priority } : {}),
@@ -283,7 +285,7 @@ export class McpService {
           where.status = status;
         }
 
-        const items = await this.prisma.equipment.findMany({
+        const items = await db.equipment.findMany({
           where,
           take: limit || 20,
           orderBy: { updatedAt: 'desc' },
@@ -316,7 +318,7 @@ export class McpService {
         equipmentCodeOrId: z.string().describe('Mã máy (VD: EQ-0001) hoặc UUID của thiết bị'),
       },
       async ({ equipmentCodeOrId }) => {
-        const eq = await this.prisma.equipment.findFirst({
+        const eq = await db.equipment.findFirst({
           where: {
             OR: [{ id: equipmentCodeOrId }, { code: equipmentCodeOrId }, { oldCode: equipmentCodeOrId }],
           },
@@ -364,7 +366,7 @@ export class McpService {
           where.priority = priority;
         }
 
-        const items = await this.prisma.workOrder.findMany({
+        const items = await db.workOrder.findMany({
           where,
           take: limit || 20,
           orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
@@ -407,7 +409,7 @@ export class McpService {
       'Cảnh báo các vật tư/phụ tùng trong kho đang thiếu hụt (tồn kho <= tồn kho an toàn minQuantity).',
       {},
       async () => {
-        const items = await this.prisma.inventoryItem.findMany({
+        const items = await db.inventoryItem.findMany({
           where: { isActive: true },
         });
 
@@ -448,13 +450,13 @@ export class McpService {
       {},
       async () => {
         const [totalEquipments, operationalEquipments, totalWorkOrders, completedWorkOrders] = await Promise.all([
-          this.prisma.equipment.count({ where: { isActive: true } }),
-          this.prisma.equipment.count({ where: { isActive: true, status: 'OPERATIONAL' } }),
-          this.prisma.workOrder.count(),
-          this.prisma.workOrder.count({ where: { status: { in: ['COMPLETED', 'VERIFIED', 'CLOSED'] } } }),
+          db.equipment.count({ where: { isActive: true } }),
+          db.equipment.count({ where: { isActive: true, status: 'OPERATIONAL' } }),
+          db.workOrder.count(),
+          db.workOrder.count({ where: { status: { in: ['COMPLETED', 'VERIFIED', 'CLOSED'] } } }),
         ]);
 
-        const costAgg = await this.prisma.workOrder.aggregate({
+        const costAgg = await db.workOrder.aggregate({
           _sum: { totalCost: true, actualHours: true },
         });
 
@@ -495,7 +497,7 @@ export class McpService {
         limit: z.number().optional().default(20),
       },
       async ({ keyword, limit }) => {
-        const items = await this.prisma.inventoryItem.findMany({
+        const items = await db.inventoryItem.findMany({
           where: {
             isActive: true,
             OR: [{ itemCode: { contains: keyword } }, { name: { contains: keyword } }],
@@ -522,7 +524,7 @@ export class McpService {
         const target = new Date();
         target.setDate(target.getDate() + (daysAhead || 30));
 
-        const schedules = await this.prisma.maintenanceSchedule.findMany({
+        const schedules = await db.maintenanceSchedule.findMany({
           where: {
             status: 'ACTIVE',
             nextDueDate: { lte: target },
@@ -562,7 +564,7 @@ export class McpService {
         }
 
         try {
-          const data: any = await this.prisma.$queryRawUnsafe(query);
+          const data: any = await db.$queryRawUnsafe(query);
           return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
         } catch (err: any) {
           return { content: [{ type: 'text' as const, text: `Lỗi SQL: ${err.message}` }] };

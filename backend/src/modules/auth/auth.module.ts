@@ -1,11 +1,15 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt.strategy';
 import { HrmIdentityService } from './hrm-identity.service';
+import { ResourceAccessService } from '../../common/auth/resource-access.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { hrmApplicationConfig } from './hrm-application.config';
+import { BrowserSessionService, browserSessionKey } from './browser-session.service';
 
+@Global()
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
@@ -13,8 +17,8 @@ import { PrismaModule } from '../../prisma/prisma.module';
     PrismaModule,
   ],
   controllers: [AuthController],
-  providers: [JwtStrategy, HrmIdentityService],
-  exports: [PassportModule, HrmIdentityService],
+  providers: [JwtStrategy, HrmIdentityService, ResourceAccessService, BrowserSessionService],
+  exports: [PassportModule, HrmIdentityService, ResourceAccessService],
 })
 export class AuthModule {
   constructor(private configService: ConfigService) {
@@ -31,6 +35,10 @@ export class AuthModule {
         this.configService.get<string>('KEYCLOAK_AUDIENCE');
 
       const hasHrmJwt = Boolean(hrmJwtSecret);
+      if (hasHrmJwt) {
+        hrmApplicationConfig(this.configService);
+        browserSessionKey(this.configService);
+      }
       const hasKeycloak = Boolean(jwksUri && issuer && audience);
 
       // Backend chỉ dừng nếu cả HRM JWT và Keycloak đều chưa được cấu hình

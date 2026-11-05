@@ -27,7 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   private readonly hrmMode: boolean;
 
   public static invalidateCache(_userIdOrSub?: string) {
-    HrmIdentityService.invalidateCache();
+    // Local permissions/status are read on every request. They do not invalidate HRM identity caches.
   }
 
   constructor(configService: ConfigService, private prisma: PrismaService, private identities: HrmIdentityService) {
@@ -89,7 +89,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       if (!token) throw new UnauthorizedException('Thiếu phiên đăng nhập.');
       // /users/me resolves the HRM primary key; token sub may be an employee code.
       const force = /\/auth\/(me|session)(?:\?|$)/.test(req.originalUrl || req.url || '');
-      const profile = await this.identities.getProfile(token, force);
+      const profile = await this.identities.validateSession(token, force);
       verifiedProfile = profile;
       dbUser = await this.identities.resolve(profile);
       identity = { provider: 'hrm', subject: String(profile.id) };
@@ -101,16 +101,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       if (!dbUser || dbUser.dataSource === 'HRM') throw new UnauthorizedException('Tài khoản Keycloak chưa được liên kết với QLTB.');
       identity = { provider: payload.iss, subject };
     }
-    if (!dbUser.isActive) throw new UnauthorizedException('Tài khoản QLTB đã ngừng hoạt động.');
+    if (!dbUser.isActive || dbUser.accessBlocked || dbUser.mergedIntoId) throw new UnauthorizedException('Tài khoản QLTB đã ngừng hoạt động.');
     return {
       id: dbUser.id, email: verifiedProfile?.email || dbUser.email, name: verifiedProfile?.name || dbUser.name, hrmId: dbUser.hrmId,
       avatar: verifiedProfile ? (verifiedProfile.avatar || null) : dbUser.avatar,
       position: verifiedProfile?.position || dbUser.specialty,
-      role: dbUser.role, roles: [dbUser.role, dbUser.customRole?.name].filter(Boolean),
+      role: dbUser.customRole?.isActive === false ? 'USER' : dbUser.role,
+      roles: dbUser.customRole?.isActive === false ? ['USER'] : [dbUser.role, dbUser.customRole?.name].filter(Boolean),
       scope: payload.scope || '', department: dbUser.department,
+      isActive: dbUser.isActive, accessBlocked: dbUser.accessBlocked || false,
       managedDepartments: dbUser.managedDepartments || null,
       roleId: dbUser.roleId || null, customRole: dbUser.customRole || null,
       customPermissions: dbUser.customPermissions || null, identity,
+      localUser: dbUser,
     };
   }
 }

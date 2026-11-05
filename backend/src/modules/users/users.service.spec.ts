@@ -141,7 +141,7 @@ describe('UsersService HRM synchronization', () => {
 
     expect(result.deactivatedCount).toBe(1);
     expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: '1' },
+      where: { id: '1', mergedIntoId: null },
       data: expect.objectContaining({
         hrmId: '1',
         dataSource: 'HRM',
@@ -152,11 +152,12 @@ describe('UsersService HRM synchronization', () => {
     expect(prisma.user.updateMany).toHaveBeenLastCalledWith({
       where: {
         dataSource: 'HRM',
-        isActive: true,
         hrmId: { not: null, notIn: ['1'] },
+        OR: [{ isActive: true }, { hrmIsActive: true }, { hrmIsActive: null }],
       },
       data: {
         isActive: false,
+        hrmIsActive: false,
         version: { increment: 1 },
       },
     });
@@ -182,6 +183,44 @@ describe('UsersService HRM synchronization', () => {
     expect(prisma.user.delete).not.toHaveBeenCalled();
     expect(prisma.user.deleteMany).not.toHaveBeenCalled();
     expect(prisma.user.updateMany.mock.calls[0][0].where.hrmId.notIn).toEqual(['B']);
+  });
+
+  it('preserves a local block when HRM still reports an active employee', async () => {
+    process.env.HRM_API_URL = 'https://hrm.example.test';
+    const user = { id: 'local', hrmId: 'external', email: 'test@example.test', name: 'Test', isActive: false, accessBlocked: true };
+    const prisma: any = { user: {
+      findMany: jest.fn().mockResolvedValue([user]),
+      update: jest.fn().mockImplementation(async ({ data }: any) => ({ ...user, ...data })),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn(),
+    }, role: { findFirst: jest.fn().mockResolvedValue(null) } };
+    const service = new UsersService(prisma);
+    jest.spyOn(service as any, 'fetchHrmUsersSnapshot').mockResolvedValue([{ id: 'external', email: user.email, status: 'ACTIVE' }]);
+    jest.spyOn(service as any, 'fetchHrmDepartmentsSnapshot').mockResolvedValue([]);
+    await service.syncHrmUsers('token');
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: user.id, mergedIntoId: null }, data: expect.objectContaining({ isActive: false, hrmIsActive: true }),
+    }));
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it('disables an account without transferring authorship or deleting its identity', async () => {
+    const prisma: any = { user: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'old', name: 'Same Name' }),
+      update: jest.fn().mockResolvedValue({ id: 'old', isActive: false }), delete: jest.fn(), findFirst: jest.fn(),
+    } };
+    await new UsersService(prisma).deleteUser('old');
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'old' }, data: { isActive: false, accessBlocked: true, version: { increment: 1 } } });
+    expect(prisma.user.findFirst).not.toHaveBeenCalled();
+    expect(prisma.user.delete).not.toHaveBeenCalled();
+  });
+
+  it('does not allow a merged account to be edited or unlocked again', async () => {
+    const prisma: any = { user: { findUnique: jest.fn().mockResolvedValue({ id: 'source', mergedIntoId: 'target' }), update: jest.fn() } };
+    const service = new UsersService(prisma);
+    await expect(service.updateUser('source', { isActive: true })).rejects.toMatchObject({ status: 409 });
+    await expect(service.updateRole('source', null)).rejects.toMatchObject({ status: 409 });
+    await expect(service.updateCustomPermissions('source', ['*'])).rejects.toMatchObject({ status: 409 });
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it('duplicate cleanup produces a read-only report even for equal names', async () => {

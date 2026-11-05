@@ -8,7 +8,7 @@ import { analyticsToolDefinitions } from './tools/analytics.js';
 import { checklistToolDefinitions } from './tools/checklists.js';
 import { prisma } from './db.js';
 
-export function createMcpServer(): McpServer {
+export function createMcpServer(authorize?: () => Promise<any>): McpServer {
   const server = new McpServer({
     name: process.env.MCP_SERVER_NAME || 'cmms-mcp-server',
     version: process.env.MCP_SERVER_VERSION || '1.0.0',
@@ -33,6 +33,9 @@ export function createMcpServer(): McpServer {
       shape,
       async (args: any) => {
         try {
+          const user = authorize ? await authorize() : null;
+          // This legacy server includes unrestricted SQL tools. Only centrally authorized administrators may use it.
+          if (!user?.permissions?.includes('ALL')) throw new Error('Administrator access is required on the legacy MCP server. Use native QLTB MCP for scoped access.');
           const result = await toolDef.handler(args);
           return {
             content: [

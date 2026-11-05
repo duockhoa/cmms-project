@@ -6,22 +6,30 @@ import { CustomLogger } from './common/logger/custom.logger';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as compression from 'compression';
 import { SanitizeResponseInterceptor } from './common/interceptors/sanitize-response.interceptor';
+import { browserOrigin, allowedBrowserOrigins } from './common/auth/browser-origin';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new CustomLogger(),
   });
   const configService = app.get(ConfigService);
+  const trustedProxy = configService.get<string>('TRUST_PROXY');
+  if (trustedProxy) app.getHttpAdapter().getInstance().set('trust proxy', trustedProxy.split(',').map(value => value.trim()));
 
   // Enable HTTP response compression (Gzip/Deflate) to minimize payload transfer size
   app.use(compression());
 
-  // Allow requests from every origin. Using `true` reflects the requesting
-  // origin, which remains compatible with credentialed browser requests.
   app.enableCors({
-    origin: true,
+    origin: browserOrigin,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+  });
+  // CORS controls response visibility; also reject browser writes from other origins.
+  app.use((req: any, res: any, next: any) => {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers.origin && !allowedBrowserOrigins().has(req.headers.origin)) {
+      return res.status(403).json({ message: 'Browser origin is not allowed.' });
+    }
+    next();
   });
 
   // Global validation pipe

@@ -211,6 +211,9 @@ export class UsersService {
         avatar: true,
         isActive: true,
         createdAt: true,
+        hrmId: true,
+        mergedIntoId: true,
+        mergedAt: true,
         roleId: isAdmin ? true : false,
         customRole: isAdmin
           ? {
@@ -288,6 +291,7 @@ export class UsersService {
         throw new NotFoundException(`Không tìm thấy nhân viên với ID: ${id}`);
       }
 
+      if (user.mergedIntoId) throw new ConflictException('Tài khoản đã gộp; hãy sửa tài khoản đích.');
       if (user.version !== dto.expectedVersion) {
         throw new ConflictException('Xung đột đồng thời: Dữ liệu nhân sự đã bị thay đổi bởi phiên làm việc khác.');
       }
@@ -297,7 +301,8 @@ export class UsersService {
         updateData.specialty = dto.specialty;
       }
       if (dto.isActive !== undefined) {
-        updateData.isActive = dto.isActive;
+        updateData.accessBlocked = !dto.isActive;
+        updateData.isActive = dto.isActive && user.hrmIsActive !== false;
       }
 
       return tx.user.update({
@@ -319,6 +324,7 @@ export class UsersService {
         throw new NotFoundException(`Không tìm thấy nhân viên với ID: ${id}`);
       }
 
+      if (user.mergedIntoId) throw new ConflictException('Tài khoản đã gộp; hãy sửa tài khoản đích.');
       if (user.version !== dto.expectedVersion) {
         throw new ConflictException('Xung đột đồng thời: Dữ liệu trạng thái nhân sự đã bị thay đổi bởi phiên làm việc khác.');
       }
@@ -339,25 +345,21 @@ export class UsersService {
       throw new NotFoundException(`Không tìm thấy nhân viên với ID: ${id}`);
     }
 
-    let roleString = user.role;
+    if (user.mergedIntoId) throw new ConflictException('Tài khoản đã gộp; hãy sửa tài khoản đích.');
+    let roleString = 'USER';
     if (roleId) {
       const targetRole = await this.prisma.role.findUnique({ where: { id: roleId } });
-      if (targetRole) {
-        const lowerName = targetRole.name.toLowerCase();
-        if (lowerName.includes('quản lý') || lowerName.includes('manager')) {
-          roleString = 'MANAGER';
-        } else if (lowerName.includes('kỹ thuật') || lowerName.includes('technician')) {
-          roleString = 'TECHNICIAN';
-        } else if (lowerName.includes('quản trị') || lowerName.includes('admin')) {
-          roleString = 'ADMIN';
-        } else if (lowerName.includes('người dùng') || lowerName.includes('user')) {
-          roleString = 'USER';
-        }
-      }
+      if (!targetRole || !targetRole.isActive) throw new ConflictException('Role is missing or disabled');
+      let permissions: string[] = [];
+      try { permissions = JSON.parse(targetRole.permissions || '[]'); } catch { /* Fail closed. */ }
+        if (!Array.isArray(permissions) || permissions.some(value => typeof value !== 'string')) throw new ConflictException('Role permissions must be an array of permission codes');
+      if (permissions.includes('*') || permissions.includes('ALL')) roleString = 'ADMIN';
+      else if (permissions.includes('requests:approve') || permissions.includes('work_orders:assign')) roleString = 'MANAGER';
+      else if (permissions.includes('work_orders:execute')) roleString = 'TECHNICIAN';
     }
 
     const updated = await this.prisma.user.update({
-      where: { id },
+      where: { id, mergedIntoId: null },
       data: {
         roleId,
         role: roleString,
@@ -375,8 +377,9 @@ export class UsersService {
       throw new NotFoundException(`Không tìm thấy nhân viên với ID: ${id}`);
     }
 
+    if (user.mergedIntoId) throw new ConflictException('Tài khoản đã gộp; hãy sửa tài khoản đích.');
     const updated = await this.prisma.user.update({
-      where: { id },
+      where: { id, mergedIntoId: null },
       data: {
         customPermissions: JSON.stringify(permissions || []),
         version: { increment: 1 },
@@ -402,6 +405,7 @@ export class UsersService {
         managedDepartments: depts.length > 0 ? JSON.stringify(depts) : null,
         specialty: data.specialty || null,
         isActive: data.isActive !== undefined ? data.isActive : true,
+        accessBlocked: data.isActive === false,
       },
       include: { customRole: true }
     });
@@ -413,6 +417,7 @@ export class UsersService {
       throw new NotFoundException(`Không tìm thấy người dùng với ID: ${id}`);
     }
 
+    if (user.mergedIntoId) throw new ConflictException('Tài khoản đã gộp; hãy sửa tài khoản đích.');
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.email !== undefined) updateData.email = data.email;
@@ -427,10 +432,10 @@ export class UsersService {
       updateData.managedDepartments = depts.length > 0 ? JSON.stringify(depts) : null;
     }
     if (data.specialty !== undefined) updateData.specialty = data.specialty;
-    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.isActive !== undefined) { updateData.accessBlocked = !data.isActive; updateData.isActive = data.isActive && user.hrmIsActive !== false; }
 
     const updated = await this.prisma.user.update({
-      where: { id },
+      where: { id, mergedIntoId: null },
       data: {
         ...updateData,
         version: { increment: 1 }
@@ -446,102 +451,8 @@ export class UsersService {
 
   async deleteUser(id: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) {
-      throw new NotFoundException(`Không tìm thấy người dùng với ID: ${id}`);
-    }
-
-    // Tìm xem có tài khoản khác cùng người (cùng tên hoặc cùng email/mã HRM) để gộp quan hệ sang không
-    const otherUser = await this.prisma.user.findFirst({
-      where: {
-        id: { not: id },
-        OR: [
-          { name: user.name },
-          ...(user.email ? [{ email: user.email }] : []),
-        ],
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    const targetUserId = otherUser ? otherUser.id : null;
-
-    return await this.prisma.$transaction(async (tx) => {
-      if (targetUserId) {
-        // Nếu có tài khoản tương ứng, chuyển toàn bộ quan hệ sang tài khoản đó rồi xóa tài khoản này
-        await tx.maintenanceRequest.updateMany({ where: { reporterId: id }, data: { reporterId: targetUserId } });
-        await tx.maintenanceRequest.updateMany({ where: { cancelledById: id }, data: { cancelledById: targetUserId } });
-        await tx.operationLog.updateMany({ where: { recordedById: id }, data: { recordedById: targetUserId } });
-        await tx.operationLog.updateMany({ where: { voidedById: id }, data: { voidedById: targetUserId } });
-        await tx.utilityReading.updateMany({ where: { recordedById: id }, data: { recordedById: targetUserId } });
-        await tx.utilitySystemStatusLog.updateMany({ where: { recordedById: id }, data: { recordedById: targetUserId } });
-        await tx.workOrder.updateMany({ where: { assignedTechnicianId: id }, data: { assignedTechnicianId: targetUserId } });
-        await tx.workOrder.updateMany({ where: { watcherId: id }, data: { watcherId: targetUserId } });
-        await tx.workOrder.updateMany({ where: { classificationReporterId: id }, data: { classificationReporterId: targetUserId } });
-        await tx.workOrderExecutionLog.updateMany({ where: { performedById: id }, data: { performedById: targetUserId } });
-        await tx.checklistExecution.updateMany({ where: { executedById: id }, data: { executedById: targetUserId } });
-        await tx.checklistExecution.updateMany({ where: { cancelledById: id }, data: { cancelledById: targetUserId } });
-        await tx.maintenanceSchedule.updateMany({ where: { createdById: id }, data: { createdById: targetUserId } });
-        await tx.maintenanceSchedule.updateMany({ where: { assignedTechnicianId: id }, data: { assignedTechnicianId: targetUserId } });
-        await tx.maintenanceSchedule.updateMany({ where: { pausedById: id }, data: { pausedById: targetUserId } });
-        await tx.maintenanceSchedule.updateMany({ where: { cancelledById: id }, data: { cancelledById: targetUserId } });
-        await tx.workflowHistory.updateMany({ where: { actedById: id }, data: { actedById: targetUserId } });
-        await tx.scheduleHistory.updateMany({ where: { actedById: id }, data: { actedById: targetUserId } });
-        await tx.inventoryTransaction.updateMany({ where: { actedById: id }, data: { actedById: targetUserId } });
-        await tx.location.updateMany({ where: { responsibleTechId: id }, data: { responsibleTechId: targetUserId } });
-        await tx.attachment.updateMany({ where: { uploadedById: id }, data: { uploadedById: targetUserId } });
-        await tx.notification.updateMany({ where: { userId: id }, data: { userId: targetUserId } });
-
-        // Đổi email tạm để tránh xung đột duy nhất trước khi xóa
-        await tx.user.update({
-          where: { id },
-          data: { email: `del_${id}_${Date.now()}@temp.merge` },
-        });
-
-        return tx.user.delete({ where: { id } });
-      }
-
-      // Nếu không có tài khoản trùng, kiểm tra xem có lịch sử kiểm toán bắt buộc không (onDelete: Restrict)
-      const [opCount, utCount, usCount, schedCount, execCount, chkCount] = await Promise.all([
-        tx.operationLog.count({ where: { recordedById: id } }),
-        tx.utilityReading.count({ where: { recordedById: id } }),
-        tx.utilitySystemStatusLog.count({ where: { recordedById: id } }),
-        tx.maintenanceSchedule.count({ where: { createdById: id } }),
-        tx.workOrderExecutionLog.count({ where: { performedById: id } }),
-        tx.checklistExecution.count({ where: { executedById: id } }),
-      ]);
-
-      const hasRestrictedHistory = (opCount + utCount + usCount + schedCount + execCount + chkCount) > 0;
-
-      if (hasRestrictedHistory) {
-        // Soft delete: Vô hiệu hóa tài khoản và giải phóng email để tài khoản biến mất khỏi danh sách
-        return tx.user.update({
-          where: { id },
-          data: {
-            isActive: false,
-            email: `deleted_${id}_${Date.now()}@deleted.local`,
-          },
-        });
-      }
-
-      // Xóa quan hệ nullable
-      await tx.maintenanceRequest.updateMany({ where: { reporterId: id }, data: { reporterId: null } });
-      await tx.maintenanceRequest.updateMany({ where: { cancelledById: id }, data: { cancelledById: null } });
-      await tx.operationLog.updateMany({ where: { voidedById: id }, data: { voidedById: null } });
-      await tx.workOrder.updateMany({ where: { assignedTechnicianId: id }, data: { assignedTechnicianId: null } });
-      await tx.workOrder.updateMany({ where: { watcherId: id }, data: { watcherId: null } });
-      await tx.workOrder.updateMany({ where: { classificationReporterId: id }, data: { classificationReporterId: null } });
-      await tx.checklistExecution.updateMany({ where: { cancelledById: id }, data: { cancelledById: null } });
-      await tx.maintenanceSchedule.updateMany({ where: { assignedTechnicianId: id }, data: { assignedTechnicianId: null } });
-      await tx.maintenanceSchedule.updateMany({ where: { pausedById: id }, data: { pausedById: null } });
-      await tx.maintenanceSchedule.updateMany({ where: { cancelledById: id }, data: { cancelledById: null } });
-      await tx.workflowHistory.updateMany({ where: { actedById: id }, data: { actedById: null } });
-      await tx.scheduleHistory.updateMany({ where: { actedById: id }, data: { actedById: null } });
-      await tx.inventoryTransaction.updateMany({ where: { actedById: id }, data: { actedById: null } });
-      await tx.location.updateMany({ where: { responsibleTechId: id }, data: { responsibleTechId: null } });
-      await tx.attachment.updateMany({ where: { uploadedById: id }, data: { uploadedById: null } });
-      await tx.notification.deleteMany({ where: { userId: id } });
-
-      return tx.user.delete({ where: { id } });
-    });
+    if (!user) throw new NotFoundException('User not found');
+    return this.prisma.user.update({ where: { id }, data: { isActive: false, accessBlocked: true, version: { increment: 1 } } });
   }
 
   async syncHrmUsers(accessToken: string) {
@@ -655,12 +566,12 @@ export class UsersService {
           department: hrmUser.department || null,
           managedDepartments: resolvedDepts.length ? JSON.stringify(resolvedDepts) : null,
           specialty: hrmUser.position || undefined, avatar: hrmUser.avatar || undefined,
-          isActive: isHrmProfileActive(hrmUser), hrmId, dataSource: 'HRM', lastHrmSyncedAt: syncStartedAt,
+          isActive: isHrmProfileActive(hrmUser) && !existing?.accessBlocked, hrmIsActive: isHrmProfileActive(hrmUser), hrmId, dataSource: 'HRM', lastHrmSyncedAt: syncStartedAt,
         };
         if (hrmUser.email?.includes('@')) data.email = hrmUser.email;
         if (existing) {
           // Keep ids, permissions, assignments and historical authors unchanged.
-          const updated = await this.prisma.user.update({ where: { id: existing.id }, data });
+          const updated = await this.prisma.user.update({ where: { id: existing.id, mergedIntoId: null }, data });
           Object.assign(existing, updated);
           updatedCount++;
         } else {
@@ -677,8 +588,11 @@ export class UsersService {
       }
       // Present but conflicting entries are never deactivated as a side effect.
       const deactivatedResult = await this.prisma.user.updateMany({
-        where: { dataSource: 'HRM', isActive: true, hrmId: { not: null, notIn: ids } },
-        data: { isActive: false, version: { increment: 1 } },
+        where: {
+          dataSource: 'HRM', hrmId: { not: null, notIn: ids },
+          OR: [{ isActive: true }, { hrmIsActive: true }, { hrmIsActive: null }],
+        },
+        data: { isActive: false, hrmIsActive: false, version: { increment: 1 } },
       });
       JwtStrategy.invalidateCache();
       return {
@@ -695,7 +609,7 @@ export class UsersService {
   /** Read-only reconciliation: never merge users or rewrite historical authors. */
   async auditHrmIdentities() {
     const users = await this.prisma.user.findMany({
-      select: { id: true, hrmId: true, email: true, name: true, dataSource: true, isActive: true },
+      select: { id: true, hrmId: true, email: true, name: true, dataSource: true, isActive: true, mergedIntoId: true },
       orderBy: { id: 'asc' },
     });
     return buildIdentityAudit(users);

@@ -47,6 +47,12 @@ model User {
   managedDepartments    String?                  @db.Text // JSON array hoặc danh sách các bộ phận quản lý kiêm nhiệm (đồng bộ từ HRM team_lead hoặc gán thêm)
   avatar                String?
   isActive              Boolean                  @default(true)
+  accessBlocked         Boolean                  @default(false)
+  hrmIsActive           Boolean?
+  mergedIntoId          String?
+  mergedAt              DateTime?
+  mergedInto            User?                    @relation("MergedUserAliases", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedAliases         User[]                   @relation("MergedUserAliases")
   hrmId                 String?                  @unique
   dataSource            UserDataSource           @default(LOCAL)
   lastHrmSyncedAt       DateTime?
@@ -90,6 +96,48 @@ model User {
   @@index([name])
   @@index([role])
   @@index([dataSource, isActive])
+  @@index([mergedIntoId])
+}
+
+model UserMergePreview {
+  id           String    @id @default(uuid())
+  sourceUserId String
+  targetUserId String
+  actorUserId  String
+  fingerprint  String    @db.VarChar(64)
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model UserMergeAudit {
+  id             String   @id @default(uuid())
+  previewId      String   @unique
+  sourceUserId   String
+  targetUserId   String
+  actorUserId    String
+  reason         String   @db.Text
+  evidence       String   @db.Text
+  sourceSnapshot Json
+  targetSnapshot Json
+  changes        Json
+  createdAt      DateTime @default(now())
+
+  @@index([sourceUserId])
+  @@index([targetUserId, createdAt])
+}
+
+model BrowserSession {
+  id           String   @id @db.VarChar(64)
+  hrmId        String
+  refreshToken String   @db.Text
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([expiresAt])
 }
 
 model Role {

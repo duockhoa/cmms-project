@@ -1,5 +1,6 @@
 /** HRM identity is an exact external key. Names and employee codes are not keys. */
 export function selectHrmIdentity(users: any[], profile: { id: string | number; email?: string; username?: string }) {
+  users = users.filter(user => !user.mergedIntoId);
   const hrmId = String(profile.id);
   const email = profile.email?.trim().toLowerCase();
   const legacyEmails = new Set([
@@ -11,14 +12,12 @@ export function selectHrmIdentity(users: any[], profile: { id: string | number; 
   const candidates = users.filter(user =>
     user.hrmId === hrmId || user.id === hrmId || legacyEmails.has(user.email?.toLowerCase()),
   );
-  const emailMismatch = linked.length === 1 && email && linked[0].email?.includes('@') &&
-    !linked[0].email.endsWith('@local.hrm') && linked[0].email.trim().toLowerCase() !== email;
   // A verified external link has priority over legacy local ids and dummy employee-code
   // emails. Those belong to different namespaces and cannot override an established link.
   const emailConflict = linked.length === 1 && email && users.some(user =>
     user.id !== linked[0].id && user.email?.trim().toLowerCase() === email,
   );
-  if (linked.length === 1 && !emailMismatch && !emailConflict) {
+  if (linked.length === 1 && !emailConflict) {
     return { user: linked[0], reason: null, candidates: [linked[0]] };
   }
   return {
@@ -31,11 +30,14 @@ export function selectHrmIdentity(users: any[], profile: { id: string | number; 
 export function isHrmProfileActive(profile: any): boolean {
   const inactive = (process.env.HRM_INACTIVE_STATUSES || 'INACTIVE,BANNED,DISABLED,TERMINATED,0')
     .split(',').map(value => value.trim().toUpperCase());
-  return profile.isActive !== false && profile.is_active !== false && !profile.deleted_at &&
-    !inactive.includes(String(profile.status ?? '').toUpperCase());
+  const status = String(profile.status ?? '').trim().toUpperCase();
+  const active = (process.env.HRM_ACTIVE_STATUSES || 'ACTIVE,1').split(',').map(value => value.trim().toUpperCase());
+  return profile.isActive !== false && profile.is_active !== false && profile.is_active !== 0 && !profile.deleted_at &&
+    !inactive.includes(status) && (status ? active.includes(status) : profile.isActive === true || profile.is_active === true || profile.is_active === 1);
 }
 
 export function buildIdentityAudit(users: any[]) {
+  users = users.filter(user => !user.mergedIntoId);
   const issues: { code: string; userIds: string[] }[] = [];
   const names = new Map<string, string[]>();
   const ids = new Map(users.map(user => [user.id, user]));

@@ -1,6 +1,6 @@
 import {
   getAccessToken,
-  getRefreshToken,
+  hasRefreshSession, markCookieSession, takeHandoffRefreshToken,
   saveAuthTokens,
   clearAuthTokens,
   getRawAccessToken,
@@ -11,6 +11,51 @@ import { catalogCache } from './catalogCache';
 
 export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_BASE = API_HOST + '/api/v1';
+let cookieSession: { csrfToken: string; hrmId: string } | null = null;
+
+async function getCookieSession(expectedHrmId?: string) {
+  if (!cookieSession || cookieSession.hrmId !== expectedHrmId) {
+    const response = await fetch(`${API_BASE}/auth/session`, { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error('AUTH_REQUIRED');
+    cookieSession = await response.json();
+  }
+  if (!cookieSession?.csrfToken || (expectedHrmId && cookieSession.hrmId !== expectedHrmId)) throw new Error('SESSION_CHANGED');
+  return cookieSession;
+}
+
+export async function restoreBrowserSession(): Promise<string | null> {
+  const version = getSessionVersion();
+  try {
+    if (getRawAccessToken() && !getVerifiedHrmId()) return null;
+    const session = await getCookieSession();
+    const response = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken },
+      body: JSON.stringify({ expectedHrmId: session.hrmId }), signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok || version !== getSessionVersion()) return null;
+    const data = await response.json();
+    if (version !== getSessionVersion()) return null;
+    saveAuthTokens(data.accessToken, null, session.hrmId);
+    markCookieSession(session.hrmId);
+    return data.accessToken;
+  } catch { return null; }
+}
+
+export async function logoutSession(): Promise<boolean> {
+  const version = getSessionVersion();
+  const expectedHrmId = getVerifiedHrmId();
+  try {
+    if (!expectedHrmId) return false;
+    const session = await getCookieSession(expectedHrmId);
+    if (version !== getSessionVersion()) return false;
+    const response = await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken },
+      body: JSON.stringify({ expectedHrmId }), signal: AbortSignal.timeout(20000),
+    });
+    return response.ok && (await response.json()).revoked === true;
+  } catch { return false; }
+  finally { if (version === getSessionVersion()) { cookieSession = null; clearAuthTokens(); invalidateMeCache(); } }
+}
 
 let refreshPromise: Promise<string | null> | null = null;
 let refreshVersion = -1;
@@ -19,17 +64,18 @@ let silentRefreshTimer: any = null;
 export async function refreshAccessToken(): Promise<string | null> {
   const version = getSessionVersion();
   if (refreshPromise && refreshVersion === version) return refreshPromise;
-  const refreshToken = getRefreshToken();
   const expectedHrmId = getVerifiedHrmId();
-  if (!refreshToken || !expectedHrmId) return null;
+  if (!hasRefreshSession() || !expectedHrmId) return null;
   const pending = (async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     try {
+      const session = await getCookieSession(expectedHrmId);
+      if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
       // The backend verifies that the refreshed access token still belongs to this HRM user.
       const response = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken, expectedHrmId }), signal: controller.signal,
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken },
+        body: JSON.stringify({ expectedHrmId }), signal: controller.signal,
       });
       if (getSessionVersion() !== version) throw new Error('SESSION_CHANGED');
       if (!response.ok) {
@@ -38,7 +84,8 @@ export async function refreshAccessToken(): Promise<string | null> {
       }
       const data = await response.json();
       if (getSessionVersion() !== version) throw new Error('SESSION_CHANGED');
-      saveAuthTokens(data.accessToken, data.refreshToken, expectedHrmId);
+      saveAuthTokens(data.accessToken, null, expectedHrmId);
+      markCookieSession(expectedHrmId);
       setupSilentRefresh();
       return data.accessToken;
     } catch {
@@ -56,7 +103,7 @@ export async function refreshAccessToken(): Promise<string | null> {
  */
 export async function ensureValidAccessToken(): Promise<string | null> {
   let token = getAccessToken();
-  if (!token && getRefreshToken()) {
+  if (!token && hasRefreshSession()) {
     token = await refreshAccessToken();
   }
   return token;
@@ -73,8 +120,7 @@ export function setupSilentRefresh() {
     silentRefreshTimer = null;
   }
 
-  const refreshToken = getRefreshToken();
-  if (!refreshToken || !getVerifiedHrmId()) return;
+  if (!hasRefreshSession() || !getVerifiedHrmId()) return;
 
   const rawToken = getRawAccessToken();
   if (!rawToken) {
@@ -163,6 +209,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
 
 if (typeof window !== 'undefined') {
   window.addEventListener(AUTH_CHANGED_EVENT, () => {
+    cookieSession = null;
     invalidateMeCache();
     catalogCache.invalidate('all');
     if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
@@ -496,8 +543,21 @@ export const api = {
     if (cachedMeData && cachedMeVersion === version && Date.now() - cachedMeTimestamp < ME_CACHE_TTL_MS) return cachedMeData;
     if (inFlightMePromise && cachedMeVersion === version) return inFlightMePromise;
     cachedMeVersion = version;
-    const pending = request('/auth/me').then(res => {
+    const pending = request('/auth/me').then(async res => {
       if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
+      const token = getRawAccessToken();
+      const handoff = token ? takeHandoffRefreshToken(token) : null;
+      if (handoff) {
+        const response = await fetch(`${API_BASE}/auth/session`, {
+          method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ refreshToken: handoff }), signal: AbortSignal.timeout(20000),
+        });
+        if (!response.ok || version !== getSessionVersion()) throw new Error('SSO_SESSION_IMPORT_FAILED');
+        const session = await response.json();
+        if (version !== getSessionVersion() || session.hrmId !== res.identity?.subject) throw new Error('SESSION_CHANGED');
+        cookieSession = session;
+        markCookieSession(session.hrmId);
+      }
       cachedMeData = res;
       cachedMeTimestamp = Date.now();
       return res;
@@ -630,6 +690,17 @@ export const api = {
     return result;
   },
   getUserIdentityAudit: () => request('/users/identity-audit'),
+  previewUserMerge: (sourceUserId: string, targetUserId: string) => request('/users/merge-preview', {
+    method: 'POST', body: JSON.stringify({ sourceUserId, targetUserId }), signal: AbortSignal.timeout(45000),
+  }),
+  confirmUserMerge: async (data: { previewId: string; reason: string; evidence: string; confirmed: boolean }) => {
+    const result = await request('/users/merge-confirm', { method: 'POST', body: JSON.stringify(data), signal: AbortSignal.timeout(60000) });
+    catalogCache.invalidate('users');
+    catalogCache.invalidate('departments');
+    return result;
+  },
+  getUserMergeHistory: (userId: string) => request(`/users/${encodeURIComponent(userId)}/merge-history`),
+  getUserMergeAudit: (auditId: string) => request(`/users/merge-audits/${encodeURIComponent(auditId)}`),
 
   // ==========================================
   // CHECKLIST TEMPLATES & LIBRARY

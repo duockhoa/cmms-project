@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><title>Auth tab observer</title></head>
+  <body>
+    <script type="module">
+      import * as auth from '../src/utils/authStorage.ts';
+      auth.startSessionMonitor();
+      window.authObserver = auth;
+    </script>
+  </body>
+</html>

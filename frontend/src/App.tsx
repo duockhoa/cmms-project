@@ -1,13 +1,13 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
 import { Navbar } from './components/layout/Navbar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ToastProvider } from './components/common/Toast';
-import { extractAndSaveTokensFromUrl, getAccessToken, getRefreshToken } from './utils/authStorage';
+import { extractAndSaveTokensFromUrl, getAccessToken, hasRefreshSession } from './utils/authStorage';
 import { usePermissions } from './hooks/usePermissions';
-import { clearAuthTokens, startSessionMonitor, getSessionError, subscribeSession } from './utils/authStorage';
+import { clearAuthTokens, startSessionMonitor, getSessionError, subscribePrincipal } from './utils/authStorage';
 import { ProtectedRoute, SmartHomeRoute } from './components/common/ProtectedRoute';
 import { SocketProvider } from './context/SocketContext';
 
@@ -77,15 +77,19 @@ const queryClient = new QueryClient({
 });
 
 // Guard: redirect to /login if not authenticated, with seamless token refresh fallback
-function RequireAuth({ children }: { children: React.ReactNode }) {
+export function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const { user, loading, error, sessionVersion, refreshPermissions } = usePermissions();
+  const { user, loading, checking, error, principalVersion, refreshPermissions } = usePermissions();
+  const mountedPrincipal = useRef<number | null>(null);
+  if (user && !loading && !error) mountedPrincipal.current = principalVersion;
   const token = getAccessToken();
-  const refreshToken = getRefreshToken();
-  if (!token && !refreshToken) {
+  const refreshable = hasRefreshSession();
+  if (!token && !refreshable) {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
-  if (loading) return <PageLoadingFallback />;
+  const retained = mountedPrincipal.current === principalVersion;
+  const content = retained ? <fieldset key={principalVersion} disabled={Boolean(checking || loading || error)} hidden={Boolean(loading || error)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>{children}</fieldset> : null;
+  if (loading) return <div>{content}<PageLoadingFallback /></div>;
   if (!user || error) {
     const messages: Record<string, string> = {
       AUTH_REQUIRED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
@@ -93,13 +97,13 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
       SSO_SESSION_CONFLICT: 'Các phiên đăng nhập đang mâu thuẫn. Vui lòng đăng nhập lại.',
       'Failed to fetch': 'Không kết nối được máy chủ. Vui lòng thử lại.',
     };
-    return <div role="alert" style={{ padding: 32, textAlign: 'center' }}>
+    return <div>{content}<div role="alert" style={{ padding: 32, textAlign: 'center' }}>
       <p>{messages[error || getSessionError() || ''] || error || 'Chưa xác minh được người dùng. Vui lòng thử lại.'}</p>
       <button onClick={() => { void refreshPermissions().catch(() => {}); }}>Kiểm tra lại</button>
       <button onClick={() => { clearAuthTokens(); window.location.href = '/login'; }}>Đăng nhập lại</button>
-    </div>;
+    </div></div>;
   }
-  return <React.Fragment key={sessionVersion}>{children}</React.Fragment>;
+  return <div>{content}</div>;
 }
 
 function AppLayout() {
@@ -170,7 +174,7 @@ export function App() {
   useEffect(() => {
     extractAndSaveTokensFromUrl();
     const stop = startSessionMonitor();
-    const unsubscribe = subscribeSession(() => queryClient.clear());
+    const unsubscribe = subscribePrincipal(() => queryClient.clear());
     return () => { stop(); unsubscribe(); };
   }, []);
   return (

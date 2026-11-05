@@ -62,8 +62,6 @@ describe('data scope helpers', () => {
       OR: [
         { equipment: { department: { in: ['PX1', 'PX3'] } } },
         { request: { department: { in: ['PX1', 'PX3'] } } },
-        { title: { contains: 'PX1' } },
-        { title: { contains: 'PX3' } },
         { assignedTechnician: { department: { in: ['PX1', 'PX3'] } } },
       ],
     });

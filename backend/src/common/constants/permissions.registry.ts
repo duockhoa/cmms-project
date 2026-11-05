@@ -413,6 +413,11 @@ export const PERMISSIONS_REGISTRY: ModulePermissions[] = [
         description: 'Xem, thêm, sửa, khóa tài khoản và đồng bộ nhân sự',
       },
       {
+        code: 'settings:merge_users',
+        name: 'Gộp tài khoản thủ công',
+        description: 'Xem trước, xác nhận gộp cùng người và tra cứu dấu vết chuyển liên kết',
+      },
+      {
         code: 'settings:roles',
         name: 'Quản lý Vai trò & Nhóm quyền',
         description: 'Cấu hình các vai trò (Roles) và ma trận phân quyền theo vai trò',
@@ -430,6 +435,16 @@ export const PERMISSIONS_REGISTRY: ModulePermissions[] = [
     ],
   },
 ];
+
+// Explicit destructive actions are separate from editing ordinary fields.
+for (const [moduleId, code, name] of [
+  ['inventory', 'inventory:delete', 'Xóa vật tư phụ tùng'],
+  ['schedules', 'schedules:cancel', 'Hủy kế hoạch bảo trì'],
+  ['schedules', 'schedules:delete', 'Xóa kế hoạch bảo trì'],
+  ['feedbacks', 'feedbacks:delete', 'Xóa góp ý báo lỗi'],
+]) {
+  PERMISSIONS_REGISTRY.find(module => module.id === moduleId)?.permissions.push({ code, name, description: name });
+}
 
 export const ALL_PERMISSION_CODES: string[] = PERMISSIONS_REGISTRY.flatMap((m) =>
   m.permissions.map((p) => p.code),

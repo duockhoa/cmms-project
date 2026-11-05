@@ -16,8 +16,8 @@ export class AnalyticsController {
   ) {}
 
   @Get('dashboard')
-  getDashboardSummary() {
-    return this.analyticsService.getDashboardSummary();
+  getDashboardSummary(@Req() req: any) {
+    return this.analyticsService.getDashboardSummary(req.user);
   }
 
   @Get('kpis')
@@ -28,7 +28,7 @@ export class AnalyticsController {
       throw new ForbiddenException('Xác thực thất bại: req.user không tồn tại hoặc không hợp lệ');
     }
     if (!user.role) {
-      user.role = (user.roles && user.roles[0]) || 'ADMIN';
+      user.role = (user.roles && user.roles[0]) || 'USER';
     }
 
     const correlationId = (req?.headers?.['x-correlation-id'] as string) || (query && query.correlationId) || `corr-${Date.now()}`;
@@ -48,7 +48,7 @@ export class AnalyticsController {
   }
 
   @Get('operation-logs-report')
-  getOperationLogsReport() {
-    return this.analyticsService.getOperationLogsReport();
+  getOperationLogsReport(@Req() req: any) {
+    return this.analyticsService.getOperationLogsReport(50, req.user);
   }
 }

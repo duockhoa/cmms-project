@@ -7,13 +7,26 @@ import { checkDbConnection } from './db.js';
 import { verifyAccessToken, authenticateWithApp, oauthCodes, oauthClients } from './auth.js';
 
 const app = express();
-app.use(cors());
+const allowedOrigins = new Set((process.env.CORS_ORIGIN || 'https://qltb.dkpharma.io.vn,https://app.dkpharma.io.vn').split(',').map(value => value.trim()));
+app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)) }));
+app.use((req, res, next) => {
+  if (req.headers.origin && !allowedOrigins.has(req.headers.origin) && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return res.status(403).json({ error: 'origin_denied' });
+  next();
+});
+function safeRedirect(value: any) {
+  try { const url = new URL(value); return !url.hash && !url.username && !url.password && (url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))); } catch { return false; }
+}
+function validAuthorization(body: any) {
+  return typeof body.client_id === 'string' && oauthClients.get(body.client_id)?.redirectUris?.includes(body.redirect_uri) && safeRedirect(body.redirect_uri) &&
+    body.code_challenge_method === 'S256' && typeof body.code_challenge === 'string' && /^[A-Za-z0-9_-]{43}$/.test(body.code_challenge);
+}
+const htmlEscape = (value: any) => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.MCP_SSE_PORT ? parseInt(process.env.MCP_SSE_PORT, 10) : 3002;
 
-let transport: SSEServerTransport | null = null;
+const connections = new Map<string, { transport: SSEServerTransport; userId: string }>();
 
 // ==========================================
 // 1. HEALTH CHECK & INFO
@@ -42,6 +55,8 @@ app.get(['/', '/health'], (req, res) => {
 
 // RFC 7591 Dynamic Client Registration (ChatGPT có thể tự động đăng ký Client ID)
 app.post('/oauth/register', (req, res) => {
+  if (!Array.isArray(req.body.redirect_uris) || !req.body.redirect_uris.length || req.body.redirect_uris.length > 10 || req.body.redirect_uris.some((uri: any) => !safeRedirect(uri))) return res.status(400).json({ error: 'invalid_redirect_uri' });
+  if (oauthClients.size >= 1000) return res.status(429).json({ error: 'registration_limit' });
   const clientId = 'cmms-' + crypto.randomBytes(8).toString('hex');
   const clientSecret = 'secret-' + crypto.randomBytes(16).toString('hex');
   
@@ -70,6 +85,7 @@ app.get('/oauth/authorize', (req, res) => {
   const { client_id, redirect_uri, state, response_type, scope, code_challenge, code_challenge_method } = req.query;
 
   // Render trang đăng nhập HTML
+  if (response_type !== 'code' || !validAuthorization(req.query)) return res.status(400).json({ error: 'invalid_request' });
   const html = `
 <!DOCTYPE html>
 <html lang="vi">
@@ -102,11 +118,11 @@ app.get('/oauth/authorize', (req, res) => {
     <p>Đăng nhập bằng tài khoản nội bộ để cấp quyền cho ChatGPT truy xuất dữ liệu thiết bị và bảo trì.</p>
     
     <form action="/oauth/authorize/submit" method="POST">
-      <input type="hidden" name="redirect_uri" value="${redirect_uri || ''}">
-      <input type="hidden" name="state" value="${state || ''}">
-      <input type="hidden" name="client_id" value="${client_id || ''}">
-      <input type="hidden" name="code_challenge" value="${code_challenge || ''}">
-      <input type="hidden" name="code_challenge_method" value="${code_challenge_method || ''}">
+      <input type="hidden" name="redirect_uri" value="${htmlEscape(redirect_uri)}">
+      <input type="hidden" name="state" value="${htmlEscape(state)}">
+      <input type="hidden" name="client_id" value="${htmlEscape(client_id)}">
+      <input type="hidden" name="code_challenge" value="${htmlEscape(code_challenge)}">
+      <input type="hidden" name="code_challenge_method" value="${htmlEscape(code_challenge_method)}">
       
       <div class="form-group">
         <label>Tên đăng nhập / Mã NV / Email</label>
@@ -133,7 +149,8 @@ app.get('/oauth/authorize', (req, res) => {
 
 // Xử lý submit form đăng nhập từ người dùng
 app.post('/oauth/authorize/submit', async (req, res) => {
-  const { username, password, redirect_uri, state, code_challenge, code_challenge_method } = req.body;
+  const { username, password, client_id, redirect_uri, state, code_challenge, code_challenge_method } = req.body;
+  if (!validAuthorization(req.body)) return res.status(400).json({ error: 'invalid_request' });
 
   try {
     const authResult = await authenticateWithApp(username, password);
@@ -148,6 +165,7 @@ app.post('/oauth/authorize/submit', async (req, res) => {
       codeChallenge: code_challenge,
       codeChallengeMethod: code_challenge_method,
       expiresAt: Date.now() + 5 * 60 * 1000,
+      clientId: client_id, redirectUri: redirect_uri,
     });
 
     if (redirect_uri) {
@@ -166,7 +184,7 @@ app.post('/oauth/authorize/submit', async (req, res) => {
     res.status(401).send(`
       <body style="background:#0f172a;color:#fff;font-family:sans-serif;padding:40px;text-align:center;">
         <h2 style="color:#f87171;">Đăng nhập thất bại</h2>
-        <p>${error.message || 'Sai tài khoản hoặc mật khẩu'}</p>
+        <p>${htmlEscape(error.message) || 'Sai tài khoản hoặc mật khẩu'}</p>
         <br>
         <a href="javascript:history.back()" style="color:#38bdf8;">Thử lại</a>
       </body>
@@ -176,19 +194,23 @@ app.post('/oauth/authorize/submit', async (req, res) => {
 
 // Endpoint ChatGPT gọi để đổi `code` lấy `access_token`
 app.post('/oauth/token', express.urlencoded({ extended: true }), async (req, res) => {
-  const { code, grant_type, code_verifier } = req.body;
+  const { code, grant_type, code_verifier, client_id, redirect_uri } = req.body;
+  res.setHeader('Cache-Control', 'no-store');
+  if (grant_type !== 'authorization_code') return res.status(400).json({ error: 'unsupported_grant_type' });
 
   if (!code || !oauthCodes.has(code)) {
     return res.status(400).json({ error: 'invalid_grant', error_description: 'Code không hợp lệ hoặc đã hết hạn' });
   }
 
   const codeData = oauthCodes.get(code)!;
+  if (codeData.clientId !== client_id || codeData.redirectUri !== redirect_uri || typeof code_verifier !== 'string' || !/^[A-Za-z0-9._~-]{43,128}$/.test(code_verifier)) return res.status(400).json({ error: 'invalid_grant' });
   if (Date.now() > codeData.expiresAt) {
     oauthCodes.delete(code);
     return res.status(400).json({ error: 'invalid_grant', error_description: 'Code đã hết hạn' });
   }
 
   // Xác thực PKCE nếu client có gửi code_challenge trước đó
+  if (codeData.codeChallenge && !code_verifier) return res.status(400).json({ error: 'invalid_grant' });
   if (codeData.codeChallenge && code_verifier) {
     let calculatedChallenge = code_verifier;
     if (codeData.codeChallengeMethod === 'S256') {
@@ -203,10 +225,13 @@ app.post('/oauth/token', express.urlencoded({ extended: true }), async (req, res
   // Remove code sau khi đã đổi (single use)
   oauthCodes.delete(code);
 
+  const verified = await verifyAccessToken(codeData.accessToken);
+  if (!verified) return res.status(401).json({ error: 'invalid_grant' });
+  const claims = JSON.parse(Buffer.from(codeData.accessToken.split('.')[1], 'base64url').toString());
   return res.json({
     access_token: codeData.accessToken,
     token_type: 'Bearer',
-    expires_in: 3600 * 24 * 30, // 30 ngày
+    expires_in: Math.max(0, Number(claims.exp || 0) - Math.floor(Date.now() / 1000)), // actual token lifetime; previously 30 ngày
     scope: 'cmms:read cmms:analytics',
   });
 });
@@ -226,7 +251,7 @@ app.get(['/.well-known/oauth-authorization-server', '/.well-known/openid-configu
     registration_endpoint: `${baseUrl}/oauth/register`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code'],
-    code_challenge_methods_supported: ['S256', 'plain'],
+    code_challenge_methods_supported: ['S256'],
     token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic', 'none'],
   });
 });
@@ -254,19 +279,13 @@ async function extractUserFromRequest(req: express.Request): Promise<any | null>
 // ==========================================
 const handleSseConnection = async (req: express.Request, res: express.Response) => {
   const user = await extractUserFromRequest(req);
-  if (user) {
-    console.log(`[SSE] Authenticated user connected: ${user.name || user.email} via ${req.path}`);
-  } else {
-    console.log(`[SSE] Unauthenticated handshake / discovery request from ${req.path}`);
-  }
-
-  transport = new SSEServerTransport('/messages', res);
-  const server = createMcpServer();
+  if (!user?.permissions?.includes('ALL')) return res.status(403).json({ error: 'administrator_access_required' });
+  const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7).trim() : String(req.query.token || req.query.access_token || '');
+  const transport = new SSEServerTransport('/messages', res);
+  connections.set(transport.sessionId, { transport, userId: user.id });
+  const server = createMcpServer(async () => (await verifyAccessToken(token))?.dbUser);
   await server.connect(transport);
-
-  req.on('close', () => {
-    console.log('[SSE] Client disconnected');
-  });
+  req.on('close', () => { connections.delete(transport.sessionId); });
 };
 
 app.get('/sse', handleSseConnection);
@@ -274,11 +293,10 @@ app.get('/mcp', handleSseConnection);
 
 // POST endpoint cho JSON-RPC messages
 app.post(['/messages', '/mcp/messages'], async (req, res) => {
-  if (transport) {
-    await transport.handlePostMessage(req, res);
-  } else {
-    res.status(400).send('No active SSE connection found');
-  }
+  const user = await extractUserFromRequest(req);
+  const connection = connections.get(String(req.query.sessionId || ''));
+  if (!connection || !user?.permissions?.includes('ALL') || connection.userId !== user.id) return res.status(403).json({ error: 'invalid_session_owner' });
+  await connection.transport.handlePostMessage(req, res);
 });
 
 // ==========================================

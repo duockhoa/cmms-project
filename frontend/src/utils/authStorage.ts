@@ -2,8 +2,24 @@
 const TOKEN_KEYS = ['accessToken', 'access_token', 'token', 'jwt', 'auth_token'];
 const REFRESH_KEYS = ['refreshToken', 'refresh_token'];
 const BINDING_KEY = 'qltb.auth.session.v2';
+const COOKIE_SESSION_KEY = 'qltb.auth.cookie.v1';
+let pendingRefresh: { accessToken: string; refreshToken: string } | null = null;
 export const AUTH_CHANGED_EVENT = 'qltb:auth-changed';
 let revision = 0;
+let principalRevision = 0;
+let verifiedPrincipal: string | null = null;
+const principalListeners = new Set<() => void>();
+export const getPrincipalVersion = () => principalRevision;
+export function subscribePrincipal(listener: () => void) {
+  principalListeners.add(listener);
+  return () => { principalListeners.delete(listener); };
+}
+export function markPrincipalVerified(principal: string | null) {
+  if (principal === verifiedPrincipal) return;
+  verifiedPrincipal = principal;
+  principalRevision++;
+  principalListeners.forEach(listener => listener());
+}
 let lastSnapshot: string | undefined;
 let sessionError: string | null = null;
 let handoffError: string | null = null;
@@ -69,13 +85,12 @@ function notify() {
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   });
 }
-function readSession(): { accessToken: string | null; refreshToken: string | null } {
-  if (typeof window === 'undefined') return { accessToken: null, refreshToken: null };
+function readSession(): { accessToken: string | null } {
+  if (typeof window === 'undefined') return { accessToken: null };
   const previous = binding();
   const accessValues = [...new Set(TOKEN_KEYS.flatMap(cookieValues))];
   const refreshValues = [...new Set(REFRESH_KEYS.flatMap(cookieValues))];
   let accessToken: string | null = null;
-  let refreshToken: string | null = null;
   sessionError = handoffError;
   if (accessValues.length) {
     // Different aliases/host cookies cannot establish which session is current.
@@ -83,35 +98,57 @@ function readSession(): { accessToken: string | null; refreshToken: string | nul
       sessionError = 'SSO_SESSION_CONFLICT';
     } else {
       accessToken = accessValues[0];
-      refreshToken = refreshValues[0] || null;
+      if (refreshValues[0]) pendingRefresh = { accessToken, refreshToken: refreshValues[0] };
     }
   } else if (!getCookieDomain() && previous?.accessToken) {
     // Local development only. Shared-domain deployments never resurrect local legacy tokens.
     accessToken = previous.accessToken;
-    refreshToken = previous.refreshToken || null;
   }
-  const snapshot = JSON.stringify([accessToken, refreshToken, sessionError]);
+  if (accessToken && previous?.accessToken === accessToken && previous?.refreshToken && !pendingRefresh) {
+    pendingRefresh = { accessToken, refreshToken: previous.refreshToken };
+  }
+  if (pendingRefresh?.accessToken !== accessToken) pendingRefresh = null;
+  REFRESH_KEYS.forEach(key => { removeCookie(key); localStorage.removeItem(key); });
+  if (previous?.refreshToken) {
+    const { refreshToken: discarded, ...safe } = previous;
+    localStorage.setItem(BINDING_KEY, JSON.stringify(safe));
+  }
+  const snapshot = JSON.stringify([accessToken, sessionError]);
   if (lastSnapshot !== snapshot) {
     const sameAccess = previous?.accessToken === accessToken;
-    localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken, refreshToken,
+    localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken,
       ...(sameAccess ? { hrmId: previous?.hrmId, verified: previous?.verified } : {}),
     }));
     TOKEN_KEYS.forEach(key => localStorage.removeItem(key));
     REFRESH_KEYS.forEach(key => localStorage.removeItem(key));
     if (accessToken) localStorage.setItem('accessToken', accessToken);
-    if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
     const changed = lastSnapshot !== undefined;
     lastSnapshot = snapshot;
     if (changed) notify();
   }
-  return { accessToken, refreshToken };
+  return { accessToken };
 }
 export function getRawAccessToken() { return readSession().accessToken; }
 export function getAccessToken(): string | null {
   const token = getRawAccessToken();
   return token && !isJwtExpired(token) ? token : null;
 }
-export function getRefreshToken() { return readSession().refreshToken; }
+export function takeHandoffRefreshToken(accessToken: string): string | null {
+  readSession();
+  const refreshToken = pendingRefresh?.accessToken === accessToken ? pendingRefresh.refreshToken : null;
+  pendingRefresh = null;
+  return refreshToken;
+}
+export function markCookieSession(hrmId: string) {
+  localStorage.setItem(COOKIE_SESSION_KEY, JSON.stringify({ hrmId }));
+}
+export function hasRefreshSession(): boolean {
+  readSession();
+  try {
+    const session = JSON.parse(localStorage.getItem(COOKIE_SESSION_KEY) || 'null');
+    return Boolean(session?.hrmId && session.hrmId === binding()?.hrmId);
+  } catch { return false; }
+}
 export function getSessionVersion() { readSession(); return revision; }
 export function getSessionError() { readSession(); return sessionError; }
 export function getVerifiedHrmId(): string | null {
@@ -143,14 +180,14 @@ export function saveAuthTokens(accessToken: string, refreshToken?: string | null
   [...TOKEN_KEYS, ...REFRESH_KEYS].forEach(removeCookie);
   setCookie('accessToken', accessToken);
   setCookie('access_token', accessToken);
-  if (refreshToken) {
-    setCookie('refreshToken', refreshToken, 30);
-    setCookie('refresh_token', refreshToken, 30);
-  }
-  localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken, refreshToken: refreshToken || null, hrmId: verifiedHrmId || null, verified: Boolean(verifiedHrmId) }));
+  pendingRefresh = refreshToken ? { accessToken, refreshToken } : null;
+  localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken, hrmId: verifiedHrmId || null, verified: Boolean(verifiedHrmId) }));
   readSession();
 }
 export function clearAuthTokens() {
+  markPrincipalVerified(null);
+  pendingRefresh = null;
+  localStorage.removeItem(COOKIE_SESSION_KEY);
   [...TOKEN_KEYS, ...REFRESH_KEYS].forEach(removeCookie);
   localStorage.removeItem(BINDING_KEY);
   readSession();

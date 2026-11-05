@@ -77,7 +77,9 @@ test('SSO B wins over local legacy A, including expired A', () => {
   b.values.set('accessToken', token('A', 1)); b.values.set('refreshToken', 'refresh-A');
   b.setSession(token('B'), 'refresh-B');
   assert.equal(b.auth.getAccessToken(), token('B'));
-  assert.equal(b.auth.getRefreshToken(), 'refresh-B');
+  assert.equal(b.auth.takeHandoffRefreshToken(token('B')), 'refresh-B');
+  assert.equal(b.values.get('refreshToken'), undefined);
+  assert.ok(!b.document.cookie.includes('refresh-B'));
 });
 
 test('different host/shared cookies or aliases require reauthentication', () => {
@@ -85,7 +87,7 @@ test('different host/shared cookies or aliases require reauthentication', () => 
   b.setSession(token('B'), 'refresh-B');
   b.setCookie('accessToken', token('A'), true);
   assert.equal(b.auth.getAccessToken(), null);
-  assert.equal(b.auth.getRefreshToken(), null);
+  assert.equal(b.auth.takeHandoffRefreshToken(token('A')), null);
   assert.equal(b.auth.getSessionError(), 'SSO_SESSION_CONFLICT');
 });
 
@@ -95,7 +97,7 @@ test('SSO handoff without refresh removes old refresh and host aliases', () => {
   b.auth.getSessionVersion();
   b.auth.saveAuthTokens(token('B'));
   assert.equal(b.auth.getAccessToken(), token('B'));
-  assert.equal(b.auth.getRefreshToken(), null);
+  assert.equal(b.auth.takeHandoffRefreshToken(token('B')), null);
   assert.equal(b.auth.getVerifiedHrmId(), null);
 });
 
@@ -104,7 +106,7 @@ test('absence of central cookies cannot resurrect an old local session', () => {
   b.values.set('accessToken', token('A'));
   b.values.set('qltb.auth.session.v2', JSON.stringify({ accessToken: token('A'), refreshToken: 'A', hrmId: 'A' }));
   assert.equal(b.auth.getRawAccessToken(), null);
-  assert.equal(b.auth.getRefreshToken(), null);
+  assert.equal(b.auth.takeHandoffRefreshToken(token('A')), null);
 });
 
 test('each tab detects account switch and logout independently', () => {
@@ -153,15 +155,16 @@ test('profile cache is scoped to the session and never returns A for B', async (
 
 test('late refresh A cannot overwrite a newly opened B session', async () => {
   const b = browser(); b.setSession(token('A'), 'refresh-A'); b.auth.markSessionVerified(token('A'), 'A');
+  b.auth.markCookieSession('A');
   const pending = deferred();
-  const api = b.api(() => pending.promise);
+  const api = b.api(url => String(url).endsWith('/auth/session') ? Promise.resolve(json({ csrfToken: 'csrf-a', hrmId: 'A' })) : pending.promise);
   const refreshed = api.refreshAccessToken();
   await flush();
   b.setSession(token('B'), 'refresh-B'); b.auth.getSessionVersion();
   pending.resolve(json({ accessToken: token('A-new'), refreshToken: 'refresh-A-new' }));
   assert.equal(await refreshed, null);
   assert.equal(b.auth.getAccessToken(), token('B'));
-  assert.equal(b.auth.getRefreshToken(), 'refresh-B');
+  assert.equal(b.auth.takeHandoffRefreshToken(token('B')), 'refresh-B');
 });
 
 test('refresh is not attempted before HRM identity has been verified', async () => {
@@ -209,7 +212,7 @@ test('URL handoff replaces the session and scrubs every token alias, including c
   b.window.location.hash = `#refreshToken=refresh-B`;
   assert.equal(b.auth.extractAndSaveTokensFromUrl(), true);
   assert.equal(b.auth.getAccessToken(), token('B'));
-  assert.equal(b.auth.getRefreshToken(), 'refresh-B');
+  assert.equal(b.auth.takeHandoffRefreshToken(token('B')), 'refresh-B');
   assert.equal(b.window.history.lastUrl, '/requests?redirect=%2Frequests');
 });
 
@@ -224,7 +227,7 @@ test('conflicting or expired URL handoffs cannot fall back to the previous accou
   assert.equal(b.auth.getAccessToken(), null);
 });
 
-test('HRM outage clears the shared profile and blocks actions until reverified', async () => {
+test('HRM outage retains the draft owner internally but blocks actions until reverified', async () => {
   const b = browser(); b.setSession(token('B'));
   let offline = false;
   const permissions = b.load('src/hooks/usePermissions.ts', {
@@ -240,21 +243,63 @@ test('HRM outage clears the shared profile and blocks actions until reverified',
   offline = true;
   permissions.invalidatePermissionsCache();
   await assert.rejects(permissions.fetchPermissionsProfile(), /HRM unavailable/);
-  assert.equal(permissions.usePermissions().user, null);
-  assert.equal(permissions.usePermissions().isAdmin, false);
+  assert.equal(permissions.usePermissions().user.id, 'B');
+  assert.equal(permissions.usePermissions().error, 'HRM unavailable');
   assert.equal(b.auth.isSessionVerified(), false);
 });
 
-test('successful refresh keeps the verified owner and stores the rotated pair', async () => {
+test('successful refresh keeps the verified owner without exposing or storing a refresh token', async () => {
   const b = browser(); b.setSession(token('B'), 'refresh-B'); b.auth.markSessionVerified(token('B'), '1125');
+  b.auth.markCookieSession('1125');
   const refreshedToken = token('B', Math.floor(Date.now() / 1000) + 7200);
   let sent;
-  const api = b.api(async (_url, options) => {
+  let headers;
+  const api = b.api(async (url, options) => {
+    if (String(url).endsWith('/auth/session')) return json({ csrfToken: 'csrf-b', hrmId: '1125' });
     sent = JSON.parse(options.body);
-    return json({ accessToken: refreshedToken, refreshToken: 'rotated-B' });
+    headers = options.headers;
+    assert.equal(options.credentials, 'include');
+    return json({ accessToken: refreshedToken });
   });
   assert.equal(await api.refreshAccessToken(), refreshedToken);
-  assert.deepEqual(sent, { refreshToken: 'refresh-B', expectedHrmId: '1125' });
-  assert.equal(b.auth.getRefreshToken(), 'rotated-B');
+  assert.deepEqual(sent, { expectedHrmId: '1125' });
+  assert.equal(headers['X-CSRF-Token'], 'csrf-b');
+  assert.equal(b.auth.hasRefreshSession(), true);
+  assert.equal(b.auth.takeHandoffRefreshToken(refreshedToken), null);
+  assert.ok(![...b.values.values()].some(value => value.includes('refresh-B')));
   assert.equal(b.auth.getVerifiedHrmId(), '1125');
+});
+
+test('legacy SSO refresh is consumed once by the backend and removed from all browser storage', async () => {
+  const b = browser(); b.setSession(token('B'), 'handoff-refresh');
+  const calls = [];
+  const api = b.api(async (url, options) => {
+    calls.push({ url, options });
+    if (String(url).endsWith('/auth/me')) return json({ authenticated: true, identity: { provider: 'hrm', subject: 'B' }, user: { id: 'B' } });
+    assert.equal(String(url).endsWith('/auth/session'), true);
+    assert.equal(options.credentials, 'include');
+    assert.equal(JSON.parse(options.body).refreshToken, 'handoff-refresh');
+    return json({ csrfToken: 'csrf-b', hrmId: 'B', refreshSession: true });
+  });
+  await api.api.getMe();
+  b.auth.markSessionVerified(token('B'), 'B');
+  assert.equal(b.auth.hasRefreshSession(), true);
+  assert.equal(b.auth.takeHandoffRefreshToken(token('B')), null);
+  assert.ok(!b.document.cookie.includes('handoff-refresh'));
+  assert.ok(![...b.values.values()].some(value => value.includes('handoff-refresh')));
+  await api.api.getMe();
+  assert.equal(calls.length, 2);
+});
+
+test('a different cookie-session owner cannot refresh the current account', async () => {
+  const b = browser(); b.setSession(token('B')); b.auth.markSessionVerified(token('B'), 'B'); b.auth.markCookieSession('B');
+  let refreshCalls = 0;
+  const api = b.api(async url => {
+    if (String(url).endsWith('/auth/session')) return json({ csrfToken: 'csrf-a', hrmId: 'A' });
+    refreshCalls++;
+    return json({ accessToken: token('A') });
+  });
+  assert.equal(await api.refreshAccessToken(), null);
+  assert.equal(refreshCalls, 0);
+  assert.equal(b.auth.getRawAccessToken(), token('B'));
 });

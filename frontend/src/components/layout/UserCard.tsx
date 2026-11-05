@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Settings, User, LayoutGrid, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { clearAuthTokens } from '../../utils/authStorage';
+import { logoutSession } from '../../services/api';
 
 export default function UserCard({ user }: { user: any }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,9 +14,9 @@ export default function UserCard({ user }: { user: any }) {
     setImageError(false);
   }, [user?.avatar]);
 
-  const handleLogout = () => {
-    clearAuthTokens();
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    const revoked = await logoutSession();
+    window.location.href = revoked ? '/login' : '/login?logout=unconfirmed';
   };
 
   // Click outside to close dropdown

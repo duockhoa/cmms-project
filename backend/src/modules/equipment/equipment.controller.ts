@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
 import { EquipmentService } from './equipment.service';
 import { CreateEquipmentDto, UpdateEquipmentDto } from './dto/equipment.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -21,8 +21,9 @@ export class EquipmentController {
     @Query('location') location?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Req() req?: any,
   ) {
-    return this.equipmentService.findAll({ search, category, department, status, location, page, limit });
+    return this.equipmentService.findAll({ search, category, department, status, location, page, limit }, req?.user);
   }
 
   @ApiStandardResponse({ summary: 'Đồng bộ chuẩn hóa trạng thái toàn bộ thiết bị', method: 'POST', path: '/equipment/sync-statuses' })

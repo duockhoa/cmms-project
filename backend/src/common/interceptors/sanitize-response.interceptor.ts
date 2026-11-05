@@ -50,11 +50,6 @@ export class SanitizeResponseInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     return next.handle().pipe(
       map((data) => {
-        // Only the explicit authentication refresh response may return a session pair.
-        // Keep the general secret filter in force for every other endpoint/object.
-        if (Reflect.getMetadata('auth:session-token-response', context.getHandler()) === true) {
-          return { accessToken: data?.accessToken, refreshToken: data?.refreshToken };
-        }
         return sanitizeData(data);
       })
     );

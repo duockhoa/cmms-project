@@ -20,6 +20,11 @@ describe('exact HRM identity resolution', () => {
     expect(selectHrmIdentity([alice, bob], { id: 'new', username: 'Shared Name' }).candidates).toEqual([]);
     expect(selectHrmIdentity([bob], { id: '0012' }).user).toBeNull();
   });
+  it('does not resurrect a merged legacy account or let it conflict with the canonical HRM link', () => {
+    const merged = { id: 'old', hrmId: null, email: 'former@example.test', mergedIntoId: bob.id };
+    expect(selectHrmIdentity([merged, bob], { id: bob.hrmId, email: merged.email }).user).toBe(bob);
+    expect(selectHrmIdentity([merged], { id: 'new', email: merged.email }).candidates).toEqual([]);
+  });
   it('does not let an employee-code alias override a verified external link', () => {
     const wrongLegacy = { id: '1120', hrmId: '1120', email: '1120@local.hrm', name: 'Employee A' };
     const verified = { id: '1125', hrmId: '1125', email: 'b@example.test', name: 'Employee B' };

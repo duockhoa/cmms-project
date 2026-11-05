@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Req, Res, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { HrmIdentityService } from '../auth/hrm-identity.service';
+import { Controller, Get, Post, Req, Res, Body, Query, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
@@ -16,32 +17,43 @@ interface AuthCodeData {
   codeChallenge?: string;
   codeChallengeMethod?: string;
   expiresAt: number;
+  clientId: string;
+  redirectUri: string;
 }
 
-interface RefreshTokenData {
-  userId: string;
-  email: string;
-  name: string;
-  accessToken: string;
-}
-
-// Durable in-memory stores
+// Process-local OAuth stores; restarting requires clients to authorize again.
 const globalOAuthCodes = new Map<string, AuthCodeData>();
-const globalOAuthRefreshTokens = new Map<string, RefreshTokenData>();
-const globalOAuthSessions = new Map<string, { redirectUri: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string; expiresAt: number }>();
-const globalOAuthClients = new Map<string, any>([
-  ['cmms-client', { clientId: 'cmms-client', clientSecret: 'cmms-secret', clientName: 'Default Client' }],
-]);
+const globalOAuthSessions = new Map<string, { redirectUri: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string; expiresAt: number; clientId: string }>();
+const globalOAuthClients = new Map<string, any>();
 
 @Controller('mcp')
 export class McpController {
-  private sseTransports = new Map<string, SSEServerTransport>();
+  private sseTransports = new Map<string, { transport: SSEServerTransport; actor: any }>();
 
   constructor(
     private readonly mcpService: McpService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly identities: HrmIdentityService,
   ) {}
+
+  private safeRedirect(uri: any) {
+    try { const url = new URL(uri); return !url.hash && !url.username && !url.password &&
+      (url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))); } catch { return false; }
+  }
+  private async verifiedUser(token: string) {
+    const secret = this.configService.get<string>('HRM_JWT_SECRET');
+    if (!secret) throw new UnauthorizedException('HRM verifier is not configured');
+    let payload: any;
+    try { payload = jwt.verify(token, secret, { algorithms: ['HS256'] }); } catch { throw new UnauthorizedException('Invalid token'); }
+    if (typeof payload.exp !== 'number') throw new UnauthorizedException('Token has no expiry');
+    const profile = await this.identities.validateSession(token, true);
+    return this.identities.resolve(profile);
+  }
+  private tokenLifetime(token: string) {
+    const payload: any = jwt.decode(token);
+    return Math.max(0, Number(payload?.exp || 0) - Math.floor(Date.now() / 1000));
+  }
 
   // ==========================================
   // 1. HEALTH / DISCOVERY
@@ -71,9 +83,9 @@ export class McpController {
       token_endpoint: `${baseUrl}/oauth/token`,
       registration_endpoint: `${baseUrl}/oauth/register`,
       response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code', 'refresh_token'],
-      scopes_supported: ['cmms:read', 'cmms:analytics', 'offline_access'],
-      code_challenge_methods_supported: ['S256', 'plain'],
+      grant_types_supported: ['authorization_code'],
+      scopes_supported: ['cmms:read', 'cmms:analytics'],
+      code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic', 'none'],
     };
   }
@@ -86,7 +98,10 @@ export class McpController {
   registerClient(@Body() body: any) {
     const clientId = 'cmms-' + crypto.randomBytes(8).toString('hex');
     const clientSecret = 'secret-' + crypto.randomBytes(16).toString('hex');
-    const redirectUris = body.redirect_uris || [];
+    const redirectUris = body.redirect_uris;
+    if (!Array.isArray(redirectUris) || !redirectUris.length || redirectUris.length > 10 || redirectUris.some(uri => !this.safeRedirect(uri))) {
+      throw new UnauthorizedException('Invalid registered redirect URI');
+    }
 
     globalOAuthClients.set(clientId, {
       clientId,
@@ -102,7 +117,7 @@ export class McpController {
       client_secret_expires_at: 0,
       client_name: body.client_name || 'ChatGPT Plugin',
       redirect_uris: redirectUris,
-      grant_types: ['authorization_code', 'refresh_token'],
+      grant_types: ['authorization_code'],
       response_types: ['code'],
       token_endpoint_auth_method: 'client_secret_post',
     };
@@ -118,8 +133,13 @@ export class McpController {
     @Query('code_challenge_method') codeChallengeMethod: string,
     @Res() res: Response,
   ) {
-    const hrmJwtSecret = this.configService.get<string>('HRM_JWT_SECRET') || 'Binh123456@';
 
+
+    const client = globalOAuthClients.get(clientId);
+    if (!client?.redirectUris?.includes(redirectUri) || !this.safeRedirect(redirectUri) ||
+        codeChallengeMethod !== 'S256' || !/^[A-Za-z0-9_-]{43}$/.test(codeChallenge || '')) {
+      return res.status(400).json({ error: 'invalid_request' });
+    }
     // 1. Kiểm tra xem người dùng đã đăng nhập app từ trước chưa
     let token: string | null = null;
     const cookieHeader = req.headers.cookie;
@@ -134,11 +154,8 @@ export class McpController {
 
     if (token) {
       let decoded: any = null;
-      try {
-        decoded = jwt.verify(token, hrmJwtSecret);
-      } catch {
-        decoded = jwt.decode(token);
-      }
+      try { const user = await this.verifiedUser(token); decoded = { sub: user.id, email: user.email, name: user.name }; }
+      catch { return res.status(401).json({ error: 'invalid_token' }); }
 
       if (decoded) {
         const code = crypto.randomBytes(24).toString('hex');
@@ -147,7 +164,7 @@ export class McpController {
           email: decoded.email || 'user',
           name: decoded.name || 'User',
           accessToken: token,
-          codeChallenge,
+          clientId, redirectUri, codeChallenge,
           codeChallengeMethod,
           expiresAt: Date.now() + 5 * 60 * 1000,
         });
@@ -163,6 +180,7 @@ export class McpController {
     const sessionId = crypto.randomBytes(16).toString('hex');
     globalOAuthSessions.set(sessionId, {
       redirectUri,
+      clientId,
       state,
       codeChallenge,
       codeChallengeMethod,
@@ -193,7 +211,7 @@ export class McpController {
     const host = req.get('host') || 'localhost:3001';
     const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
     const proto = isLocal ? 'http' : 'https';
-    const hrmJwtSecret = this.configService.get<string>('HRM_JWT_SECRET') || 'Binh123456@';
+
 
     let token = queryToken;
     if (!token && req.headers.cookie) {
@@ -206,12 +224,9 @@ export class McpController {
       return res.redirect(`${proto}://${host}/login?redirect=${encodeURIComponent(callbackUrl)}`);
     }
 
-    let decoded: any = null;
-    try {
-      decoded = jwt.verify(token, hrmJwtSecret);
-    } catch {
-      decoded = jwt.decode(token);
-    }
+    let decoded: any;
+    try { const user = await this.verifiedUser(token); decoded = { sub: user.id, email: user.email, name: user.name }; }
+    catch { return res.status(401).json({ error: 'invalid_token' }); }
 
     const code = crypto.randomBytes(24).toString('hex');
     globalOAuthCodes.set(code, {
@@ -219,6 +234,7 @@ export class McpController {
       email: decoded?.email || 'user',
       name: decoded?.name || 'User',
       accessToken: token,
+      clientId: session.clientId, redirectUri: session.redirectUri,
       codeChallenge: session.codeChallenge,
       codeChallengeMethod: session.codeChallengeMethod,
       expiresAt: Date.now() + 5 * 60 * 1000,
@@ -236,25 +252,7 @@ export class McpController {
   async exchangeToken(@Body() body: any, @Res() res: Response) {
     const { grant_type, code, code_verifier, refresh_token } = body;
 
-    // A. Xử lý refresh_token
-    if (grant_type === 'refresh_token') {
-      if (!refresh_token || !globalOAuthRefreshTokens.has(refresh_token)) {
-        return res.status(400).json({ error: 'invalid_grant', error_description: 'Refresh token không hợp lệ' });
-      }
-
-      const tokenData = globalOAuthRefreshTokens.get(refresh_token)!;
-      const newRefreshToken = 'rt_' + crypto.randomBytes(32).toString('hex');
-      globalOAuthRefreshTokens.delete(refresh_token);
-      globalOAuthRefreshTokens.set(newRefreshToken, tokenData);
-
-      return res.json({
-        access_token: tokenData.accessToken,
-        token_type: 'Bearer',
-        expires_in: 3600 * 24 * 30, // 30 ngày
-        refresh_token: newRefreshToken,
-        scope: 'cmms:read cmms:analytics offline_access',
-      });
-    }
+    if (grant_type !== 'authorization_code') return res.status(400).json({ error: 'unsupported_grant_type' });
 
     // B. Xử lý authorization_code
     if (!code || !globalOAuthCodes.has(code)) {
@@ -267,32 +265,22 @@ export class McpController {
       return res.status(400).json({ error: 'invalid_grant', error_description: 'Code đã hết hạn' });
     }
 
-    if (codeData.codeChallenge && code_verifier) {
-      let calc = code_verifier;
-      if (codeData.codeChallengeMethod === 'S256') {
-        calc = crypto.createHash('sha256').update(code_verifier).digest('base64url');
-      }
-      if (calc !== codeData.codeChallenge) {
-        return res.status(400).json({ error: 'invalid_grant', error_description: 'PKCE verification failed' });
-      }
+    if (body.client_id !== codeData.clientId || body.redirect_uri !== codeData.redirectUri ||
+        typeof code_verifier !== 'string' || !/^[A-Za-z0-9._~-]{43,128}$/.test(code_verifier) ||
+        crypto.createHash('sha256').update(code_verifier).digest('base64url') !== codeData.codeChallenge) {
+      return res.status(400).json({ error: 'invalid_grant' });
     }
 
     globalOAuthCodes.delete(code);
 
-    const refreshToken = 'rt_' + crypto.randomBytes(32).toString('hex');
-    globalOAuthRefreshTokens.set(refreshToken, {
-      userId: codeData.userId,
-      email: codeData.email,
-      name: codeData.name,
-      accessToken: codeData.accessToken,
-    });
+    try { await this.verifiedUser(codeData.accessToken); }
+    catch { return res.status(401).json({ error: 'invalid_token' }); }
 
     return res.json({
       access_token: codeData.accessToken,
       token_type: 'Bearer',
-      expires_in: 3600 * 24 * 30, // 30 ngày
-      refresh_token: refreshToken,
-      scope: 'cmms:read cmms:analytics offline_access',
+      expires_in: this.tokenLifetime(codeData.accessToken),
+      scope: 'cmms:read cmms:analytics',
     });
   }
 
@@ -336,7 +324,7 @@ export class McpController {
     };
 
     try {
-      const server = this.mcpService.createServerInstance();
+      const server = this.mcpService.createServerInstance((req as any).user);
       const transport: Transport = {
         start: async () => {},
         close: async () => {},
@@ -412,9 +400,10 @@ export class McpController {
 
     const messagesUrl = `${proto}://${host}/api/v1/mcp/messages`;
     const transport = new SSEServerTransport(messagesUrl, res);
-    this.sseTransports.set(transport.sessionId, transport);
+    const actor = { ...(req as any).user };
+    this.sseTransports.set(transport.sessionId, { transport, actor });
 
-    const server = this.mcpService.createServerInstance();
+    const server = this.mcpService.createServerInstance(actor);
     await server.connect(transport);
 
     req.on('close', () => {
@@ -427,16 +416,14 @@ export class McpController {
   @Post('messages')
   async handleMessages(@Req() req: Request, @Res() res: Response) {
     const sessionId = req.query.sessionId as string;
-    let transport: SSEServerTransport | undefined;
-
-    if (sessionId) {
-      transport = this.sseTransports.get(sessionId);
+    const connection = sessionId ? this.sseTransports.get(sessionId) : undefined;
+    if (sessionId && (!connection || connection.actor.id !== (req as any).user?.id)) {
+      return res.status(403).json({ error: 'invalid_session_owner' });
     }
-    if (!transport && this.sseTransports.size > 0) {
-      transport = Array.from(this.sseTransports.values()).pop();
-    }
-
-    if (transport) {
+    if (connection) {
+      for (const key of Object.keys(connection.actor)) delete connection.actor[key];
+      Object.assign(connection.actor, (req as any).user);
+      const transport = connection.transport;
       await transport.handlePostMessage(req, res);
     } else {
       // Fallback thông minh: nếu phiên SSE bị gián đoạn, vẫn xử lý JSON-RPC trực tiếp

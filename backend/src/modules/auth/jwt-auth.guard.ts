@@ -1,49 +1,45 @@
-import { ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { isObservable, lastValueFrom } from 'rxjs';
+import { timingSafeEqual } from 'crypto';
+import { getRoutePolicy, AUTHENTICATED_REQUEST } from '../../common/auth/route-policy';
+import { hasPermission } from '../../common/utils/rbac.helper';
+import { ResourceAccessService } from '../../common/auth/resource-access.service';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  canActivate(context: ExecutionContext) {
+  constructor(private resources: ResourceAccessService) { super(); }
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-
-    // Support M2M API Key (e.g. EVN Electricity sync bot)
-    const apiKey = request.headers['x-api-key'];
-    const configuredKey = process.env.EVN_SYNC_API_KEY || 'cmms_evn_sync_secret_2026';
-    if (apiKey && apiKey === configuredKey) {
-      request.user = {
-        id: 'system-evn-bot',
-        name: 'EVN Auto-Sync Bot',
-        email: 'evn-sync@cmms.local',
-        role: 'ADMIN',
-        roles: ['ADMIN'],
-      };
-      return true;
-    }
-
-    // x-user-id header bypass is strictly restricted to automated test environments (Jest)
-    if (process.env.NODE_ENV === 'test') {
-      const userId = request.headers['x-user-id'];
-      if (userId) {
-        const adminCode = process.env.ADMIN_EMPLOYEE_CODE;
-        const role = (adminCode && userId === adminCode) ? 'ADMIN' : 'TECHNICIAN';
-        
-        request.user = { 
-          id: userId, 
-          role: role,
-          roles: [role]
-        };
-        return true;
+    if (request[AUTHENTICATED_REQUEST]) return true;
+    const key = `${context.getClass().name}.${context.getHandler().name}`;
+    const policy = getRoutePolicy(context.getClass().name, context.getHandler().name);
+    if (!policy) throw new ForbiddenException('API access policy is not configured.');
+    if (policy.public) return true;
+    const apiKey = request.headers?.['x-api-key'];
+    if (apiKey) {
+      const configured = process.env.EVN_SYNC_API_KEY;
+      if (typeof apiKey !== 'string' || !configured || Buffer.byteLength(apiKey) !== Buffer.byteLength(configured) ||
+          !timingSafeEqual(Buffer.from(apiKey), Buffer.from(configured))) throw new UnauthorizedException('Invalid API key.');
+      if (policy.machine !== 'evn' || key !== 'UtilitiesController.syncEvnReadings' || request.method !== 'POST') {
+        throw new ForbiddenException('Machine identity is not allowed on this API.');
       }
+      request.user = { id: 'system-evn-bot', name: 'EVN Auto-Sync Bot', role: 'SERVICE', roles: [],
+        isActive: true, kind: 'machine', customPermissions: JSON.stringify(['utilities:record']) };
+    } else {
+      const result = super.canActivate(context);
+      const authenticated = isObservable(result) ? await lastValueFrom(result) : await result;
+      if (!authenticated || !request.user) throw new UnauthorizedException('Authentication required.');
     }
-    return super.canActivate(context);
+    if (policy.any?.length && !policy.any.some(permission => hasPermission(request.user, permission))) {
+      throw new ForbiddenException('Permission denied.');
+    }
+    if (request.user.kind !== 'machine') await this.resources.assertRequest(context.getClass().name, request);
+    request[AUTHENTICATED_REQUEST] = true;
+    return true;
   }
-
-  handleRequest(err: any, user: any, info: any) {
-    if (err || !user) {
-      console.error('JwtAuthGuard Error:', err?.message || err);
-      console.error('JwtAuthGuard Info:', info?.message || info);
-      throw err || new UnauthorizedException('Authentication token is missing, expired, or invalid.');
-    }
+  handleRequest(error: any, user: any) {
+    if (error || !user) throw error || new UnauthorizedException('Invalid or expired session.');
     return user;
   }
 }

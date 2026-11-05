@@ -1,3 +1,4 @@
+import { equipmentScope } from '../../common/auth/resource-scope';
 import { Injectable, NotFoundException, ConflictException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateEquipmentDto } from './dto/equipment.dto';
@@ -125,8 +126,8 @@ export class EquipmentService implements OnModuleInit {
       .sort((a, b) => a.localeCompare(b, 'vi'));
   }
 
-  async findAll(query?: { search?: string; category?: string; department?: string; status?: string; location?: string; page?: string; limit?: string }) {
-    const where: any = { isActive: true };
+  async findAll(query?: { search?: string; category?: string; department?: string; status?: string; location?: string; page?: string; limit?: string }, actor?: any) {
+    const where: any = { isActive: true, ...(actor ? { AND: [equipmentScope(actor)] } : {}) };
     if (query?.search) {
       where.OR = [
         { name: { contains: query.search } },

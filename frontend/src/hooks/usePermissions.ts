@@ -1,8 +1,9 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { api, invalidateMeCache, setupSilentRefresh } from '../services/api';
 import {
-  getAccessToken, getRawAccessToken, getRefreshToken, getSessionVersion,
+  getAccessToken, getRawAccessToken, hasRefreshSession, getSessionVersion,
   markSessionVerified, markSessionUnverified, subscribeSession,
+  markPrincipalVerified, getPrincipalVersion,
 } from '../utils/authStorage';
 
 interface PermissionsState {
@@ -10,6 +11,7 @@ interface PermissionsState {
   permissions: string[];
   isAdmin: boolean;
   loading: boolean;
+  checking?: boolean;
   error: string | null;
   sessionVersion: number;
 }
@@ -20,12 +22,12 @@ const listeners = new Set<() => void>();
 if (typeof window !== 'undefined') markSessionUnverified();
 const publish = (next: PermissionsState) => { state = next; listeners.forEach(listener => listener()); };
 
-export const invalidatePermissionsCache = () => {
+export const invalidatePermissionsCache = (background = false) => {
   generation++;
   profilePromise = null;
   invalidateMeCache();
   markSessionUnverified();
-  publish({ user: null, permissions: [], isAdmin: false, loading: true, error: null, sessionVersion: getSessionVersion() });
+  publish({ ...state, loading: !background || !state.user, checking: true, error: null, sessionVersion: getSessionVersion() });
 };
 
 export const fetchPermissionsProfile = async (): Promise<{ user: any; permissions: string[] }> => {
@@ -40,15 +42,16 @@ export const fetchPermissionsProfile = async (): Promise<{ user: any; permission
       const token = getRawAccessToken();
       if (!token) throw new Error('AUTH_REQUIRED');
       markSessionVerified(token, res.identity?.provider === 'hrm' ? res.identity.subject : undefined);
+      markPrincipalVerified(`${res.identity?.provider || 'local'}:${res.identity?.subject || res.user.id}`);
       const permissions: string[] = Array.isArray(res.permissions) ? res.permissions : [];
-      publish({ user: res.user, permissions, loading: false, error: null, sessionVersion: version,
+      publish({ user: res.user, permissions, loading: false, checking: false, error: null, sessionVersion: version,
         isAdmin: ['ADMIN', 'SUPER_ADMIN'].includes(res.user.role) || permissions.includes('ALL') || permissions.includes('*'),
       });
       setupSilentRefresh();
       return { user: res.user, permissions };
     } catch (error: any) {
       if (currentGeneration === generation) {
-        publish({ user: null, permissions: [], isAdmin: false, loading: false, error: error.message, sessionVersion: getSessionVersion() });
+        publish({ ...state, loading: false, checking: false, error: error.message, sessionVersion: getSessionVersion() });
       }
       throw error;
     }
@@ -57,7 +60,7 @@ export const fetchPermissionsProfile = async (): Promise<{ user: any; permission
   try { return await pending; } finally { if (profilePromise === pending) profilePromise = null; }
 };
 function load() {
-  if (!getAccessToken() && !getRefreshToken()) {
+  if (!getAccessToken() && !hasRefreshSession()) {
     publish({ user: null, permissions: [], isAdmin: false, loading: false, error: null, sessionVersion: getSessionVersion() });
     return;
   }
@@ -69,7 +72,7 @@ if (typeof window !== 'undefined') {
   const check = () => {
     if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 500) return;
     lastCheck = Date.now();
-    invalidatePermissionsCache();
+    invalidatePermissionsCache(true);
     if (listeners.size) load();
   };
   window.addEventListener('focus', check);
@@ -115,7 +118,7 @@ export const usePermissions = () => {
   );
 
   return {
-    ...state, can, canAny, canAll,
+    ...state, principalVersion: getPrincipalVersion(), can, canAny, canAll,
     refreshPermissions: async () => {
       invalidatePermissionsCache();
       return fetchPermissionsProfile();
@@ -127,7 +130,7 @@ function stateSnapshot() {
   const version = getSessionVersion();
   if (state.sessionVersion === version) return state;
   if (!blockedSnapshot || blockedSnapshot.sessionVersion !== version) {
-    blockedSnapshot = { user: null, permissions: [], isAdmin: false, loading: true, error: null, sessionVersion: version };
+    blockedSnapshot = { ...state, loading: true, checking: true, error: null, sessionVersion: version };
   }
   return blockedSnapshot;
 }

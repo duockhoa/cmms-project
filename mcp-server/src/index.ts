@@ -1,3 +1,4 @@
+import { verifyAccessToken } from './auth.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createMcpServer } from './server.js';
 import { checkDbConnection } from './db.js';
@@ -12,7 +13,10 @@ async function runStdioServer() {
   }
   console.error('[MCP] Database connected successfully.');
 
-  const server = createMcpServer();
+  const token = process.env.MCP_STDIO_ACCESS_TOKEN;
+  const verified = token ? await verifyAccessToken(token) : null;
+  if (!verified?.dbUser?.permissions?.includes('ALL')) throw new Error('A centrally authenticated administrator token is required.');
+  const server = createMcpServer(async () => (await verifyAccessToken(token!))?.dbUser);
   const transport = new StdioServerTransport();
 
   await server.connect(transport);

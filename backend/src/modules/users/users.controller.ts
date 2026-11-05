@@ -6,13 +6,35 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiResponse, ApiOperation } from '@nestjs/swagger';
 import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
 import { hasPermission } from '../../common/utils/rbac.helper';
+import { UserMergeService } from './user-merge.service';
+import { ConfirmUserMergeDto, PreviewUserMergeDto } from './dto/merge-users.dto';
 
 @ApiTags('Người dùng')
 @ApiBearerAuth()
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService, private readonly merges: UserMergeService) {}
+
+  @Post('merge-preview')
+  previewMerge(@Body() dto: PreviewUserMergeDto, @Req() request: any) {
+    return this.merges.preview(dto, request.user.id);
+  }
+
+  @Post('merge-confirm')
+  confirmMerge(@Body() dto: ConfirmUserMergeDto, @Req() request: any) {
+    return this.merges.confirm(dto, request.user.id);
+  }
+
+  @Get(':id/merge-history')
+  getMergeHistory(@Param('id') id: string, @Req() request: any) {
+    return this.merges.history(id, request.user.id);
+  }
+
+  @Get('merge-audits/:auditId')
+  getMergeAudit(@Param('auditId') auditId: string, @Req() request: any) {
+    return this.merges.audit(auditId, request.user.id);
+  }
 
   private assertPermission(actor: any, permission: string) {
     if (!hasPermission(actor, permission)) {

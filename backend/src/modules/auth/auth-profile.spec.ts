@@ -24,4 +24,13 @@ describe('verified auth profile response', () => {
     await expect(controller.getMe({ user: { id: 'removed', email: 'someone@example.test' } })).rejects.toThrow();
     expect(prisma.user.findFirst).not.toHaveBeenCalled();
   });
+  it('reuses the local account loaded by JWT verification without a second database query', async () => {
+    const prisma: any = { user: { findUnique: jest.fn() } };
+    const localUser = { id: 'local', hrmId: 'external', role: 'USER', isActive: true, customPermissions: '["equipment:view"]' };
+    const result = await new AuthController(prisma, {} as any).getMe({ user: {
+      id: localUser.id, role: localUser.role, localUser, identity: { provider: 'hrm', subject: localUser.hrmId },
+    } });
+    expect(result.permissions).toContain('equipment:view');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
 });

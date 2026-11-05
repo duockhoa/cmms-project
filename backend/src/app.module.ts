@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from './prisma/prisma.module';
@@ -23,6 +25,7 @@ import { MailModule } from './modules/mail/mail.module';
 import { McpModule } from './modules/mcp/mcp.module';
 
 @Module({
+  providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,

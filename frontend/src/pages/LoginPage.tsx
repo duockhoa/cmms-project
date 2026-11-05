@@ -3,13 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 
-import { extractAndSaveTokensFromUrl, getAccessToken, getRefreshToken, saveAuthTokens, getSessionError } from '../utils/authStorage';
-import { invalidateMeCache, refreshAccessToken, setupSilentRefresh } from '../services/api';
+import { extractAndSaveTokensFromUrl, getAccessToken, markCookieSession, saveAuthTokens, getSessionError } from '../utils/authStorage';
+import { API_HOST, api, invalidateMeCache, restoreBrowserSession, setupSilentRefresh } from '../services/api';
 import { invalidatePermissionsCache } from '../hooks/usePermissions';
 
 const HRM_API_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
 
+
 function performRedirect(targetUrl: string, token?: string | null) {
+  const destination = new URL(targetUrl, window.location.origin);
+  if (destination.origin !== window.location.origin) { window.location.href = '/'; return; }
   if (token && targetUrl.includes('/api/v1/mcp/oauth/callback')) {
     const sep = targetUrl.includes('?') ? '&' : '?';
     window.location.href = `${targetUrl}${sep}token=${encodeURIComponent(token)}`;
@@ -30,23 +33,28 @@ export function LoginPage() {
 
   // Auto-login if token present in URL or shared root domain cookies (*.dkpharma.io.vn) or refreshable
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('logout') === 'unconfirmed') {
+      setErrorMessage('Đã đăng xuất trên thiết bị này. Chưa xác nhận được việc thu hồi phiên HRM; vui lòng kiểm tra lại trên cổng nhân sự.');
+      return;
+    }
     extractAndSaveTokensFromUrl();
     if (getSessionError()) setErrorMessage('Các phiên đăng nhập đang mâu thuẫn. Vui lòng đăng nhập lại để xác nhận đúng tài khoản.');
     const token = getAccessToken();
     if (token) {
       invalidateMeCache();
       invalidatePermissionsCache();
-      setupSilentRefresh();
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
-      performRedirect(redirectTo, token);
+      setIsLoading(true);
+      api.getMe().then(() => performRedirect(redirectTo, token)).catch(() => {
+        setErrorMessage('Chưa xác minh được phiên đăng nhập. Vui lòng đăng nhập lại.');
+      }).finally(() => setIsLoading(false));
       return;
     }
 
-    const refreshToken = getRefreshToken();
-    if (refreshToken) {
+    if (!getSessionError()) {
       setIsLoading(true);
-      refreshAccessToken()
+      restoreBrowserSession()
         .then((newToken) => {
           setIsLoading(false);
           if (newToken) {
@@ -76,8 +84,9 @@ export function LoginPage() {
     try {
       setIsLoading(true);
 
-      const response = await fetch(`${HRM_API_URL}/auth/login`, {
+      const response = await fetch(`${API_HOST}/api/v1/auth/login`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
@@ -89,14 +98,13 @@ export function LoginPage() {
 
       const data = await response.json();
       const accessToken = data.accessToken || data.access_token || data.token;
-      const refreshToken = data.refreshToken || data.refresh_token;
 
       if (!accessToken) {
         throw new Error('Không nhận được mã xác thực từ máy chủ.');
       }
 
-      // Save tokens to both localStorage AND shared domain cookies (*.dkpharma.io.vn)
-      saveAuthTokens(accessToken, refreshToken);
+      saveAuthTokens(accessToken, null, data.hrmId);
+      markCookieSession(data.hrmId);
       setupSilentRefresh();
       invalidateMeCache();
       invalidatePermissionsCache();

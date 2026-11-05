@@ -11,7 +11,8 @@ describe('HrmIdentityService', () => {
   beforeEach(() => {
     HrmIdentityService.invalidateCache();
     prisma = { user: { findMany: jest.fn().mockResolvedValue([user]), create: jest.fn(), findUnique: jest.fn() } };
-    service = new HrmIdentityService({ get: (key: string) => key === 'HRM_API_URL' ? 'https://hrm.example.test' : undefined } as any, prisma);
+    const settings: Record<string, string> = { HRM_API_URL: 'https://hrm.example.test', HRM_APPLICATION_ID: '7', HRM_APPLICATION_KEY: 'equipment' };
+    service = new HrmIdentityService({ get: (key: string) => settings[key] } as any, prisma);
   });
   afterEach(() => { global.fetch = originalFetch; });
 
@@ -71,11 +72,31 @@ describe('HrmIdentityService', () => {
   it('rejects refresh-token user A when the verified session belongs to B', async () => {
     global.fetch = jest.fn()
       .mockResolvedValueOnce(response({ accessToken: 'access-a', refreshToken: 'refresh-a' }))
-      .mockResolvedValueOnce(response({ ...profile, id: 'A' })) as any;
+      .mockResolvedValueOnce(response({ ...profile, id: 'A' })).mockResolvedValueOnce(response([{ id: 7, key: 'equipment', is_active: true }])) as any;
     await expect(service.refreshSession('refresh-a', '1120')).rejects.toBeInstanceOf(UnauthorizedException);
   });
   it('accepts refresh only after verifying the same HRM identity', async () => {
-    global.fetch = jest.fn().mockResolvedValueOnce(response({ accessToken: 'new-b' })).mockResolvedValueOnce(response(profile)) as any;
+    global.fetch = jest.fn().mockResolvedValueOnce(response({ accessToken: 'new-b' })).mockResolvedValueOnce(response(profile)).mockResolvedValueOnce(response([{ id: 7, key: 'equipment', is_active: true }])) as any;
     await expect(service.refreshSession('refresh-b', '1120')).resolves.toEqual({ accessToken: 'new-b', refreshToken: 'refresh-b' });
+  });
+  it('revokes the rotated refresh token even after application access has been removed', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response({ accessToken: 'new-b', refreshToken: 'rotated-b' }))
+      .mockResolvedValueOnce(response(profile)).mockResolvedValueOnce(response({})) as any;
+    await expect(service.logout('refresh-b', '1120')).resolves.toEqual({ revoked: true });
+    expect(global.fetch).toHaveBeenLastCalledWith('https://hrm.example.test/auth/logout', expect.objectContaining({
+      body: JSON.stringify({ refreshToken: 'rotated-b' }),
+    }));
+    expect((global.fetch as jest.Mock).mock.calls.some(([url]) => url.endsWith('/users/me/applications'))).toBe(false);
+  });
+  it('does not report successful revocation when HRM logout fails', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response({ accessToken: 'new-b' }))
+      .mockResolvedValueOnce(response(profile)).mockResolvedValueOnce(response({}, 503)) as any;
+    await expect(service.logout('refresh-b', '1120')).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+  it('never revokes a refresh token belonging to a different verified identity', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response({ accessToken: 'new-a' }))
+      .mockResolvedValueOnce(response({ ...profile, id: 'another-user' })) as any;
+    await expect(service.logout('refresh-a', '1120')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 });

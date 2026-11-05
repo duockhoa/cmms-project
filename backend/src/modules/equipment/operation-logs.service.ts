@@ -1,3 +1,4 @@
+import { equipmentScope } from '../../common/auth/resource-scope';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SubmitOperationLogsDto } from './dto/operation-log.dto';
@@ -24,8 +25,9 @@ export class OperationLogsService {
     });
   }
 
-  async getAllLogs(limit: number = 100) {
+  async getAllLogs(limit: number = 100, actor?: any) {
     return this.prisma.operationLog.findMany({
+      where: actor ? { equipment: equipmentScope(actor) } : {},
       orderBy: { recordedAt: 'desc' },
       take: limit,
       include: {

@@ -4,10 +4,13 @@ export interface UserWithPermissions {
   id: string;
   name?: string | null;
   role?: string | null;
+  isActive?: boolean;
+  accessBlocked?: boolean;
   department?: string | null;
   managedDepartments?: string | string[] | null;
   customRole?: {
     id?: string;
+    isActive?: boolean;
     name?: string;
     permissions?: string | string[] | null;
   } | null;
@@ -87,10 +90,10 @@ export function isUserInDepartment(
  * Trích xuất danh sách mã quyền hiệu lực (Set<string>) từ user.
  */
 export function extractEffectivePermissions(user: UserWithPermissions | null | undefined): Set<string> {
-  if (!user) return new Set();
+  if (!user || user.isActive === false || user.accessBlocked) return new Set();
 
   let rolePerms: string[] = [];
-  if (user.customRole?.permissions) {
+  if (user.customRole?.isActive !== false && user.customRole?.permissions) {
     try {
       rolePerms = typeof user.customRole.permissions === 'string'
         ? JSON.parse(user.customRole.permissions)
@@ -114,7 +117,7 @@ export function extractEffectivePermissions(user: UserWithPermissions | null | u
   const perms = new Set<string>([...(Array.isArray(rolePerms) ? rolePerms : []), ...(Array.isArray(customPerms) ? customPerms : [])]);
   
   // Backward compatibility: If legacy role is ADMIN, grant global wildcard
-  if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
+  if (user.customRole?.isActive !== false && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN')) {
     perms.add('*');
   }
 
@@ -125,8 +128,8 @@ export function extractEffectivePermissions(user: UserWithPermissions | null | u
  * Kiểm tra xem người dùng có quyền toàn quyền (Global Scope - ví dụ Admin) hay không.
  */
 export function isGlobalAdmin(user: UserWithPermissions | null | undefined): boolean {
-  if (!user) return false;
-  if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') return true;
+  if (!user || user.isActive === false || user.accessBlocked) return false;
+  if (user.customRole?.isActive !== false && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN')) return true;
   const perms = extractEffectivePermissions(user);
   return perms.has('*') || perms.has('ALL') || ALL_PERMISSION_CODES.every((permission) => perms.has(permission));
 }
@@ -135,8 +138,8 @@ export function isGlobalAdmin(user: UserWithPermissions | null | undefined): boo
  * Kiểm tra xem user có mã quyền yêu cầu hay không (hỗ trợ wildcard '*', 'ALL', '{module}:*').
  */
 export function hasPermission(user: UserWithPermissions | null | undefined, requiredPermission: string): boolean {
-  if (!user) return false;
-  if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') return true;
+  if (!user || user.isActive === false || user.accessBlocked) return false;
+  if (user.customRole?.isActive !== false && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN')) return true;
 
   const effectivePerms = extractEffectivePermissions(user);
 
@@ -199,4 +202,11 @@ export function canManageDepartmentRequest(
   }
 
   return { allowed: true };
+}
+
+/** The same expansion is returned by /auth/me and enforced by every permission guard. */
+export function effectivePermissionCodes(user: UserWithPermissions | null | undefined): string[] {
+  const permissions = extractEffectivePermissions(user);
+  if (permissions.has('*') || permissions.has('ALL')) return ['ALL', ...ALL_PERMISSION_CODES];
+  return ALL_PERMISSION_CODES.filter(code => hasPermission(user, code));
 }

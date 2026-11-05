@@ -1,3 +1,4 @@
+import { scheduleScope } from '../../common/auth/resource-scope';
 import {
   Injectable,
   NotFoundException,
@@ -913,8 +914,8 @@ export class SchedulesService implements OnModuleInit {
     search?: string;
     page?: number | string;
     limit?: number | string;
-  }) {
-    const where: any = {};
+  }, actor?: any) {
+    const where: any = actor ? { AND: [scheduleScope(actor)] } : {};
 
     if (query?.status) where.status = query.status;
     if (query?.equipmentId) where.equipmentId = query.equipmentId;

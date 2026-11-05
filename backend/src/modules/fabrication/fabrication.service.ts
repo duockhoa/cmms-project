@@ -1,3 +1,4 @@
+import { fabricationScope } from '../../common/auth/resource-scope';
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateFabricationDto } from './dto/create-fabrication.dto';
@@ -137,7 +138,7 @@ export class FabricationService {
     },
     user?: any,
   ) {
-    const where: any = {};
+    const where: any = user ? { AND: [fabricationScope(user)] } : { id: { in: [] } };
 
     if (params?.status && params.status !== 'ALL' && params.status.trim()) {
       where.status = params.status.trim();
@@ -179,28 +180,6 @@ export class FabricationService {
       },
     });
 
-    const role = user?.role ? String(user.role).toUpperCase() : '';
-    const roles: string[] = Array.isArray(user?.roles) ? user.roles.map((r: any) => String(r).toUpperCase()) : [];
-    const isManagerOrAdmin =
-      role === 'ADMIN' ||
-      role === 'SUPER_ADMIN' ||
-      role === 'MANAGER' ||
-      roles.some((r) => r.includes('ADMIN') || r.includes('MANAGER') || r.includes('QUẢN LÝ') || r.includes('TRƯỞNG'));
-
-    // Nếu không phải là Quản lý / Admin (nhân viên thường), chỉ trả về các phiếu mình được phân công
-    if (!isManagerOrAdmin && user?.id) {
-      const uid = String(user.id);
-      return items.filter((item) => {
-        if (item.assignedTechnicianId === uid) return true;
-        try {
-          const sup = item.supporterIds
-            ? (typeof item.supporterIds === 'string' ? JSON.parse(item.supporterIds) : item.supporterIds)
-            : [];
-          if (Array.isArray(sup) && sup.map(String).includes(uid)) return true;
-        } catch {}
-        return false;
-      });
-    }
 
     return items;
   }
@@ -545,41 +524,12 @@ export class FabricationService {
   }
 
   async getStats(user?: any) {
-    const role = user?.role ? String(user.role).toUpperCase() : '';
-    const roles: string[] = Array.isArray(user?.roles) ? user.roles.map((r: any) => String(r).toUpperCase()) : [];
-    const isManagerOrAdmin =
-      role === 'ADMIN' ||
-      role === 'SUPER_ADMIN' ||
-      role === 'MANAGER' ||
-      roles.some((r) => r.includes('ADMIN') || r.includes('MANAGER') || r.includes('QUẢN LÝ') || r.includes('TRƯỞNG'));
-
-    // Nếu là nhân viên thường, thống kê chỉ tính trên các phiếu mà nhân viên đó được phân công
-    if (!isManagerOrAdmin && user?.id) {
-      const userOrders = await this.findAll({}, user);
-      return {
-        total: userOrders.length,
-        assigned: userOrders.filter((x) => x.status === 'ASSIGNED').length,
-        inProgress: userOrders.filter((x) => x.status === 'IN_PROGRESS').length,
-        completed: userOrders.filter((x) => x.status === 'COMPLETED').length,
-        closed: userOrders.filter((x) => x.status === 'CLOSED').length,
-      };
-    }
-
+    const scope = user ? fabricationScope(user) : { id: { in: [] } };
+    const count = (status?: string) => this.prisma.fabricationOrder.count({ where: { AND: [scope, status ? { status } : {}] } });
     const [total, assigned, inProgress, completed, closed] = await Promise.all([
-      this.prisma.fabricationOrder.count(),
-      this.prisma.fabricationOrder.count({ where: { status: 'ASSIGNED' } }),
-      this.prisma.fabricationOrder.count({ where: { status: 'IN_PROGRESS' } }),
-      this.prisma.fabricationOrder.count({ where: { status: 'COMPLETED' } }),
-      this.prisma.fabricationOrder.count({ where: { status: 'CLOSED' } }),
+      count(), count('ASSIGNED'), count('IN_PROGRESS'), count('COMPLETED'), count('CLOSED'),
     ]);
-
-    return {
-      total,
-      assigned,
-      inProgress,
-      completed,
-      closed,
-    };
+    return { total, assigned, inProgress, completed, closed };
   }
 
   async getProgressLogs(orderId: string) {

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test:auth": "node --test tests/auth-session.test.cjs",
+    "test:auth:browser": "node tests/run-auth-browser.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

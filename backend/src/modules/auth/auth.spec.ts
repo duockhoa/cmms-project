@@ -1,97 +1,73 @@
-const baseDbUrl = process.env.DATABASE_URL || "mysql://root:123456@localhost:3306/dk_cmms";
-process.env.DATABASE_URL = baseDbUrl.includes('?')
-  ? baseDbUrl.replace(/\/([^/?]+)\?/, '/dk_cmms_test_auth?auth')
-  : baseDbUrl.replace(/\/([^/]+)$/, '/dk_cmms_test_auth');
-
-import { NestApplicationContext } from '@nestjs/core';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../../app.module';
-import { PrismaService } from '../../prisma/prisma.service';
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
-import { INestApplication } from '@nestjs/common';
+import 'reflect-metadata';
+import { INestApplication, Module } from '@nestjs/common';
+import { APP_GUARD, NestFactory } from '@nestjs/core';
+import { PassportModule } from '@nestjs/passport';
+import { JwtService } from '@nestjs/jwt';
 import * as request from 'supertest';
+import { AuthController } from './auth.controller';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { JwtStrategy } from './jwt.strategy';
+import { HrmIdentityService } from './hrm-identity.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { ResourceAccessService } from '../../common/auth/resource-access.service';
+import { BrowserSessionService } from './browser-session.service';
 
-jest.setTimeout(30000);
-
-describe('Authentication & Authorization Flow', () => {
+describe('Authentication HTTP flow with isolated storage', () => {
+  const secret = 'auth-http-tests-only';
+  const jwt = new JwtService({ secret });
+  const user = { id: 'local-user', hrmId: 'external-user', role: 'USER', name: 'Test User', isActive: true, department: 'QA', customPermissions: '["work_orders:execute"]' };
+  const prisma = { user: { findUnique: jest.fn() } };
+  const identities = { validateSession: jest.fn(), resolve: jest.fn(), login: jest.fn(), refreshSession: jest.fn(), logout: jest.fn() };
   let app: INestApplication;
-  let prisma: PrismaService;
-  
+
+  @Module({
+    imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
+    controllers: [AuthController],
+    providers: [
+      { provide: PrismaService, useValue: prisma },
+      { provide: HrmIdentityService, useValue: identities },
+      { provide: BrowserSessionService, useValue: {} },
+      { provide: ResourceAccessService, useValue: { assertRequest: jest.fn() } },
+      { provide: JwtStrategy, useFactory: () => new JwtStrategy({ get: (key: string) => key === 'HRM_JWT_SECRET' ? secret : undefined } as any, prisma as any, identities as any) },
+      { provide: APP_GUARD, useClass: JwtAuthGuard },
+    ],
+  })
+  class TestModule {}
 
   beforeAll(async () => {
-    
-
-    execSync('npx prisma db push --force-reset --accept-data-loss --skip-generate', {
-      env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL },
-      stdio: 'inherit',
-    });
-
-    const nestApp = await NestFactory.create(AppModule);
-    app = nestApp;
+    app = await NestFactory.create(TestModule, { logger: false });
     await app.init();
-    prisma = app.get(PrismaService);
-
-    // Seed test users with different roles
-    await prisma.user.create({
-      data: {
-        id: 'user-admin-id',
-        name: 'Admin User',
-        email: 'admin@company.com',
-        role: 'ADMIN',
-        isActive: true,
-      },
-    });
-
-    await prisma.user.create({
-      data: {
-        id: 'user-tech-id',
-        name: 'Tech User',
-        email: 'tech@company.com',
-        role: 'TECHNICIAN',
-        isActive: true,
-      },
-    });
+  });
+  afterAll(async () => { await app?.close(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma.user.findUnique.mockResolvedValue({ ...user });
+    identities.validateSession.mockResolvedValue({ id: user.hrmId, name: user.name });
+    identities.resolve.mockResolvedValue({ ...user });
   });
 
-  afterAll(async () => {
-    if (app) {
-      await app.close();
-    }
-    
+  it('rejects absent JWTs and spoofed administrator headers', async () => {
+    await request(app.getHttpServer()).get('/auth/me').expect(401);
+    await request(app.getHttpServer()).get('/auth/me').set('x-test-user-id', 'admin').set('x-test-roles', 'ADMIN').expect(401);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('should return 401 Unauthorized when requesting /auth/me without token', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/auth/me')
-      .expect(401);
-
-    expect(res.body.message).toBe('Authentication token is missing, expired, or invalid.');
+  it('returns verified identity and effective local permissions for a signed JWT', async () => {
+    const result = await request(app.getHttpServer()).get('/auth/me')
+      .set('Authorization', 'Bearer ' + jwt.sign({ sub: 'employee-code' })).expect(200);
+    expect(result.body.identity).toEqual({ provider: 'hrm', subject: user.hrmId });
+    expect(result.body.user.id).toBe(user.id);
+    expect(result.body.permissions).toContain('work_orders:execute');
+    expect(result.body.permissions).not.toContain('ALL');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('should return user info when authenticated via mock headers (ADMIN)', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/auth/me')
-      .set('x-test-user-id', 'user-admin-id')
-      .set('x-test-roles', 'ADMIN')
-      .expect(200);
-
-    expect(res.body.authenticated).toBe(true);
-    expect(res.body.user.role).toBe('ADMIN');
-    expect(res.body.permissions).toContain('ALL');
-  });
-
-  it('should return user info when authenticated via mock headers (TECHNICIAN)', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/auth/me')
-      .set('x-test-user-id', 'user-tech-id')
-      .set('x-test-roles', 'TECHNICIAN')
-      .expect(200);
-
-    expect(res.body.authenticated).toBe(true);
-    expect(res.body.user.role).toBe('TECHNICIAN');
-    expect(res.body.permissions).toContain('WORK_ORDER_EXECUTE');
-    expect(res.body.permissions).not.toContain('ALL');
+  it('returns administrator permissions consistently with the backend resolver', async () => {
+    const admin = { ...user, role: 'ADMIN' };
+    identities.resolve.mockResolvedValue(admin);
+    const result = await request(app.getHttpServer()).get('/auth/me')
+      .set('Authorization', 'Bearer ' + jwt.sign({ sub: 'employee-code' })).expect(200);
+    expect(result.body.user.role).toBe('ADMIN');
+    expect(result.body.permissions).toContain('ALL');
   });
 });

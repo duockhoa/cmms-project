@@ -15,7 +15,7 @@ describe('passport JWT identity boundary', () => {
   });
   beforeEach(() => {
     identities = {
-      getProfile: jest.fn().mockResolvedValue({ id: '1120', name: 'Verified Employee B' }),
+      validateSession: jest.fn().mockResolvedValue({ id: '1120', name: 'Verified Employee B' }),
       resolve: jest.fn().mockResolvedValue(account),
     };
     new JwtStrategy({ get: (key: string) => key === 'HRM_JWT_SECRET' ? secret : undefined } as ConfigService, {} as any, identities);
@@ -26,10 +26,10 @@ describe('passport JWT identity boundary', () => {
     expect(user.id).toBe('local-b');
     expect(user.name).toBe('Verified Employee B');
     expect(user.identity).toEqual({ provider: 'hrm', subject: '1120' });
-    expect(identities.getProfile).toHaveBeenCalledWith(token, true);
+    expect(identities.validateSession).toHaveBeenCalledWith(token, true);
   });
   it('regression: employee code 1120 must resolve to verified HRM id 1125, not the account with id 1120', async () => {
-    identities.getProfile.mockResolvedValue({ id: '1125', name: 'Employee B' });
+    identities.validateSession.mockResolvedValue({ id: '1125', name: 'Employee B' });
     identities.resolve.mockResolvedValue({ ...account, id: '1125', hrmId: '1125' });
     const token = jwt.sign({ sub: '1120', username: '1120' });
     const user = await verify({ authorization: `Bearer ${token}` });
@@ -39,12 +39,12 @@ describe('passport JWT identity boundary', () => {
   it('rejects expired tokens before consulting HRM or local users', async () => {
     const token = jwt.sign({ sub: 'b', exp: 1 });
     expect(await verify({ authorization: `Bearer ${token}` })).toBe(false);
-    expect(identities.getProfile).not.toHaveBeenCalled();
+    expect(identities.validateSession).not.toHaveBeenCalled();
   });
   it('rejects cookie-only requests with multiple sessions', async () => {
     const a = jwt.sign({ sub: 'a' }), b = jwt.sign({ sub: 'b' });
     expect(await verify({ cookie: `accessToken=${a}; access_token=${b}` })).toBe(false);
-    expect(identities.getProfile).not.toHaveBeenCalled();
+    expect(identities.validateSession).not.toHaveBeenCalled();
   });
   it('accepts a consistent cookie pair and rechecks local inactivity', async () => {
     const token = jwt.sign({ sub: 'b' });

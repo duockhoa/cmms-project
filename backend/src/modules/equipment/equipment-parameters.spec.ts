@@ -139,6 +139,7 @@ describe('EquipmentParameters & RBAC PermissionsGuard Tests', () => {
     it('should throw ForbiddenException if user has neither role permissions nor custom permissions', async () => {
       jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['equipment:reorder_parameters']);
       mockPrismaService.user.findUnique.mockResolvedValue({
+        isActive: true,
         id: 'user-1',
         customRole: { permissions: JSON.stringify(['equipment:view']) },
         customPermissions: null,
@@ -151,6 +152,7 @@ describe('EquipmentParameters & RBAC PermissionsGuard Tests', () => {
     it('should allow access if role has exact permission "equipment:reorder_parameters"', async () => {
       jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['equipment:reorder_parameters']);
       mockPrismaService.user.findUnique.mockResolvedValue({
+        isActive: true,
         id: 'user-1',
         customRole: { permissions: JSON.stringify(['equipment:view', 'equipment:reorder_parameters']) },
         customPermissions: null,
@@ -164,6 +166,7 @@ describe('EquipmentParameters & RBAC PermissionsGuard Tests', () => {
     it('should allow access if role has wildcard "*"', async () => {
       jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['equipment:reorder_parameters']);
       mockPrismaService.user.findUnique.mockResolvedValue({
+        isActive: true,
         id: 'user-admin',
         customRole: { permissions: JSON.stringify(['*']) },
         customPermissions: null,
@@ -177,6 +180,7 @@ describe('EquipmentParameters & RBAC PermissionsGuard Tests', () => {
     it('should allow access if role has wildcard "ALL"', async () => {
       jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['equipment:reorder_parameters']);
       mockPrismaService.user.findUnique.mockResolvedValue({
+        isActive: true,
         id: 'user-admin',
         customRole: { permissions: JSON.stringify(['ALL']) },
         customPermissions: null,
@@ -190,6 +194,7 @@ describe('EquipmentParameters & RBAC PermissionsGuard Tests', () => {
     it('should allow access if role has module wildcard "equipment:*"', async () => {
       jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['equipment:reorder_parameters']);
       mockPrismaService.user.findUnique.mockResolvedValue({
+        isActive: true,
         id: 'user-equip-manager',
         customRole: { permissions: JSON.stringify(['equipment:*']) },
         customPermissions: null,
@@ -203,6 +208,7 @@ describe('EquipmentParameters & RBAC PermissionsGuard Tests', () => {
     it('should allow access if granted specifically via user customPermissions', async () => {
       jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['equipment:reorder_parameters']);
       mockPrismaService.user.findUnique.mockResolvedValue({
+        isActive: true,
         id: 'user-special',
         customRole: { permissions: JSON.stringify(['equipment:view']) },
         customPermissions: JSON.stringify(['equipment:reorder_parameters']),

@@ -1,3 +1,4 @@
+import { equipmentScope } from '../../common/auth/resource-scope';
 import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
@@ -507,8 +508,8 @@ export class OeeRecordsService implements OnModuleInit {
     endDate?: string;
     limit?: string;
     batchOeeId?: string;
-  }) {
-    const where: any = {};
+  }, actor?: any) {
+    const where: any = actor ? { AND: [{ equipment: equipmentScope(actor) }] } : {};
     if (query?.batchOeeId) where.batchOeeId = query.batchOeeId;
 
     if (query?.equipmentId) {
@@ -598,7 +599,7 @@ export class OeeRecordsService implements OnModuleInit {
   async getOeeAnalyticsSummary(query?: {
     startDate?: string; endDate?: string; department?: string; equipmentId?: string;
     criticalOnly?: string; calculationMethod?: string; batchOeeId?: string;
-  }) {
+  }, actor?: any) {
     const calculationMethod = (query?.calculationMethod || 'PA1') as OeeMethod;
     if (!['PA1', 'PA2', 'PA3'].includes(calculationMethod)) {
       throw new BadRequestException('Phương án OEE phải là PA1, PA2 hoặc PA3.');
@@ -616,7 +617,7 @@ export class OeeRecordsService implements OnModuleInit {
     const today = businessDateKey(new Date());
     const endDate = requestedEnd && requestedEnd < today ? requestedEnd : today;
     const criticalEquipments = await this.prisma.equipment.findMany({
-      where: { isActive: true, ...(query?.criticalOnly !== 'false' ? { isCritical: true } : {}),
+      where: { isActive: true, ...(actor ? { AND: [equipmentScope(actor)] } : {}), ...(query?.criticalOnly !== 'false' ? { isCritical: true } : {}),
         ...(query?.department ? { department: query.department } : {}),
         ...(query?.equipmentId ? { id: query.equipmentId } : {}) },
       orderBy: [{ department: 'asc' }, { name: 'asc' }],

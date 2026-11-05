@@ -1,3 +1,5 @@
+import { equipmentScope } from '../../common/auth/resource-scope';
+import { buildRequestScopeWhere, buildWorkOrderScopeWhere } from '../../common/utils/data-scope.helper';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -5,7 +7,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class AnalyticsService {
   constructor(private prisma: PrismaService) {}
 
-  async getDashboardSummary() {
+  async getDashboardSummary(actor?: any) {
+    const eq = equipmentScope(actor), requests = buildRequestScopeWhere(actor), workOrders = buildWorkOrderScopeWhere(actor);
     const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
 
     const [
@@ -22,34 +25,37 @@ export class AnalyticsService {
       urgentWorkOrders,
       overdueIncidents4hCount,
     ] = await Promise.all([
-      this.prisma.equipment.count(),
-      this.prisma.equipment.count({ where: { status: 'OPERATIONAL' } }),
-      this.prisma.equipment.count({ where: { status: 'UNDER_MAINTENANCE' } }),
-      this.prisma.equipment.count({ where: { status: 'INCIDENT' } }),
-      this.prisma.maintenanceRequest.count({ where: { status: 'PENDING' } }),
+      this.prisma.equipment.count({ where: eq }),
+      this.prisma.equipment.count({ where: { AND: [eq], status: 'OPERATIONAL' } }),
+      this.prisma.equipment.count({ where: { AND: [eq], status: 'UNDER_MAINTENANCE' } }),
+      this.prisma.equipment.count({ where: { AND: [eq], status: 'INCIDENT' } }),
+      this.prisma.maintenanceRequest.count({ where: { AND: [requests], status: 'PENDING' } }),
       this.prisma.workOrder.count({
-        where: { status: { in: ['PENDING', 'IN_PROGRESS', 'INSPECTION'] } },
+        where: { AND: [workOrders], status: { in: ['PENDING', 'IN_PROGRESS', 'INSPECTION'] } },
       }),
-      this.prisma.workOrder.count({ where: { status: 'COMPLETED' } }),
+      this.prisma.workOrder.count({ where: { AND: [workOrders], status: 'COMPLETED' } }),
       this.prisma.workOrder.aggregate({
+        where: workOrders,
         _sum: { totalCost: true },
       }),
       this.prisma.inventoryItem.count({
         where: { quantity: { lte: 5 } },
       }),
       this.prisma.maintenanceRequest.findMany({
+        where: requests,
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: { equipment: true },
       }),
       this.prisma.workOrder.findMany({
-        where: { priority: { in: ['HIGH', 'URGENT'] }, status: { not: 'COMPLETED' } },
+        where: { AND: [workOrders], priority: { in: ['HIGH', 'URGENT'] }, status: { not: 'COMPLETED' } },
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: { equipment: true },
       }),
       this.prisma.maintenanceRequest.count({
         where: {
+          AND: [requests],
           priority: { in: ['HIGH', 'URGENT'] },
           createdAt: { lt: fourHoursAgo },
           status: { notIn: ['REJECTED', 'CANCELLED'] },
@@ -79,10 +85,10 @@ export class AnalyticsService {
     };
   }
 
-  async getOperationLogsReport(limit: number = 50) {
+  async getOperationLogsReport(limit: number = 50, actor?: any) {
     // Get latest outlier logs (excluding voided erroneous logs)
     const outliers = await this.prisma.operationLog.findMany({
-      where: { isOutlier: true, isVoided: false },
+      where: { isOutlier: true, isVoided: false, ...(actor ? { equipment: equipmentScope(actor) } : {}) },
       orderBy: { recordedAt: 'desc' },
       take: limit,
       include: {
@@ -95,7 +101,7 @@ export class AnalyticsService {
     // Group by equipment to find those with most issues (excluding voided)
     const grouped = await this.prisma.operationLog.groupBy({
       by: ['equipmentId'],
-      where: { isOutlier: true, isVoided: false },
+      where: { isOutlier: true, isVoided: false, ...(actor ? { equipment: equipmentScope(actor) } : {}) },
       _count: { isOutlier: true },
       orderBy: { _count: { isOutlier: 'desc' } },
       take: 10,

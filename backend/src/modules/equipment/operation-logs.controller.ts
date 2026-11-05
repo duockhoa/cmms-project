@@ -41,7 +41,7 @@ export class GlobalOperationLogsController {
   constructor(private readonly service: OperationLogsService) {}
 
   @Get()
-  getAllLogs() {
-    return this.service.getAllLogs();
+  getAllLogs(@Req() req: any) {
+    return this.service.getAllLogs(100, req.user);
   }
 }

@@ -58,6 +58,7 @@ export class GlobalOeeRecordsController {
     @Query('endDate') endDate?: string,
     @Query('limit') limit?: string,
     @Query('batchOeeId') batchOeeId?: string,
+    @Req() req?: any,
   ) {
     return this.service.getAllRecords({
       equipmentId,
@@ -67,7 +68,7 @@ export class GlobalOeeRecordsController {
       endDate,
       limit,
       batchOeeId,
-    });
+    }, req?.user);
   }
 
   @Get('analytics')
@@ -79,6 +80,7 @@ export class GlobalOeeRecordsController {
     @Query('criticalOnly') criticalOnly?: string,
     @Query('calculationMethod') calculationMethod?: string,
     @Query('batchOeeId') batchOeeId?: string,
+    @Req() req?: any,
   ) {
     return this.service.getOeeAnalyticsSummary({
       startDate,
@@ -88,7 +90,7 @@ export class GlobalOeeRecordsController {
       criticalOnly,
       calculationMethod,
       batchOeeId,
-    });
+    }, req?.user);
   }
 
   @Post(':recordId/void')

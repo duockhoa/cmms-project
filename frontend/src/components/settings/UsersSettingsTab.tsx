@@ -7,8 +7,14 @@ import {
   Search, Check, AlertTriangle, UserCheck, UserX, User, Key, ShieldAlert
 } from 'lucide-react';
 import { UserCustomPermissionsModal } from './UserCustomPermissionsModal';
+import { UserMergeModal, UserMergeHistoryModal } from './UserMergeModal';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export const UsersSettingsTab: React.FC = () => {
+  const { can } = usePermissions();
+  const canMerge = can('settings:users') && can('settings:merge_users');
+  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
+  const [mergeHistoryUser, setMergeHistoryUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -46,7 +52,7 @@ export const UsersSettingsTab: React.FC = () => {
     try {
       const [uRes, rRes] = await Promise.all([
         api.getUsers({ includeInactive: true }),
-        api.getRoles(),
+        can('settings:roles') ? api.getRoles() : Promise.resolve([]),
       ]);
       setUsers(uRes);
       setRoles(rRes);
@@ -174,18 +180,18 @@ export const UsersSettingsTab: React.FC = () => {
 
   const handleDeleteUser = async (user: any) => {
     const ok = await confirm(
-      'Xác nhận xóa người dùng',
-      `Bạn có chắc chắn muốn xóa tài khoản "${user.name}" (${user.email}) khỏi hệ thống không?`,
+      'Xác nhận khóa người dùng',
+      `Khóa tài khoản "${user.name}" (${user.email})? Lịch sử thao tác và người thực hiện trên các phiếu được giữ nguyên.`,
       { type: 'danger' }
     );
     if (!ok) return;
 
     try {
       await api.deleteUser(user.id);
-      toast.success('Đã xóa', `Đã xóa người dùng "${user.name}".`);
+      toast.success('Đã khóa', `Đã khóa tài khoản "${user.name}".`);
       loadData();
     } catch (err: any) {
-      toast.error('Lỗi', err.message || 'Không thể xóa người dùng');
+      toast.error('Lỗi', err.message || 'Không thể khóa người dùng');
     }
   };
 
@@ -248,6 +254,7 @@ export const UsersSettingsTab: React.FC = () => {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {canMerge && <button className="btn btn-secondary" onClick={() => setMergeSourceId('')}>Gộp tài khoản thủ công</button>}
           {pendingCount > 0 && (
             <button 
               className="btn btn-primary" 
@@ -439,7 +446,7 @@ export const UsersSettingsTab: React.FC = () => {
                       </div>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      {u.isActive !== false ? (
+                      {u.mergedIntoId ? <span title={`Đích: ${u.mergedIntoId}`}>Đã gộp</span> : u.isActive !== false ? (
                         <span style={{ color: 'var(--success)', fontSize: '12px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                           <UserCheck size={14} /> Hoạt động
                         </span>
@@ -451,6 +458,10 @@ export const UsersSettingsTab: React.FC = () => {
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                        {canMerge && <>
+                          {!u.mergedIntoId && <button className="btn btn-secondary btn-sm" onClick={() => setMergeSourceId(u.id)}>Gộp</button>}
+                          <button className="btn btn-secondary btn-sm" onClick={() => setMergeHistoryUser(u)}>Lịch sử gộp</button>
+                        </>}
                         <button 
                           className="btn btn-secondary btn-sm" 
                           onClick={() => setPermissionsModalUser(u)}
@@ -471,7 +482,7 @@ export const UsersSettingsTab: React.FC = () => {
                           className="btn btn-secondary btn-sm" 
                           onClick={() => handleDeleteUser(u)}
                           style={{ padding: '4px 8px', fontSize: '12px', color: 'var(--danger)' }}
-                          title="Xóa người dùng"
+                          title="Khóa tài khoản, giữ lịch sử"
                         >
                           <Trash2 size={12} />
                         </button>
@@ -627,6 +638,13 @@ export const UsersSettingsTab: React.FC = () => {
       </Modal>
 
       {/* Direct User Permissions Modal */}
+      {mergeSourceId !== null && <UserMergeModal users={users} initialSourceId={mergeSourceId}
+        onClose={() => setMergeSourceId(null)} onMerged={result => {
+          setMergeSourceId(null); setIdentityIssues(null);
+          toast.success('Đã gộp tài khoản', `Đã chuyển ${result.totalRecords} bản ghi. Mã thao tác: ${result.auditId}`);
+          void loadData();
+        }} />}
+      {mergeHistoryUser && <UserMergeHistoryModal user={mergeHistoryUser} onClose={() => setMergeHistoryUser(null)} />}
       {permissionsModalUser && (
         <UserCustomPermissionsModal
           isOpen={!!permissionsModalUser}

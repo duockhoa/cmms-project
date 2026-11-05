@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { buildRequestScopeWhere, buildWorkOrderScopeWhere } from '../../common/utils/data-scope.helper';
 import { hasPermission, UserWithPermissions } from '../../common/utils/rbac.helper';
+import { equipmentScope, fabricationScope } from '../../common/auth/resource-scope';
 
 const RETENTION_POLICIES: Record<string, 'HARD_DELETE' | 'SOFT_DELETE'> = {
   Equipment: 'HARD_DELETE',
@@ -70,6 +71,14 @@ export class AttachmentsService {
   ) {
     this.assertPermission(entityType, actor, mode);
     const scopedActor = actor as UserWithPermissions;
+
+    if (entityType === 'Equipment' || entityType === 'FabricationOrder') {
+      const model = entityType === 'Equipment' ? this.prisma.equipment : this.prisma.fabricationOrder;
+      const scope = entityType === 'Equipment' ? equipmentScope(scopedActor) : fabricationScope(scopedActor);
+      const entity = await (model as any).findFirst({ where: { AND: [{ id: entityId }, scope] }, select: { id: true } });
+      if (!entity) throw new NotFoundException('Không tìm thấy tài nguyên trong phạm vi truy cập.');
+      return;
+    }
 
     if (entityType === 'MaintenanceRequest') {
       const request = await this.prisma.maintenanceRequest.findFirst({

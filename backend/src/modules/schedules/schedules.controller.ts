@@ -17,8 +17,8 @@ export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
 
   @Get()
-  findAll(@Query() query: any) {
-    return this.schedulesService.findAll(query);
+  findAll(@Query() query: any, @Req() req: any) {
+    return this.schedulesService.findAll(query, req.user);
   }
 
   @Post('process-due')

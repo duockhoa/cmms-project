@@ -6,10 +6,9 @@ const matchDepartments = (departments: string[]) =>
   departments.length === 1 ? { equals: departments[0] } : { in: departments };
 
 const isDepartmentManager = (actor: UserWithPermissions): boolean => {
-  const role = (actor.role || '').toUpperCase();
+  const role = (actor.customRole?.isActive === false ? 'USER' : actor.role || '').toUpperCase();
   if (role === 'MANAGER') return true;
   if (hasPermission(actor, 'requests:approve')) return true;
-  if (actor.customRole?.name?.toLowerCase().includes('quản lý')) return true;
   return false;
 };
 
@@ -20,7 +19,7 @@ export function buildRequestScopeWhere(actor?: UserWithPermissions | null): any 
     return {};
   }
 
-  const role = (actor.role || '').toUpperCase();
+  const role = (actor.customRole?.isActive === false ? 'USER' : actor.role || '').toUpperCase();
   const departments = getUserDepartments(actor);
 
   if (role === 'MANAGER') {
@@ -46,7 +45,7 @@ export function buildRequestScopeWhere(actor?: UserWithPermissions | null): any 
     };
   }
 
-  return {};
+  return role === 'TECHNICIAN' ? {} : denyAllScope();
 }
 
 export function buildWorkOrderScopeWhere(actor?: UserWithPermissions | null): any {
@@ -56,7 +55,7 @@ export function buildWorkOrderScopeWhere(actor?: UserWithPermissions | null): an
     return {};
   }
 
-  const role = (actor.role || '').toUpperCase();
+  const role = (actor.customRole?.isActive === false ? 'USER' : actor.role || '').toUpperCase();
   const departments = getUserDepartments(actor);
 
   if (isDepartmentManager(actor)) {
@@ -66,7 +65,6 @@ export function buildWorkOrderScopeWhere(actor?: UserWithPermissions | null): an
       OR: [
         { equipment: { department: matchDepartments(departments) } },
         { request: { department: matchDepartments(departments) } },
-        ...departments.map((dept) => ({ title: { contains: dept } })),
         { assignedTechnician: { department: matchDepartments(departments) } },
       ],
     };

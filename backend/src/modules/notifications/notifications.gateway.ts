@@ -2,12 +2,14 @@ import * as passport from 'passport';
 import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { parseDepartmentList } from '../../common/utils/rbac.helper';
+import { browserOrigin, allowedBrowserOrigins } from '../../common/auth/browser-origin';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: browserOrigin,
   },
   namespace: 'notifications',
+  allowRequest: (req, callback) => callback(null, !req.headers.origin || allowedBrowserOrigins().has(req.headers.origin)),
 })
 export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -94,7 +96,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     }
 
     // Broadcast data change event to all connected clients in 'global'
-    this.server.to('global').emit('data:changed', payload);
+    this.server.to('global').emit('data:changed', { entity: payload.entity, action: payload.action });
 
     if (payload.department) {
       this.server.to(`dept:${payload.department}`).emit('data:changed', payload);
