@@ -41,3 +41,4 @@ export class CreateIncidentAssessmentDto {
   @IsOptional()
   notes?: string;
 }
+

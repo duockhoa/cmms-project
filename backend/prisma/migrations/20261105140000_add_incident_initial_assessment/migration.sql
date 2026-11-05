@@ -44,3 +44,4 @@ ALTER TABLE `IncidentInitialAssessment` ADD CONSTRAINT `IncidentInitialAssessmen
 
 -- AddForeignKey
 ALTER TABLE `IncidentInitialAssessment` ADD CONSTRAINT `IncidentInitialAssessment_assessedById_fkey` FOREIGN KEY (`assessedById`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+

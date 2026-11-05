@@ -283,3 +283,4 @@ export const IncidentResponseKpiSection: React.FC = () => {
     </div>
   );
 };
+
