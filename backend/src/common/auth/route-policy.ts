@@ -25,7 +25,10 @@ routes('McpController', {
   'getHealth getOAuthDiscovery registerClient handleAuthorize handleOAuthCallback exchangeToken': publicRoute,
   'handlePostRoot handlePostSse handleSseRoot handleSse handleMessages': session,
 });
-routes('AnalyticsController', { 'getDashboardSummary getKpiSummary': ['dashboard:view', 'reports:view'], getOperationLogsReport: ['reports:view', 'operation_logs:view'] });
+routes('AnalyticsController', {
+  'getDashboardSummary getKpiSummary getIncidentResponseKpi': ['dashboard:view', 'reports:view'],
+  getOperationLogsReport: ['reports:view', 'operation_logs:view'],
+});
 // Entity-specific permissions/ownership are additionally enforced inside AttachmentsService.
 routes('AttachmentsController', { 'uploadFile getAttachments downloadFile viewFile deleteFile': session });
 routes('EquipmentController', {
@@ -50,7 +53,7 @@ routes('RequestsController', {
 routes('WorkOrdersController', {
   'findByEquipmentQr getExecutionLogs findAll findOne getWorkOrderTransactions getActiveSession getSessions': 'work_orders:view',
   create: 'work_orders:create', 'assign assignExecutor': 'work_orders:assign',
-  'createExecutionLog start pause resume complete startSession stopSession': 'work_orders:execute',
+  'createExecutionLog start startWithAssessment pause resume complete startSession stopSession': 'work_orders:execute',
   'updateStatus escalate classify': 'work_orders:edit',
   'submitHandover': ['work_orders:execute', 'work_orders:edit'],
   'acceptHandover rejectHandover qaVerify qaReject verify close': 'work_orders:close',

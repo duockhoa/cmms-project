@@ -8,6 +8,7 @@ import { AnalyticsQueryService } from './services/analytics-query.service';
 import { AnalyticsAuditAdapter } from './adapters/analytics-audit.adapter';
 import { AnalyticsPermissionGuard } from './guards/analytics-permission.guard';
 import { KpiEngineService } from './services/kpi-engine.service';
+import { IncidentResponseKpiService } from './services/incident-response-kpi.service';
 
 @Module({
   imports: [PrismaModule],

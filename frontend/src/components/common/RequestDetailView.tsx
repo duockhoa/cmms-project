@@ -504,6 +504,53 @@ export const RequestDetailView: React.FC<RequestDetailViewProps> = ({
                 <td style={{ padding: '12px 0' }}>{req.description}</td>
               </tr>
               
+              {/* Kết quả đánh giá sơ bộ sự cố từ Kỹ thuật viên (Chốt SLA KPI 4h) */}
+              {req.initialAssessment && (
+                <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: '#f0fdf4' }}>
+                  <td style={{ padding: '14px 12px', color: '#15803d', fontWeight: 700, verticalAlign: 'top' }}>
+                    ⚡ Đánh giá sơ bộ từ KTV
+                  </td>
+                  <td style={{ padding: '14px 12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, color: '#0f172a' }}>KTV: {req.initialAssessment.assessorName} ({req.initialAssessment.assessorDepartment || 'Cơ điện'})</span>
+                        <span style={{ color: '#64748b', fontSize: '12px' }}>
+                          Thời điểm: {new Date(req.initialAssessment.assessedAt).toLocaleString('vi-VN')}
+                        </span>
+                        <span
+                          style={{
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            backgroundColor: req.initialAssessment.isWithinSla4h ? '#dcfce7' : '#fee2e2',
+                            color: req.initialAssessment.isWithinSla4h ? '#15803d' : '#b91c1c',
+                          }}
+                        >
+                          {req.initialAssessment.isWithinSla4h
+                            ? `Đạt SLA (${req.initialAssessment.responseDurationHours}h)`
+                            : `Trễ hạn (${req.initialAssessment.responseDurationHours}h > 4h)`}
+                        </span>
+                      </div>
+                      <div style={{ color: '#334155' }}>
+                        <strong>Hiện trạng:</strong> {req.initialAssessment.actualCondition}
+                      </div>
+                      <div style={{ color: '#334155' }}>
+                        <strong>Nguyên nhân sơ bộ:</strong> {req.initialAssessment.preliminaryCause}
+                      </div>
+                      <div style={{ color: '#334155' }}>
+                        <strong>Phương án:</strong> {req.initialAssessment.proposedSolution} (Dự kiến: {req.initialAssessment.estimatedCompletionMinutes} phút)
+                      </div>
+                      {req.initialAssessment.requireSpareParts && (
+                        <div style={{ color: '#b45309' }}>
+                          <strong>Phụ tùng cần lấy:</strong> {req.initialAssessment.sparePartsNeeded || 'Chưa kê chi tiết'}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+
               {/* Phiếu sửa chữa liên kết nếu có */}
               {req.workOrders && req.workOrders.length > 0 && (
                 <tr style={{ borderBottom: '1px solid var(--border-color)' }}>

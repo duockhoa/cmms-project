@@ -1,6 +1,7 @@
 import React from 'react';
 import { DetailViewSkeleton } from './Skeleton';
 import { WorkOrderExecutionModals } from '../work-orders/detail/WorkOrderExecutionModals';
+import { InitialAssessmentModal } from '../work-orders/detail/InitialAssessmentModal';
 import { WorkOrderDispatchModals } from '../work-orders/detail/WorkOrderDispatchModals';
 import { WorkOrderAcceptanceModals } from '../work-orders/detail/WorkOrderAcceptanceModals';
 import { WorkOrderTimeline } from '../work-orders/detail/WorkOrderTimeline';
@@ -35,7 +36,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
     handleEscalateSubmit, handleLogSubmit, handlePauseSubmit, handleQaRejectSubmit,
     handleQaVerifySubmit, handleRejectHandoverSubmit, handleResume, handleStart,
     handleWorkshopAcceptSubmit, isAssignExecutorOpen, isClassifyOpen, isCompleteFormOpen,
-    isEscalateOpen, isLogFormOpen, isManagerOrAdmin, isPauseFormOpen, isQA,
+    isEscalateOpen, isLogFormOpen, isAssessmentModalOpen, setIsAssessmentModalOpen, isManagerOrAdmin, isPauseFormOpen, isQA,
     isQaAcceptOpen, isQaRejectOpen, isRejectHandoverOpen, isWorkshopAcceptOpen,
     lineClearanceResult, loading, logAdjustReason, logAdjustTargetId, logContent,
     logNotes, logPhotoCategory, logPhotos, logResult, logs, pauseReason, qaComment,
@@ -129,6 +130,17 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         onSubmit={handleStopSessionSubmit}
         activeSession={mySession}
         loading={sessionLoading}
+      />
+
+      {/* Form khảo sát & đánh giá sơ bộ sự cố (chốt SLA KPI 4h) */}
+      <InitialAssessmentModal
+        isOpen={isAssessmentModalOpen}
+        onClose={() => setIsAssessmentModalOpen(false)}
+        workOrder={wo}
+        onSuccess={() => {
+          loadData();
+          if (onStatusChangeSuccess) onStatusChangeSuccess();
+        }}
       />
 
       <WorkOrderExecutionModals

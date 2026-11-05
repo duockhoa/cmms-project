@@ -357,6 +357,22 @@ export const api = {
     request(`/work-orders/${id}/qa-reject`, { method: 'POST', body: JSON.stringify(body) }),
   getWorkOrderActiveSession: (id: string) =>
     request(`/work-orders/${id}/sessions/active`),
+  startWorkOrderWithAssessment: (id: string, body: {
+    expectedVersion: number;
+    actualCondition: string;
+    preliminaryCause: string;
+    preliminaryCauseDetail?: string;
+    proposedSolution: string;
+    estimatedCompletionMinutes?: number;
+    requireSpareParts?: boolean;
+    sparePartsNeeded?: string;
+    images?: string;
+    notes?: string;
+  }) => request(`/work-orders/${id}/start-with-assessment`, { method: 'POST', body: JSON.stringify(body) }),
+
+  getIncidentResponseKpiReport: (params?: { startDate?: string; endDate?: string; supportDepartment?: string; workshop?: string }) =>
+    request(`/analytics/kpis/incident-response-4h${toQueryString(params)}`),
+
   startWorkOrderSession: (id: string, data?: { taskContent?: string }) =>
     request(`/work-orders/${id}/sessions/start`, { method: 'POST', body: JSON.stringify(data || {}) }),
   stopWorkOrderSession: (id: string, data?: { taskContent?: string; resultNotes?: string; photos?: string[]; materialsUsed?: any[] }) =>

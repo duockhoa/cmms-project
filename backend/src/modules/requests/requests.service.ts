@@ -135,6 +135,7 @@ export class RequestsService {
       where: { AND: [{ id }, scopeWhere] },
       include: {
         equipment: true,
+        initialAssessment: true,
         functionalUnit: { include: { libraryItem: true } },
         reporter: {
           select: {

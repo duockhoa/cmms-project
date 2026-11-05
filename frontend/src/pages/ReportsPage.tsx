@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import { DashboardSkeleton } from '../components/common/Skeleton';
 import { ExportButton, KpiCard, PageHeader, Tabs } from '../components/common';
 import { OeeManagementSection } from '../components/operation-logs/OeeManagementSection';
+import { IncidentResponseKpiSection } from '../components/reports/IncidentResponseKpiSection';
 
 export const ReportsPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState('Tháng này');
@@ -14,7 +15,7 @@ export const ReportsPage: React.FC = () => {
   const [opLogsReport, setOpLogsReport] = useState<any>(null);
 
   const ranges = ['7 ngày', '30 ngày', 'Tháng này', 'Quý này', 'Năm nay', 'Tùy chọn'];
-  const tabs = ['Đo lường OEE', 'Tổng quan', 'Thiết bị', 'Bảo trì định kỳ', 'Chi phí', 'Kỹ thuật viên', 'Phụ tùng', 'Sổ vận hành'];
+  const tabs = ['KPI Phản hồi 4h', 'Đo lường OEE', 'Tổng quan', 'Thiết bị', 'Bảo trì định kỳ', 'Chi phí', 'Kỹ thuật viên', 'Phụ tùng', 'Sổ vận hành'];
 
   const loadReportData = async () => {
     try {
@@ -127,7 +128,11 @@ export const ReportsPage: React.FC = () => {
           style={{ marginBottom: '20px' }}
         />
 
-        {activeTab === 'Đo lường OEE' ? (
+        {activeTab === 'KPI Phản hồi 4h' ? (
+          <div style={{ padding: '4px 0' }}>
+            <IncidentResponseKpiSection />
+          </div>
+        ) : activeTab === 'Đo lường OEE' || activeTab === 'Do lường OEE' ? (
           <div style={{ padding: '4px 0' }}>
             <OeeManagementSection />
           </div>

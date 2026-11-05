@@ -22,6 +22,7 @@ export const useWorkOrderDetail = ({
   // Form states
   // Custom Log Modal state
   const [isLogFormOpen, setIsLogFormOpen] = useState(false);
+  const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
   const [logContent, setLogContent] = useState('');
   const [logResult, setLogResult] = useState('');
   const [logNotes, setLogNotes] = useState('');
@@ -287,6 +288,10 @@ export const useWorkOrderDetail = ({
   const handleStart = async () => {
     if (!canModify) {
       toast.error('Từ chối truy cập', 'Bạn không được phân công thực hiện công việc này.');
+      return;
+    }
+    if (wo?.requestId && !wo?.initialAssessment) {
+      setIsAssessmentModalOpen(true);
       return;
     }
     try {
@@ -725,7 +730,7 @@ export const useWorkOrderDetail = ({
     handleEscalateSubmit, handleLogSubmit, handlePauseSubmit, handleQaRejectSubmit,
     handleQaVerifySubmit, handleRejectHandoverSubmit, handleResume, handleStart,
     handleWorkshopAcceptSubmit, isAssignExecutorOpen, isClassifyOpen, isCompleteFormOpen,
-    isEscalateOpen, isLogFormOpen, isManagerOrAdmin, isPauseFormOpen, isQA,
+    isEscalateOpen, isLogFormOpen, isAssessmentModalOpen, setIsAssessmentModalOpen, isManagerOrAdmin, isPauseFormOpen, isQA,
     isQaAcceptOpen, isQaRejectOpen, isRejectHandoverOpen, isWorkshopAcceptOpen,
     lineClearanceResult, loading, logAdjustReason, logAdjustTargetId, logContent,
     logNotes, logPhotoCategory, logPhotos, logResult, logs, pauseReason, qaComment,

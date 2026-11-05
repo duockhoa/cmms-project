@@ -1,3 +1,4 @@
+import { CreateIncidentAssessmentDto } from './dto/incident-assessment.dto';
 import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
@@ -25,6 +26,7 @@ import { buildWorkOrderScopeWhere } from '../../common/utils/data-scope.helper';
 const WORK_ORDER_ACTION_PERMISSIONS: Partial<Record<string, string>> = {
   ASSIGN: 'work_orders:assign',
   START: 'work_orders:execute',
+  INITIAL_ASSESSMENT: 'work_orders:execute',
   PAUSE: 'work_orders:execute',
   RESUME: 'work_orders:execute',
   COMPLETE: 'work_orders:execute',
@@ -255,6 +257,7 @@ export class WorkOrdersService implements OnModuleInit {
       include: {
         equipment: true,
         request: true,
+        initialAssessment: true,
         items: { include: { inventoryItem: true } },
         workSessions: {
           include: { user: { select: { id: true, name: true, specialty: true, role: true } } },
@@ -945,6 +948,108 @@ export class WorkOrdersService implements OnModuleInit {
       logMessage,
       undefined,
       undefined,
+      actorContext,
+    );
+  }
+
+  async startWithAssessment(
+    id: string,
+    dto: CreateIncidentAssessmentDto,
+    actorContext?: any,
+  ) {
+    const assessedAt = new Date();
+
+    return this.updateStatusTransaction(
+      id,
+      dto.expectedVersion,
+      'IN_PROGRESS',
+      {
+        actualStartDate: assessedAt,
+        initialRespondedAt: assessedAt,
+      },
+      'INITIAL_ASSESSMENT',
+      `KTV đánh giá sơ bộ: ${dto.preliminaryCause} - ${dto.proposedSolution}`,
+      undefined,
+      async (tx: any, wo: any) => {
+        // Tính thời gian phản hồi kể từ khi xưởng báo sự cố (MaintenanceRequest)
+        let responseDurationHours: number | null = null;
+        let isWithinSla4h = true;
+
+        if (wo.requestId) {
+          const req = await tx.maintenanceRequest.findUnique({
+            where: { id: wo.requestId },
+            select: { createdAt: true },
+          });
+          if (req?.createdAt) {
+            const reqCreatedMs = new Date(req.createdAt).getTime();
+            const assessMs = assessedAt.getTime();
+            responseDurationHours = Math.round(((assessMs - reqCreatedMs) / (1000 * 3600)) * 100) / 100;
+            isWithinSla4h = responseDurationHours <= 4.0;
+          }
+
+          // Cập nhật initialRespondedAt lên MaintenanceRequest
+          await tx.maintenanceRequest.update({
+            where: { id: wo.requestId },
+            data: { initialRespondedAt: assessedAt },
+          });
+        }
+
+        // Lấy thông tin người đánh giá
+        let assessorName = actorContext?.name || actorContext?.fullName || 'Kỹ thuật viên';
+        let assessorDepartment = actorContext?.department || 'Cơ điện';
+
+        if (actorContext?.id) {
+          const u = await tx.user.findUnique({
+            where: { id: actorContext.id },
+            select: { name: true, department: true },
+          });
+          if (u) {
+            assessorName = u.name || assessorName;
+            assessorDepartment = u.department || assessorDepartment;
+          }
+        }
+
+        // Lưu bản ghi IncidentInitialAssessment
+        await tx.incidentInitialAssessment.upsert({
+          where: { workOrderId: id },
+          create: {
+            workOrderId: id,
+            requestId: wo.requestId || null,
+            assessedById: actorContext.id,
+            assessorName,
+            assessorDepartment,
+            assessedAt,
+            responseDurationHours,
+            isWithinSla4h,
+            actualCondition: dto.actualCondition,
+            preliminaryCause: dto.preliminaryCause,
+            preliminaryCauseDetail: dto.preliminaryCauseDetail || null,
+            proposedSolution: dto.proposedSolution,
+            estimatedCompletionMinutes: dto.estimatedCompletionMinutes || 60,
+            requireSpareParts: dto.requireSpareParts || false,
+            sparePartsNeeded: dto.sparePartsNeeded || null,
+            images: dto.images || null,
+            notes: dto.notes || null,
+          },
+          update: {
+            assessedById: actorContext.id,
+            assessorName,
+            assessorDepartment,
+            assessedAt,
+            responseDurationHours,
+            isWithinSla4h,
+            actualCondition: dto.actualCondition,
+            preliminaryCause: dto.preliminaryCause,
+            preliminaryCauseDetail: dto.preliminaryCauseDetail || null,
+            proposedSolution: dto.proposedSolution,
+            estimatedCompletionMinutes: dto.estimatedCompletionMinutes || 60,
+            requireSpareParts: dto.requireSpareParts || false,
+            sparePartsNeeded: dto.sparePartsNeeded || null,
+            images: dto.images || null,
+            notes: dto.notes || null,
+          },
+        });
+      },
       actorContext,
     );
   }

@@ -1,6 +1,7 @@
 import { Controller, Get, Query, Req, UseGuards, ForbiddenException } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { KpiEngineService } from './services/kpi-engine.service';
+import { IncidentResponseKpiService } from './services/incident-response-kpi.service';
 import { AnalyticsAuditAdapter } from './adapters/analytics-audit.adapter';
 import { AnalyticsPermissionGuard } from './guards/analytics-permission.guard';
 import { KpiQueryDto } from './dto/kpi-query.dto';
@@ -12,7 +13,8 @@ export class AnalyticsController {
   constructor(
     private readonly analyticsService: AnalyticsService,
     private readonly kpiEngineService: KpiEngineService,
-    private readonly auditAdapter: AnalyticsAuditAdapter
+    private readonly auditAdapter: AnalyticsAuditAdapter,
+    private readonly incidentResponseKpiService: IncidentResponseKpiService
   ) {}
 
   @Get('dashboard')
@@ -45,6 +47,21 @@ export class AnalyticsController {
     );
 
     return this.kpiEngineService.computeKpiSummary(query, user);
+  }
+
+  @Get('kpis/incident-response-4h')
+  getIncidentResponseKpi(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('supportDepartment') supportDepartment?: string,
+    @Query('workshop') workshop?: string,
+  ) {
+    return this.incidentResponseKpiService.calculateIncidentResponseKpi({
+      startDate,
+      endDate,
+      supportDepartment,
+      workshop,
+    });
   }
 
   @Get('operation-logs-report')
