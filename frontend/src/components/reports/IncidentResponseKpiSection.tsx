@@ -62,10 +62,10 @@ export const IncidentResponseKpiSection: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-              🎯 KPI Phản hồi sự cố thiết bị trong 4 giờ
+              🎯 KPI Phản hồi sự cố thiết bị trong 4 giờ làm việc
             </h3>
             <p style={{ fontSize: '12.5px', color: '#64748b', margin: '3px 0 0 0' }}>
-              Đo lường thời gian từ lúc xưởng gửi yêu cầu đến khi KTV có mặt điền Form đánh giá sơ bộ (Mục tiêu: ≥ 95%)
+              Đo lường thời gian từ lúc giao việc cho KTV đến khi có mặt điền Form đánh giá sơ bộ trong khung giờ làm việc 8h00 - 17h00 (Mục tiêu: ≥ 95%)
             </p>
           </div>
           <button
@@ -241,7 +241,7 @@ export const IncidentResponseKpiSection: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
             <AlertTriangle size={18} color="#dc2626" />
             <h4 style={{ fontSize: '15px', fontWeight: 800, color: '#991b1b', margin: 0 }}>
-              ⚠️ Danh sách sự cố trễ hạn phản hồi (&gt; 4 giờ) — Cần đối soát giải trình
+              ⚠️ Danh sách sự cố trễ hạn phản hồi (&gt; 4 giờ làm việc) — Cần đối soát giải trình
             </h4>
           </div>
           <div style={{ overflowX: 'auto' }}>
@@ -252,7 +252,7 @@ export const IncidentResponseKpiSection: React.FC = () => {
                   <th>Thiết bị</th>
                   <th>Xưởng báo</th>
                   <th>Bộ phận hỗ trợ</th>
-                  <th>Thời điểm báo</th>
+                  <th>Thời điểm giao KTV</th>
                   <th>Thời gian chờ</th>
                   <th>Hiện trạng / Trạng thái</th>
                 </tr>
@@ -266,8 +266,8 @@ export const IncidentResponseKpiSection: React.FC = () => {
                     </td>
                     <td>{inc.workshop}</td>
                     <td><strong>{inc.supportDepartment}</strong></td>
-                    <td>{new Date(inc.requestCreatedAt).toLocaleString('vi-VN')}</td>
-                    <td style={{ color: '#dc2626', fontWeight: 800 }}>{inc.hoursWaited} giờ</td>
+                    <td>{inc.assignedAt ? new Date(inc.assignedAt).toLocaleString('vi-VN') : new Date(inc.requestCreatedAt).toLocaleString('vi-VN')}</td>
+                    <td style={{ color: '#dc2626', fontWeight: 800 }}>{inc.hoursWaited} giờ làm việc</td>
                     <td>
                       <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '11px', backgroundColor: '#fee2e2', color: '#991b1b', fontWeight: 600 }}>
                         {inc.status}

@@ -1,4 +1,5 @@
 import { CreateIncidentAssessmentDto } from './dto/incident-assessment.dto';
+import { calculateWorkingHoursBetween, isExemptFrom4hSla } from '../../common/utils/working-hours.helper';
 import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EquipmentStatusService } from '../equipment/equipment-status.service';
@@ -977,14 +978,24 @@ export class WorkOrdersService implements OnModuleInit {
         let isWithinSla4h = true;
 
         if (wo.requestId) {
-          const req = await tx.maintenanceRequest.findUnique({
-            where: { id: wo.requestId },
-            select: { createdAt: true },
+          // Tính thời gian phản hồi trong giờ làm việc (08:00 - 17:00, trừ Chủ Nhật)
+          // Mốc bắt đầu = thời điểm giao việc cho KTV (ASSIGN log hoặc lúc tạo WO nếu đã có KTV)
+          let assignmentTime = wo.createdAt ? new Date(wo.createdAt) : assessedAt;
+          const assignLog = await tx.workOrderExecutionLog.findFirst({
+            where: { workOrderId: id, actionType: 'ASSIGN' },
+            orderBy: { recordedAt: 'asc' },
+            select: { recordedAt: true },
           });
-          if (req?.createdAt) {
-            const reqCreatedMs = new Date(req.createdAt).getTime();
-            const assessMs = assessedAt.getTime();
-            responseDurationHours = Math.round(((assessMs - reqCreatedMs) / (1000 * 3600)) * 100) / 100;
+          if (assignLog) {
+            assignmentTime = new Date(assignLog.recordedAt);
+          }
+
+          if (isExemptFrom4hSla(assignmentTime)) {
+            // Sự cố trước mốc cutoff 10/11/2026: mặc định PASS
+            isWithinSla4h = true;
+            responseDurationHours = calculateWorkingHoursBetween(assignmentTime, assessedAt);
+          } else {
+            responseDurationHours = calculateWorkingHoursBetween(assignmentTime, assessedAt);
             isWithinSla4h = responseDurationHours <= 4.0;
           }
 

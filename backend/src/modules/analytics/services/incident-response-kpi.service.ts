@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { calculateWorkingHoursBetween, isExemptFrom4hSla } from '../../../common/utils/working-hours.helper';
 
 export interface IncidentResponseKpiSummary {
   period: {
@@ -41,6 +42,7 @@ export interface IncidentResponseKpiSummary {
     equipmentName?: string;
     workshop?: string;
     supportDepartment?: string;
+    assignedAt?: string;
     requestCreatedAt: string;
     respondedAt?: string;
     hoursWaited: number;
@@ -79,10 +81,10 @@ export class IncidentResponseKpiService {
       where.department = query.workshop;
     }
 
-    // Loại trừ các yêu cầu đã bị hủy (CANCELLED)
-    where.status = { notIn: ['CANCELLED'] };
+    // Loại trừ các yêu cầu đã bị hủy (CANCELLED) hoặc bị từ chối (REJECTED)
+    where.status = { notIn: ['CANCELLED', 'REJECTED'] };
 
-    const requests = await this.prisma.maintenanceRequest.findMany({
+    const requests: any[] = await this.prisma.maintenanceRequest.findMany({
       where,
       include: {
         equipment: {
@@ -94,8 +96,21 @@ export class IncidentResponseKpiService {
             orderCode: true,
             handlingRoute: true,
             status: true,
+            assignedTechnicianId: true,
+            assignedTechnicianIds: true,
+            technicianName: true,
+            assignedTechnician: {
+              select: { name: true, department: true },
+            },
+            createdAt: true,
             initialRespondedAt: true,
             initialAssessment: true,
+            executionLogs: {
+              where: { actionType: 'ASSIGN' },
+              orderBy: { recordedAt: 'asc' },
+              take: 1,
+              select: { recordedAt: true },
+            },
           },
         },
         initialAssessment: true,
@@ -116,25 +131,43 @@ export class IncidentResponseKpiService {
     const overdueList: any[] = [];
 
     for (const req of requests) {
-      totalIncidents++;
-      const reqCreatedMs = new Date(req.createdAt).getTime();
-      const workshopName = req.department || req.equipment?.department || 'Khác';
-
-      // Tìm thông tin đánh giá sơ bộ từ request hoặc workOrder liên kết
-      const assessment = req.initialAssessment || req.workOrders?.[0]?.initialAssessment;
       const linkedWo = req.workOrders?.[0];
 
-      // Xác định bộ phận hỗ trợ
-      let supportDept = assessment?.assessorDepartment || 'Cơ điện';
-      if (!assessment && linkedWo?.handlingRoute === 'WORKSHOP_SELF_HANDLE') {
-        supportDept = 'Xưởng tự xử lý';
-      }
-
-      // Bộ lọc theo bộ phận hỗ trợ nếu query yêu cầu
-      if (query.supportDepartment && supportDept !== query.supportDepartment) {
-        totalIncidents--;
+      // 1. Loại trừ nếu xưởng tự xử lý (không tính vào KPI bộ phận hỗ trợ)
+      if (linkedWo && linkedWo.handlingRoute === 'WORKSHOP_SELF_HANDLE') {
         continue;
       }
+
+      // 2. Xác định mốc thời điểm giao việc cho KTV (assignedAt)
+      let assignedAt: Date | null = null;
+      if (linkedWo) {
+        if (linkedWo.executionLogs && linkedWo.executionLogs.length > 0) {
+          assignedAt = new Date(linkedWo.executionLogs[0].recordedAt);
+        } else if (
+          linkedWo.assignedTechnicianId ||
+          (Array.isArray(linkedWo.assignedTechnicianIds as any) && (linkedWo.assignedTechnicianIds as any[]).length > 0)
+        ) {
+          assignedAt = new Date(linkedWo.createdAt);
+        }
+      }
+
+      // 3. Nếu chưa giao KTV: sự cố vẫn đang chờ quản đốc phân công, chưa tính vào SLA phản hồi của KTV
+      if (!assignedAt) {
+        continue;
+      }
+
+      const workshopName = req.department || req.equipment?.department || 'Khác';
+      const assessment = req.initialAssessment || linkedWo?.initialAssessment;
+
+      // Xác định bộ phận hỗ trợ
+      let supportDept = assessment?.assessorDepartment || linkedWo?.assignedTechnician?.department || 'Cơ điện';
+
+      // Lọc theo bộ phận hỗ trợ nếu query yêu cầu
+      if (query.supportDepartment && supportDept !== query.supportDepartment) {
+        continue;
+      }
+
+      totalIncidents++;
 
       // Khởi tạo stats theo bộ phận
       if (!deptMap.has(supportDept)) {
@@ -150,16 +183,19 @@ export class IncidentResponseKpiService {
       const wsStat = workshopMap.get(workshopName)!;
       wsStat.total++;
 
+      // 4. Kiểm tra sự cố trước mốc cutoff 10/11/2026 -> mặc định PASS
+      const isHistorical = isExemptFrom4hSla(assignedAt);
+
       if (assessment && assessment.assessedAt) {
         // Đã có form đánh giá sơ bộ của KTV
-        const assessMs = new Date(assessment.assessedAt).getTime();
-        const durationHours = Math.round(((assessMs - reqCreatedMs) / (1000 * 3600)) * 100) / 100;
+        const assessDate = new Date(assessment.assessedAt);
+        const durationHours = calculateWorkingHoursBetween(assignedAt, assessDate);
         sumResponseHours += durationHours;
         respondedCount++;
         deptStat.sumHours += durationHours;
         deptStat.respondedCount++;
 
-        if (durationHours <= 4.0) {
+        if (isHistorical || durationHours <= 4.0) {
           respondedWithin4hCount++;
           deptStat.within4h++;
           wsStat.within4h++;
@@ -176,43 +212,54 @@ export class IncidentResponseKpiService {
             equipmentName: req.equipment?.name,
             workshop: workshopName,
             supportDepartment: supportDept,
+            assignedAt: assignedAt.toISOString(),
             requestCreatedAt: req.createdAt.toISOString(),
-            respondedAt: assessment.assessedAt.toISOString(),
+            respondedAt: assessDate.toISOString(),
             hoursWaited: durationHours,
-            status: 'Đã phản hồi (Trễ hạn)',
+            status: 'Đã phản hồi (Trễ hạn làm việc)',
             preliminaryCause: assessment.preliminaryCause,
           });
         }
       } else {
         // Chưa có form đánh giá sơ bộ
-        const hoursPassed = (now - reqCreatedMs) / (1000 * 3600);
-        if (hoursPassed > 4.0) {
-          overdueResponseCount++;
-          deptStat.overdue++;
-          wsStat.overdue++;
-          overdueList.push({
-            requestId: req.id,
-            requestCode: req.requestCode,
-            workOrderId: linkedWo?.id,
-            orderCode: linkedWo?.orderCode,
-            equipmentCode: req.equipment?.code,
-            equipmentName: req.equipment?.name,
-            workshop: workshopName,
-            supportDepartment: supportDept,
-            requestCreatedAt: req.createdAt.toISOString(),
-            respondedAt: undefined,
-            hoursWaited: Math.round(hoursPassed * 10) / 10,
-            status: 'Chưa có đánh giá sơ bộ (>4h)',
-            preliminaryCause: undefined,
-          });
+        if (isHistorical) {
+          // Lịch sử cũ trước cutoff: mặc định PASS
+          respondedWithin4hCount++;
+          deptStat.within4h++;
+          wsStat.within4h++;
         } else {
-          pendingAwaitingResponseCount++;
+          const workingHoursPassed = calculateWorkingHoursBetween(assignedAt, now);
+          if (workingHoursPassed > 4.0) {
+            overdueResponseCount++;
+            deptStat.overdue++;
+            wsStat.overdue++;
+            overdueList.push({
+              requestId: req.id,
+              requestCode: req.requestCode,
+              workOrderId: linkedWo?.id,
+              orderCode: linkedWo?.orderCode,
+              equipmentCode: req.equipment?.code,
+              equipmentName: req.equipment?.name,
+              workshop: workshopName,
+              supportDepartment: supportDept,
+              assignedAt: assignedAt.toISOString(),
+              requestCreatedAt: req.createdAt.toISOString(),
+              respondedAt: undefined,
+              hoursWaited: workingHoursPassed,
+              status: 'Chưa có đánh giá sơ bộ (>4h làm việc)',
+              preliminaryCause: undefined,
+            });
+          } else {
+            pendingAwaitingResponseCount++;
+          }
         }
       }
     }
 
-    const overallRate = totalIncidents > 0
-      ? Math.round((respondedWithin4hCount / totalIncidents) * 10000) / 100
+    // Mẫu số chỉ tính các sự cố đã có kết quả (đã phản hồi trong 4h hoặc đã trễ hạn), loại trừ pending đang trong hạn
+    const evaluatedTotal = respondedWithin4hCount + overdueResponseCount;
+    const overallRate = evaluatedTotal > 0
+      ? Math.round((respondedWithin4hCount / evaluatedTotal) * 10000) / 100
       : 100;
     const avgResponseHours = respondedCount > 0
       ? Math.round((sumResponseHours / respondedCount) * 100) / 100
@@ -225,7 +272,8 @@ export class IncidentResponseKpiService {
     else if (overallRate >= 90.0) status = 'WARNING';
 
     const bySupportDepartment = Array.from(deptMap.entries()).map(([department, st]) => {
-      const rate = st.total > 0 ? Math.round((st.within4h / st.total) * 10000) / 100 : 100;
+      const evaluated = st.within4h + st.overdue;
+      const rate = evaluated > 0 ? Math.round((st.within4h / evaluated) * 10000) / 100 : 100;
       const avg = st.respondedCount > 0 ? Math.round((st.sumHours / st.respondedCount) * 100) / 100 : 0;
       return {
         department,
@@ -239,7 +287,8 @@ export class IncidentResponseKpiService {
     });
 
     const byWorkshop = Array.from(workshopMap.entries()).map(([workshop, st]) => {
-      const rate = st.total > 0 ? Math.round((st.within4h / st.total) * 10000) / 100 : 100;
+      const evaluated = st.within4h + st.overdue;
+      const rate = evaluated > 0 ? Math.round((st.within4h / evaluated) * 10000) / 100 : 100;
       return {
         workshop,
         totalIncidents: st.total,
