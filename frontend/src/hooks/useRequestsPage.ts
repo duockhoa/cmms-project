@@ -89,13 +89,6 @@ export function useRequestsPage() {
           department: meRes.user.department || '',
         }));
       }
-
-      if (eqRes.length > 0 && !formData.equipmentId) {
-        setFormData((prev) => ({
-          ...prev,
-          equipmentId: eqRes[0].id,
-        }));
-      }
     } catch (err) {
       console.error(err);
       toast.error('Lỗi tải dữ liệu', 'Không thể tải đầy đủ danh sách báo cáo sự cố.');
@@ -274,7 +267,7 @@ export function useRequestsPage() {
       });
       setIsAddOpen(false);
       setFormData({
-        equipmentId: equipmentList[0]?.id || '',
+        equipmentId: '',
         functionalUnitId: '',
         title: '',
         description: '',

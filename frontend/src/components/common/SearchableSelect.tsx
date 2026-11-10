@@ -33,6 +33,7 @@ export interface SearchableSelectProps {
   clearable?: boolean;
   required?: boolean;
   renderOption?: (option: SearchableOption) => React.ReactNode;
+  emptyText?: string;
 }
 
 export const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -46,6 +47,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   clearable = true,
   required = false,
   renderOption,
+  emptyText,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -252,8 +254,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             position: 'absolute',
             top: 'calc(100% + 4px)',
             left: 0,
-            width: 'max(100%, 360px)',
-            maxWidth: '520px',
+            right: 0,
+            width: '100%',
             zIndex: 99999,
             backgroundColor: '#ffffff',
             borderRadius: '8px',
@@ -292,7 +294,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           <div style={{ overflowY: 'auto', flex: 1, maxHeight: '220px' }}>
             {filteredOptions.length === 0 ? (
               <div style={{ padding: '20px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                Không tìm thấy mặt hàng nào phù hợp với từ khóa
+                {emptyText || 'Không tìm thấy kết quả nào phù hợp với từ khóa'}
               </div>
             ) : (
               filteredOptions.map((opt) => {

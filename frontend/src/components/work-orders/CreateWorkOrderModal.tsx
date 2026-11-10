@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Plus, X, Check, Users } from 'lucide-react';
 import { Modal } from '../common/Modal';
+import { SearchableSelect } from '../common/SearchableSelect';
 
 interface CreateWorkOrderModalProps {
   isOpen: boolean;
@@ -24,6 +25,17 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({
   const update = (field: string, value: any) => onChange((current: any) => ({ ...current, [field]: value }));
 
   const selectedIds: string[] = Array.isArray(formData.assignedTechnicianIds) ? formData.assignedTechnicianIds : [];
+
+  const equipmentOptions = useMemo(() => {
+    return equipmentList.map((eq) => ({
+      value: eq.id,
+      label: `[${eq.code}] ${eq.name}`,
+      subLabel: [eq.location, eq.department].filter(Boolean).join(' • '),
+      tag: eq.code,
+      tagColor: '#eff6ff',
+      raw: eq,
+    }));
+  }, [equipmentList]);
 
   const handleToggleTech = (techId: string) => {
     let newIds: string[];
@@ -59,14 +71,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({
         <div className="grid-2">
           <div className="form-group">
             <label className="form-label" style={{ fontWeight: 600 }}>Thiết bị *</label>
-            <select className="form-select" required value={formData.equipmentId} onChange={(event) => update('equipmentId', event.target.value)}>
-              <option value="">-- Chọn thiết bị sự cố --</option>
-              {equipmentList.map((equipment) => (
-                <option key={equipment.id} value={equipment.id}>
-                  [{equipment.code}] {equipment.name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={equipmentOptions}
+              value={formData.equipmentId}
+              onChange={(val) => update('equipmentId', val)}
+              placeholder="🔍 Nhập mã máy, tên thiết bị hoặc vị trí..."
+              emptyText="Không tìm thấy thiết bị phù hợp"
+              required
+            />
           </div>
           <div className="form-group">
             <label className="form-label" style={{ fontWeight: 600 }}>Loại công việc</label>

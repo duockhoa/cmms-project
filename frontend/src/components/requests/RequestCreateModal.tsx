@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { QrCode, Cpu } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { QRScanner } from '../common/QRScanner';
+import { SearchableSelect } from '../common/SearchableSelect';
 
 interface RequestCreateModalProps {
   isOpen: boolean;
@@ -38,12 +39,23 @@ export const RequestCreateModal: React.FC<RequestCreateModalProps> = ({
   onQRScan,
   onSubmit,
 }) => {
+  const equipmentOptions = useMemo(() => {
+    return equipmentList.map((eq) => ({
+      value: eq.id,
+      label: `[${eq.code}] ${eq.name}`,
+      subLabel: [eq.location, eq.department].filter(Boolean).join(' • '),
+      tag: eq.code,
+      tagColor: '#eff6ff',
+      raw: eq,
+    }));
+  }, [equipmentList]);
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Tạo Yêu cầu Sửa chữa / Báo sự cố">
       <form onSubmit={onSubmit}>
         <div className="form-group">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <label className="form-label" style={{ margin: 0 }}>Chọn Thiết bị gặp sự cố *</label>
+            <label className="form-label" style={{ margin: 0, fontWeight: 600 }}>Chọn Thiết bị gặp sự cố *</label>
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -58,18 +70,14 @@ export const RequestCreateModal: React.FC<RequestCreateModalProps> = ({
               <QRScanner onScanSuccess={onQRScan} onClose={() => setShowScanner(false)} />
             </div>
           ) : (
-            <select 
-              className="form-select" 
-              required 
-              value={formData.equipmentId} 
-              onChange={(e) => setFormData({ ...formData, equipmentId: e.target.value, functionalUnitId: '' })}
-            >
-              {equipmentList.map((eq) => (
-                <option key={eq.id} value={eq.id}>
-                  [{eq.code}] {eq.name} - {eq.location}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={equipmentOptions}
+              value={formData.equipmentId}
+              onChange={(val) => setFormData({ ...formData, equipmentId: val, functionalUnitId: '' })}
+              placeholder="🔍 Nhập mã máy (VD: 0094), tên thiết bị hoặc vị trí để lọc..."
+              emptyText="Không tìm thấy thiết bị nào phù hợp với từ khóa"
+              required
+            />
           )}
         </div>
 

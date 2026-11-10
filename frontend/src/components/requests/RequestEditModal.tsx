@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Cpu } from 'lucide-react';
 import { Modal } from '../common/Modal';
+import { SearchableSelect } from '../common/SearchableSelect';
 
 interface RequestEditModalProps {
   isOpen: boolean;
@@ -35,6 +36,17 @@ export const RequestEditModal: React.FC<RequestEditModalProps> = ({
 }) => {
   if (!isOpen || !editingReq) return null;
 
+  const equipmentOptions = useMemo(() => {
+    return equipmentList.map((eq) => ({
+      value: eq.id,
+      label: `[${eq.code}] ${eq.name}`,
+      subLabel: [eq.location, eq.department].filter(Boolean).join(' • '),
+      tag: eq.code,
+      tagColor: '#eff6ff',
+      raw: eq,
+    }));
+  }, [equipmentList]);
+
   return (
     <Modal 
       isOpen={isOpen} 
@@ -43,19 +55,15 @@ export const RequestEditModal: React.FC<RequestEditModalProps> = ({
     >
       <form onSubmit={onSubmit}>
         <div className="form-group">
-          <label className="form-label">Thiết bị gặp sự cố *</label>
-          <select 
-            className="form-select" 
-            required 
-            value={editFormData.equipmentId} 
-            onChange={(e) => setEditFormData({ ...editFormData, equipmentId: e.target.value, functionalUnitId: '' })}
-          >
-            {equipmentList.map((eq) => (
-              <option key={eq.id} value={eq.id}>
-                [{eq.code}] {eq.name} - {eq.location}
-              </option>
-            ))}
-          </select>
+          <label className="form-label" style={{ fontWeight: 600 }}>Thiết bị gặp sự cố *</label>
+          <SearchableSelect
+            options={equipmentOptions}
+            value={editFormData.equipmentId}
+            onChange={(val) => setEditFormData({ ...editFormData, equipmentId: val, functionalUnitId: '' })}
+            placeholder="🔍 Nhập mã máy (VD: 0094), tên thiết bị hoặc vị trí để lọc..."
+            emptyText="Không tìm thấy thiết bị nào phù hợp với từ khóa"
+            required
+          />
         </div>
 
         {/* Cụm chức năng gặp lỗi */}
