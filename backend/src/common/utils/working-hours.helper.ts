@@ -67,3 +67,4 @@ export function calculateWorkingHoursBetween(
   const hours = totalWorkingMs / (1000 * 60 * 60);
   return Math.round(hours * 100) / 100;
 }
+

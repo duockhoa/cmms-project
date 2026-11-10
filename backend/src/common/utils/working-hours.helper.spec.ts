@@ -54,3 +54,4 @@ describe('working-hours.helper', () => {
     expect(isExemptFrom4hSla(postPatch)).toBe(false);
   });
 });
+
