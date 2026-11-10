@@ -119,3 +119,4 @@ export function resolveNotificationDestination(n?: NotificationLike | null): str
 
   return '';
 }
+
