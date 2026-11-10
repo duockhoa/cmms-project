@@ -21,6 +21,9 @@ export class HrmIdentityService {
 
   async assertApplication(token: string, force = false) {
     const application = hrmApplicationConfig(this.config);
+    if (!application) {
+      return;
+    }
     const key = createHash('sha256').update(JSON.stringify([application.id, application.key, token])).digest('hex');
     const cached = HrmIdentityService.applications.get(key);
     if (!force && cached && cached.expires > Date.now()) return;

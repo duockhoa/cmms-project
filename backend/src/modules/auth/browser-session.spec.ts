@@ -118,7 +118,7 @@ describe('HttpOnly browser sessions', () => {
   });
 
   it('rejects a missing encryption key and limits repeated authentication requests', async () => {
-    const unconfigured = new BrowserSessionService(new ConfigService({}), prisma, identities);
+    const unconfigured = new BrowserSessionService(new ConfigService({ HRM_JWT_SECRET: '', SESSION_ENCRYPTION_KEY: '' }), prisma, identities);
     await expect(unconfigured.open(request(), response, 'access', 'secret', 'employee')).rejects.toMatchObject({ status: 503 });
     expect(prisma.browserSession.create).not.toHaveBeenCalled();
     for (let attempt = 0; attempt < 30; attempt++) service.throttle(request());

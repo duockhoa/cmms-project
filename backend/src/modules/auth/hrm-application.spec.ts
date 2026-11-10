@@ -37,11 +37,11 @@ describe('HRM equipment application assignment', () => {
     await expect(service.assertApplication('session', true)).rejects.toMatchObject({ status: 403 });
     await expect(service.assertApplication('session')).rejects.toMatchObject({ status: 403 });
   });
-  it('rejects missing application configuration before calling HRM', async () => {
+  it('allows access and skips HRM check when application configuration is not set', async () => {
     for (const settings of [{}, { HRM_APPLICATION_ID: '42' }, { HRM_APPLICATION_ID: ' ', HRM_APPLICATION_KEY: 'test-maintenance' }]) {
       const unconfigured = new HrmIdentityService({ get: (key: string) => (settings as any)[key] } as any, {} as any);
       global.fetch = jest.fn() as any;
-      await expect(unconfigured.assertApplication('session')).rejects.toMatchObject({ status: 503 });
+      await expect(unconfigured.assertApplication('session')).resolves.toBeUndefined();
       expect(global.fetch).not.toHaveBeenCalled();
     }
   });

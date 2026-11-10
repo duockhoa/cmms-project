@@ -7,9 +7,15 @@ import { allowedBrowserOrigins } from '../../common/auth/browser-origin';
 import { HrmIdentityService } from './hrm-identity.service';
 
 export function browserSessionKey(config: ConfigService): Buffer {
-  const secret = config.get<string>('SESSION_ENCRYPTION_KEY') || '';
-  if (!/^[a-f0-9]{64}$/i.test(secret)) throw new ServiceUnavailableException('SESSION_ENCRYPTION_KEY phải là khóa ngẫu nhiên 32 byte dạng hex.');
-  return Buffer.from(secret, 'hex');
+  const secret = (config.get<string>('SESSION_ENCRYPTION_KEY') || '').trim();
+  if (/^[a-f0-9]{64}$/i.test(secret)) {
+    return Buffer.from(secret, 'hex');
+  }
+  const hrmSecret = (config.get<string>('HRM_JWT_SECRET') || '').trim();
+  if (hrmSecret) {
+    return createHash('sha256').update(hrmSecret).digest();
+  }
+  throw new ServiceUnavailableException('SESSION_ENCRYPTION_KEY phải là khóa ngẫu nhiên 32 byte dạng hex.');
 }
 
 @Injectable()
@@ -24,7 +30,14 @@ export class BrowserSessionService {
   private csrf(value: string) { return createHmac('sha256', browserSessionKey(this.config)).update('csrf:' + value).digest('hex'); }
 
   assertOrigin(request: Request) {
-    const origin = request.headers.origin;
+    let origin = request.headers.origin;
+    if (!origin && request.headers.referer) {
+      try {
+        origin = new URL(request.headers.referer).origin;
+      } catch {
+        // invalid referer url format
+      }
+    }
     if (!origin || !allowedBrowserOrigins().has(origin)) throw new ForbiddenException('Nguồn yêu cầu đăng nhập không được phép.');
     if (!request.is('application/json')) throw new ForbiddenException('Yêu cầu xác thực phải dùng application/json.');
   }

@@ -6,8 +6,7 @@ import { ResourceAccessService } from '../../common/auth/resource-access.service
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
-import { hrmApplicationConfig } from './hrm-application.config';
-import { BrowserSessionService, browserSessionKey } from './browser-session.service';
+import { BrowserSessionService } from './browser-session.service';
 
 @Global()
 @Module({
@@ -35,10 +34,6 @@ export class AuthModule {
         this.configService.get<string>('KEYCLOAK_AUDIENCE');
 
       const hasHrmJwt = Boolean(hrmJwtSecret);
-      if (hasHrmJwt) {
-        hrmApplicationConfig(this.configService);
-        browserSessionKey(this.configService);
-      }
       const hasKeycloak = Boolean(jwksUri && issuer && audience);
 
       // Backend chỉ dừng nếu cả HRM JWT và Keycloak đều chưa được cấu hình
