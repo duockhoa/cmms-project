@@ -121,6 +121,27 @@ export function extractEffectivePermissions(user: UserWithPermissions | null | u
     perms.add('*');
   }
 
+  // Backward compatibility: If user has no customRole/customPermissions, fallback to standard role permissions
+  if (!user.customRole && !user.customPermissions && perms.size === 0) {
+    if (user.role === 'TECHNICIAN') {
+      perms.add('work_orders:view');
+      perms.add('work_orders:execute');
+      perms.add('requests:view');
+      perms.add('requests:create');
+      perms.add('equipment:view');
+      perms.add('checklists:view');
+      perms.add('checklists:execute');
+    } else if (user.role === 'MANAGER') {
+      perms.add('work_orders:view');
+      perms.add('work_orders:assign');
+      perms.add('work_orders:close');
+      perms.add('requests:view');
+      perms.add('requests:approve');
+      perms.add('requests:reject');
+      perms.add('equipment:view');
+    }
+  }
+
   return perms;
 }
 

@@ -185,8 +185,10 @@ export class FabricationService {
   }
 
   async findOne(id: string) {
-    const item = await this.prisma.fabricationOrder.findUnique({
-      where: { id },
+    const item = await this.prisma.fabricationOrder.findFirst({
+      where: {
+        OR: [{ id }, { orderCode: id }],
+      },
       include: {
         assignedTechnician: {
           select: { id: true, name: true, email: true, specialty: true, avatar: true },
@@ -509,10 +511,11 @@ export class FabricationService {
   }
 
   async getHistory(id: string) {
+    const item = await this.findOne(id);
     return this.prisma.workflowHistory.findMany({
       where: {
         entityType: 'FabricationOrder',
-        entityId: id,
+        entityId: item.id,
       },
       include: {
         actedBy: {
@@ -533,8 +536,9 @@ export class FabricationService {
   }
 
   async getProgressLogs(orderId: string) {
+    const item = await this.findOne(orderId);
     return this.prisma.fabricationProgressLog.findMany({
-      where: { orderId },
+      where: { orderId: item.id },
       include: {
         user: {
           select: { id: true, name: true, email: true, avatar: true, specialty: true },

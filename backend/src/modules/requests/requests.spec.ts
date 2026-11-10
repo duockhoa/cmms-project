@@ -39,6 +39,8 @@ describe('Requests Module', () => {
         email: 'tech@company.com',
         role: 'TECHNICIAN',
         status: 'AVAILABLE',
+        department: 'Phân xưởng A',
+        customPermissions: JSON.stringify(['requests:approve', 'requests:reject', 'requests:cancel']),
         isActive: true,
       },
     });

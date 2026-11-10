@@ -104,10 +104,10 @@ export const RequestsPage: React.FC = () => {
                       padding: '12px',
                       marginBottom: '8px',
                       borderRadius: '8px',
-                      backgroundColor: selectedDetailReqId === req.id ? 'var(--bg-primary)' : 'var(--bg-card)',
-                      border: selectedDetailReqId === req.id ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                      backgroundColor: (selectedDetailReqId === req.id || selectedDetailReqId === req.requestCode) ? 'var(--bg-primary)' : 'var(--bg-card)',
+                      border: (selectedDetailReqId === req.id || selectedDetailReqId === req.requestCode) ? '1px solid var(--primary)' : '1px solid var(--border-color)',
                       cursor: 'pointer',
-                      boxShadow: selectedDetailReqId === req.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                      boxShadow: (selectedDetailReqId === req.id || selectedDetailReqId === req.requestCode) ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -319,8 +319,8 @@ export const RequestsPage: React.FC = () => {
               currentUser={currentUser} 
               onActionSuccess={() => { loadData(); }} 
               onClose={() => setSelectedDetailReqId(null)} 
-              onEdit={canEdit && !isReqLocked(requests.find(r => r.id === selectedDetailReqId)) ? openEditModal : undefined}
-              onDelete={canDelete && !isReqLocked(requests.find(r => r.id === selectedDetailReqId)) ? openDeleteConfirm : undefined}
+              onEdit={canEdit && !isReqLocked(requests.find(r => r.id === selectedDetailReqId || r.requestCode === selectedDetailReqId)) ? openEditModal : undefined}
+              onDelete={canDelete && !isReqLocked(requests.find(r => r.id === selectedDetailReqId || r.requestCode === selectedDetailReqId)) ? openDeleteConfirm : undefined}
             />
           </div>
         )}

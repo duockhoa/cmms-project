@@ -21,6 +21,7 @@ import { IncidentResponseKpiService } from './services/incident-response-kpi.ser
     AnalyticsAuditAdapter,
     AnalyticsPermissionGuard,
     KpiEngineService,
+    IncidentResponseKpiService,
   ],
   exports: [
     AnalyticsService,
@@ -30,6 +31,7 @@ import { IncidentResponseKpiService } from './services/incident-response-kpi.ser
     AnalyticsAuditAdapter,
     AnalyticsPermissionGuard,
     KpiEngineService,
+    IncidentResponseKpiService,
   ],
 })
 export class AnalyticsModule {}

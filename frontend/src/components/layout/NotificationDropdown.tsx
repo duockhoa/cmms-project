@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, CheckCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, CheckCheck, ExternalLink } from 'lucide-react';
 import { api } from '../../services/api';
 import { getAccessToken } from '../../utils/authStorage';
 import { useSocket } from '../../context/SocketContext';
+import { resolveNotificationDestination } from '../../utils/notificationRouter';
 
 interface NotificationDropdownProps {
   currentUser?: any;
 }
 
 export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser }) => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -71,6 +74,17 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ curr
       );
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleNotificationClick = async (n: any) => {
+    setIsOpen(false);
+    if (!n.isRead) {
+      handleMarkAsRead(n.id);
+    }
+    const destination = resolveNotificationDestination(n);
+    if (destination) {
+      navigate(destination);
     }
   };
 
@@ -207,53 +221,73 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ curr
                 Chưa có thông báo nào.
               </div>
             ) : (
-              notifications.slice(0, 10).map((n) => (
-                <div
-                  key={n.id}
-                  onClick={() => handleMarkAsRead(n.id)}
-                  style={{
-                    padding: '12px 16px',
-                    borderBottom: '1px solid var(--border-color, #e2e8f0)',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s ease',
-                    backgroundColor: n.isRead ? 'transparent' : 'rgba(37, 99, 235, 0.04)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f1f5f9)')}
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = n.isRead
-                      ? 'transparent'
-                      : 'rgba(37, 99, 235, 0.04)')
-                  }
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                    <span style={{ fontWeight: n.isRead ? 600 : 700, fontSize: '13px', color: 'var(--text-primary)' }}>
-                      {n.title}
+              notifications.slice(0, 10).map((n) => {
+                const destination = resolveNotificationDestination(n);
+                return (
+                  <div
+                    key={n.id}
+                    onClick={() => handleNotificationClick(n)}
+                    title={destination ? 'Bấm để mở chi tiết sự kiện' : undefined}
+                    style={{
+                      padding: '12px 16px',
+                      borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s ease',
+                      backgroundColor: n.isRead ? 'transparent' : 'rgba(37, 99, 235, 0.04)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f1f5f9)')}
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = n.isRead
+                        ? 'transparent'
+                        : 'rgba(37, 99, 235, 0.04)')
+                    }
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                      <span style={{ fontWeight: n.isRead ? 600 : 700, fontSize: '13px', color: 'var(--text-primary)' }}>
+                        {n.title}
+                      </span>
+                      {!n.isRead && (
+                        <span
+                          style={{
+                            width: '7px',
+                            height: '7px',
+                            backgroundColor: 'var(--accent-blue, #2563eb)',
+                            borderRadius: '50%',
+                            flexShrink: 0,
+                            marginTop: '4px',
+                          }}
+                        />
+                      )}
+                    </div>
+                    <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.35 }}>
+                      {n.message}
                     </span>
-                    {!n.isRead && (
-                      <span
-                        style={{
-                          width: '7px',
-                          height: '7px',
-                          backgroundColor: 'var(--accent-blue, #2563eb)',
-                          borderRadius: '50%',
-                          flexShrink: 0,
-                          marginTop: '4px',
-                        }}
-                      />
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '3px' }}>
+                      {destination ? (
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--accent-blue, #2563eb)',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                          }}
+                        >
+                          Chi tiết <ExternalLink size={11} />
+                        </span>
+                      ) : <span />}
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -{' '}
+                        {new Date(n.createdAt).toLocaleDateString('vi-VN')}
+                      </span>
+                    </div>
                   </div>
-                  <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.35 }}>
-                    {n.message}
-                  </span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', alignSelf: 'flex-end', marginTop: '2px' }}>
-                    {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -{' '}
-                    {new Date(n.createdAt).toLocaleDateString('vi-VN')}
-                  </span>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

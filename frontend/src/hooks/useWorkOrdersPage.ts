@@ -14,7 +14,7 @@ export const useWorkOrdersPage = () => {
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [handlerTeamFilter, setHandlerTeamFilter] = useState('');
   const [onlyMyWork, setOnlyMyWork] = useState(false);
@@ -222,7 +222,14 @@ export const useWorkOrdersPage = () => {
     loadWorkOrders();
   }, [loadWorkOrders]);
 
-  // Sync selectedDetailWoId with URL query param (e.g. Browser back/forward)
+  // Sync selectedDetailWoId and search with URL query param (e.g. Browser back/forward or notification click)
+  useEffect(() => {
+    const searchFromUrl = searchParams.get('search') || '';
+    if (searchFromUrl !== search) {
+      setSearch(searchFromUrl);
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     const idFromUrl = searchParams.get('id') || null;
     if (idFromUrl !== selectedDetailWoId) {

@@ -253,7 +253,12 @@ export class WorkOrdersService implements OnModuleInit {
     }
     const scopeWhere = buildWorkOrderScopeWhere(actorContext);
     const wo = await this.prisma.workOrder.findFirst({
-      where: { AND: [{ id }, scopeWhere] },
+      where: {
+        AND: [
+          { OR: [{ id }, { orderCode: id }] },
+          scopeWhere,
+        ],
+      },
       include: {
         equipment: true,
         request: true,
@@ -270,7 +275,7 @@ export class WorkOrdersService implements OnModuleInit {
 
     if (wo.status === 'CANCELLED') {
       const cancelLog = await this.prisma.workflowHistory.findFirst({
-        where: { entityType: 'WorkOrder', entityId: id, action: 'CANCEL' },
+        where: { entityType: 'WorkOrder', entityId: wo.id, action: 'CANCEL' },
         orderBy: { createdAt: 'desc' },
         include: { actedBy: { select: { id: true, name: true } } },
       });
@@ -420,11 +425,11 @@ export class WorkOrdersService implements OnModuleInit {
 
   getPerformerUnitType(user: { role: string; department?: string | null }): PerformerUnitType {
     const dept = (user.department || '').toLowerCase();
-    if (dept.includes('cơ điện') || dept.includes('kỹ thuật') || dept.includes('technical') || user.role === 'ADMIN' || user.role === 'MANAGER') {
-      return PerformerUnitType.TECHNICAL;
-    }
     if (dept.includes('xưởng') || dept.includes('px') || dept.includes('workshop') || user.role === 'OPERATOR') {
       return PerformerUnitType.WORKSHOP;
+    }
+    if (dept.includes('kỹ thuật') || dept.includes('technical') || user.role === 'ADMIN' || user.role === 'MANAGER') {
+      return PerformerUnitType.TECHNICAL;
     }
     return PerformerUnitType.MAINTENANCE;
   }
@@ -485,10 +490,6 @@ export class WorkOrdersService implements OnModuleInit {
     });
 
     const filteredWos = activeWos.filter((wo) => {
-      // ADMIN and MANAGER can see all active WOs
-      if (user.role === 'ADMIN' || user.role === 'MANAGER') {
-        return true;
-      }
       if (unitType === PerformerUnitType.TECHNICAL && wo.status === 'PENDING') {
         return true;
       }
@@ -512,9 +513,9 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async getExecutionLogs(workOrderId: string, actor?: UserWithPermissions | null) {
-    await this.findOne(workOrderId, actor);
+    const wo = await this.findOne(workOrderId, actor);
     return this.prisma.workOrderExecutionLog.findMany({
-      where: { workOrderId },
+      where: { workOrderId: wo.id },
       orderBy: { recordedAt: 'asc' },
       include: {
         performedBy: true,
@@ -533,7 +534,7 @@ export class WorkOrdersService implements OnModuleInit {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { customRole: true } });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
-    if (!hasPermission(user, 'work_orders:execute')) {
+    if (hasPermissionContext(user) && !hasPermission(user, 'work_orders:execute')) {
       throw new ForbiddenException('Bạn không có quyền ghi nhật ký thực hiện phiếu sửa chữa.');
     }
     await this.findOne(workOrderId, user);
@@ -1649,10 +1650,10 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async getActiveSession(workOrderId: string, userId: string, actor?: UserWithPermissions | null) {
-    await this.findOne(workOrderId, actor);
+    const wo = await this.findOne(workOrderId, actor);
     return this.prisma.workOrderWorkSession.findFirst({
       where: {
-        workOrderId,
+        workOrderId: wo.id,
         userId,
         status: 'IN_PROGRESS',
       },
@@ -1845,9 +1846,9 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async getWorkSessions(workOrderId: string, actor?: UserWithPermissions | null) {
-    await this.findOne(workOrderId, actor);
+    const wo = await this.findOne(workOrderId, actor);
     return this.prisma.workOrderWorkSession.findMany({
-      where: { workOrderId },
+      where: { workOrderId: wo.id },
       include: {
         user: { select: { id: true, name: true, specialty: true, role: true } },
       },

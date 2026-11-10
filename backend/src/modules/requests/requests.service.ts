@@ -132,7 +132,12 @@ export class RequestsService {
     }
     const scopeWhere = buildRequestScopeWhere(actor);
     const request = await this.prisma.maintenanceRequest.findFirst({
-      where: { AND: [{ id }, scopeWhere] },
+      where: {
+        AND: [
+          { OR: [{ id }, { requestCode: id }] },
+          scopeWhere,
+        ],
+      },
       include: {
         equipment: true,
         initialAssessment: true,
@@ -1115,11 +1120,11 @@ export class RequestsService {
 
   // ─── WORKFLOW HISTORY ───
   async getHistory(requestId: string, actor?: UserWithPermissions | null) {
-    await this.findOne(requestId, actor);
+    const request = await this.findOne(requestId, actor);
     return this.prisma.workflowHistory.findMany({
       where: {
         entityType: 'MaintenanceRequest',
-        entityId: requestId,
+        entityId: request.id,
       },
       orderBy: { createdAt: 'asc' },
     });

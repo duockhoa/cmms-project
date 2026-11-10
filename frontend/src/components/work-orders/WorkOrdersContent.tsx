@@ -294,14 +294,14 @@ export const WorkOrdersContent: React.FC<WorkOrdersContentProps> = ({ model }) =
                   style={{
                     padding: '16px',
                     borderRadius: '8px',
-                    border: selectedDetailWoId === wo.id ? '2px solid #2563eb' : '1px solid var(--border-color)',
-                    backgroundColor: selectedDetailWoId === wo.id ? '#eff6ff' : 'var(--bg-card)',
+                    border: (selectedDetailWoId === wo.id || selectedDetailWoId === wo.orderCode) ? '2px solid #2563eb' : '1px solid var(--border-color)',
+                    backgroundColor: (selectedDetailWoId === wo.id || selectedDetailWoId === wo.orderCode) ? '#eff6ff' : 'var(--bg-card)',
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '8px',
                     transition: 'all 0.2s ease',
-                    boxShadow: selectedDetailWoId === wo.id ? '0 4px 6px -1px rgba(37, 99, 235, 0.1)' : 'none'
+                    boxShadow: (selectedDetailWoId === wo.id || selectedDetailWoId === wo.orderCode) ? '0 4px 6px -1px rgba(37, 99, 235, 0.1)' : 'none'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
