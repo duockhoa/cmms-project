@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { StatusBadge } from '../components/common/Badge';
 import { Plus, MoreHorizontal, Eye, Trash2, Edit, Printer, CheckSquare } from 'lucide-react';
@@ -50,6 +51,44 @@ export const EquipmentPage: React.FC = () => {
     handleFormSubmit,
     handleDelete,
   } = useEquipmentPage();
+
+  const [menuAnchor, setMenuAnchor] = useState<{ top: number; right: number; openUpwards?: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!activeActionMenu) return;
+    const handleClose = () => {
+      setActiveActionMenu(null);
+      setMenuAnchor(null);
+    };
+    document.addEventListener('click', handleClose);
+    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('resize', handleClose);
+    return () => {
+      document.removeEventListener('click', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleClose);
+    };
+  }, [activeActionMenu, setActiveActionMenu]);
+
+  const activeItem = equipment.find((item) => item.id === activeActionMenu);
+
+  const toggleActionMenu = (e: React.MouseEvent, itemId: string) => {
+    e.stopPropagation();
+    if (activeActionMenu === itemId) {
+      setActiveActionMenu(null);
+      setMenuAnchor(null);
+    } else {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpwards = spaceBelow < 185;
+      setMenuAnchor({
+        top: openUpwards ? rect.top - 6 : rect.bottom + 4,
+        right: Math.max(10, window.innerWidth - rect.right),
+        openUpwards,
+      });
+      setActiveActionMenu(itemId);
+    }
+  };
 
   if (id) {
     return <EquipmentDetailPage item={{ id }} onBack={() => navigate('/equipment')} />;
@@ -245,7 +284,7 @@ export const EquipmentPage: React.FC = () => {
           </div>
         )}
 
-        <div className="table-wrapper">
+        <div className="table-wrapper" style={{ minHeight: equipment.length > 0 ? '220px' : 'auto' }}>
           <table className="custom-table">
             <thead>
               <tr>
@@ -324,49 +363,17 @@ export const EquipmentPage: React.FC = () => {
                         : 'Chưa lập lịch'}
                     </td>
                     <td 
-                      style={{ textAlign: 'center', position: 'relative' }}
+                      style={{ textAlign: 'center' }}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button 
                         className="btn btn-secondary btn-sm" 
-                        onClick={() => setActiveActionMenu(activeActionMenu === item.id ? null : item.id)}
+                        onClick={(e) => toggleActionMenu(e, item.id)}
                         style={{ padding: '4px 8px' }}
+                        title="Tùy chọn thao tác"
                       >
                         <MoreHorizontal size={14} />
                       </button>
-                      {activeActionMenu === item.id && (
-                        <div className="action-dropdown" style={{
-                          position: 'absolute', right: '10px', top: '35px',
-                          backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-md)',
-                          zIndex: 100, display: 'flex', flexDirection: 'column', width: '140px', padding: '4px 0'
-                        }}>
-                          <button 
-                            onClick={() => { navigate(`/equipment/${item.id}`); setActiveActionMenu(null); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
-                          >
-                            <Eye size={12} /> Xem chi tiết
-                          </button>
-                          <button 
-                            onClick={() => { handlePrintSingle(item); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
-                          >
-                            <Printer size={12} /> In tem QR
-                          </button>
-                          <button 
-                            onClick={() => { equipmentModal.open(item); setActiveActionMenu(null); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
-                          >
-                            <Edit size={12} /> Chỉnh sửa
-                          </button>
-                          <button 
-                            onClick={() => { handleDelete(item.id); setActiveActionMenu(null); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)' }}
-                          >
-                            <Trash2 size={12} /> Xóa
-                          </button>
-                        </div>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -384,6 +391,63 @@ export const EquipmentPage: React.FC = () => {
             onPageChange={setPage}
           />
         </div>
+
+      {/* Floating Action Menu rendered outside table wrapper to avoid clipping */}
+      {activeActionMenu && activeItem && menuAnchor && createPortal(
+        <div 
+          className="action-dropdown" 
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: menuAnchor.openUpwards ? undefined : `${menuAnchor.top}px`,
+            bottom: menuAnchor.openUpwards ? `${window.innerHeight - menuAnchor.top}px` : undefined,
+            right: `${menuAnchor.right}px`,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            border: '1px solid var(--border-color, #e2e8f0)',
+            borderRadius: 'var(--radius-sm, 6px)',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            width: '145px',
+            padding: '4px 0',
+          }}
+        >
+          <button 
+            onClick={() => { navigate(`/equipment/${activeItem.id}`); setActiveActionMenu(null); setMenuAnchor(null); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f1f5f9)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <Eye size={13} /> Xem chi tiết
+          </button>
+          <button 
+            onClick={() => { handlePrintSingle(activeItem); setActiveActionMenu(null); setMenuAnchor(null); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f1f5f9)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <Printer size={13} /> In tem QR
+          </button>
+          <button 
+            onClick={() => { equipmentModal.open(activeItem); setActiveActionMenu(null); setMenuAnchor(null); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f1f5f9)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <Edit size={13} /> Chỉnh sửa
+          </button>
+          <button 
+            onClick={() => { handleDelete(activeItem.id); setActiveActionMenu(null); setMenuAnchor(null); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '13px', color: 'var(--danger, #dc2626)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f1f5f9)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <Trash2 size={13} /> Xóa
+          </button>
+        </div>,
+        document.body
+      )}
 
       {/* Modal Add/Edit Equipment */}
       <EquipmentFormModal 
