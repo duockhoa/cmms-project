@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { StatusBadge } from '../components/common/Badge';
-import { Plus, MoreHorizontal, Eye, Trash2, Edit, Printer, CheckSquare, FileSpreadsheet } from 'lucide-react';
+import { Plus, MoreHorizontal, Eye, Trash2, Edit, Printer, CheckSquare, FileSpreadsheet, Layers } from 'lucide-react';
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
 import { EquipmentImportModal } from '../components/equipment/EquipmentImportModal';
+import { FunctionalUnitImportModal } from '../components/equipment/FunctionalUnitImportModal';
 import { TableSkeleton } from '../components/common/Skeleton';
 import { Pagination } from '../components/common/Pagination';
 import { EmptyState, ExportButton, FilterBar, PageHeader, SearchInput } from '../components/common';
@@ -56,6 +57,7 @@ export const EquipmentPage: React.FC = () => {
 
   const [menuAnchor, setMenuAnchor] = useState<{ top: number; right: number; openUpwards?: boolean } | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isUnitImportModalOpen, setIsUnitImportModalOpen] = useState(false);
 
   useEffect(() => {
     if (!activeActionMenu) return;
@@ -166,6 +168,16 @@ export const EquipmentPage: React.FC = () => {
           >
             <FileSpreadsheet size={15} color="#16a34a" />
             <span>Import Excel</span>
+          </button>
+
+          <button
+            className="btn btn-secondary"
+            onClick={() => setIsUnitImportModalOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            title="Tải biểu mẫu và nhập cụm chức năng theo thiết bị từ Excel"
+          >
+            <Layers size={15} color="#2563eb" />
+            <span>Import Cụm CN</span>
           </button>
 
           <button className="btn btn-primary" onClick={() => equipmentModal.open()}>
@@ -474,6 +486,13 @@ export const EquipmentPage: React.FC = () => {
       <EquipmentImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
+        onSuccess={() => loadEquipment()}
+      />
+
+      {/* Modal Import Functional Units by Equipment */}
+      <FunctionalUnitImportModal
+        isOpen={isUnitImportModalOpen}
+        onClose={() => setIsUnitImportModalOpen(false)}
         onSuccess={() => loadEquipment()}
       />
     </div>

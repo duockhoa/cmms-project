@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { 
   CreateFunctionalUnitDto, 
@@ -315,6 +315,214 @@ export class FunctionalUnitsService {
       clonedCount: clonedUnits.length,
       items: clonedUnits,
       message: `Đã sao chép thành công ${clonedUnits.length} cụm chức năng sang thiết bị ${targetEquipment.code}.`,
+    };
+  }
+
+  private normalizeUnitStatus(rawStatus: any): string {
+    const val = String(rawStatus ?? '').trim().toUpperCase();
+    if (!val) return 'OPERATIONAL';
+
+    const aliasMap: Record<string, string> = {
+      OPERATIONAL: 'OPERATIONAL',
+      'HOẠT ĐỘNG TỐT': 'OPERATIONAL',
+      'HOAT DONG TOT': 'OPERATIONAL',
+      'BÌNH THƯỜNG': 'OPERATIONAL',
+      WARNING: 'WARNING',
+      'CẦN THEO DÕI': 'WARNING',
+      'CAN THEO DOI': 'WARNING',
+      'CẢNH BÁO': 'WARNING',
+      INCIDENT: 'INCIDENT',
+      'SỰ CỐ': 'INCIDENT',
+      'SU CO': 'INCIDENT',
+      'HỎNG': 'INCIDENT',
+      INACTIVE: 'INACTIVE',
+      'NGỪNG HOẠT ĐỘNG': 'INACTIVE',
+      'NGUNG HOAT DONG': 'INACTIVE',
+    };
+
+    const mapped = aliasMap[val];
+    if (!mapped) {
+      throw new Error(`Trạng thái cụm chức năng không hợp lệ: '${rawStatus}'`);
+    }
+    return mapped;
+  }
+
+  async importBulkByEquipment(items: Record<string, any>[]) {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException('Danh sách cụm chức năng import không được để trống.');
+    }
+
+    const allEquipment = await this.prisma.equipment.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, oldCode: true, accountingCode: true, name: true, category: true },
+    });
+
+    const byId = new Map<string, typeof allEquipment[number]>();
+    const byCode = new Map<string, typeof allEquipment[number]>();
+    const byOldCode = new Map<string, typeof allEquipment[number]>();
+    const byAccCode = new Map<string, typeof allEquipment[number]>();
+    const byNameCount = new Map<string, typeof allEquipment[number][]>();
+
+    for (const eq of allEquipment) {
+      byId.set(eq.id, eq);
+      if (eq.code) byCode.set(eq.code.trim().toLowerCase(), eq);
+      if (eq.oldCode) byOldCode.set(eq.oldCode.trim().toLowerCase(), eq);
+      if (eq.accountingCode) byAccCode.set(eq.accountingCode.trim().toLowerCase(), eq);
+      if (eq.name) {
+        const key = eq.name.trim().toLowerCase();
+        const arr = byNameCount.get(key) || [];
+        arr.push(eq);
+        byNameCount.set(key, arr);
+      }
+    }
+
+    // Cache existing units & library items to avoid N+1 full scans
+    const existingUnits = await this.prisma.equipmentFunctionalUnit.findMany({
+      select: { equipmentId: true, name: true, code: true },
+    });
+    const unitNamesByEq = new Map<string, Set<string>>();
+    const unitCountByEq = new Map<string, number>();
+    const usedUnitCodes = new Set<string>();
+
+    for (const u of existingUnits) {
+      if (!unitNamesByEq.has(u.equipmentId)) {
+        unitNamesByEq.set(u.equipmentId, new Set());
+      }
+      unitNamesByEq.get(u.equipmentId)!.add(u.name.trim().toLowerCase());
+      unitCountByEq.set(u.equipmentId, (unitCountByEq.get(u.equipmentId) || 0) + 1);
+      if (u.code) usedUnitCodes.add(u.code.trim().toLowerCase());
+    }
+
+    const libraryList = await this.prisma.functionalUnitLibrary.findMany();
+    const libraryByName = new Map<string, typeof libraryList[number]>();
+    for (const lib of libraryList) {
+      libraryByName.set(lib.name.trim().toLowerCase(), lib);
+    }
+
+    const created: Array<{ id: string; code: string; name: string; equipmentCode: string; equipmentName: string }> = [];
+    const errors: Array<{ rowNumber: number; equipmentKey?: string; name?: string; reason: string }> = [];
+
+    for (let idx = 0; idx < items.length; idx++) {
+      const raw = items[idx] || {};
+      const rowNumber = Number(raw.rowNumber) || idx + 2;
+      const equipmentIdRaw = String(raw.equipmentId ?? '').trim();
+      const equipmentKey = String(
+        raw.equipmentKey ?? raw.equipmentCode ?? raw.oldCode ?? raw.accountingCode ?? raw.equipmentName ?? ''
+      ).trim();
+      const name = String(raw.name ?? '').trim();
+
+      try {
+        if (!name) {
+          throw new Error('Thiếu tên cụm chức năng');
+        }
+
+        let targetEq = equipmentIdRaw ? byId.get(equipmentIdRaw) : undefined;
+        if (!targetEq) {
+          if (!equipmentKey) {
+            throw new Error('Thiếu mã/tên thiết bị');
+          }
+          const normalizedKey = equipmentKey.toLowerCase();
+          targetEq = byCode.get(normalizedKey) || byOldCode.get(normalizedKey) || byAccCode.get(normalizedKey);
+          if (!targetEq) {
+            const matchedByName = byNameCount.get(normalizedKey);
+            if (matchedByName && matchedByName.length === 1) {
+              targetEq = matchedByName[0];
+            } else if (matchedByName && matchedByName.length > 1) {
+              throw new Error(`Tên thiết bị '${equipmentKey}' bị trùng (${matchedByName.length} máy), vui lòng dùng mã EQ-xxxx hoặc mã cũ`);
+            }
+          }
+        }
+
+        if (!targetEq) {
+          throw new Error(`Không tìm thấy thiết bị khớp với '${equipmentKey || equipmentIdRaw}'`);
+        }
+
+        if (!unitNamesByEq.has(targetEq.id)) {
+          unitNamesByEq.set(targetEq.id, new Set());
+        }
+        const eqUnitNames = unitNamesByEq.get(targetEq.id)!;
+        if (eqUnitNames.has(name.toLowerCase())) {
+          throw new Error(`Thiết bị ${targetEq.code} đã có cụm chức năng '${name}'`);
+        }
+
+        const status = this.normalizeUnitStatus(raw.status);
+        const category = String(raw.category ?? '').trim() || targetEq.category || 'Cơ khí';
+        const description = String(raw.description ?? '').trim() || undefined;
+
+        let orderIndex: number | undefined;
+        if (raw.orderIndex !== undefined && raw.orderIndex !== null && String(raw.orderIndex).trim() !== '') {
+          const parsedOrder = Number(raw.orderIndex);
+          if (!Number.isFinite(parsedOrder)) {
+            throw new Error('Thứ tự hiển thị phải là số nguyên');
+          }
+          orderIndex = Math.trunc(parsedOrder);
+        }
+
+        // Sync vào thư viện dùng chung nếu chưa có
+        let libItem = libraryByName.get(name.toLowerCase());
+        if (!libItem) {
+          libItem = await this.prisma.functionalUnitLibrary.create({
+            data: {
+              name,
+              code: `FU-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+              category,
+              description: description || `Tự động tạo khi import cho thiết bị ${targetEq.code}`,
+            },
+          });
+          libraryByName.set(name.toLowerCase(), libItem);
+        }
+
+        let seq = (unitCountByEq.get(targetEq.id) || 0) + 1;
+        let unitCode = String(raw.code ?? '').trim();
+        if (!unitCode) {
+          unitCode = `${targetEq.code}-CU${String(seq).padStart(2, '0')}`;
+          while (usedUnitCodes.has(unitCode.toLowerCase())) {
+            seq++;
+            unitCode = `${targetEq.code}-CU${String(seq).padStart(2, '0')}`;
+          }
+        } else if (usedUnitCodes.has(unitCode.toLowerCase())) {
+          throw new Error(`Mã cụm chức năng '${unitCode}' đã tồn tại`);
+        }
+
+        const newUnit = await this.prisma.equipmentFunctionalUnit.create({
+          data: {
+            equipmentId: targetEq.id,
+            libraryId: libItem.id,
+            name,
+            code: unitCode,
+            description: description ?? libItem.description,
+            status,
+            orderIndex: orderIndex ?? seq - 1,
+          },
+        });
+
+        eqUnitNames.add(name.toLowerCase());
+        unitCountByEq.set(targetEq.id, seq);
+        usedUnitCodes.add(unitCode.toLowerCase());
+
+        created.push({
+          id: newUnit.id,
+          code: newUnit.code,
+          name: newUnit.name,
+          equipmentCode: targetEq.code,
+          equipmentName: targetEq.name,
+        });
+      } catch (err: any) {
+        errors.push({
+          rowNumber,
+          equipmentKey: equipmentKey || undefined,
+          name: name || undefined,
+          reason: err?.message || 'Lỗi không xác định khi lưu cụm chức năng',
+        });
+      }
+    }
+
+    return {
+      totalRows: items.length,
+      createdCount: created.length,
+      skippedCount: errors.length,
+      errors,
+      created,
     };
   }
 }

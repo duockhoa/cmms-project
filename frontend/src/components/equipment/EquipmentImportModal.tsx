@@ -577,3 +577,4 @@ export const EquipmentImportModal: React.FC<EquipmentImportModalProps> = ({
     </Modal>
   );
 };
+

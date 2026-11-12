@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
 import { EquipmentService } from './equipment.service';
+import { FunctionalUnitsService } from './functional-units.service';
 import { CreateEquipmentDto, UpdateEquipmentDto, BulkImportEquipmentDto } from './dto/equipment.dto';
+import { BulkImportFunctionalUnitDto } from './dto/functional-unit.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
@@ -9,7 +11,10 @@ import { ApiStandardResponse } from '../../common/decorators/api-standard-respon
 @Controller('equipment')
 @UseGuards(JwtAuthGuard)
 export class EquipmentController {
-  constructor(private readonly equipmentService: EquipmentService) {}
+  constructor(
+    private readonly equipmentService: EquipmentService,
+    private readonly functionalUnitsService: FunctionalUnitsService,
+  ) {}
 
   @ApiStandardResponse({ summary: 'Lấy danh sách thiết bị', method: 'GET', path: '/equipment' })
   @Get()
@@ -69,6 +74,13 @@ export class EquipmentController {
   @Delete(':id/spare-parts/:linkId')
   removeSparePart(@Param('id') id: string, @Param('linkId') linkId: string) {
     return this.equipmentService.removeEquipmentSparePart(id, linkId);
+  }
+
+  @ApiStandardResponse({ summary: 'Nhập hàng loạt cụm chức năng theo thiết bị từ Excel', method: 'POST', path: '/equipment/functional-units/import' })
+  @Post('functional-units/import')
+  @HttpCode(HttpStatus.OK)
+  importFunctionalUnits(@Body() data: BulkImportFunctionalUnitDto) {
+    return this.functionalUnitsService.importBulkByEquipment(data.items);
   }
 
   @ApiStandardResponse({ summary: 'Nhập hàng loạt thiết bị từ Excel', method: 'POST', path: '/equipment/import' })

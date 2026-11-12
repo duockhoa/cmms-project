@@ -33,7 +33,7 @@ routes('AnalyticsController', {
 routes('AttachmentsController', { 'uploadFile getAttachments downloadFile viewFile deleteFile': session });
 routes('EquipmentController', {
   'findAll findOne getSpareParts': equipmentRead, 'getDepartments lookup': lookup,
-  syncStatuses: 'settings:system', 'update addSparePart removeSparePart': 'equipment:edit', 'create importBulk': 'equipment:create', remove: 'equipment:delete',
+  syncStatuses: 'settings:system', 'update addSparePart removeSparePart importFunctionalUnits': 'equipment:edit', 'create importBulk': 'equipment:create', remove: 'equipment:delete',
 });
 routes('EquipmentParametersController', {
   getParameters: equipmentRead, 'createParameter bulkAssign sync batchUpdate updateParameter deleteParameter': 'equipment:edit', reorder: 'equipment:reorder_parameters',

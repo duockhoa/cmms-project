@@ -1,12 +1,12 @@
 import React from 'react';
 import {
   AlertCircle, AlertTriangle, BookOpen, CheckCircle2, Copy,
-  Cpu, Edit, Plus, RefreshCw, Trash2,
+  Cpu, Edit, FileSpreadsheet, Plus, RefreshCw, Trash2,
 } from 'lucide-react';
 import { KpiCard } from '../../common';
 
 export const FunctionalUnitsList: React.FC<any> = ({
-  handleOpenAddModal, handleOpenCloneModal, handleOpenEditModal, incidentCount,
+  handleOpenAddModal, handleOpenCloneModal, handleOpenEditModal, handleOpenImportModal, incidentCount,
   loadData, loading, operationalCount, renderStatusBadge, setUnitToDelete,
   totalCount, units, warningCount,
 }) => (
@@ -49,6 +49,16 @@ export const FunctionalUnitsList: React.FC<any> = ({
             >
               <Copy size={14} /> Sao chép từ máy khác
             </button>
+            {handleOpenImportModal && (
+              <button
+                onClick={handleOpenImportModal}
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
+                title="Import danh sách cụm chức năng từ file Excel"
+              >
+                <FileSpreadsheet size={14} color="#16a34a" /> Import Excel
+              </button>
+            )}
             <button 
               onClick={handleOpenAddModal}
               className="btn btn-primary btn-sm"

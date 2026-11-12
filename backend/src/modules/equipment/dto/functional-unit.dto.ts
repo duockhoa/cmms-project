@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsArray, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 
 export class CreateFunctionalUnitDto {
   @IsString()
@@ -98,4 +98,11 @@ export class UpdateFunctionalUnitLibraryDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+}
+
+export class BulkImportFunctionalUnitDto {
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Danh sách cụm chức năng import không được để trống' })
+  @ArrayMaxSize(1000, { message: 'Mỗi lần import tối đa 1000 dòng cụm chức năng' })
+  items: Record<string, any>[];
 }

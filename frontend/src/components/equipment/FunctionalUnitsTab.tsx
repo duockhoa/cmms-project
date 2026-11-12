@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useFunctionalUnits } from '../../hooks/useFunctionalUnits';
 import { FunctionalUnitCloneModal } from './functional-units/FunctionalUnitCloneModal';
 import { FunctionalUnitDeleteModal } from './functional-units/FunctionalUnitDeleteModal';
 import { FunctionalUnitFormModal } from './functional-units/FunctionalUnitFormModal';
 import { FunctionalUnitsList } from './functional-units/FunctionalUnitsList';
+import { FunctionalUnitImportModal } from './FunctionalUnitImportModal';
 
 interface FunctionalUnitsTabProps {
   equipmentId: string;
@@ -35,6 +36,7 @@ export const FunctionalUnitsTab: React.FC<FunctionalUnitsTabProps> = ({
   onUnitsUpdated,
 }) => {
   const functionalUnits = useFunctionalUnits({ equipmentId, equipmentCode, onUnitsUpdated });
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const operationalCount = functionalUnits.units.filter(unit => unit.status === 'OPERATIONAL').length;
   const warningCount = functionalUnits.units.filter(unit => unit.status === 'WARNING').length;
   const incidentCount = functionalUnits.units.filter(unit => unit.status === 'INCIDENT').length;
@@ -45,6 +47,7 @@ export const FunctionalUnitsTab: React.FC<FunctionalUnitsTabProps> = ({
         handleOpenAddModal={functionalUnits.handleOpenAddModal}
         handleOpenCloneModal={functionalUnits.handleOpenCloneModal}
         handleOpenEditModal={functionalUnits.handleOpenEditModal}
+        handleOpenImportModal={() => setIsImportModalOpen(true)}
         incidentCount={incidentCount}
         loadData={functionalUnits.loadData}
         loading={functionalUnits.loading}
@@ -106,6 +109,20 @@ export const FunctionalUnitsTab: React.FC<FunctionalUnitsTabProps> = ({
         isDeleting={functionalUnits.isDeleting}
         setUnitToDelete={functionalUnits.setUnitToDelete}
         unitToDelete={functionalUnits.unitToDelete}
+      />
+
+      <FunctionalUnitImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={() => {
+          functionalUnits.loadData();
+          onUnitsUpdated?.();
+        }}
+        fixedEquipment={{
+          id: equipmentId,
+          code: equipmentCode || '',
+          name: equipmentName || '',
+        }}
       />
     </div>
   );
