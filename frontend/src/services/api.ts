@@ -258,6 +258,12 @@ export const api = {
     }
     return request(`/equipment${toQueryString(params)}`);
   },
+  getEquipmentLookup: (search?: string) => {
+    if (!search?.trim()) {
+      return catalogCache.fetchWithCache('equipment_lookup', () => request('/equipment/lookup'));
+    }
+    return request(`/equipment/lookup${toQueryString({ search: search.trim() })}`);
+  },
   getEquipmentById: (id: string) => request(`/equipment/${id}`),
   createEquipment: async (data: any) => {
     const res = await request('/equipment', { method: 'POST', body: JSON.stringify(data) });

@@ -38,6 +38,12 @@ export class EquipmentController {
     return this.equipmentService.getDepartments();
   }
 
+  @ApiStandardResponse({ summary: 'Lấy danh sách thiết bị rút gọn cho form báo sự cố / chọn máy', method: 'GET', path: '/equipment/lookup' })
+  @Get('lookup')
+  lookup(@Query('search') search?: string) {
+    return this.equipmentService.lookup(search);
+  }
+
   @ApiStandardResponse({ summary: 'Lấy chi tiết thiết bị theo ID', method: 'GET', path: '/equipment/{id}' })
   @Get(':id')
   findOne(@Param('id') id: string) {

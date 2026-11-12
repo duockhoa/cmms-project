@@ -66,7 +66,7 @@ export function useRequestsPage() {
       setLoading(true);
       const [reqRes, eqRes, userRes, meRes] = await Promise.all([
         api.getRequests({ status: statusFilter, page, limit }),
-        api.getEquipment(),
+        api.getEquipmentLookup().catch(() => []),
         api.getUsers().catch(() => []),
         api.getMe().catch(() => null),
       ]);

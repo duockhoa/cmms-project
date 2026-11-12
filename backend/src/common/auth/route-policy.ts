@@ -32,7 +32,7 @@ routes('AnalyticsController', {
 // Entity-specific permissions/ownership are additionally enforced inside AttachmentsService.
 routes('AttachmentsController', { 'uploadFile getAttachments downloadFile viewFile deleteFile': session });
 routes('EquipmentController', {
-  'findAll findOne getSpareParts': equipmentRead, getDepartments: lookup,
+  'findAll findOne getSpareParts': equipmentRead, 'getDepartments lookup': lookup,
   syncStatuses: 'settings:system', 'update addSparePart removeSparePart': 'equipment:edit', create: 'equipment:create', remove: 'equipment:delete',
 });
 routes('EquipmentParametersController', {

@@ -126,6 +126,35 @@ export class EquipmentService implements OnModuleInit {
       .sort((a, b) => a.localeCompare(b, 'vi'));
   }
 
+  async lookup(search?: string) {
+    const where: any = { isActive: true };
+    if (search?.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { name: { contains: q } },
+        { code: { contains: q } },
+        { oldCode: { contains: q } },
+        { accountingCode: { contains: q } },
+        { location: { contains: q } },
+      ];
+    }
+    return this.prisma.equipment.findMany({
+      where,
+      select: {
+        id: true,
+        code: true,
+        oldCode: true,
+        accountingCode: true,
+        name: true,
+        category: true,
+        department: true,
+        location: true,
+        status: true,
+      },
+      orderBy: [{ code: 'asc' }, { name: 'asc' }],
+    });
+  }
+
   async findAll(query?: { search?: string; category?: string; department?: string; status?: string; location?: string; page?: string; limit?: string }, actor?: any) {
     const where: any = { isActive: true, ...(actor ? { AND: [equipmentScope(actor)] } : {}) };
     if (query?.search) {
