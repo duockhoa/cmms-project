@@ -53,22 +53,32 @@ async function bootstrap() {
     ],
   });
 
-  // Swagger Configuration (FastAPI Style)
-  const config = new DocumentBuilder()
-    .setTitle('API Docs')
-    .setDescription('API documentation')
+  // Swagger Configuration (Public API Docs - no login required)
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('DK Pharma CMMS - API Documentation')
+    .setDescription('Tài liệu API hệ thống Quản lý Thiết bị & Bảo trì (CMMS)')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document, {
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  const swaggerOptions = {
     customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'API Docs',
+    customSiteTitle: 'DK Pharma CMMS - API Docs',
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  };
+  // Mount under /api/v1/docs so production Nginx /api/ proxy serves it directly without login
+  SwaggerModule.setup('docs', app, document, {
+    ...swaggerOptions,
+    useGlobalPrefix: true,
   });
+  // Keep /docs for local development convenience
+  SwaggerModule.setup('docs', app, document, swaggerOptions);
 
   const port = configService.get<number>('PORT') || 3001;
   await app.listen(port);
   console.log(`🚀 NestJS Backend server listening on http://localhost:${port}`);
-  console.log(`📄 Swagger docs available at http://localhost:${port}/docs`);
+  console.log(`📄 Swagger docs available at http://localhost:${port}/api/v1/docs (and /docs)`);
 }
 bootstrap();
