@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { CustomLogger } from './common/logger/custom.logger';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as compression from 'compression';
+import { json, urlencoded } from 'express';
 import { SanitizeResponseInterceptor } from './common/interceptors/sanitize-response.interceptor';
 import { browserOrigin, allowedBrowserOrigins } from './common/auth/browser-origin';
 
@@ -18,6 +19,8 @@ async function bootstrap() {
 
   // Enable HTTP response compression (Gzip/Deflate) to minimize payload transfer size
   app.use(compression());
+  app.use(json({ limit: '5mb' }));
+  app.use(urlencoded({ extended: true, limit: '5mb' }));
 
   app.enableCors({
     origin: browserOrigin,

@@ -345,13 +345,30 @@ export const EquipmentImportModal: React.FC<EquipmentImportModalProps> = ({
     try {
       setIsImporting(true);
       const payload = validRows.map(({ clientError: _err, ...rest }) => rest);
-      const result: ImportResult = await api.importEquipment(payload);
-      setImportResult(result);
+      const CHUNK_SIZE = 100;
+      const aggregated: ImportResult = {
+        totalRows: payload.length,
+        createdCount: 0,
+        skippedCount: 0,
+        errors: [],
+        created: [],
+      };
 
-      if (result.createdCount > 0) {
+      for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
+        const chunk = payload.slice(i, i + CHUNK_SIZE);
+        const res: ImportResult = await api.importEquipment(chunk);
+        aggregated.createdCount += res.createdCount || 0;
+        aggregated.skippedCount += res.skippedCount || 0;
+        if (Array.isArray(res.errors)) aggregated.errors.push(...res.errors);
+        if (Array.isArray(res.created)) aggregated.created.push(...res.created);
+      }
+
+      setImportResult(aggregated);
+
+      if (aggregated.createdCount > 0) {
         toast.success(
           'Import hoàn tất',
-          `Đã thêm thành công ${result.createdCount} thiết bị${result.skippedCount > 0 ? `, bỏ qua ${result.skippedCount} dòng lỗi` : ''}.`
+          `Đã thêm thành công ${aggregated.createdCount} thiết bị${aggregated.skippedCount > 0 ? `, bỏ qua ${aggregated.skippedCount} dòng lỗi` : ''}.`
         );
         onSuccess();
       } else {

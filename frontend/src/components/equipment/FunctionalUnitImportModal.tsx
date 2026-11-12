@@ -103,11 +103,13 @@ export const FunctionalUnitImportModal: React.FC<FunctionalUnitImportModalProps>
   const [fileName, setFileName] = useState('');
   const [parsedRows, setParsedRows] = useState<ParsedUnitRow[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   const resetState = () => {
     setFileName('');
     setParsedRows([]);
+    setImportProgress(null);
     setImportResult(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -271,13 +273,32 @@ export const FunctionalUnitImportModal: React.FC<FunctionalUnitImportModalProps>
     try {
       setIsImporting(true);
       const payload = validRows.map(({ clientError: _err, ...rest }) => rest);
-      const result: ImportResult = await api.importFunctionalUnitsByEquipment(payload);
-      setImportResult(result);
+      const CHUNK_SIZE = 100;
+      const aggregated: ImportResult = {
+        totalRows: payload.length,
+        createdCount: 0,
+        skippedCount: 0,
+        errors: [],
+        created: [],
+      };
 
-      if (result.createdCount > 0) {
+      setImportProgress({ done: 0, total: payload.length });
+      for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
+        const chunk = payload.slice(i, i + CHUNK_SIZE);
+        const res: ImportResult = await api.importFunctionalUnitsByEquipment(chunk);
+        aggregated.createdCount += res.createdCount || 0;
+        aggregated.skippedCount += res.skippedCount || 0;
+        if (Array.isArray(res.errors)) aggregated.errors.push(...res.errors);
+        if (Array.isArray(res.created)) aggregated.created.push(...res.created);
+        setImportProgress({ done: Math.min(i + chunk.length, payload.length), total: payload.length });
+      }
+
+      setImportResult(aggregated);
+
+      if (aggregated.createdCount > 0) {
         toast.success(
           'Import cụm chức năng hoàn tất',
-          `Đã thêm ${result.createdCount} cụm chức năng${result.skippedCount > 0 ? `, bỏ qua ${result.skippedCount} dòng lỗi` : ''}.`
+          `Đã thêm ${aggregated.createdCount} cụm chức năng${aggregated.skippedCount > 0 ? `, bỏ qua ${aggregated.skippedCount} dòng lỗi` : ''}.`
         );
         onSuccess();
       } else {
@@ -287,6 +308,7 @@ export const FunctionalUnitImportModal: React.FC<FunctionalUnitImportModalProps>
       toast.error('Lỗi import cụm chức năng', err?.message || 'Không thể gửi dữ liệu lên máy chủ.');
     } finally {
       setIsImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -493,7 +515,11 @@ export const FunctionalUnitImportModal: React.FC<FunctionalUnitImportModalProps>
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <Upload size={15} />
-              <span>{isImporting ? 'Đang import...' : `Xác nhận Import (${validRows.length} cụm)`}</span>
+              <span>
+                {isImporting
+                  ? `Đang import${importProgress ? ` (${importProgress.done}/${importProgress.total})` : '...'}`
+                  : `Xác nhận Import (${validRows.length} cụm)`}
+              </span>
             </button>
           )}
         </div>
