@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { StatusBadge } from '../components/common/Badge';
-import { Plus, MoreHorizontal, Eye, Trash2, Edit, Printer, CheckSquare } from 'lucide-react';
+import { Plus, MoreHorizontal, Eye, Trash2, Edit, Printer, CheckSquare, FileSpreadsheet } from 'lucide-react';
 import { EquipmentDetailPage } from './EquipmentDetailPage';
 import { EquipmentFormModal } from '../components/equipment/EquipmentFormModal';
+import { EquipmentImportModal } from '../components/equipment/EquipmentImportModal';
 import { TableSkeleton } from '../components/common/Skeleton';
 import { Pagination } from '../components/common/Pagination';
 import { EmptyState, ExportButton, FilterBar, PageHeader, SearchInput } from '../components/common';
@@ -50,9 +51,11 @@ export const EquipmentPage: React.FC = () => {
     exportEquipment,
     handleFormSubmit,
     handleDelete,
+    loadEquipment,
   } = useEquipmentPage();
 
   const [menuAnchor, setMenuAnchor] = useState<{ top: number; right: number; openUpwards?: boolean } | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   useEffect(() => {
     if (!activeActionMenu) return;
@@ -154,6 +157,16 @@ export const EquipmentPage: React.FC = () => {
               <span>In Kết Quả Lọc ({total})</span>
             </button>
           )}
+
+          <button
+            className="btn btn-secondary"
+            onClick={() => setIsImportModalOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            title="Tải biểu mẫu và nhập thiết bị hàng loạt từ Excel"
+          >
+            <FileSpreadsheet size={15} color="#16a34a" />
+            <span>Import Excel</span>
+          </button>
 
           <button className="btn btn-primary" onClick={() => equipmentModal.open()}>
             <Plus size={16} /> Thêm thiết bị
@@ -455,6 +468,13 @@ export const EquipmentPage: React.FC = () => {
         onClose={() => equipmentModal.close()} 
         onSubmit={handleFormSubmit} 
         initialData={equipmentModal.data}
+      />
+
+      {/* Modal Import Equipment */}
+      <EquipmentImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={() => loadEquipment()}
       />
     </div>
   );

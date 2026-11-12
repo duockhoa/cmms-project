@@ -378,42 +378,7 @@ export class EquipmentService implements OnModuleInit {
       const rawUnits = Array.isArray(data.functionalUnits)
         ? data.functionalUnits
         : (newEquipment.functionalUnit ? newEquipment.functionalUnit.split(',') : []);
-      const unitNames = rawUnits.map((s: any) => String(s).trim()).filter(Boolean);
-
-      if (unitNames.length > 0) {
-        for (let i = 0; i < unitNames.length; i++) {
-          const uName = unitNames[i];
-          try {
-            // 1. Kiểm tra hoặc thêm vào thư viện
-            let libItem = await this.prisma.functionalUnitLibrary.findFirst({
-              where: { name: uName }
-            });
-            if (!libItem) {
-              libItem = await this.prisma.functionalUnitLibrary.create({
-                data: {
-                  name: uName,
-                  code: `FU-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-                  category: data.category || 'Cơ khí',
-                  description: `Tự động lưu từ thiết bị ${newEquipment.code}`,
-                }
-              });
-            }
-            // 2. Tạo cụm chức năng cho thiết bị
-            await this.prisma.equipmentFunctionalUnit.create({
-              data: {
-                equipmentId: newEquipment.id,
-                libraryId: libItem.id,
-                name: uName,
-                code: `${newEquipment.code}-CU${(i + 1).toString().padStart(2, '0')}`,
-                status: 'OPERATIONAL',
-                orderIndex: i,
-              }
-            });
-          } catch (unitErr) {
-            console.warn('Lỗi khi tự động khởi tạo cụm chức năng:', unitErr);
-          }
-        }
-      }
+      await this.syncFunctionalUnitsForEquipment(newEquipment, rawUnits, data.category);
 
       return newEquipment;
     } catch (err: any) {
@@ -506,5 +471,248 @@ export class EquipmentService implements OnModuleInit {
       where: { id },
       data: { isActive: false },
     });
+  }
+
+  private async syncFunctionalUnitsForEquipment(
+    equipment: { id: string; code: string },
+    rawUnits: any[],
+    category?: string,
+  ) {
+    const unitNames = rawUnits.map((s: any) => String(s).trim()).filter(Boolean);
+    if (unitNames.length === 0) return;
+
+    for (let i = 0; i < unitNames.length; i++) {
+      const uName = unitNames[i];
+      try {
+        let libItem = await this.prisma.functionalUnitLibrary.findFirst({
+          where: { name: uName },
+        });
+        if (!libItem) {
+          libItem = await this.prisma.functionalUnitLibrary.create({
+            data: {
+              name: uName,
+              code: `FU-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+              category: category || 'Cơ khí',
+              description: `Tự động lưu từ thiết bị ${equipment.code}`,
+            },
+          });
+        }
+        await this.prisma.equipmentFunctionalUnit.create({
+          data: {
+            equipmentId: equipment.id,
+            libraryId: libItem.id,
+            name: uName,
+            code: `${equipment.code}-CU${(i + 1).toString().padStart(2, '0')}`,
+            status: 'OPERATIONAL',
+            orderIndex: i,
+          },
+        });
+      } catch (unitErr) {
+        console.warn('Lỗi khi tự động khởi tạo cụm chức năng:', unitErr);
+      }
+    }
+  }
+
+  private normalizeImportStatus(rawStatus: any): string {
+    const val = String(rawStatus ?? '').trim().toUpperCase();
+    if (!val) return 'OPERATIONAL';
+
+    const aliasMap: Record<string, string> = {
+      OPERATIONAL: 'OPERATIONAL',
+      'HOẠT ĐỘNG TỐT': 'OPERATIONAL',
+      'HOAT DONG TOT': 'OPERATIONAL',
+      'BÌNH THƯỜNG': 'OPERATIONAL',
+      UNDER_MAINTENANCE: 'UNDER_MAINTENANCE',
+      'ĐANG BẢO TRÌ': 'UNDER_MAINTENANCE',
+      'DANG BAO TRI': 'UNDER_MAINTENANCE',
+      'BẢO TRÌ': 'UNDER_MAINTENANCE',
+      INCIDENT: 'INCIDENT',
+      'SỰ CỐ': 'INCIDENT',
+      'SU CO': 'INCIDENT',
+      'HỎNG': 'INCIDENT',
+      DISCOMMISSIONED: 'DISCOMMISSIONED',
+      'NGỪNG SỬ DỤNG': 'DISCOMMISSIONED',
+      'NGUNG SU DUNG': 'DISCOMMISSIONED',
+    };
+
+    const mapped = aliasMap[val];
+    if (!mapped) {
+      throw new Error(`Trạng thái không hợp lệ: '${rawStatus}'`);
+    }
+    return mapped;
+  }
+
+  private parseOptionalNumber(val: any, fieldLabel: string): number | undefined {
+    if (val === undefined || val === null || String(val).trim() === '') return undefined;
+    const num = Number(String(val).replace(/,/g, '').trim());
+    if (!Number.isFinite(num)) {
+      throw new Error(`${fieldLabel} phải là số hợp lệ`);
+    }
+    return num;
+  }
+
+  private parseOptionalBoolean(val: any): boolean | undefined {
+    if (val === undefined || val === null || String(val).trim() === '') return undefined;
+    const normalized = String(val).trim().toLowerCase();
+    if (['true', '1', 'có', 'co', 'yes', 'x'].includes(normalized)) return true;
+    if (['false', '0', 'không', 'khong', 'no'].includes(normalized)) return false;
+    return undefined;
+  }
+
+  private parseOptionalDate(val: any): Date | undefined {
+    if (val === undefined || val === null || String(val).trim() === '') return undefined;
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) {
+      throw new Error(`Ngày mua không hợp lệ: '${val}'`);
+    }
+    return d;
+  }
+
+  async importBulk(items: Record<string, any>[]) {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException('Danh sách thiết bị import không được để trống.');
+    }
+
+    // Lấy toàn bộ mã hệ thống & mã kế toán hiện có 1 lần để kiểm tra trùng lặp và sinh EQ-xxxx tuần tự
+    const existingEquipment = await this.prisma.equipment.findMany({
+      select: { code: true, accountingCode: true, name: true },
+    });
+
+    const usedCodes = new Set<string>();
+    const existingAccMap = new Map<string, { code: string; name: string }>();
+    let maxEqNum = 0;
+
+    for (const eq of existingEquipment) {
+      if (eq.code) {
+        usedCodes.add(eq.code);
+        if (eq.code.startsWith('EQ-')) {
+          const numPart = parseInt(eq.code.replace('EQ-', ''), 10);
+          if (!Number.isNaN(numPart) && numPart > maxEqNum) {
+            maxEqNum = numPart;
+          }
+        }
+      }
+      if (eq.accountingCode) {
+        existingAccMap.set(eq.accountingCode, { code: eq.code, name: eq.name });
+      }
+    }
+
+    const created: Array<{ id: string; code: string; name: string; accountingCode: string | null }> = [];
+    const errors: Array<{ rowNumber: number; name?: string; accountingCode?: string; reason: string }> = [];
+
+    for (let idx = 0; idx < items.length; idx++) {
+      const raw = items[idx] || {};
+      const rowNumber = Number(raw.rowNumber) || idx + 2; // Excel row 1 is header
+      const name = String(raw.name ?? '').trim();
+      const category = String(raw.category ?? '').trim();
+      const location = String(raw.location ?? '').trim();
+      const accountingCode = raw.accountingCode && String(raw.accountingCode).trim() !== ''
+        ? String(raw.accountingCode).trim()
+        : null;
+
+      try {
+        if (!name) throw new Error('Thiếu tên thiết bị');
+        if (!category) throw new Error('Thiếu loại thiết bị');
+        if (!location) throw new Error('Thiếu vị trí lắp đặt');
+
+        if (accountingCode && existingAccMap.has(accountingCode)) {
+          const dup = existingAccMap.get(accountingCode)!;
+          throw new Error(`Mã kế toán '${accountingCode}' đã tồn tại (${dup.code} - ${dup.name})`);
+        }
+
+        const status = this.normalizeImportStatus(raw.status);
+        const purchaseDate = this.parseOptionalDate(raw.purchaseDate);
+        const currentOperatingHours = this.parseOptionalNumber(raw.currentOperatingHours, 'Giờ vận hành hiện tại');
+        const standardSpeedPerHour = this.parseOptionalNumber(raw.standardSpeedPerHour, 'Tốc độ chuẩn/giờ');
+        const plannedShiftMinutes = this.parseOptionalNumber(raw.plannedShiftMinutes, 'Thời gian ca (phút)');
+        const oeeTarget = this.parseOptionalNumber(raw.oeeTarget, 'Mục tiêu OEE (%)');
+        const isCritical = this.parseOptionalBoolean(raw.isCritical);
+
+        const oldCode = raw.oldCode && String(raw.oldCode).trim() !== ''
+          ? String(raw.oldCode).trim()
+          : (raw.code && String(raw.code).trim() !== '' && !String(raw.code).startsWith('EQ-')
+            ? String(raw.code).trim()
+            : null);
+
+        // Sinh mã EQ-xxxx tiếp theo không trùng
+        let nextNum = maxEqNum + 1;
+        let nextCode = `EQ-${String(nextNum).padStart(4, '0')}`;
+        while (usedCodes.has(nextCode)) {
+          nextNum++;
+          nextCode = `EQ-${String(nextNum).padStart(4, '0')}`;
+        }
+        maxEqNum = nextNum;
+        usedCodes.add(nextCode);
+
+        const department = raw.department && String(raw.department).trim() !== '' ? String(raw.department).trim() : null;
+        const serialNumber = raw.serialNumber && String(raw.serialNumber).trim() !== '' ? String(raw.serialNumber).trim() : null;
+        const warrantyPeriod = raw.warrantyPeriod && String(raw.warrantyPeriod).trim() !== '' ? String(raw.warrantyPeriod).trim() : null;
+        const specs = raw.specs && String(raw.specs).trim() !== '' ? String(raw.specs).trim() : null;
+        const notes = raw.notes && String(raw.notes).trim() !== '' ? String(raw.notes).trim() : null;
+        const outputUnit = raw.outputUnit && String(raw.outputUnit).trim() !== '' ? String(raw.outputUnit).trim() : undefined;
+        const functionalUnit = raw.functionalUnit && String(raw.functionalUnit).trim() !== ''
+          ? String(raw.functionalUnit).trim()
+          : null;
+
+        const newEquipment = await this.prisma.equipment.create({
+          data: {
+            code: nextCode,
+            oldCode,
+            accountingCode,
+            name,
+            category,
+            department,
+            location,
+            status,
+            purchaseDate,
+            warrantyPeriod,
+            serialNumber,
+            specs,
+            notes,
+            functionalUnit,
+            currentOperatingHours,
+            isCritical,
+            standardSpeedPerHour,
+            outputUnit,
+            plannedShiftMinutes,
+            oeeTarget,
+          },
+        });
+
+        if (accountingCode) {
+          existingAccMap.set(accountingCode, { code: newEquipment.code, name: newEquipment.name });
+        }
+
+        if (functionalUnit) {
+          await this.syncFunctionalUnitsForEquipment(
+            newEquipment,
+            functionalUnit.split(','),
+            category,
+          );
+        }
+
+        created.push({
+          id: newEquipment.id,
+          code: newEquipment.code,
+          name: newEquipment.name,
+          accountingCode: newEquipment.accountingCode,
+        });
+      } catch (err: any) {
+        errors.push({
+          rowNumber,
+          name: name || undefined,
+          accountingCode: accountingCode || undefined,
+          reason: err?.message || 'Lỗi không xác định khi lưu thiết bị',
+        });
+      }
+    }
+
+    return {
+      totalRows: items.length,
+      createdCount: created.length,
+      skippedCount: errors.length,
+      errors,
+      created,
+    };
   }
 }

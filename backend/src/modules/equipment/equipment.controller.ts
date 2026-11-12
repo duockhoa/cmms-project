@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
 import { EquipmentService } from './equipment.service';
-import { CreateEquipmentDto, UpdateEquipmentDto } from './dto/equipment.dto';
+import { CreateEquipmentDto, UpdateEquipmentDto, BulkImportEquipmentDto } from './dto/equipment.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
@@ -69,6 +69,13 @@ export class EquipmentController {
   @Delete(':id/spare-parts/:linkId')
   removeSparePart(@Param('id') id: string, @Param('linkId') linkId: string) {
     return this.equipmentService.removeEquipmentSparePart(id, linkId);
+  }
+
+  @ApiStandardResponse({ summary: 'Nhập hàng loạt thiết bị từ Excel', method: 'POST', path: '/equipment/import' })
+  @Post('import')
+  @HttpCode(HttpStatus.OK)
+  importBulk(@Body() data: BulkImportEquipmentDto) {
+    return this.equipmentService.importBulk(data.items);
   }
 
   @ApiStandardResponse({ summary: 'Tạo thiết bị mới', method: 'POST', path: '/equipment' })

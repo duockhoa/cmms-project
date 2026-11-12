@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsDateString, IsArray, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsDateString, IsArray, IsBoolean, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 
 export enum EquipmentStatus {
   OPERATIONAL = 'OPERATIONAL',
@@ -189,4 +189,11 @@ export class UpdateEquipmentDto {
   @IsNumber()
   @IsNotEmpty()
   expectedVersion: number;
+}
+
+export class BulkImportEquipmentDto {
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Danh sách thiết bị import không được để trống' })
+  @ArrayMaxSize(500, { message: 'Mỗi lần import tối đa 500 thiết bị' })
+  items: Record<string, any>[];
 }

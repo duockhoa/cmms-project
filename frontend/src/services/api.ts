@@ -270,6 +270,14 @@ export const api = {
     catalogCache.invalidate('equipment');
     return res;
   },
+  importEquipment: async (items: Record<string, any>[]) => {
+    const res = await request('/equipment/import', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+    catalogCache.invalidate('equipment');
+    return res;
+  },
   updateEquipment: async (id: string, data: any) => {
     const res = await request(`/equipment/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
     catalogCache.invalidate('equipment');
