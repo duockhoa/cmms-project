@@ -19,14 +19,13 @@ let state: PermissionsState = { user: null, permissions: [], isAdmin: false, loa
 let generation = 0;
 let profilePromise: Promise<{ user: any; permissions: string[] }> | null = null;
 const listeners = new Set<() => void>();
-if (typeof window !== 'undefined') markSessionUnverified();
 const publish = (next: PermissionsState) => { state = next; listeners.forEach(listener => listener()); };
 
 export const invalidatePermissionsCache = (background = false) => {
   generation++;
   profilePromise = null;
   invalidateMeCache();
-  markSessionUnverified();
+  if (!background) markSessionUnverified();
   publish({ ...state, loading: !background || !state.user, checking: true, error: null, sessionVersion: getSessionVersion() });
 };
 

@@ -42,7 +42,7 @@ export function LoginPage() {
     const token = getAccessToken();
     if (token) {
       invalidateMeCache();
-      invalidatePermissionsCache();
+      invalidatePermissionsCache(true);
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
       setIsLoading(true);
@@ -59,7 +59,7 @@ export function LoginPage() {
           setIsLoading(false);
           if (newToken) {
             invalidateMeCache();
-            invalidatePermissionsCache();
+            invalidatePermissionsCache(true);
             setupSilentRefresh();
             const params = new URLSearchParams(window.location.search);
             const redirectTo = params.get('redirect') || '/';
@@ -107,7 +107,7 @@ export function LoginPage() {
       markCookieSession(data.hrmId);
       setupSilentRefresh();
       invalidateMeCache();
-      invalidatePermissionsCache();
+      invalidatePermissionsCache(true);
 
       toast.success('Thành công', 'Đăng nhập thành công!');
 

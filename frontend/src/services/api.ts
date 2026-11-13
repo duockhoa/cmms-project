@@ -5,7 +5,7 @@ import {
   clearAuthTokens,
   getRawAccessToken,
   getTokenExpiry,
-  getSessionVersion, getVerifiedHrmId, isSessionVerified, AUTH_CHANGED_EVENT,
+  getSessionVersion, getVerifiedHrmId, isSessionVerified, markSessionVerified, AUTH_CHANGED_EVENT,
 } from '../utils/authStorage';
 import { catalogCache } from './catalogCache';
 
@@ -164,13 +164,48 @@ function handleAuthFailure() {
   }
 }
 
+let verificationPromise: Promise<boolean> | null = null;
+let verificationVersion = -1;
+
+export async function ensureSessionVerified(): Promise<boolean> {
+  if (isSessionVerified()) return true;
+  const token = getAccessToken();
+  if (!token) return false;
+  const version = getSessionVersion();
+  if (verificationPromise && verificationVersion === version) {
+    return verificationPromise;
+  }
+  verificationVersion = version;
+  verificationPromise = (async () => {
+    try {
+      const res = await api.getMe();
+      if (!res?.authenticated || !res?.user?.id) return false;
+      const currentToken = getRawAccessToken();
+      if (!currentToken || currentToken !== token) return false;
+      markSessionVerified(currentToken, res.identity?.provider === 'hrm' ? res.identity.subject : undefined);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      if (verificationVersion === version) verificationPromise = null;
+    }
+  })();
+  return verificationPromise;
+}
+
 const responseVersions = new WeakMap<Response, number>();
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
   let token = await ensureValidAccessToken();
   if (!token) throw new Error('AUTH_REQUIRED');
   let version = getSessionVersion();
   const isProfile = String(url) === `${API_BASE}/auth/me`;
-  if (!isProfile && !isSessionVerified()) throw new Error('SESSION_NOT_VERIFIED');
+  if (!isProfile && !isSessionVerified()) {
+    const verified = await ensureSessionVerified();
+    if (!verified && !isSessionVerified()) {
+      throw new Error('SESSION_NOT_VERIFIED');
+    }
+    version = getSessionVersion();
+  }
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   headers.set('Authorization', `Bearer ${token}`);
@@ -214,6 +249,7 @@ if (typeof window !== 'undefined') {
     catalogCache.invalidate('all');
     if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
     refreshPromise = null;
+    verificationPromise = null;
   });
 }
 
