@@ -36,7 +36,6 @@ export const UtilitiesPage: React.FC = () => {
       <PageHeader
         className="util-page-header"
         title="TIỆN ÍCH & NĂNG LƯỢNG"
-        subtitle="Theo dõi Điện, Nước và Giám sát Bật/Tắt hệ thống phụ trợ."
         badge={<Zap size={22} color="#eab308" className="util-title-icon" />}
         actions={(
           <>

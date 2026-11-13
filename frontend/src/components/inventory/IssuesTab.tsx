@@ -115,7 +115,6 @@ export const IssuesTab: React.FC<IssuesTabProps> = ({ onRefreshInventory }) => {
               <EmptyState
                 colSpan={7}
                 title="Chưa có dữ liệu xuất kho"
-                description="Các giao dịch xuất dùng cho sửa chữa thiết bị, gia công chế tạo hoặc xuất nội bộ sẽ hiển thị tại đây."
                 compact
                 minHeight={180}
               />

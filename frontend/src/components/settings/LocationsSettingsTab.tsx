@@ -348,8 +348,7 @@ export const LocationsSettingsTab: React.FC = () => {
                     colSpan={6}
                     icon={MapPin}
                     title="Chưa có vị trí"
-                    description="Thêm phân xưởng hoặc khu vực để gắn thiết bị và người phụ trách."
-                    action={{ label: 'Thêm vị trí đầu tiên', onClick: handleOpenAdd, icon: Plus }}
+                    action={{ label: 'Thêm vị trí', onClick: handleOpenAdd, icon: Plus }}
                   />
                 )}
               </tbody>

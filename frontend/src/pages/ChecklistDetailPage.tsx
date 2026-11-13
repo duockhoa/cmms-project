@@ -135,7 +135,6 @@ export const ChecklistDetailPage: React.FC = () => {
             <EmptyState
               icon={CheckSquare}
               title="Chưa có hạng mục checklist"
-              description="Hãy thêm thủ công hoặc chọn hạng mục có sẵn từ thư viện hệ thống."
               action={{ label: 'Mở thư viện', onClick: () => setIsLibraryOpen(true), icon: Plus }}
             />
           ) : (

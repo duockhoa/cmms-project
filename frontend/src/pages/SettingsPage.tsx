@@ -46,7 +46,6 @@ interface NavGroup {
   items: {
     id: SettingsTabId;
     label: string;
-    description: string;
     icon: LucideIcon;
   }[];
 }
@@ -58,43 +57,36 @@ const SETTINGS_GROUPS: NavGroup[] = [
       {
         id: 'categories',
         label: 'Phân loại thiết bị',
-        description: 'Nhóm thiết bị, phân loại máy móc',
         icon: Cpu,
       },
       {
         id: 'locations',
         label: 'Vị trí & Nhà xưởng',
-        description: 'Phân xưởng, phòng sạch & KTV phụ trách',
         icon: MapPin,
       },
       {
         id: 'production-lines',
         label: 'Khu vực / Dây chuyền',
-        description: 'Line sản xuất, dây chuyền đóng gói',
         icon: Layers,
       },
       {
         id: 'functional-unit-library',
         label: 'Thư viện Cụm chức năng',
-        description: 'Cụm bơm, chiết rót, cấp phôi, băng tải...',
         icon: Cpu,
       },
       {
         id: 'standard-technical-specs',
-        label: 'Thư viện Thông số KT (NSX)',
-        description: 'Công suất, Điện áp, Kích thước, Dung tích...',
+        label: 'Thư viện Thông số KT',
         icon: BookOpen,
       },
       {
         id: 'standard-parameters',
         label: 'Thư viện Tham số Vận hành',
-        description: 'Nhiệt độ, Áp suất, Rung, Dòng điện, pH...',
         icon: Gauge,
       },
       {
         id: 'equipment-parameters',
         label: 'Thiết lập thông số máy',
-        description: 'Gán thông số KT & tham số vận hành',
         icon: Sliders,
       },
     ],
@@ -105,25 +97,21 @@ const SETTINGS_GROUPS: NavGroup[] = [
       {
         id: 'maintenance-plans',
         label: 'Kế hoạch bảo trì định kỳ',
-        description: 'Thiết lập chu kỳ, checklist mẫu & quét tự động',
         icon: Calendar,
       },
       {
         id: 'checklist-library',
         label: 'Thư viện Checklist',
-        description: 'Hạng mục kiểm tra mẫu định kỳ',
         icon: ListChecks,
       },
       {
         id: 'utility-settings',
         label: 'Chỉ số đầu kỳ Điện & Nước',
-        description: 'Khởi tạo mốc chỉ số tổng cấp & điểm đo',
         icon: Zap,
       },
       {
         id: 'system-settings',
         label: 'Tham số hệ thống',
-        description: 'Cảnh báo trước hạn & định danh',
         icon: Settings,
       },
     ],
@@ -134,25 +122,21 @@ const SETTINGS_GROUPS: NavGroup[] = [
       {
         id: 'users',
         label: 'Người dùng & Tài khoản',
-        description: 'Đồng bộ HRM & gán nhóm quyền',
         icon: Users,
       },
       {
         id: 'roles',
         label: 'Quản lý Nhóm quyền',
-        description: 'Cấu hình phân quyền RBAC',
         icon: Shield,
       },
       {
         id: 'technicians',
         label: 'Kỹ thuật viên',
-        description: 'Chuyên môn & trạng thái làm việc',
         icon: UserCheck,
       },
       {
         id: 'connection-logs',
         label: 'Lịch sử kết nối',
-        description: 'Theo dõi phiên làm việc & thiết bị online',
         icon: Activity,
       },
     ],
@@ -230,7 +214,6 @@ export const SettingsPage: React.FC = () => {
       {/* Page Header */}
       <PageHeader
         title="Cài đặt & Cấu hình hệ thống"
-        subtitle="Quản lý danh mục cơ sở, thông số vận hành, thư viện checklist và phân quyền người dùng."
         badge={<Settings size={22} style={{ color: 'var(--accent-blue, #2563eb)' }} />}
       />
 
@@ -278,7 +261,6 @@ export const SettingsPage: React.FC = () => {
                 items={group.items.map((item) => ({
                   key: item.id,
                   label: item.label,
-                  description: item.description,
                   icon: item.icon,
                 }))}
                 style={{ padding: 0, background: 'transparent' }}

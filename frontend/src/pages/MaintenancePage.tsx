@@ -28,7 +28,6 @@ export const MaintenancePage: React.FC = () => {
     <div>
       <PageHeader
         title="Lịch bảo trì"
-        subtitle="Danh sách các công việc bảo trì định kỳ trong tháng, việc bảo trì đột xuất và tra cứu lịch sử thực hiện"
       />
 
       {/* Tabs Switcher */}

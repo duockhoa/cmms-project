@@ -44,7 +44,6 @@ export const ReportsPage: React.FC = () => {
       <div>
         <PageHeader
           title="Báo cáo & Phân tích"
-          subtitle="Chỉ số KPI, hiệu suất và phân tích thời gian dừng máy MTTR/MTBF"
         />
         <DashboardSkeleton />
       </div>
@@ -88,7 +87,6 @@ export const ReportsPage: React.FC = () => {
     <div>
       <PageHeader
         title="Báo cáo & Phân tích bảo trì"
-        subtitle="Phân tích hiệu quả bảo trì, chi phí và hiệu suất thiết bị"
         actions={(
           <>
           <button className="btn btn-secondary" onClick={loadReportData}><RefreshCw size={14} /> Làm mới</button>

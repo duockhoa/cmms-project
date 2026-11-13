@@ -46,7 +46,7 @@ export const Dashboard: React.FC = () => {
   if (loading || !data) {
     return (
       <div>
-        <PageHeader title="Tổng quan" subtitle="Theo dõi tình hình bảo trì và vận hành thiết bị" />
+        <PageHeader title="Tổng quan" />
         <DashboardSkeleton />
       </div>
     );
@@ -67,7 +67,7 @@ export const Dashboard: React.FC = () => {
   return (
     <div>
       {/* Title */}
-      <PageHeader title="Tổng quan" subtitle="Theo dõi tình hình bảo trì và vận hành thiết bị" />
+      <PageHeader title="Tổng quan" />
 
       {/* KPI Cards Row */}
       <div className="kpi-row">

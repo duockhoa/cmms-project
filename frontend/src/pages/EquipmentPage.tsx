@@ -103,7 +103,6 @@ export const EquipmentPage: React.FC = () => {
     <div>
       <PageHeader
         title="Quản lý thiết bị"
-        subtitle="Quản lý thông tin và tình trạng thiết bị"
         actions={
           <>
           <ExportButton
@@ -341,7 +340,6 @@ export const EquipmentPage: React.FC = () => {
                   compact
                   minHeight={150}
                   title="Không có thiết bị phù hợp"
-                  description="Thử thay đổi từ khóa hoặc đặt lại bộ lọc để xem thêm kết quả."
                   action={{ label: 'Thêm thiết bị', onClick: () => equipmentModal.open(), icon: Plus }}
                 />
               ) : equipment.map((item) => (

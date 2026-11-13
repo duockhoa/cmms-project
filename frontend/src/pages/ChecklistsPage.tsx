@@ -73,7 +73,6 @@ export const ChecklistsPage: React.FC = () => {
     <div>
       <PageHeader
         title="Checklist bảo trì"
-        subtitle="Quản lý checklist kiểm tra và bảo trì thiết bị"
         actions={(
           <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
             <Plus size={16} /> Tạo checklist

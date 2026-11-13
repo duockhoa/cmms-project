@@ -134,11 +134,8 @@ export const InitialAssessmentModal: React.FC<InitialAssessmentModalProps> = ({
             </div>
             <div>
               <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                Khảo sát & Đánh giá sơ bộ sự cố
+                Đánh giá sơ bộ sự cố
               </h3>
-              <p style={{ fontSize: '12.5px', color: '#64748b', margin: '2px 0 0 0' }}>
-                Xác nhận có mặt tại hiện trường để chốt SLA KPI phản hồi ≤ 4h
-              </p>
             </div>
           </div>
           <button

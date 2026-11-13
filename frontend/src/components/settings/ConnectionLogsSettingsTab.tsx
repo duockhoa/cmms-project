@@ -180,12 +180,9 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
       {/* Tab Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--text-primary)' }}>
-            Lịch sử kết nối & Phiên làm việc
+          <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+            Lịch sử kết nối
           </h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
-            Giám sát thời gian thực các phiên đăng nhập, thiết bị truy cập và trạng thái trực tuyến.
-          </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -335,7 +332,7 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
           <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted, #94a3b8)' }} />
           <input
             type="text"
-            placeholder="Tìm theo tên người dùng, mã HRM, IP..."
+            placeholder="Tìm kiếm..."
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -398,7 +395,7 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
             ) : logs.length === 0 ? (
               <tr>
                 <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  Không tìm thấy phiên kết nối nào phù hợp với bộ lọc.
+                  Không có dữ liệu phiên kết nối.
                 </td>
               </tr>
             ) : (
@@ -562,7 +559,7 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
       {/* Pagination Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
         <div>
-          Tổng số: <strong>{totalCount.toLocaleString('vi-VN')}</strong> phiên ghi nhận
+          Tổng: <strong>{totalCount.toLocaleString('vi-VN')}</strong> phiên
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

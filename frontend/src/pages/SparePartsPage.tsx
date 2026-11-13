@@ -540,7 +540,6 @@ export const SparePartsPage: React.FC = () => {
     <div>
       <PageHeader
         title="Kho phụ tùng"
-        subtitle="Quản lý kho phụ tùng, vật tư bảo trì"
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
             {activeTab === 'inventory' && (

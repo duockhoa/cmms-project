@@ -307,8 +307,7 @@ export const ProductionLinesSettingsTab: React.FC = () => {
                     colSpan={5}
                     icon={Layers}
                     title="Chưa có dây chuyền"
-                    description="Khai báo dây chuyền sản xuất để liên kết máy móc và lịch bảo trì."
-                    action={{ label: 'Thêm dây chuyền đầu tiên', onClick: handleOpenAdd, icon: Plus }}
+                    action={{ label: 'Thêm dây chuyền', onClick: handleOpenAdd, icon: Plus }}
                   />
                 )}
               </tbody>

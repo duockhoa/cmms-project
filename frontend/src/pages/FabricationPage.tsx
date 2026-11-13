@@ -90,7 +90,6 @@ export const FabricationPage: React.FC = () => {
           {/* Header */}
           <PageHeader
             title="Gia công và Chế tạo"
-            subtitle="Quản lý phiếu gia công, chế tạo và cải tiến thiết bị"
             actions={(
               <button
                 type="button"

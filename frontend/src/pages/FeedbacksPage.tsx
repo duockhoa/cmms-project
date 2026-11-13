@@ -35,7 +35,6 @@ export const FeedbacksPage: React.FC = () => {
       {/* Page Header */}
       <PageHeader
         title="Yêu cầu Chỉnh sửa & Báo lỗi App"
-        subtitle="Theo dõi, phản hồi và cập nhật tiến độ xử lý các góp ý và lỗi hệ thống DK.QLTB"
         actions={(
           <button className="btn btn-primary" onClick={() => setIsCreateModalOpen(true)}>
             <MessageSquarePlus size={16} /> Gửi Góp ý / Báo lỗi

@@ -44,7 +44,6 @@ export const OperationLogsPage: React.FC = () => {
       {/* Top Page Header */}
       <PageHeader
         title="Sổ Vận Hành & Đo Lường OEE"
-        subtitle="Ghi nhận hiệu suất OEE theo ca và theo dõi thông số kỹ thuật thiết bị"
         actions={(
           <>
           <button

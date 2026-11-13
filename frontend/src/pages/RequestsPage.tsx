@@ -62,7 +62,6 @@ export const RequestsPage: React.FC = () => {
     <div>
       <PageHeader
         title="Yêu cầu Sửa chữa & Báo Sự cố"
-        subtitle="Tiếp nhận báo hỏng từ nhân viên vận hành xưởng, phê duyệt và tự động tạo phiếu bảo trì."
         actions={(
           <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
             <Plus size={16} /> Gửi yêu cầu báo sự cố mới

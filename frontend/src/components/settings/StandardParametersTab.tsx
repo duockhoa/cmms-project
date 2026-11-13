@@ -362,8 +362,7 @@ export const StandardParametersTab: React.FC = () => {
                     colSpan={7}
                     icon={Gauge}
                     title="Chưa có thông số chuẩn"
-                    description="Khai báo thông số vận hành chuẩn để áp dụng thống nhất cho thiết bị."
-                    action={{ label: 'Thêm thông số đầu tiên', onClick: handleOpenAdd, icon: Plus }}
+                    action={{ label: 'Thêm thông số', onClick: handleOpenAdd, icon: Plus }}
                   />
                 )}
               </tbody>

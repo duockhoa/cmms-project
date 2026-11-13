@@ -113,15 +113,10 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
             flexWrap: 'wrap',
             gap: '12px',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Clock size={20} style={{ color: '#d97706' }} />
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#b45309' }}>
-                  Chưa thực hiện Khảo sát & Đánh giá sơ bộ sự cố (SLA 4h)
-                </div>
-                <div style={{ fontSize: '12.5px', color: '#78350f' }}>
-                  Kỹ thuật viên cần khảo sát hiện trường và gửi đánh giá sơ bộ trong vòng 4 giờ kể từ khi xưởng báo sự cố.
-                </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={18} style={{ color: '#d97706' }} />
+              <div style={{ fontWeight: 700, fontSize: '13px', color: '#b45309' }}>
+                Chưa đánh giá sơ bộ sự cố (SLA ≤ 4h)
               </div>
             </div>
             <button
@@ -132,17 +127,17 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
                 alignItems: 'center',
                 gap: '6px',
                 fontWeight: 700,
-                fontSize: '13px',
-                padding: '8px 16px',
+                fontSize: '12.5px',
+                padding: '6px 14px',
                 backgroundColor: '#f59e0b',
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: '8px',
+                borderRadius: '6px',
                 cursor: 'pointer',
               }}
             >
-              <Zap size={16} />
-              Khảo sát & Đánh giá ngay
+              <Zap size={15} />
+              Đánh giá ngay
             </button>
           </div>
         )}

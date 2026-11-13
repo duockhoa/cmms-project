@@ -129,8 +129,7 @@ export const MaintenanceScheduleTab: React.FC<MaintenanceScheduleTabProps> = ({
               compact
               minHeight={170}
               title="Chưa có kế hoạch bảo trì"
-              description="Lập kế hoạch định kỳ để chủ động theo dõi lịch bảo dưỡng thiết bị."
-              action={{ label: 'Lập kế hoạch mới', onClick: onCreate, icon: Plus }}
+              action={{ label: 'Lập kế hoạch', onClick: onCreate, icon: Plus }}
             />
           ) : schedules.map((schedule) => {
             const now = new Date();

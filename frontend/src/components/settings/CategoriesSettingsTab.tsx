@@ -307,8 +307,7 @@ export const CategoriesSettingsTab: React.FC = () => {
                     colSpan={5}
                     icon={Cpu}
                     title="Chưa có loại thiết bị"
-                    description="Khai báo nhóm loại thiết bị để chuẩn hóa danh mục máy móc."
-                    action={{ label: 'Thêm phân loại đầu tiên', onClick: handleOpenAdd, icon: Plus }}
+                    action={{ label: 'Thêm phân loại', onClick: handleOpenAdd, icon: Plus }}
                   />
                 )}
               </tbody>
