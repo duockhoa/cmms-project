@@ -19,6 +19,7 @@ const UtilitySettingsTab = lazy(() => import('../components/settings/UtilitySett
 const RolesSettingsTab = lazy(() => import('../components/settings/RolesSettingsTab').then(module => ({ default: module.RolesSettingsTab })));
 const UsersSettingsTab = lazy(() => import('../components/settings/UsersSettingsTab').then(module => ({ default: module.UsersSettingsTab })));
 const TechniciansSettingsTab = lazy(() => import('../components/settings/TechniciansSettingsTab').then(module => ({ default: module.TechniciansSettingsTab })));
+const ConnectionLogsSettingsTab = lazy(() => import('../components/settings/ConnectionLogsSettingsTab').then(module => ({ default: module.ConnectionLogsSettingsTab })));
 const EquipmentParameterAssignTab = lazy(() => import('../components/settings/EquipmentParameterAssignTab').then(module => ({ default: module.EquipmentParameterAssignTab })));
 const FunctionalUnitLibraryTab = lazy(() => import('../components/settings/FunctionalUnitLibraryTab').then(module => ({ default: module.FunctionalUnitLibraryTab })));
 const MaintenancePlansSettingsTab = lazy(() => import('../components/settings/MaintenancePlansSettingsTab').then(module => ({ default: module.MaintenancePlansSettingsTab })));
@@ -37,7 +38,8 @@ export type SettingsTabId =
   | 'system-settings'
   | 'users'
   | 'roles'
-  | 'technicians';
+  | 'technicians'
+  | 'connection-logs';
 
 interface NavGroup {
   title: string;
@@ -146,6 +148,12 @@ const SETTINGS_GROUPS: NavGroup[] = [
         label: 'Kỹ thuật viên',
         description: 'Chuyên môn & trạng thái làm việc',
         icon: UserCheck,
+      },
+      {
+        id: 'connection-logs',
+        label: 'Lịch sử kết nối',
+        description: 'Theo dõi phiên làm việc & thiết bị online',
+        icon: Activity,
       },
     ],
   },
@@ -307,6 +315,7 @@ export const SettingsPage: React.FC = () => {
             {activeTab === 'users' && <UsersSettingsTab />}
             {activeTab === 'roles' && <RolesSettingsTab />}
             {activeTab === 'technicians' && <TechniciansSettingsTab />}
+            {activeTab === 'connection-logs' && <ConnectionLogsSettingsTab />}
           </Suspense>
         </div>
       </div>

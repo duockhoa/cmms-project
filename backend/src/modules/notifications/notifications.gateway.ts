@@ -3,6 +3,7 @@ import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDiscon
 import { Server, Socket } from 'socket.io';
 import { parseDepartmentList } from '../../common/utils/rbac.helper';
 import { browserOrigin, allowedBrowserOrigins } from '../../common/auth/browser-origin';
+import { UserConnectionsService } from './user-connections.service';
 
 @WebSocketGateway({
   cors: {
@@ -16,6 +17,8 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   server: Server;
 
   private sessions = new Map<string, ReturnType<typeof setInterval>>();
+
+  constructor(private readonly userConnectionsService?: UserConnectionsService) {}
 
   private authenticateToken(token: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -36,6 +39,23 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
       client.join(`role:${user.role}`);
       for (const department of parseDepartmentList(user.managedDepartments || user.department)) client.join(`dept:${department}`);
       client.join('global');
+
+      const headers = client.handshake.headers;
+      const rawIp = (headers['x-forwarded-for'] as string) || client.handshake.address || '';
+      const ipAddress = rawIp.split(',')[0].trim().replace(/^::ffff:/, '') || '127.0.0.1';
+      const userAgent = (headers['user-agent'] as string) || '';
+
+      this.userConnectionsService?.recordConnection({
+        userId: user.id,
+        userName: user.name || user.username || user.hrmId || 'Unknown',
+        hrmId: user.hrmId || null,
+        department: user.department || null,
+        role: user.role || 'USER',
+        socketId: client.id,
+        ipAddress,
+        userAgent,
+      })?.catch((err) => console.error('[UserConnections] Failed to record connection:', err?.message));
+
       const signature = JSON.stringify([user.id, user.role, user.managedDepartments, user.department]);
       let verifying = false;
       this.sessions.set(client.id, setInterval(async () => {
@@ -43,9 +63,16 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
         verifying = true;
         try {
           const current = await this.authenticateToken(token);
-          if (JSON.stringify([current.id, current.role, current.managedDepartments, current.department]) !== signature) client.disconnect(true);
-        } catch { client.disconnect(true); }
-        finally { verifying = false; }
+          if (JSON.stringify([current.id, current.role, current.managedDepartments, current.department]) !== signature) {
+            client.disconnect(true);
+            return;
+          }
+          this.userConnectionsService?.recordHeartbeat(client.id)?.catch(() => {});
+        } catch {
+          client.disconnect(true);
+        } finally {
+          verifying = false;
+        }
       }, 30000));
     } catch { client.disconnect(true); }
   }
@@ -54,6 +81,9 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     const timer = this.sessions.get(client.id);
     if (timer) clearInterval(timer);
     this.sessions.delete(client.id);
+    this.userConnectionsService?.recordDisconnect(client.id)?.catch((err) => {
+      console.error('[UserConnections] Failed to record disconnect:', err?.message);
+    });
   }
 
   sendNotificationToRooms(

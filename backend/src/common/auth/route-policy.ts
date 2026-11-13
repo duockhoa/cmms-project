@@ -91,6 +91,7 @@ routes('UsersController', {
   updateRole: 'settings:roles', updateCustomPermissions: 'settings:user_perms',
 });
 routes('NotificationsController', { 'getNotifications markAsRead': session });
+routes('UserConnectionsController', { getConnections: 'settings:view', forceDisconnect: 'settings:users' });
 routes('MailController', { 'getStatus testSend': 'settings:system' });
 routes('UtilitiesController', {
   'getPoints getPointByIdOrCode getPeriodBaselines getReadings getStatusLogs getAnalytics getCumulativeReport getTrendMatrixReport': 'utilities:view',

@@ -1035,6 +1035,21 @@ export const api = {
     });
   },
 
+  getUserConnections: (params?: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    return request(`/user-connections${toQueryString(params)}`);
+  },
+
+  forceDisconnectUserSession: (id: string) => {
+    return request(`/user-connections/${id}/disconnect`, {
+      method: 'POST',
+    });
+  },
+
   // Master Catalog Cache Interface
   catalog: {
     getEquipment: () => catalogCache.fetchWithCache('equipment_all', () => request('/equipment')),

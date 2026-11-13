@@ -141,6 +141,26 @@ model BrowserSession {
   @@index([expiresAt])
 }
 
+model UserConnectionLog {
+  id             String    @id @db.VarChar(64)
+  userId         String    @db.VarChar(64)
+  hrmId          String?   @db.VarChar(64)
+  userName       String    @db.VarChar(191)
+  department     String?   @db.VarChar(191)
+  role           String    @db.VarChar(64)
+  socketId       String    @db.VarChar(128)
+  status         String    @default("CONNECTED") @db.VarChar(32) // CONNECTED, RECONNECTING, DISCONNECTED
+  connectedAt    DateTime  @default(now())
+  lastSeenAt     DateTime  @default(now())
+  disconnectedAt DateTime?
+  reconnectCount Int       @default(1)
+  ipAddress      String?   @db.VarChar(64)
+  userAgent      String?   @db.Text
+
+  @@index([userId, connectedAt], map: "idx_user_conn")
+  @@index([status], map: "idx_conn_status")
+}
+
 model Role {
   id          String   @id @default(uuid())
   name        String   @unique
