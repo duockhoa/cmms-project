@@ -18,7 +18,7 @@ export class ResourceAccessService {
     if (controller === 'EquipmentController' && request.method === 'POST' && !params.id && !body.department && Object.keys(equipmentScope(actor)).length) {
       throw new ForbiddenException('Cần chọn bộ phận thiết bị thuộc phạm vi được phép.');
     }
-    const equipmentId = params.equipmentId || (controller === 'EquipmentController' ? params.id : undefined) || body.equipmentId;
+    const equipmentId = (controller === 'RequestsController' ? undefined : (params.equipmentId || (controller === 'EquipmentController' ? params.id : undefined) || body.equipmentId));
     if (equipmentId) await this.assert('equipment', { id: equipmentId }, equipmentScope(actor));
     if (controller === 'EquipmentController' && body.department) {
       const scope = equipmentScope(actor);
@@ -36,9 +36,12 @@ export class ResourceAccessService {
     if (controller === 'GlobalOeeRecordsController' && params.recordId) {
       await this.assert('equipmentOeeRecord', { id: params.recordId }, { equipment: equipmentScope(actor) });
     }
-    if (controller === 'RequestsController' && !equipmentId && body.equipmentCode) {
-      const code = String(body.equipmentCode).replace(/^(cmms-equipment|equipment):/i, '').trim();
-      await this.assert('equipment', { OR: [{ id: code }, { code }] }, equipmentScope(actor));
+    // RequestsController: Nhân viên có quyền requests:create được báo sự cố cho mọi máy móc trong nhà máy mà không bị chặn phạm vi bộ phận
+    if (controller === 'FunctionalUnitsController' && params.equipmentId) {
+      // Cho phép tra cứu cụm chức năng khi tạo báo sự cố
+      if (!hasPermission(actor, 'requests:create') && !hasPermission(actor, 'equipment:view')) {
+        await this.assert('equipment', { id: params.equipmentId }, equipmentScope(actor));
+      }
     }
   }
   private async assert(model: string, identity: any, scope: any) {
