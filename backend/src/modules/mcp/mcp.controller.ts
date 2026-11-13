@@ -139,133 +139,36 @@ export class McpController {
       return res.status(400).json({ error: 'invalid_request' });
     }
 
-    const host = req.get('host') || 'localhost:3001';
-    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-    const proto = isLocal ? 'http' : 'https';
+    const clientName = client?.clientName || 'ChatGPT / Ứng dụng AI';
+    const escapeHtml = (val: any) => String(val || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || ''));
 
-    // 1. Kiểm tra token đăng nhập hiện tại qua Cookie hoặc Header
-    let token: string | null = null;
+    // Kiểm tra xem trình duyệt đã có phiên đăng nhập hợp lệ chưa
+    let existingUser: any = null;
+    let existingToken: string | null = null;
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
       const match = cookieHeader.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
-      if (match) token = decodeURIComponent(match[1]);
+      if (match) existingToken = decodeURIComponent(match[1]);
     }
-    const authHeader = req.headers.authorization;
-    if (!token && authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7).trim();
+    if (!existingToken && req.headers.authorization?.startsWith('Bearer ')) {
+      existingToken = req.headers.authorization.substring(7).trim();
     }
-
-    // Luôn lưu phiên cấp quyền để yêu cầu xác nhận Consent
-    const sessionId = crypto.randomBytes(16).toString('hex');
-    globalOAuthSessions.set(sessionId, {
-      redirectUri,
-      clientId,
-      state,
-      codeChallenge,
-      codeChallengeMethod,
-      expiresAt: Date.now() + 15 * 60 * 1000, // 15 phút
-    });
-
-    if (token) {
+    if (existingToken) {
       try {
-        await this.verifiedUser(token);
-        // Đã đăng nhập -> Chuyển đến màn hình Xác nhận cấp quyền (Consent Screen)
-        return res.redirect(`${proto}://${host}/api/v1/mcp/oauth/consent?session_id=${sessionId}`);
+        existingUser = await this.verifiedUser(existingToken);
       } catch {
-        // Token không hợp lệ -> Tiếp tục chuyển hướng về trang /login
+        existingUser = null;
+        existingToken = null;
       }
     }
 
-    // Chưa đăng nhập -> Chuyển hướng về trang /login của app
-    const callbackUrl = `${proto}://${host}/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
-    const appLoginUrl = `${proto}://${host}/login?redirect=${encodeURIComponent(callbackUrl)}`;
-    return res.redirect(appLoginUrl);
-  }
-
-  @Get('oauth/callback')
-  async handleOAuthCallback(
-    @Req() req: Request,
-    @Query('session_id') sessionId: string,
-    @Query('token') queryToken: string,
-    @Res() res: Response,
-  ) {
-    const session = globalOAuthSessions.get(sessionId);
-    if (!session || Date.now() > session.expiresAt) {
-      return res.status(400).send('Phiên cấp quyền đã hết hạn. Vui lòng thử lại từ ChatGPT/AI Client.');
-    }
-
-    const host = req.get('host') || 'localhost:3001';
-    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-    const proto = isLocal ? 'http' : 'https';
-
-    let token = queryToken;
-    if (!token && req.headers.cookie) {
-      const match = req.headers.cookie.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
-      if (match) token = decodeURIComponent(match[1]);
-    }
-
-    if (!token) {
-      const callbackUrl = `${proto}://${host}/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
-      return res.redirect(`${proto}://${host}/login?redirect=${encodeURIComponent(callbackUrl)}`);
-    }
-
-    try {
-      await this.verifiedUser(token);
-    } catch {
-      return res.status(401).send('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.');
-    }
-
-    // Đăng nhập thành công -> Chuyển đến màn hình Xác nhận cấp quyền (Consent Screen)
-    return res.redirect(`${proto}://${host}/api/v1/mcp/oauth/consent?session_id=${sessionId}`);
-  }
-
-  @Get('oauth/consent')
-  async renderConsent(
-    @Req() req: Request,
-    @Query('session_id') sessionId: string,
-    @Res() res: Response,
-  ) {
-    const session = globalOAuthSessions.get(sessionId);
-    if (!session || Date.now() > session.expiresAt) {
-      return res.status(400).send('Phiên cấp quyền đã hết hạn. Vui lòng thử lại từ ứng dụng AI.');
-    }
-
-    const host = req.get('host') || 'localhost:3001';
-    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-    const proto = isLocal ? 'http' : 'https';
-
-    let token: string | null = null;
-    if (req.headers.cookie) {
-      const match = req.headers.cookie.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
-      if (match) token = decodeURIComponent(match[1]);
-    }
-    if (!token && req.headers.authorization?.startsWith('Bearer ')) {
-      token = req.headers.authorization.substring(7).trim();
-    }
-
-    if (!token) {
-      const callbackUrl = `${proto}://${host}/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
-      return res.redirect(`${proto}://${host}/login?redirect=${encodeURIComponent(callbackUrl)}`);
-    }
-
-    let user: any;
-    try {
-      user = await this.verifiedUser(token);
-    } catch {
-      const callbackUrl = `${proto}://${host}/api/v1/mcp/oauth/callback?session_id=${sessionId}`;
-      return res.redirect(`${proto}://${host}/login?redirect=${encodeURIComponent(callbackUrl)}`);
-    }
-
-    const client = globalOAuthClients.get(session.clientId);
-    const clientName = client?.clientName || 'Ứng dụng AI (ChatGPT / Claude)';
-    const escapeHtml = (s: any) => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || ''));
-
+    // Render trực tiếp form đăng nhập & cấp quyền bảo mật, không chuyển hướng lòng vòng
     const html = `<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cấp quyền ứng dụng AI - DK Pharma CMMS</title>
+  <title>Cấp quyền AI - DK Pharma CMMS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -283,16 +186,21 @@ export class McpController {
     .user-name { font-size: 14px; font-weight: 600; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .user-email { font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .scope-title { font-size: 13px; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
-    .scope-list { list-style: none; margin-bottom: 28px; display: flex; flex-direction: column; gap: 10px; }
+    .scope-list { list-style: none; margin-bottom: 24px; display: flex; flex-direction: column; gap: 10px; }
     .scope-item { display: flex; align-items: flex-start; gap: 12px; font-size: 13px; color: #cbd5e1; line-height: 1.4; background: rgba(15, 23, 42, 0.5); padding: 10px 14px; border-radius: 10px; border-left: 3px solid #0ea5e9; }
     .scope-icon { color: #38bdf8; font-weight: 700; font-size: 16px; line-height: 1; }
-    .actions { display: flex; gap: 12px; }
+    .form-group { margin-bottom: 16px; text-align: left; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="text"], input[type="password"] { width: 100%; padding: 12px 14px; background: #0b1329; border: 1px solid #334155; border-radius: 10px; color: #f8fafc; font-size: 14px; outline: none; transition: border-color 0.2s; }
+    input[type="text"]:focus, input[type="password"]:focus { border-color: #38bdf8; }
+    .actions { display: flex; gap: 12px; margin-top: 20px; }
     .btn { flex: 1; padding: 12px 18px; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; border: none; text-align: center; text-decoration: none; display: inline-flex; justify-content: center; align-items: center; }
     .btn-allow { background: #0284c7; color: #ffffff; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4); }
     .btn-allow:hover { background: #0369a1; }
     .btn-deny { background: rgba(51, 65, 85, 0.6); color: #cbd5e1; border: 1px solid #475569; }
     .btn-deny:hover { background: rgba(71, 85, 105, 0.8); color: #ffffff; }
     .footer { margin-top: 24px; text-align: center; font-size: 12px; color: #64748b; }
+    .error-box { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
   </style>
 </head>
 <body>
@@ -301,41 +209,47 @@ export class McpController {
       <div class="app-badge">
         <span>🤖</span> MCP OAuth 2.0 Integration
       </div>
-      <h1>Cấp quyền truy cập</h1>
-      <p class="subtitle">Ứng dụng <strong style="color:#38bdf8;">${escapeHtml(clientName)}</strong> đang yêu cầu quyền truy xuất dữ liệu từ hệ thống DK Pharma CMMS.</p>
+      <h1>Cấp quyền truy cập CMMS</h1>
+      <p class="subtitle">Ứng dụng <strong style="color:#38bdf8;">${escapeHtml(clientName)}</strong> đang yêu cầu quyền truy xuất dữ liệu thiết bị và bảo trì.</p>
     </div>
 
+    ${existingUser ? `
     <div class="user-box">
-      <div class="user-avatar">${escapeHtml((user.name || 'U').charAt(0).toUpperCase())}</div>
+      <div class="user-avatar">${escapeHtml((existingUser.name || 'U').charAt(0).toUpperCase())}</div>
       <div class="user-info">
-        <div class="user-name">${escapeHtml(user.name || 'Người dùng')}</div>
-        <div class="user-email">${escapeHtml(user.email || user.hrmId || user.id)}</div>
+        <div class="user-name">${escapeHtml(existingUser.name || 'Người dùng')}</div>
+        <div class="user-email">${escapeHtml(existingUser.email || existingUser.hrmId || existingUser.id)}</div>
       </div>
-      <span style="font-size: 11px; background: rgba(34, 197, 94, 0.2); color: #4ade80; padding: 2px 8px; border-radius: 6px; font-weight: 600;">Đã xác thực</span>
+      <span style="font-size: 11px; background: rgba(34, 197, 94, 0.2); color: #4ade80; padding: 2px 8px; border-radius: 6px; font-weight: 600;">Đã đăng nhập</span>
     </div>
+    ` : ''}
 
     <div class="scope-title">Các quyền ứng dụng sẽ nhận được:</div>
     <ul class="scope-list">
-      <li class="scope-item">
-        <span class="scope-icon">✓</span>
-        <div><strong>Tra cứu thông tin thiết bị:</strong> Xem danh mục máy móc, vị trí phòng ban, trạng thái vận hành và lịch sử bảo dưỡng.</div>
-      </li>
-      <li class="scope-item">
-        <span class="scope-icon">✓</span>
-        <div><strong>Tra cứu phiếu giao việc (Work Orders):</strong> Xem tiến độ xử lý sự cố, người phụ trách và nghiệm thu.</div>
-      </li>
-      <li class="scope-item">
-        <span class="scope-icon">✓</span>
-        <div><strong>Tra cứu kho phụ tùng & vật tư:</strong> Kiểm tra mức tồn kho, cảnh báo tồn tối thiểu và phụ tùng thay thế.</div>
-      </li>
-      <li class="scope-item">
-        <span class="scope-icon">✓</span>
-        <div><strong>Báo cáo & Tổng hợp:</strong> Truy xuất chỉ số hiệu suất OEE, số lượng thiết bị và chi phí bảo trì.</div>
-      </li>
+      <li class="scope-item"><span class="scope-icon">✓</span> <div><strong>Tra cứu thông tin thiết bị:</strong> Danh mục máy móc, vị trí, tình trạng vận hành và lịch sử bảo dưỡng.</div></li>
+      <li class="scope-item"><span class="scope-icon">✓</span> <div><strong>Tra cứu phiếu giao việc (Work Orders):</strong> Tiến độ sửa chữa, bảo dưỡng và sự cố khẩn cấp.</div></li>
+      <li class="scope-item"><span class="scope-icon">✓</span> <div><strong>Tra cứu kho vật tư & phụ tùng:</strong> Tồn kho, cảnh báo tồn tối thiểu và phụ tùng thay thế.</div></li>
+      <li class="scope-item"><span class="scope-icon">✓</span> <div><strong>Báo cáo & Tổng hợp:</strong> Chỉ số hiệu suất OEE, số lượng máy móc và chi phí bảo trì.</div></li>
     </ul>
 
-    <form action="/api/v1/mcp/oauth/consent/submit" method="POST">
-      <input type="hidden" name="session_id" value="${escapeHtml(sessionId)}">
+    <form action="/api/v1/mcp/oauth/authorize/submit" method="POST">
+      <input type="hidden" name="client_id" value="${escapeHtml(clientId)}">
+      <input type="hidden" name="redirect_uri" value="${escapeHtml(redirectUri)}">
+      <input type="hidden" name="state" value="${escapeHtml(state)}">
+      <input type="hidden" name="code_challenge" value="${escapeHtml(codeChallenge)}">
+      <input type="hidden" name="code_challenge_method" value="${escapeHtml(codeChallengeMethod)}">
+
+      ${!existingUser ? `
+      <div class="form-group">
+        <label>Tên đăng nhập / Mã NV / Email</label>
+        <input type="text" name="username" placeholder="VD: 0947 hoặc user@dkpharma.vn" required autofocus autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Mật khẩu</label>
+        <input type="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      ` : ''}
+
       <div class="actions">
         <button type="submit" name="decision" value="deny" class="btn btn-deny">Từ chối</button>
         <button type="submit" name="decision" value="allow" class="btn btn-allow">Đồng ý cấp quyền</button>
@@ -352,66 +266,89 @@ export class McpController {
     return res.send(html);
   }
 
-  @Post('oauth/consent/submit')
-  async submitConsent(
+  @Post('oauth/authorize/submit')
+  async handleAuthorizeSubmit(
     @Req() req: Request,
     @Body() body: any,
     @Res() res: Response,
   ) {
-    const { session_id, decision } = body;
-    const session = globalOAuthSessions.get(session_id);
-    if (!session || Date.now() > session.expiresAt) {
-      return res.status(400).send('Phiên cấp quyền đã hết hạn. Vui lòng thử lại từ ứng dụng AI.');
+    const { client_id, redirect_uri, state, code_challenge, code_challenge_method, decision, username, password } = body;
+    const client = globalOAuthClients.get(client_id);
+    if (!client?.redirectUris?.includes(redirect_uri) || !this.safeRedirect(redirect_uri)) {
+      return res.status(400).json({ error: 'invalid_request' });
     }
 
     if (decision !== 'allow') {
-      globalOAuthSessions.delete(session_id);
-      const url = new URL(session.redirectUri);
+      const url = new URL(redirect_uri);
       url.searchParams.set('error', 'access_denied');
-      url.searchParams.set('error_description', 'Người dùng từ chối cấp quyền truy cập cho ứng dụng AI.');
-      if (session.state) url.searchParams.set('state', session.state);
+      url.searchParams.set('error_description', 'Người dùng từ chối cấp quyền.');
+      if (state) url.searchParams.set('state', state);
       return res.redirect(url.toString());
     }
 
     let token: string | null = null;
-    if (req.headers.cookie) {
-      const match = req.headers.cookie.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
+    let user: any = null;
+
+    // 1. Nếu người dùng đã có token hợp lệ trong Cookie
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+      const match = cookieHeader.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
       if (match) token = decodeURIComponent(match[1]);
     }
     if (!token && req.headers.authorization?.startsWith('Bearer ')) {
       token = req.headers.authorization.substring(7).trim();
     }
-
-    if (!token) {
-      return res.status(401).send('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    if (token) {
+      try {
+        user = await this.verifiedUser(token);
+      } catch {
+        user = null;
+        token = null;
+      }
     }
 
-    let user: any;
-    try {
-      user = await this.verifiedUser(token);
-    } catch {
-      return res.status(401).send('Xác thực token thất bại.');
+    // 2. Nếu chưa có token, xác thực qua username/password nhập trên form
+    if (!token && username && password) {
+      const hrmApiUrl = this.configService.get<string>('HRM_API_URL') || 'https://hrmserver.dkpharma.io.vn';
+      try {
+        const response = await fetch(`${hrmApiUrl.replace(/\/$/, '')}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+          signal: AbortSignal.timeout(8000),
+        });
+        if (response.ok) {
+          const data: any = await response.json();
+          token = data.accessToken || data.access_token || data.token;
+          if (token) user = await this.verifiedUser(token);
+        }
+      } catch {}
     }
 
-    // Sinh code ngắn hạn 5 phút cho OAuth exchange
+    if (!token || !user) {
+      return res.status(401).send(`<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8"><title>Lỗi xác thực</title>
+<style>body{background:#0b1329;color:#f8fafc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}.card{background:#131f37;padding:32px;border-radius:16px;text-align:center;max-width:400px;border:1px solid #334155;}a{color:#38bdf8;text-decoration:none;font-weight:600;display:inline-block;margin-top:16px;}</style></head>
+<body><div class="card"><h2 style="color:#f87171;margin-bottom:8px;">Đăng nhập thất bại</h2><p style="color:#94a3b8;font-size:14px;">Tên đăng nhập hoặc mật khẩu không chính xác.</p><a href="javascript:history.back()">← Quay lại thử lại</a></div></body></html>`);
+    }
+
+    // Sinh mã Authorization Code 5 phút
     const code = crypto.randomBytes(24).toString('hex');
     globalOAuthCodes.set(code, {
       userId: user.id,
       email: user.email || 'user',
       name: user.name || 'User',
       accessToken: token,
-      clientId: session.clientId,
-      redirectUri: session.redirectUri,
-      codeChallenge: session.codeChallenge,
-      codeChallengeMethod: session.codeChallengeMethod,
+      clientId: client_id,
+      redirectUri: redirect_uri,
+      codeChallenge: code_challenge,
+      codeChallengeMethod: code_challenge_method,
       expiresAt: Date.now() + 5 * 60 * 1000,
     });
 
-    globalOAuthSessions.delete(session_id);
-
-    const url = new URL(session.redirectUri);
+    const url = new URL(redirect_uri);
     url.searchParams.set('code', code);
-    if (session.state) url.searchParams.set('state', session.state);
+    if (state) url.searchParams.set('state', state);
     return res.redirect(url.toString());
   }
 @Post('oauth/token')
