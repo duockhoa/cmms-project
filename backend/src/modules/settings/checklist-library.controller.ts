@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ChecklistLibraryService } from './checklist-library.service';
 
+@ApiTags('Checklist Library (Thư viện checklist)')
 @Controller('checklist-library')
 export class ChecklistLibraryController {
   constructor(private readonly checklistLibraryService: ChecklistLibraryService) {}

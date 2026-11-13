@@ -1,7 +1,9 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { StandardTechnicalSpecsService } from './standard-technical-specs.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+@ApiTags('Settings (Cài đặt danh mục)')
 @Controller('standard-technical-specs')
 @UseGuards(JwtAuthGuard)
 export class StandardTechnicalSpecsController {

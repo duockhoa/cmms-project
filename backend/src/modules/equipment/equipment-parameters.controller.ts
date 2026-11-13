@@ -1,10 +1,13 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
 import { EquipmentParametersService } from './equipment-parameters.service';
 import { CreateEquipmentParameterDto, UpdateEquipmentParameterDto } from './dto/equipment-parameter.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 
+@ApiTags('Thông số giám sát thiết bị')
 @Controller('equipment/:equipmentId/parameters')
 @UseGuards(JwtAuthGuard)
 export class EquipmentParametersController {

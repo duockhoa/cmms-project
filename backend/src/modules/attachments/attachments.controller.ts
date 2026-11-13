@@ -14,12 +14,15 @@ import {
   HttpStatus,
   Req,
 } from '@nestjs/common';
+import { ApiTags, ApiConsumes } from '@nestjs/swagger';
+import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { AttachmentsService } from './attachments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FileValidationPipe } from '../../common/pipes/file-validation.pipe';
 
+@ApiTags('Attachments (Tệp đính kèm)')
 @Controller('attachments')
 @UseGuards(JwtAuthGuard)
 export class AttachmentsController {

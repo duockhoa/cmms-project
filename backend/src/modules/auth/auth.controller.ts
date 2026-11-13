@@ -1,4 +1,6 @@
 import { Controller, Get, Post, Body, Header, UseGuards, Req, Res, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ApiTags, ApiBody } from '@nestjs/swagger';
+import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
 import { Request, Response } from 'express';
 import { BrowserSessionService } from './browser-session.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -7,10 +9,22 @@ import { ALL_PERMISSION_CODES } from '../../common/constants/permissions.registr
 import { getUserDepartments, effectivePermissionCodes } from '../../common/utils/rbac.helper';
 import { HrmIdentityService } from './hrm-identity.service';
 
+@ApiTags('Auth (Xác thực & Phiên làm việc)')
 @Controller('auth')
 export class AuthController {
   constructor(private prisma: PrismaService, private identities: HrmIdentityService, private sessions?: BrowserSessionService) {}
 
+  @ApiStandardResponse({ summary: 'Đăng nhập hệ thống bằng tài khoản / mật khẩu', method: 'POST', path: '/auth/login', isPublic: true })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['username', 'password'],
+      properties: {
+        username: { type: 'string', example: 'admin' },
+        password: { type: 'string', example: '123456' },
+      },
+    },
+  })
   @Post('login')
   @Header('Cache-Control', 'no-store')
   async login(@Body() body: { username: string; password: string }, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
@@ -20,24 +34,28 @@ export class AuthController {
     return this.sessions.open(request, response, accessToken, refreshToken, String(profile.id));
   }
 
+  @ApiStandardResponse({ summary: 'Đăng xuất khỏi hệ thống', method: 'POST', path: '/auth/logout', isPublic: true })
   @Post('logout')
   @Header('Cache-Control', 'no-store')
   logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     return this.sessions.logout(request, response);
   }
 
+  @ApiStandardResponse({ summary: 'Làm mới Access Token bằng Refresh Token', method: 'POST', path: '/auth/refresh', isPublic: true })
   @Post('refresh')
   @Header('Cache-Control', 'no-store')
   refresh(@Req() request: Request) {
     return this.sessions.refresh(request);
   }
 
+  @ApiStandardResponse({ summary: 'Kiểm tra trạng thái phiên làm việc hiện tại', method: 'GET', path: '/auth/session', isPublic: true })
   @Get('session')
   @Header('Cache-Control', 'no-store')
   getSession(@Req() request: Request) {
     return this.sessions.inspect(request);
   }
 
+  @ApiStandardResponse({ summary: 'Nhận diện phiên làm việc SSO từ cổng HRM', method: 'POST', path: '/auth/session', isPublic: true })
   @Post('session')
   @Header('Cache-Control', 'no-store')
   async adoptSession(@Body() body: { refreshToken: string }, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
@@ -51,6 +69,7 @@ export class AuthController {
     return this.sessions.open(request, response, pair.accessToken, pair.refreshToken, String(profile.id));
   }
 
+  @ApiStandardResponse({ summary: 'Lấy thông tin tài khoản, vai trò và danh sách quyền hạn của tôi', method: 'GET', path: '/auth/me' })
   @Get('me')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard)

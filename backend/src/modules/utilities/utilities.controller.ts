@@ -10,9 +10,12 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
 import { UtilitiesService } from './utilities.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+@ApiTags('Utilities (Hệ thống phụ trợ / Năng lượng)')
 @Controller('utilities')
 @UseGuards(JwtAuthGuard)
 export class UtilitiesController {

@@ -1,4 +1,6 @@
 import { Controller, Get, Query, Req, UseGuards, ForbiddenException } from '@nestjs/common';
+import { ApiTags, ApiQuery } from '@nestjs/swagger';
+import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
 import { AnalyticsService } from './analytics.service';
 import { KpiEngineService } from './services/kpi-engine.service';
 import { IncidentResponseKpiService } from './services/incident-response-kpi.service';
@@ -7,6 +9,7 @@ import { AnalyticsPermissionGuard } from './guards/analytics-permission.guard';
 import { KpiQueryDto } from './dto/kpi-query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+@ApiTags('Analytics (Báo cáo & KPI)')
 @Controller('analytics')
 @UseGuards(JwtAuthGuard)
 export class AnalyticsController {
@@ -17,11 +20,13 @@ export class AnalyticsController {
     private readonly incidentResponseKpiService: IncidentResponseKpiService
   ) {}
 
+  @ApiStandardResponse({ summary: 'Lấy dữ liệu tổng hợp Dashboard trang chủ', method: 'GET', path: '/analytics/dashboard' })
   @Get('dashboard')
   getDashboardSummary(@Req() req: any) {
     return this.analyticsService.getDashboardSummary(req.user);
   }
 
+  @ApiStandardResponse({ summary: 'Tính toán tổng hợp các chỉ số KPI bảo trì toàn nhà máy', method: 'GET', path: '/analytics/kpis' })
   @Get('kpis')
   @UseGuards(AnalyticsPermissionGuard)
   async getKpiSummary(@Query() query: KpiQueryDto, @Req() req: any) {
@@ -49,6 +54,11 @@ export class AnalyticsController {
     return this.kpiEngineService.computeKpiSummary(query, user);
   }
 
+  @ApiStandardResponse({ summary: 'Tính tỷ lệ đạt KPI phản hồi sự cố 4h trong giờ làm việc (8h-17h)', method: 'GET', path: '/analytics/kpis/incident-response-4h' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Từ ngày (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Đến ngày (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'supportDepartment', required: false, description: 'Bộ phận hỗ trợ (Cơ điện, IT...)' })
+  @ApiQuery({ name: 'workshop', required: false, description: 'Xưởng yêu cầu (PX1, PX2...)' })
   @Get('kpis/incident-response-4h')
   getIncidentResponseKpi(
     @Query('startDate') startDate?: string,
@@ -64,6 +74,7 @@ export class AnalyticsController {
     });
   }
 
+  @ApiStandardResponse({ summary: 'Báo cáo tổng hợp nhật ký vận hành thiết bị', method: 'GET', path: '/analytics/operation-logs-report' })
   @Get('operation-logs-report')
   getOperationLogsReport(@Req() req: any) {
     return this.analyticsService.getOperationLogsReport(50, req.user);

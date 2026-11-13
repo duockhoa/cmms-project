@@ -1,4 +1,6 @@
 import { Controller, Post, Get, Patch, Param, Body, UseGuards, HttpCode, HttpStatus, Req, ForbiddenException } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
 import { ChecklistExecutionsService } from './checklist-executions.service';
 import { CreateChecklistExecutionDto } from './dto/create-checklist-execution.dto';
 import { PatchChecklistItemDto } from './dto/patch-checklist-item.dto';
@@ -8,6 +10,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkOrdersService } from '../work-orders/work-orders.service';
 import { hasPermission } from '../../common/utils/rbac.helper';
 
+@ApiTags('Checklists (Thực thi Checklist)')
 @Controller()
 @UseGuards(JwtAuthGuard)
 export class ChecklistExecutionsController {

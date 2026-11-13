@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
@@ -12,6 +13,7 @@ import {
 } from './dto/settings.dto';
 
 // ── Equipment Categories Controller ────────────────────────────
+@ApiTags('Settings (Cài đặt danh mục)')
 @Controller('equipment-categories')
 @UseGuards(JwtAuthGuard)
 export class EquipmentCategoryController {
@@ -44,6 +46,7 @@ export class EquipmentCategoryController {
 }
 
 // ── Locations Controller ────────────────────────────────────────
+@ApiTags('Settings (Cài đặt danh mục)')
 @Controller('locations')
 @UseGuards(JwtAuthGuard)
 export class LocationController {
@@ -76,6 +79,7 @@ export class LocationController {
 }
 
 // ── Production Lines Controller ─────────────────────────────────
+@ApiTags('Settings (Cài đặt danh mục)')
 @Controller('production-lines')
 @UseGuards(JwtAuthGuard)
 export class ProductionLineController {
@@ -108,6 +112,7 @@ export class ProductionLineController {
 }
 
 // ── System Settings Controller ──────────────────────────────────
+@ApiTags('Settings (Cài đặt danh mục)')
 @Controller('system-settings')
 @UseGuards(JwtAuthGuard)
 export class SystemSettingController {

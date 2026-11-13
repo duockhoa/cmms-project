@@ -59,9 +59,41 @@ async function bootstrap() {
   // Swagger Configuration (Public API Docs - no login required)
   const swaggerConfig = new DocumentBuilder()
     .setTitle('DK Pharma CMMS - API Documentation')
-    .setDescription('Tài liệu API hệ thống Quản lý Thiết bị & Bảo trì (CMMS)')
+    .setDescription('Tài liệu API đầy đủ của hệ thống Quản lý Thiết bị & Bảo trì (CMMS). Hỗ trợ tích hợp cho ứng dụng di động, giao diện web, hệ thống MES, SCADA, IoT và các dịch vụ nội bộ.')
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      name: 'Authorization',
+      description: 'Nhập access token nhận được từ API /api/v1/auth/login theo định dạng: Bearer <token>',
+      in: 'header',
+    })
+    .addTag('Auth (Xác thực & Phiên làm việc)', 'Các API đăng nhập, lấy thông tin cá nhân và quản lý phiên người dùng')
+    .addTag('Equipment', 'Quản lý thông tin thiết bị, tra cứu, import Excel và tạo mới')
+    .addTag('Cụm chức năng thiết bị', 'Cụm cơ cấu con của thiết bị, import hàng loạt từ Excel và liên kết thư viện')
+    .addTag('Thư viện cụm chức năng', 'Danh mục chuẩn hóa cụm chức năng dùng chung toàn nhà máy')
+    .addTag('Thông số giám sát thiết bị', 'Thông số vận hành, đo đạc hàng ngày và gán từ danh mục chuẩn')
+    .addTag('Thông số kỹ thuật thiết bị', 'Thông số kỹ thuật, catalogue và đặc tính thiết kế của máy')
+    .addTag('Nhật ký vận hành thiết bị', 'Ghi chép và hủy ca ghi nhận nhật ký vận hành')
+    .addTag('OEE Records (Hiệu suất thiết bị)', 'Thu thập và tính toán A x P x Q, tích hợp máy đo và phần mềm MES/SCADA bên ngoài')
+    .addTag('Requests (Yêu cầu sự cố / Bảo trì)', 'Gửi báo cáo sự cố, duyệt, từ chối, trả lại và chuyển đổi thành Work Order')
+    .addTag('Work Orders', 'Quản lý phiếu giao việc, quét QR, tiến độ sửa chữa, biên bản bàn giao và nghiệm thu QA')
+    .addTag('Schedules (Kế hoạch bảo trì)', 'Lập lịch định kỳ, kích hoạt, tạm dừng và tự động sinh phiếu bảo trì đến hạn')
+    .addTag('Inventory (Kho vật tư & Phụ tùng)', 'Kho phụ tùng thay thế, phiếu xuất kho trực tiếp, nhập kho và báo cáo tồn kho')
+    .addTag('Checklists (Thực thi Checklist)', 'Thực hiện kiểm tra định kỳ, bảo trì phòng ngừa theo từng đầu việc')
+    .addTag('Checklist Templates (Biểu mẫu Checklist)', 'Cấu hình mẫu kiểm tra theo loại máy hoặc quy trình')
+    .addTag('Checklist Library', 'Thư viện câu hỏi và đầu mục kiểm tra chuẩn')
+    .addTag('Utilities (Hệ thống phụ trợ / Năng lượng)', 'Theo dõi chỉ số điện, nước, khí nén, hơi và các điểm đo tiện ích')
+    .addTag('Fabrication (Chế tạo & Cải tiến)', 'Theo dõi tiến độ đề xuất gia công, cải tiến máy móc và hỗ trợ kỹ thuật')
+    .addTag('Analytics (Báo cáo & KPI)', 'Dashboard tổng quan, KPI phản hồi sự cố 4h, báo cáo thời gian chạy máy')
+    .addTag('Feedbacks (Ý kiến phản hồi)', 'Tiếp nhận và xử lý phản ánh chất lượng vận hành từ các xưởng')
+    .addTag('Notifications (Thông báo)', 'Danh sách thông báo nội bộ và đánh dấu đã đọc')
+    .addTag('Attachments (Tệp đính kèm)', 'Tải lên và tải xuống hình ảnh hiện trường, tài liệu PDF, biên bản')
+    .addTag('Users', 'Quản lý tài khoản, gán bộ phận và phân quyền nhân sự')
+    .addTag('Settings (Cài đặt danh mục)', 'Quản lý loại thiết bị, vị trí nhà xưởng, dây chuyền sản xuất')
+    .addTag('Roles', 'Quản lý nhóm quyền và ma trận phân quyền RBAC')
+    .addTag('Health', 'Kiểm tra trạng thái hoạt động của máy chủ và kết nối Cơ sở dữ liệu')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   const swaggerOptions = {
