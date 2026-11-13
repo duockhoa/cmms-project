@@ -72,17 +72,10 @@ export class HrmIdentityService {
   }
 
   async logout(refreshToken: string, expectedHrmId: string) {
-    // An opaque or mixed refresh token must not revoke another employee's session.
-    const pair = await this.refreshPair(refreshToken, expectedHrmId, false);
-    const root = this.config.get<string>('HRM_API_URL') || 'https://hrmserver.dkpharma.io.vn';
-    try {
-      const response = await fetch(`${root.replace(/\/$/, '')}/auth/logout`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: pair.refreshToken }), signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) throw new ServiceUnavailableException('Chưa xác nhận được việc thu hồi phiên HRM.');
-      HrmIdentityService.invalidateCache();
-      return { revoked: true };
-    } catch { throw new ServiceUnavailableException('Phiên cục bộ sẽ kết thúc nhưng chưa xác nhận được thu hồi phiên HRM.'); }
+    // Không gửi lệnh thu hồi refresh token lên máy chủ HRM trung tâm khi đăng xuất ở QLTB,
+    // để tránh làm mất phiên đăng nhập của các ứng dụng nội bộ khác đang chạy cùng tài khoản này.
+    HrmIdentityService.invalidateCache();
+    return { revoked: false };
   }
 
   async refreshSession(refreshToken: string, expectedHrmId: string) {

@@ -26,9 +26,9 @@ let handoffError: string | null = null;
 const listeners = new Set<() => void>();
 
 export function getCookieDomain(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  const host = window.location.hostname;
-  return host === 'dkpharma.io.vn' || host.endsWith('.dkpharma.io.vn') ? '.dkpharma.io.vn' : undefined;
+  // Không đặt domain cấp gốc .dkpharma.io.vn để cookie là Host-Only (chỉ qltb.dkpharma.io.vn nhìn thấy),
+  // tránh ghi đè cookie accessToken của các app nội bộ khác cùng domain.
+  return undefined;
 }
 
 function cookieValues(name: string): string[] {
@@ -92,18 +92,19 @@ function readSession(): { accessToken: string | null } {
   const refreshValues = [...new Set(REFRESH_KEYS.flatMap(cookieValues))];
   let accessToken: string | null = null;
   sessionError = handoffError;
-  if (accessValues.length) {
-    // Different aliases/host cookies cannot establish which session is current.
-    if (accessValues.length !== 1 || refreshValues.length > 1) {
-      sessionError = 'SSO_SESSION_CONFLICT';
-    } else {
-      accessToken = accessValues[0];
+
+  // Ưu tiên token hợp lệ đã lưu của QLTB trong binding / localStorage
+  if (previous?.accessToken && !isJwtExpired(previous.accessToken)) {
+    accessToken = previous.accessToken;
+  } else if (accessValues.length) {
+    // Nếu chưa có trong local mà có trong cookie, lấy token đầu tiên còn hạn
+    const validCookieToken = accessValues.find(t => !isJwtExpired(t));
+    if (validCookieToken) {
+      accessToken = validCookieToken;
       if (refreshValues[0]) pendingRefresh = { accessToken, refreshToken: refreshValues[0] };
     }
-  } else if (!getCookieDomain() && previous?.accessToken) {
-    // Local development only. Shared-domain deployments never resurrect local legacy tokens.
-    accessToken = previous.accessToken;
   }
+
   if (accessToken && previous?.accessToken === accessToken && previous?.refreshToken && !pendingRefresh) {
     pendingRefresh = { accessToken, refreshToken: previous.refreshToken };
   }
