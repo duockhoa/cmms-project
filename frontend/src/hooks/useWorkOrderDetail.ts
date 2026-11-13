@@ -290,10 +290,6 @@ export const useWorkOrderDetail = ({
       toast.error('Từ chối truy cập', 'Bạn không được phân công thực hiện công việc này.');
       return;
     }
-    if (wo?.requestId && !wo?.initialAssessment) {
-      setIsAssessmentModalOpen(true);
-      return;
-    }
     try {
       setActionLoading(true);
       await api.updateWorkOrderStatus(wo.id, {
@@ -660,12 +656,6 @@ export const useWorkOrderDetail = ({
   // ==================== WORK ORDER SESSIONS ====================
 
   const handleStartSession = async (taskContent?: string) => {
-    // Nếu là sự cố từ xưởng mà KTV chưa đánh giá sơ bộ 4h -> tự động kích hoạt form khảo sát sơ bộ
-    if (Boolean(wo?.requestId || wo?.request) && !wo?.initialAssessment) {
-      setIsAssessmentModalOpen(true);
-      return;
-    }
-
     try {
       setSessionLoading(true);
       await api.startWorkOrderSession(workOrderId, { taskContent });

@@ -961,13 +961,21 @@ export class WorkOrdersService implements OnModuleInit {
   ) {
     const assessedAt = new Date();
 
+    const currentWo = await this.prisma.workOrder.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+    const targetStatus = (currentWo?.status === 'ON_HOLD' || currentWo?.status === 'IN_PROGRESS')
+      ? currentWo.status
+      : 'IN_PROGRESS';
+
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
-      'IN_PROGRESS',
+      targetStatus,
       {
-        actualStartDate: assessedAt,
         initialRespondedAt: assessedAt,
+        ...(targetStatus === 'IN_PROGRESS' ? { actualStartDate: assessedAt } : {}),
       },
       'INITIAL_ASSESSMENT',
       `KTV đánh giá sơ bộ: ${dto.preliminaryCause} - ${dto.proposedSolution}`,
