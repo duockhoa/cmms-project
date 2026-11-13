@@ -90,9 +90,8 @@ async function bootstrap() {
     .addTag('Feedbacks (Ý kiến phản hồi)', 'Tiếp nhận và xử lý phản ánh chất lượng vận hành từ các xưởng')
     .addTag('Notifications (Thông báo)', 'Danh sách thông báo nội bộ và đánh dấu đã đọc')
     .addTag('Attachments (Tệp đính kèm)', 'Tải lên và tải xuống hình ảnh hiện trường, tài liệu PDF, biên bản')
-    .addTag('Users', 'Quản lý tài khoản, gán bộ phận và phân quyền nhân sự')
+    .addTag('Users', 'Quản lý tài khoản, gán bộ phận nhân sự')
     .addTag('Settings (Cài đặt danh mục)', 'Quản lý loại thiết bị, vị trí nhà xưởng, dây chuyền sản xuất')
-    .addTag('Roles', 'Quản lý nhóm quyền và ma trận phân quyền RBAC')
     .addTag('Health', 'Kiểm tra trạng thái hoạt động của máy chủ và kết nối Cơ sở dữ liệu')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);

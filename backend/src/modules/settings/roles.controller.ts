@@ -1,9 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
-import { ApiStandardResponse } from '../../common/decorators/api-standard-response.decorator';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { RolesService, CreateRoleDto, UpdateRoleDto } from './roles.service';
 
-@ApiTags('Roles (Nhóm quyền RBAC)')
+@ApiExcludeController()
 @Controller('roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
