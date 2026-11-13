@@ -660,6 +660,12 @@ export const useWorkOrderDetail = ({
   // ==================== WORK ORDER SESSIONS ====================
 
   const handleStartSession = async (taskContent?: string) => {
+    // Nếu là sự cố từ xưởng mà KTV chưa đánh giá sơ bộ 4h -> tự động kích hoạt form khảo sát sơ bộ
+    if (Boolean(wo?.requestId || wo?.request) && !wo?.initialAssessment) {
+      setIsAssessmentModalOpen(true);
+      return;
+    }
+
     try {
       setSessionLoading(true);
       await api.startWorkOrderSession(workOrderId, { taskContent });

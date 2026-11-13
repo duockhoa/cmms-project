@@ -122,6 +122,12 @@ export class WorkOrdersController {
     return this.workOrdersService.start(id, body, req.user);
   }
 
+  @ApiStandardResponse({ summary: 'Bắt đầu work order kèm đánh giá sơ bộ sự cố (4h SLA)', method: 'POST', path: '/work-orders/{id}/start-with-assessment' })
+  @Post(':id/start-with-assessment')
+  startWithAssessment(@Param('id') id: string, @Body() body: CreateIncidentAssessmentDto, @Req() req: any) {
+    return this.workOrdersService.startWithAssessment(id, body, req.user);
+  }
+
   @ApiStandardResponse({ summary: 'Tạm dừng work order', method: 'POST', path: '/work-orders/{id}/pause' })
   @Post(':id/pause')
   pause(@Param('id') id: string, @Body() body: PauseWorkOrderDto, @Req() req: any) {

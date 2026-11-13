@@ -1,4 +1,5 @@
 import React from 'react';
+import { Zap, Clock, CheckCircle2 } from 'lucide-react';
 import { DetailViewSkeleton } from './Skeleton';
 import { WorkOrderExecutionModals } from '../work-orders/detail/WorkOrderExecutionModals';
 import { InitialAssessmentModal } from '../work-orders/detail/InitialAssessmentModal';
@@ -89,14 +90,101 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({
         setWorkshopComment={setWorkshopComment}
         userUnitType={userUnitType}
         wo={wo}
-        // Work Session props
+        // Work Session & Assessment props
         mySession={mySession}
         sessionLoading={sessionLoading}
         handleStartSession={handleStartSession}
         handleOpenStopSession={handleOpenStopSession}
+        setIsAssessmentModalOpen={setIsAssessmentModalOpen}
       />
 
       <div className="work-order-detail-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, padding: '24px', overflowY: 'auto' }}>
+
+        {/* Khảo sát & Đánh giá sơ bộ sự cố (4h SLA) Banner */}
+        {Boolean(wo?.requestId || wo?.request) && !wo?.initialAssessment && (
+          <div style={{
+            padding: '14px 18px',
+            borderRadius: '10px',
+            backgroundColor: '#fffbeb',
+            border: '1px solid #fde68a',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Clock size={20} style={{ color: '#d97706' }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#b45309' }}>
+                  Chưa thực hiện Khảo sát & Đánh giá sơ bộ sự cố (SLA 4h)
+                </div>
+                <div style={{ fontSize: '12.5px', color: '#78350f' }}>
+                  Kỹ thuật viên cần khảo sát hiện trường và gửi đánh giá sơ bộ trong vòng 4 giờ kể từ khi xưởng báo sự cố.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsAssessmentModalOpen(true)}
+              className="btn btn-warning"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 700,
+                fontSize: '13px',
+                padding: '8px 16px',
+                backgroundColor: '#f59e0b',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+              }}
+            >
+              <Zap size={16} />
+              Khảo sát & Đánh giá ngay
+            </button>
+          </div>
+        )}
+
+        {wo?.initialAssessment && (
+          <div style={{
+            padding: '16px 20px',
+            borderRadius: '10px',
+            backgroundColor: wo.initialAssessment.isWithinSla4h ? '#f0fdf4' : '#fef2f2',
+            border: `1px solid ${wo.initialAssessment.isWithinSla4h ? '#bbf7d0' : '#fecaca'}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={18} style={{ color: wo.initialAssessment.isWithinSla4h ? '#16a34a' : '#dc2626' }} />
+                <strong style={{ fontSize: '14px', color: wo.initialAssessment.isWithinSla4h ? '#15803d' : '#b91c1c' }}>
+                  Đánh giá sơ bộ sự cố ({wo.initialAssessment.isWithinSla4h ? 'Đạt chuẩn SLA 4h' : 'Trễ hạn SLA 4h'})
+                </strong>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  — KTV: <strong>{wo.initialAssessment.assessorName}</strong> ({new Date(wo.initialAssessment.assessedAt).toLocaleString('vi-VN')})
+                </span>
+              </div>
+              <button
+                onClick={() => setIsAssessmentModalOpen(true)}
+                className="btn btn-sm btn-secondary"
+                style={{ fontSize: '12px', padding: '3px 10px' }}
+              >
+                Xem / Cập nhật đánh giá
+              </button>
+            </div>
+            <div style={{ fontSize: '13px', color: '#334155', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '8px' }}>
+              <div><strong>Hiện trạng:</strong> {wo.initialAssessment.actualCondition}</div>
+              <div><strong>Nguyên nhân sơ bộ:</strong> {wo.initialAssessment.preliminaryCause}</div>
+              <div><strong>Phương án:</strong> {wo.initialAssessment.proposedSolution} ({wo.initialAssessment.estimatedCompletionMinutes} phút)</div>
+              {wo.initialAssessment.requireSpareParts && (
+                <div style={{ color: '#b45309' }}><strong>Linh kiện cần:</strong> {wo.initialAssessment.sparePartsNeeded || 'Cần phụ tùng'}</div>
+              )}
+            </div>
+          </div>
+        )}
 
         <WorkOrderMetadata
           allUsers={allUsers}

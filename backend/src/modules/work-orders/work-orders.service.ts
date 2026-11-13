@@ -836,7 +836,7 @@ export class WorkOrdersService implements OnModuleInit {
 
       return tx.workOrder.findUnique({
         where: { id },
-        include: { equipment: true, items: { include: { inventoryItem: true } }, request: true },
+        include: { equipment: true, items: { include: { inventoryItem: true } }, request: true, initialAssessment: true },
       });
     });
 
@@ -1021,13 +1021,22 @@ export class WorkOrdersService implements OnModuleInit {
           }
         }
 
+        let assessorId = actorContext?.id;
+        if (!assessorId) {
+          assessorId = wo.assignedTechnicianId;
+        }
+        if (!assessorId) {
+          const fallback = await tx.user.findFirst();
+          assessorId = fallback?.id;
+        }
+
         // Lưu bản ghi IncidentInitialAssessment
         await tx.incidentInitialAssessment.upsert({
           where: { workOrderId: id },
           create: {
             workOrderId: id,
             requestId: wo.requestId || null,
-            assessedById: actorContext.id,
+            assessedById: assessorId,
             assessorName,
             assessorDepartment,
             assessedAt,
@@ -1044,7 +1053,7 @@ export class WorkOrdersService implements OnModuleInit {
             notes: dto.notes || null,
           },
           update: {
-            assessedById: actorContext.id,
+            assessedById: assessorId,
             assessorName,
             assessorDepartment,
             assessedAt,

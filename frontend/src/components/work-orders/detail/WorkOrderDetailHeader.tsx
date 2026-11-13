@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowRightLeft, CheckCircle2, Lock, Play, Square,
-  ShieldCheck, XOctagon, Loader2, Ban
+  ShieldCheck, XOctagon, Loader2, Ban, Zap
 } from 'lucide-react';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { Modal } from '../../common/Modal';
@@ -51,8 +51,9 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
   setIsEscalateOpen, setIsQaAcceptOpen,
   setIsQaRejectOpen, setIsRejectHandoverOpen, setIsWorkshopAcceptOpen,
   setQaComment, setQaRejectReason, setWorkshopComment, userUnitType, wo,
-  // Work Session props
+  // Work Session & Assessment props
   mySession, sessionLoading, handleStartSession, handleOpenStopSession,
+  setIsAssessmentModalOpen,
 }) => {
   const { can, isAdmin, user: authUser } = usePermissions();
   const toast = useToast();
@@ -128,6 +129,17 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
         </h3>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center', alignItems: 'center' }}>
+
+          {/* Khảo sát & Đánh giá sơ bộ sự cố (Chốt SLA 4h phản hồi) */}
+          {Boolean(wo?.requestId || wo?.request) && (
+            <ActionButton
+              onClick={() => setIsAssessmentModalOpen?.(true)}
+              disabled={actionLoading}
+              icon={Zap}
+              label={wo?.initialAssessment ? "Đánh giá 4h (Đã chốt)" : "⚡ Đánh giá sơ bộ (SLA 4h)"}
+              color={wo?.initialAssessment ? (wo.initialAssessment.isWithinSla4h ? "#059669" : "#dc2626") : "#f59e0b"}
+            />
+          )}
 
           {/* Phiên làm việc (Session Start / Stop) */}
           {canModify && isWorkingStatus && (

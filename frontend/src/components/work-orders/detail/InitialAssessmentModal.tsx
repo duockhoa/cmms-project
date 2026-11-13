@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { AlertTriangle, Clock, Wrench, CheckCircle2, X, Camera, Package } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertTriangle, Clock, Wrench, CheckCircle2, X, Camera, Package, Zap } from 'lucide-react';
 import { api } from '../../../services/api';
 import { useToast } from '../../common/Toast';
 
@@ -37,6 +37,29 @@ export const InitialAssessmentModal: React.FC<InitialAssessmentModalProps> = ({
   const [requireSpareParts, setRequireSpareParts] = useState(false);
   const [sparePartsNeeded, setSparePartsNeeded] = useState('');
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    if (workOrder?.initialAssessment) {
+      const ia = workOrder.initialAssessment;
+      setActualCondition(ia.actualCondition || '');
+      setPreliminaryCause(ia.preliminaryCause || PRELIMINARY_CAUSES[0]);
+      setPreliminaryCauseDetail(ia.preliminaryCauseDetail || '');
+      setProposedSolution(ia.proposedSolution || '');
+      setEstimatedCompletionMinutes(ia.estimatedCompletionMinutes || 60);
+      setRequireSpareParts(Boolean(ia.requireSpareParts));
+      setSparePartsNeeded(ia.sparePartsNeeded || '');
+      setNotes(ia.notes || '');
+    } else {
+      setActualCondition('');
+      setPreliminaryCause(PRELIMINARY_CAUSES[0]);
+      setPreliminaryCauseDetail('');
+      setProposedSolution('');
+      setEstimatedCompletionMinutes(60);
+      setRequireSpareParts(false);
+      setSparePartsNeeded('');
+      setNotes('');
+    }
+  }, [workOrder?.id, workOrder?.initialAssessment, isOpen]);
 
   if (!isOpen) return null;
 
