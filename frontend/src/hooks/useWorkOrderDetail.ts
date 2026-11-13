@@ -394,6 +394,10 @@ export const useWorkOrderDetail = ({
   const handleCompleteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canModify) return;
+    if (mySession) {
+      toast.error('Chưa kết thúc phiên', 'Vui lòng bấm "Kết thúc phiên" để chốt giờ làm trước khi gửi bàn giao.');
+      return;
+    }
     if (!completeWorkDone.trim()) {
       toast.error('Yêu cầu dữ liệu', 'Vui lòng nhập nội dung công việc đã thực hiện.');
       return;
@@ -656,6 +660,12 @@ export const useWorkOrderDetail = ({
   // ==================== WORK ORDER SESSIONS ====================
 
   const handleStartSession = async (taskContent?: string) => {
+    if (Boolean(wo?.requestId || wo?.request) && !wo?.initialAssessment) {
+      toast.warning('Yêu cầu quy trình', 'Vui lòng hoàn thành "Đánh giá sơ bộ sự cố (SLA 4h)" trước khi bắt đầu thực hiện!');
+      setIsAssessmentModalOpen(true);
+      return;
+    }
+
     try {
       setSessionLoading(true);
       await api.startWorkOrderSession(workOrderId, { taskContent });

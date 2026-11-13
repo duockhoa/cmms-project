@@ -1127,6 +1127,13 @@ export class WorkOrdersService implements OnModuleInit {
 
   async complete(id: string, dto: CompleteWorkOrderDto, actorContext?: { id: string; role: string }) {
     const extraOperations = async (tx: any, wo: any) => {
+      const openSession = await tx.workOrderWorkSession.findFirst({
+        where: { workOrderId: id, status: 'IN_PROGRESS' },
+      });
+      if (openSession) {
+        throw new BadRequestException('Vui lòng bấm Kết thúc phiên làm việc để chốt giờ làm trước khi gửi bàn giao.');
+      }
+
       const neededQuantities: Record<string, { required: number; name: string; itemCode: string; available: number; unitPrice: number }> = {};
       for (const item of wo.items) {
         if (!neededQuantities[item.inventoryItemId]) {
@@ -1268,6 +1275,13 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async submitHandover(id: string, dto: SubmitHandoverDto, actorContext?: { id: string; role: string }) {
+    const openSession = await this.prisma.workOrderWorkSession.findFirst({
+      where: { workOrderId: id, status: 'IN_PROGRESS' },
+    });
+    if (openSession) {
+      throw new BadRequestException('Vui lòng bấm Kết thúc phiên làm việc để chốt giờ làm trước khi gửi bàn giao.');
+    }
+
     return this.updateStatusTransaction(
       id,
       dto.expectedVersion,
@@ -1698,9 +1712,13 @@ export class WorkOrdersService implements OnModuleInit {
     await this.findOne(workOrderId, actor);
     const wo = await this.prisma.workOrder.findUnique({
       where: { id: workOrderId },
-      include: { equipment: true },
+      include: { equipment: true, initialAssessment: true },
     });
     if (!wo) throw new NotFoundException('Không tìm thấy phiếu sửa chữa');
+
+    if (Boolean(wo.requestId) && !wo.initialAssessment) {
+      throw new BadRequestException('Vui lòng hoàn thành Đánh giá sơ bộ sự cố (SLA 4h) trước khi bắt đầu phiên làm việc.');
+    }
 
     // Chốt phiên đang chạy ở phiếu khác của người này nếu có
     const activeElsewhere = await this.prisma.workOrderWorkSession.findFirst({

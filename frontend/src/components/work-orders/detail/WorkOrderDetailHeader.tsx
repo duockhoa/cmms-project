@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowRightLeft, CheckCircle2, Lock, Play, Square,
-  ShieldCheck, XOctagon, Loader2, Ban, Zap
+  ShieldCheck, XOctagon, Loader2, Ban, Zap, Pause
 } from 'lucide-react';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { Modal } from '../../common/Modal';
@@ -48,7 +48,7 @@ const ActionButton = ({ onClick, disabled, icon: Icon, label, color }: any) => (
 export const WorkOrderDetailHeader: React.FC<any> = ({
   actionLoading, canModify, isManagerOrAdmin, isQA,
   onClose, onReload, onStatusChangeSuccess, setIsAssignExecutorOpen, setIsClassifyOpen, setIsCompleteFormOpen,
-  setIsEscalateOpen, setIsQaAcceptOpen,
+  setIsEscalateOpen, setIsPauseFormOpen, setIsQaAcceptOpen,
   setIsQaRejectOpen, setIsRejectHandoverOpen, setIsWorkshopAcceptOpen,
   setQaComment, setQaRejectReason, setWorkshopComment, userUnitType, wo,
   // Work Session & Assessment props
@@ -60,6 +60,8 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+
+  const hasPendingAssessment = Boolean((wo?.requestId || wo?.request) && !wo?.initialAssessment);
 
   const isAssigned = Boolean(
     authUser?.id && (
@@ -141,35 +143,57 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
             />
           )}
 
-          {/* Phiên làm việc (Session Start / Stop) */}
+          {/* Phiên làm việc (Session Start / Stop / Pause) */}
           {canModify && isWorkingStatus && (
             <>
               {!mySession ? (
                 <ActionButton
-                  onClick={() => handleStartSession?.()}
-                  disabled={actionLoading || sessionLoading}
+                  onClick={() => {
+                    if (hasPendingAssessment) {
+                      toast.warning('Yêu cầu quy trình', 'Vui lòng hoàn thành "Đánh giá sơ bộ sự cố (SLA 4h)" trước khi bắt đầu thực hiện!');
+                      setIsAssessmentModalOpen?.(true);
+                      return;
+                    }
+                    handleStartSession?.();
+                  }}
+                  disabled={actionLoading || sessionLoading || hasPendingAssessment}
                   icon={sessionLoading ? Loader2 : Play}
-                  label="Bắt đầu làm việc"
-                  color="#10b981"
+                  label={hasPendingAssessment ? "Cần đánh giá trước khi làm" : "Bắt đầu làm việc"}
+                  color={hasPendingAssessment ? "#94a3b8" : "#10b981"}
                 />
               ) : (
-                <ActionButton
-                  onClick={() => handleOpenStopSession?.()}
-                  disabled={actionLoading || sessionLoading}
-                  icon={Square}
-                  label="Kết thúc phiên"
-                  color="#f59e0b"
-                />
+                <>
+                  <ActionButton
+                    onClick={() => handleOpenStopSession?.()}
+                    disabled={actionLoading || sessionLoading}
+                    icon={Square}
+                    label="Kết thúc phiên"
+                    color="#f59e0b"
+                  />
+                  <ActionButton
+                    onClick={() => setIsPauseFormOpen(true)}
+                    disabled={actionLoading || sessionLoading}
+                    icon={Pause}
+                    label="Tạm dừng"
+                    color="#eab308"
+                  />
+                </>
               )}
 
-              {/* Hoàn thành sửa / Bàn giao */}
+              {/* Hoàn thành sửa / Bàn giao: Chỉ cho phép khi KTV đã kết thúc phiên làm việc */}
               {wo.status === 'IN_PROGRESS' && (
                 <ActionButton
-                  onClick={() => setIsCompleteFormOpen(true)}
-                  disabled={actionLoading}
+                  onClick={() => {
+                    if (mySession) {
+                      toast.warning('Chưa kết thúc phiên', 'Bạn đang trong phiên làm việc. Vui lòng bấm "Kết thúc phiên" để chốt giờ làm trước khi gửi bàn giao!');
+                      return;
+                    }
+                    setIsCompleteFormOpen(true);
+                  }}
+                  disabled={actionLoading || Boolean(mySession)}
                   icon={CheckCircle2}
-                  label={wo?.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? 'Đề nghị bàn giao' : 'Hoàn thành sửa'}
-                  color="#2563eb"
+                  label={mySession ? "Chốt phiên trước khi bàn giao" : (wo?.handlingRoute === 'TECHNICAL_MAINTENANCE_SUPPORT' ? 'Đề nghị bàn giao' : 'Hoàn thành sửa')}
+                  color={mySession ? "#94a3b8" : "#2563eb"}
                 />
               )}
             </>
