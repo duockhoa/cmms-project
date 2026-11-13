@@ -22,7 +22,7 @@ routes('AuthController', { 'login refresh logout adoptSession getSession': publi
 routes('HealthController', { check: publicRoute });
 routes('WellKnownController', { 'getDiscovery getProtectedResource': publicRoute });
 routes('McpController', {
-  'getHealth getOAuthDiscovery registerClient handleAuthorize handleOAuthCallback exchangeToken': publicRoute,
+  'getHealth getOAuthDiscovery registerClient handleAuthorize renderConsent submitConsent handleOAuthCallback exchangeToken': publicRoute,
   'handlePostRoot handlePostSse handleSseRoot handleSse handleMessages': session,
 });
 routes('AnalyticsController', {
