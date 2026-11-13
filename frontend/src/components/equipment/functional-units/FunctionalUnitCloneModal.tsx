@@ -9,9 +9,6 @@ export const FunctionalUnitCloneModal: React.FC<any> = ({
   setIsCloneModalOpen, sourceUnits, units,
 }) => (
   <>
-      {/* ==================================================== */}
-      {/* MODAL SAO CHÉP CỤM CHỨC NĂNG TỪ THIẾT BỊ KHÁC        */}
-      {/* ==================================================== */}
       {isCloneModalOpen && (
         <Modal
           isOpen={isCloneModalOpen}

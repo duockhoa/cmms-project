@@ -220,35 +220,35 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
           style={{
             cursor: 'pointer',
             padding: '16px 20px',
-            backgroundColor: statusFilter === 'CONNECTED' ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-primary, #ffffff)',
+            backgroundColor: statusFilter === 'CONNECTED' || statusFilter === 'ALL' ? '#f0fdfa' : 'var(--bg-primary, #ffffff)',
             borderRadius: '10px',
-            border: statusFilter === 'CONNECTED' ? '2px solid #10b981' : '1px solid var(--border-color, #e2e8f0)',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            border: statusFilter === 'CONNECTED' || statusFilter === 'ALL' ? '1.5px solid #38bdf8' : '1px solid var(--border-color, #e2e8f0)',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
             transition: 'all 0.2s ease',
           }}
         >
           <div>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginBottom: '4px', fontWeight: 500 }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginBottom: '8px', fontWeight: 500 }}>
               Đang kết nối
             </div>
-            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #1e293b)', lineHeight: 1.1 }}>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #1e293b)', lineHeight: 1 }}>
               {stats.connected.toLocaleString('vi-VN')}
             </div>
           </div>
           <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '10px',
-            backgroundColor: '#ecfdf5',
-            color: '#059669',
+            width: '38px',
+            height: '38px',
+            borderRadius: '50%',
+            backgroundColor: '#e6f9f0',
+            color: '#10b981',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <Activity size={22} />
+            <Activity size={20} />
           </div>
         </div>
 
@@ -258,35 +258,35 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
           style={{
             cursor: 'pointer',
             padding: '16px 20px',
-            backgroundColor: statusFilter === 'RECONNECTING' ? 'rgba(245, 158, 11, 0.08)' : 'var(--bg-primary, #ffffff)',
+            backgroundColor: statusFilter === 'RECONNECTING' ? '#fffbeb' : 'var(--bg-primary, #ffffff)',
             borderRadius: '10px',
-            border: statusFilter === 'RECONNECTING' ? '2px solid #f59e0b' : '1px solid var(--border-color, #e2e8f0)',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            border: statusFilter === 'RECONNECTING' ? '1.5px solid #f59e0b' : '1px solid var(--border-color, #e2e8f0)',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
             transition: 'all 0.2s ease',
           }}
         >
           <div>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginBottom: '4px', fontWeight: 500 }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginBottom: '8px', fontWeight: 500 }}>
               Chờ kết nối lại
             </div>
-            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #1e293b)', lineHeight: 1.1 }}>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #1e293b)', lineHeight: 1 }}>
               {stats.reconnecting.toLocaleString('vi-VN')}
             </div>
           </div>
           <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '10px',
-            backgroundColor: '#fffbeb',
-            color: '#d97706',
+            width: '38px',
+            height: '38px',
+            borderRadius: '50%',
+            backgroundColor: '#fef9c3',
+            color: '#ca8a04',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <Clock size={22} />
+            <Clock size={20} />
           </div>
         </div>
 
@@ -296,35 +296,35 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
           style={{
             cursor: 'pointer',
             padding: '16px 20px',
-            backgroundColor: statusFilter === 'DISCONNECTED' ? 'rgba(100, 116, 139, 0.08)' : 'var(--bg-primary, #ffffff)',
+            backgroundColor: statusFilter === 'DISCONNECTED' ? '#f8fafc' : 'var(--bg-primary, #ffffff)',
             borderRadius: '10px',
-            border: statusFilter === 'DISCONNECTED' ? '2px solid #64748b' : '1px solid var(--border-color, #e2e8f0)',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            border: statusFilter === 'DISCONNECTED' ? '1.5px solid #64748b' : '1px solid var(--border-color, #e2e8f0)',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
             transition: 'all 0.2s ease',
           }}
         >
           <div>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginBottom: '4px', fontWeight: 500 }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary, #64748b)', marginBottom: '8px', fontWeight: 500 }}>
               Đã kết thúc
             </div>
-            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #1e293b)', lineHeight: 1.1 }}>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #1e293b)', lineHeight: 1 }}>
               {stats.disconnected.toLocaleString('vi-VN')}
             </div>
           </div>
           <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '10px',
+            width: '38px',
+            height: '38px',
+            borderRadius: '50%',
             backgroundColor: '#f1f5f9',
             color: '#64748b',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <PowerOff size={20} />
+            <PowerOff size={18} />
           </div>
         </div>
       </div>
@@ -376,7 +376,7 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
           <thead>
             <tr style={{ backgroundColor: 'var(--bg-table-header, #f8fafc)', borderBottom: '1px solid var(--border-color, #e2e8f0)' }}>
               <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Phiên / Người dùng</th>
-              <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Mở phiên lúc</th>
+              <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Mở EBR lúc</th>
               <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Lần cuối kết nối</th>
               <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Ngắt / Kết thúc lúc</th>
               <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Thời lượng phiên</th>
@@ -455,11 +455,10 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
                           gap: '6px',
                           padding: '4px 10px',
                           borderRadius: '20px',
-                          fontSize: '12px',
+                          fontSize: '12.5px',
                           fontWeight: 500,
-                          backgroundColor: '#ecfdf5',
+                          backgroundColor: '#e6f9f0',
                           color: '#059669',
-                          border: '1px solid #a7f3d0',
                         }}>
                           <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
                           Đang kết nối
@@ -471,14 +470,13 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
                           gap: '6px',
                           padding: '4px 10px',
                           borderRadius: '20px',
-                          fontSize: '12px',
+                          fontSize: '12.5px',
                           fontWeight: 500,
-                          backgroundColor: '#fffbeb',
+                          backgroundColor: '#fef3c7',
                           color: '#d97706',
-                          border: '1px solid #fde68a',
                         }}>
                           <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f59e0b' }}></span>
-                          Chờ kết nối
+                          Chờ kết nối lại
                         </span>
                       ) : (
                         <span style={{
@@ -487,11 +485,10 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
                           gap: '6px',
                           padding: '4px 10px',
                           borderRadius: '20px',
-                          fontSize: '12px',
+                          fontSize: '12.5px',
                           fontWeight: 500,
                           backgroundColor: '#f1f5f9',
                           color: '#64748b',
-                          border: '1px solid #e2e8f0',
                         }}>
                           <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#94a3b8' }}></span>
                           Đã kết thúc
@@ -500,29 +497,29 @@ export const ConnectionLogsSettingsTab: React.FC = () => {
                     </td>
 
                     {/* Số lần kết nối */}
-                    <td style={{ padding: '12px 14px', verticalAlign: 'middle', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    <td style={{ padding: '12px 14px', verticalAlign: 'middle', textAlign: 'center', color: 'var(--text-primary)' }}>
                       {log.reconnectCount || 1}
                     </td>
 
                     {/* Địa chỉ IP */}
-                    <td style={{ padding: '12px 14px', verticalAlign: 'middle', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '12.5px', color: 'var(--text-primary)' }}>
+                    <td style={{ padding: '12px 14px', verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '13px', color: 'var(--text-primary)' }}>
                       {log.ipAddress || '—'}
                     </td>
 
                     {/* Thiết bị / Trình duyệt */}
-                    <td style={{ padding: '12px 14px', verticalAlign: 'middle', maxWidth: '240px' }}>
+                    <td style={{ padding: '12px 14px', verticalAlign: 'middle', maxWidth: '300px' }}>
                       <div 
                         title={log.userAgent || 'Không có thông tin'}
                         style={{
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
-                          fontSize: '12px',
+                          fontSize: '12.5px',
                           color: 'var(--text-secondary)',
                           cursor: 'default',
                         }}
                       >
-                        {deviceInfo.browser} ({deviceInfo.os}) - {log.userAgent || '—'}
+                        {log.userAgent || '—'}
                       </div>
                     </td>
 

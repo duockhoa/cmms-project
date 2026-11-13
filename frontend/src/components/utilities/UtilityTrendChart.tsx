@@ -284,9 +284,6 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
       {/* CHẾ ĐỘ 1: BIỂU ĐỒ ĐƯỜNG 2 BÊN SONG SONG CẠNH NHAU TRÊN 1 KHUNG */}
       {chartSubMode === 'LINE' && (
         <div className="dual-charts-grid">
-          {/* ========================================================= */}
-          {/* CỘT TRÁI: TỔNG HỢP NGUỒN CẤP & TIÊU THỤ TOÀN NHÀ MÁY     */}
-          {/* ========================================================= */}
           <div className="sub-chart-box">
             <div className="sub-chart-header">
               <div className="sub-chart-title-group">
@@ -525,9 +522,6 @@ export const UtilityTrendChart: React.FC<UtilityTrendChartProps> = ({
             </div>
           </div>
 
-          {/* ========================================================= */}
-          {/* CỘT PHẢI: DIỄN BIẾN TIÊU THỤ TỪNG VỊ TRÍ / PHÂN XƯỞNG CON */}
-          {/* ========================================================= */}
           {pointsWithColors.length > 0 && (
             <div className="sub-chart-box points-box">
               <div className="sub-chart-header">

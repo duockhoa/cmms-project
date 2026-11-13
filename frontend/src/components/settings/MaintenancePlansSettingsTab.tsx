@@ -60,7 +60,7 @@ export const MaintenancePlansSettingsTab: React.FC = () => {
         onViewHistory={openHistory}
       />
 
-      {/* ===================== MODALS ===================== */}
+
 
       <CreateScheduleModal
         isOpen={isAddOpen || Boolean(editTarget)}

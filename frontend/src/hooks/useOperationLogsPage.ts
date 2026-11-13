@@ -139,7 +139,6 @@ export function useOperationLogsPage() {
     }
   }, [showScanner, equipmentList, navigate]);
 
-  // THUẬT TOÁN TỐI ƯU HÓA: Memoized Search Filter O(N)
   const filteredEquipment = useMemo(() => {
     const term = search.trim().toLowerCase();
     return equipmentList.filter((eq) => {

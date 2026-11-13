@@ -211,7 +211,6 @@ export const SparePartsPage: React.FC = () => {
     });
   };
 
-  // Single-Pass Vector Reduction O(N)
   const { totalItems, lowStockItems, outOfStockItems, totalValue, bannerWarnings } = useMemo(() => {
     const lowStock: any[] = [];
     const outOfStock: any[] = [];

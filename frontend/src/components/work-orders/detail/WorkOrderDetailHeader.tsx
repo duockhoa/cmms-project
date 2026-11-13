@@ -331,7 +331,7 @@ export const WorkOrderDetailHeader: React.FC<any> = ({
         </div>
       </div>
 
-      {/* ── MODAL ĐÁNH DẤU HỦY PHIẾU BẢO TRÌ ── */}
+      {/* Modal xác nhận hủy phiếu */}
       {isCancelModalOpen && (
         <Modal
           isOpen={isCancelModalOpen}

@@ -37,9 +37,6 @@ export const useWorkOrdersPage = () => {
   const [woTransactions, setWoTransactions] = useState<any[]>([]);
   const [materialLoading, setMaterialLoading] = useState(false);
 
-  // THUẬT TOÁN TỐI ƯU HÓA: Precomputed Hash Map O(T)
-  // Thay vì quét toàn bộ mảng woTransactions lặp đi lặp lại với O(M x T),
-  // tính toán trước bảng tổng hợp xuất/trả với O(T) cho phép tra cứu tức thì O(1)
   const txSummaryByItemId = useMemo(() => {
     const map = new Map<string, { issued: number; returned: number }>();
     for (const t of woTransactions) {

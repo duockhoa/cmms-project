@@ -184,7 +184,7 @@ export const useEquipmentParameterAssignment = () => {
     });
   }, [equipmentList, eqSearch, selectedLocation]);
 
-  // ===================== TAB 1: TECH SPECS INTERACTION =====================
+  // Tech specs interaction
   const handleToggleTechSpec = (indexInFull: number) => {
     setTechSpecRows((prev) => {
       const copy = [...prev];
@@ -236,7 +236,7 @@ export const useEquipmentParameterAssignment = () => {
 
   const selectedTechCount = useMemo(() => techSpecRows.filter((r) => r.isSelected).length, [techSpecRows]);
 
-  // ===================== TAB 2: OPERATING PARAMS INTERACTION =====================
+  // Operating params interaction
   const handleToggleOpParam = (indexInFull: number) => {
     setOpParamRows((prev) => {
       const copy = [...prev];
@@ -290,7 +290,7 @@ export const useEquipmentParameterAssignment = () => {
 
   const selectedOpCount = useMemo(() => opParamRows.filter((r) => r.isSelected).length, [opParamRows]);
 
-  // ===================== SAVE ALL CHANGES FOR CURRENT EQUIPMENT =====================
+  // Lưu thay đổi
   const handleSaveAll = async () => {
     if (!selectedEqId) return;
     setSaving(true);

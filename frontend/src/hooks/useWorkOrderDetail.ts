@@ -657,8 +657,7 @@ export const useWorkOrderDetail = ({
     }
   };
 
-  // ==================== WORK ORDER SESSIONS ====================
-
+  // Work order sessions
   const handleStartSession = async (taskContent?: string) => {
     if (Boolean(wo?.requestId || wo?.request) && !wo?.initialAssessment) {
       toast.warning('Yêu cầu quy trình', 'Vui lòng hoàn thành "Đánh giá sơ bộ sự cố (SLA 4h)" trước khi bắt đầu thực hiện!');

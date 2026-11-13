@@ -25,8 +25,6 @@ export const Dashboard: React.FC = () => {
 
   const recentRequests = data?.recentRequests;
 
-  // THUẬT TOÁN TỐI ƯU HÓA: Single-Pass Vector Reduction O(N)
-  // Gom 5 lần duyệt mảng độc lập về 1 vòng lặp duy nhất và ghi nhớ kết quả qua useMemo
   const requestStats = useMemo(() => {
     let urgentCount = 0;
     let pendingCount = 0;

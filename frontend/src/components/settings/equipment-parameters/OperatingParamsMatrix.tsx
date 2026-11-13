@@ -15,7 +15,6 @@ export const OperatingParamsMatrix: React.FC<OperatingParamsMatrixProps> = ({ mo
 
   return (
     <>
-{/* ===================== TAB 2: OPERATING PARAMS DIRECT MATRIX ===================== */}
 {activeSubTab === 'OPERATING_PARAMS' && (
   <div>
     {/* Toolbar inside Tab 2 */}

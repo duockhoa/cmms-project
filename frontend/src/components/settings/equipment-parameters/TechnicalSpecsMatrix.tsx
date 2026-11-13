@@ -15,7 +15,6 @@ export const TechnicalSpecsMatrix: React.FC<TechnicalSpecsMatrixProps> = ({ mode
 
   return (
     <>
-{/* ===================== TAB 1: TECHNICAL SPECS DIRECT MATRIX ===================== */}
 {activeSubTab === 'TECHNICAL_SPECS' && (
   <div>
     {/* Toolbar inside Tab 1 */}

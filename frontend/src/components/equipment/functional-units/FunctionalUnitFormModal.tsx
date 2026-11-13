@@ -12,9 +12,6 @@ export const FunctionalUnitFormModal: React.FC<any> = ({
   setModalMode, setSelectedLibItems, submitting, units,
 }) => (
   <>
-      {/* ==================================================== */}
-      {/* MODAL THÊM / SỬA CỤM CHỨC NĂNG (GIAO DIỆN NÂNG CẤP) */}
-      {/* ==================================================== */}
       {isModalOpen && (
         <Modal
           isOpen={isModalOpen}

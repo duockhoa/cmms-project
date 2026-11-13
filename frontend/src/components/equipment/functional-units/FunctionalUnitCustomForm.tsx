@@ -4,9 +4,6 @@ export const FunctionalUnitCustomForm: React.FC<any> = ({
   allCategories, editingUnit, formData, modalMode, setFormData,
 }) => (
   <>
-            {/* ==================================================== */}
-            {/* TAB 2: TẠO CỤM MỚI ĐỘC LẬP / CHỈNH SỬA CỤM HIỆN CÓ  */}
-            {/* ==================================================== */}
             {(editingUnit || modalMode === 'CUSTOM') && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div>

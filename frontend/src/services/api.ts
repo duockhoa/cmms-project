@@ -713,9 +713,7 @@ export const api = {
   getSystemSettings: () => request('/system-settings'),
   updateSystemSetting: (data: { key: string; value: string }) => request('/system-settings', { method: 'POST', body: JSON.stringify(data) }),
 
-  // ==========================================
-  // ROLES & PERMISSIONS
-  // ==========================================
+  // Roles & Permissions
   getRoles: () => request('/roles'),
   getRole: (id: string) => request(`/roles/${id}`),
   createRole: (role: any) => request('/roles', { method: 'POST', body: JSON.stringify(role) }),
@@ -776,9 +774,7 @@ export const api = {
   getUserMergeHistory: (userId: string) => request(`/users/${encodeURIComponent(userId)}/merge-history`),
   getUserMergeAudit: (auditId: string) => request(`/users/merge-audits/${encodeURIComponent(auditId)}`),
 
-  // ==========================================
-  // CHECKLIST TEMPLATES & LIBRARY
-  // ==========================================
+  // Checklist templates & library
   getChecklistLibrary: () => request('/checklist-library'),
   createChecklistLibraryItem: (data: any) => request('/checklist-library', { method: 'POST', body: JSON.stringify(data) }),
   updateChecklistLibraryItem: (id: string, data: any) => request(`/checklist-library/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -794,9 +790,7 @@ export const api = {
   deleteChecklistTemplateItem: (templateId: string, itemId: string) => request(`/checklist-templates/${templateId}/items/${itemId}`, { method: 'DELETE' }),
   reorderChecklistTemplateItems: (templateId: string, items: any[]) => request(`/checklist-templates/${templateId}/items/reorder`, { method: 'PUT', body: JSON.stringify(items) }),
 
-  // ==========================================
-  // FEEDBACKS & BUG REPORTS
-  // ==========================================
+  // Feedbacks & Bug reports
   getFeedbacks: (params?: { status?: string; type?: string; search?: string }) => {
     return request(`/feedbacks${toQueryString(params)}`);
   },
@@ -805,9 +799,7 @@ export const api = {
   updateFeedback: (id: string, data: any) => request(`/feedbacks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteFeedback: (id: string) => request(`/feedbacks/${id}`, { method: 'DELETE' }),
 
-  // ==========================================
-  // UTILITIES & ENERGY MONITORING (ĐIỆN, NƯỚC, HỆ THỐNG PHỤ TRỢ)
-  // ==========================================
+  // Utilities & Energy monitoring
   getUtilityPoints: (params?: { type?: string; location?: string; search?: string; isActive?: boolean }) => {
     return request(`/utilities/points${toQueryString(params)}`);
   },
@@ -1001,9 +993,7 @@ export const api = {
     });
   },
 
-  // ==========================================
-  // OEE MEASUREMENT & ANALYTICS (KH.DK-SX.2026.03)
-  // ==========================================
+  // OEE measurement & analytics
   getOeeShiftContext: (equipmentId: string, params?: { recordDate?: string; shift?: string }) => {
     return request(`/equipment/${equipmentId}/oee-records/shift-context${toQueryString(params)}`);
   },

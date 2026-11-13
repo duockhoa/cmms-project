@@ -7,9 +7,6 @@ export const FunctionalUnitLibraryPicker: React.FC<any> = ({
   selectedLibItems, setFormData, setLibCategory, setLibSearch, units,
 }) => (
   <>
-            {/* ==================================================== */}
-            {/* TAB 1: CHỌN TỪ THƯ VIỆN CÓ SẴN (CHỌN ĐƯỢC NHIỀU CỤM) */}
-            {/* ==================================================== */}
             {!editingUnit && modalMode === 'LIBRARY' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {/* Thanh tìm kiếm & lọc nhóm */}

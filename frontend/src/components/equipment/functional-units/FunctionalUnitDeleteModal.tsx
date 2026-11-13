@@ -6,8 +6,6 @@ export const FunctionalUnitDeleteModal: React.FC<any> = ({
   handleConfirmDelete, isDeleting, setUnitToDelete, unitToDelete,
 }) => (
   <>
-      {/* MODAL XÁC NHẬN XÓA CỤM CHỨC NĂNG                     */}
-      {/* ==================================================== */}
       {unitToDelete && (
         <Modal
           isOpen={Boolean(unitToDelete)}
