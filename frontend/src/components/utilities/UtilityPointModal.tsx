@@ -26,6 +26,11 @@ export const UtilityPointModal: React.FC<UtilityModalProps> = ({ model }) => {
                     onChange={(e) => setPointForm({ ...pointForm, code: e.target.value })}
                     className="modal-input"
                   />
+                  {editingPoint && pointForm.code.trim().toUpperCase() !== editingPoint.code.trim().toUpperCase() && (
+                    <p role="note" style={{ margin: '6px 0 0', fontSize: '12px', color: '#92400e' }}>
+                      Sau khi đổi mã, cần in lại tem QR và cập nhật mã ở nguồn đồng bộ (nếu có). Lịch sử ghi số vẫn được giữ nguyên.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="modal-label required">Loại tiện ích *</label>

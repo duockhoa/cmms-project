@@ -95,38 +95,61 @@ export class UtilitiesService {
     return point;
   }
 
+  private normalizePointCode(value: unknown): string {
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new BadRequestException('Mã điểm đo không được để trống.');
+    }
+    return value.trim().toUpperCase();
+  }
+
+  private duplicatePointCode(code: string) {
+    return new BadRequestException(`Mã điểm đo ${code} đã tồn tại trên hệ thống.`);
+  }
+
   async createPoint(data: any) {
+    const code = this.normalizePointCode(data.code);
     const existing = await this.prisma.utilityPoint.findUnique({
-      where: { code: data.code.trim().toUpperCase() },
+      where: { code },
     });
     if (existing) {
-      throw new BadRequestException(`Mã điểm đo ${data.code} đã tồn tại trên hệ thống.`);
+      throw this.duplicatePointCode(code);
     }
 
-    return this.prisma.utilityPoint.create({
-      data: {
-        code: data.code.trim().toUpperCase(),
-        name: data.name.trim(),
-        type: data.type,
-        location: data.location || 'Chưa xác định',
-        tariffType: data.tariffType || 'SINGLE',
-        multiplier: Number(data.multiplier) || 1.0,
-        unit: data.unit || (data.type === 'ELECTRICITY' ? 'kWh' : data.type === 'WATER' ? 'm3' : 'Giờ'),
-        currentStatus: data.currentStatus || 'RUNNING',
-        lastReadingValue: Number(data.lastReadingValue) || 0,
-        isSupplyMeter: Boolean(data.isSupplyMeter),
-        isRecycledWater: Boolean(data.isRecycledWater),
-        isExcludedFromTotal: Boolean(data.isExcludedFromTotal),
-        description: data.description,
-        isActive: data.isActive !== false,
-      },
-    });
+    try {
+      return await this.prisma.utilityPoint.create({
+        data: {
+          code,
+          name: data.name.trim(),
+          type: data.type,
+          location: data.location || 'Chưa xác định',
+          tariffType: data.tariffType || 'SINGLE',
+          multiplier: Number(data.multiplier) || 1.0,
+          unit: data.unit || (data.type === 'ELECTRICITY' ? 'kWh' : data.type === 'WATER' ? 'm3' : 'Giờ'),
+          currentStatus: data.currentStatus || 'RUNNING',
+          lastReadingValue: Number(data.lastReadingValue) || 0,
+          isSupplyMeter: Boolean(data.isSupplyMeter),
+          isRecycledWater: Boolean(data.isRecycledWater),
+          isExcludedFromTotal: Boolean(data.isExcludedFromTotal),
+          description: data.description,
+          isActive: data.isActive !== false,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') throw this.duplicatePointCode(code);
+      throw error;
+    }
   }
 
   async updatePoint(id: string, data: any) {
-    await this.getPointByIdOrCode(id);
+    const point = await this.getPointByIdOrCode(id);
 
     const updateData: any = {};
+    if (data.code !== undefined) {
+      const code = this.normalizePointCode(data.code);
+      const existing = await this.prisma.utilityPoint.findUnique({ where: { code } });
+      if (existing && existing.id !== point.id) throw this.duplicatePointCode(code);
+      updateData.code = code;
+    }
     if (data.name !== undefined) updateData.name = data.name.trim();
     if (data.location !== undefined) updateData.location = data.location;
     if (data.type !== undefined) updateData.type = data.type;
@@ -141,10 +164,15 @@ export class UtilitiesService {
     if (data.description !== undefined) updateData.description = data.description;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
-    return this.prisma.utilityPoint.update({
-      where: { id },
-      data: updateData,
-    });
+    try {
+      return await this.prisma.utilityPoint.update({
+        where: { id: point.id },
+        data: updateData,
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002' && updateData.code !== undefined) throw this.duplicatePointCode(updateData.code);
+      throw error;
+    }
   }
 
   async deletePoint(id: string) {
