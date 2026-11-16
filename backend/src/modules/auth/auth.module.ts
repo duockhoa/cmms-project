@@ -7,6 +7,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { BrowserSessionService } from './browser-session.service';
+import { SessionMaintenanceService } from './session-maintenance.service';
 
 @Global()
 @Module({
@@ -16,8 +17,8 @@ import { BrowserSessionService } from './browser-session.service';
     PrismaModule,
   ],
   controllers: [AuthController],
-  providers: [JwtStrategy, HrmIdentityService, ResourceAccessService, BrowserSessionService],
-  exports: [PassportModule, HrmIdentityService, ResourceAccessService],
+  providers: [JwtStrategy, HrmIdentityService, ResourceAccessService, BrowserSessionService, SessionMaintenanceService],
+  exports: [PassportModule, HrmIdentityService, ResourceAccessService, BrowserSessionService],
 })
 export class AuthModule {
   constructor(private configService: ConfigService) {

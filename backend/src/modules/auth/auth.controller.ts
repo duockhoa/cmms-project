@@ -30,8 +30,8 @@ export class AuthController {
   async login(@Body() body: { username: string; password: string }, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
     this.sessions.assertOrigin(request);
     this.sessions.throttle(request);
-    const { accessToken, refreshToken, profile } = await this.identities.login(body.username, body.password);
-    return this.sessions.open(request, response, accessToken, refreshToken, String(profile.id));
+    return this.sessions.authenticate(request, response, 'DIRECT_LOGIN', [body.username, body.password],
+      () => this.identities.login(body.username, body.password));
   }
 
   @ApiStandardResponse({ summary: 'Đăng xuất khỏi hệ thống', method: 'POST', path: '/auth/logout', isPublic: true })
@@ -63,10 +63,12 @@ export class AuthController {
     this.sessions.throttle(request);
     const authorization = request.headers.authorization;
     if (!authorization?.startsWith('Bearer ')) throw new UnauthorizedException('Cần xác minh phiên SSO.');
-    const profile = await this.identities.validateSession(authorization.slice(7), true);
-    await this.identities.resolve(profile);
-    const pair = await this.identities.refreshSession(body.refreshToken, String(profile.id));
-    return this.sessions.open(request, response, pair.accessToken, pair.refreshToken, String(profile.id));
+    return this.sessions.authenticate(request, response, 'LEGACY_SSO', [authorization.slice(7), body.refreshToken], async () => {
+      const profile = await this.identities.validateSession(authorization.slice(7), true);
+      await this.identities.resolve(profile);
+      const pair = await this.identities.exchangeRefreshToken(body.refreshToken);
+      return { ...pair, profile, validateAfterStore: true };
+    });
   }
 
   @ApiStandardResponse({ summary: 'Lấy thông tin tài khoản, vai trò và danh sách quyền hạn của tôi', method: 'GET', path: '/auth/me' })

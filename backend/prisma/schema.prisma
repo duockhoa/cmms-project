@@ -134,10 +134,39 @@ model BrowserSession {
   id           String   @id @db.VarChar(64)
   hrmId        String
   refreshToken String   @db.Text
+  accessToken  String?  @db.Text // Encrypted; used to coalesce refreshes across workers
+  refreshedAt  DateTime?
+  state        String   @default("ACTIVE") @db.VarChar(32)
+  source       String   @default("UNKNOWN") @db.VarChar(32)
+  tokenOwnership String @default("UNKNOWN") @db.VarChar(16)
   expiresAt    DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  @@index([expiresAt])
+  @@index([hrmId, state])
+}
+
+model BrowserAuthOperation {
+  id          String   @id @db.VarChar(64)
+  fingerprint String   @db.VarChar(64)
+  result      String?  @db.Text // Encrypted cookie and response, short-lived replay only
+  sessionId   String?  @db.VarChar(64)
+  state       String   @default("PENDING") @db.VarChar(16)
+  expiresAt   DateTime
+
+  @@index([expiresAt])
+}
+
+model HrmRevocationTask {
+  id           String   @id @db.VarChar(64)
+  hrmId        String
+  refreshToken String   @db.Text
+  attempts     Int      @default(0)
+  availableAt  DateTime @default(now())
+  expiresAt    DateTime
+
+  @@index([availableAt])
   @@index([expiresAt])
 }
 

@@ -2,6 +2,8 @@
 
 Triển khai trong mã nguồn ngày 04/11/2026. Chưa chạy migration hoặc đưa lên máy chủ.
 
+**Cập nhật 16/11/2026:** xem [cải thiện vòng đời token HRM](hrm-token-lifecycle-fix.md) cho hành vi hiện tại, migration bổ sung, chính sách cookie dùng chung, logout, MCP và tác vụ dọn phiên. Luồng bên dưới mô tả bản triển khai ban đầu; các khác biệt đã được cập nhật trong tài liệu mới.
+
 ## Luồng mới
 
 1. Trình duyệt gọi `POST /api/v1/auth/login` với username/password qua HTTPS. Backend xác minh HRM, trạng thái cục bộ và quyền vào ứng dụng.

@@ -11,6 +11,7 @@ export class OeeRecordsService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
+    if (process.env.NODE_ENV === 'development' && process.env.LOCAL_REVIEW_MODE === 'true') return;
     try {
       // Tự động chuẩn hóa định mức OEE mặc định cho các Thiết bị sản xuất trọng yếu nếu chưa có thiết bị nào được cấu hình
       const criticalCount = await this.prisma.equipment.count({

@@ -25,7 +25,7 @@ export const invalidatePermissionsCache = (background = false) => {
   generation++;
   profilePromise = null;
   invalidateMeCache();
-  if (!background) markSessionUnverified();
+  markSessionUnverified();
   publish({ ...state, loading: !background || !state.user, checking: true, error: null, sessionVersion: getSessionVersion() });
 };
 

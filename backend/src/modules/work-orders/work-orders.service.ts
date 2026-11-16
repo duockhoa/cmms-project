@@ -81,6 +81,7 @@ export class WorkOrdersService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    if (process.env.NODE_ENV === 'development' && process.env.LOCAL_REVIEW_MODE === 'true') return;
     try {
       const workOrders = await this.prisma.workOrder.findMany({
         where: { assignedTechnicianId: null, technicianName: { not: null } },

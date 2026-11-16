@@ -14,6 +14,9 @@
     "oee:backfill": "node --env-file=.env -r ts-node/register scripts/backfill-oee-records.ts",
     "oee:audit": "node --env-file=.env -r ts-node/register scripts/audit-oee-records.ts",
     "oee:verify": "node --env-file=.env -r ts-node/register scripts/verify-oee-records.ts",
+    "sessions:audit": "node --env-file=.env -r ts-node/register scripts/maintain-browser-sessions.ts --audit",
+    "sessions:cleanup": "node --env-file=.env -r ts-node/register scripts/maintain-browser-sessions.ts --execute",
+    "test:auth:mysql": "node --env-file=.env -r ts-node/register scripts/verify-browser-sessions-mysql.ts --isolated-local-test",
     "test": "npx jest --runInBand"
   },
   "dependencies": {

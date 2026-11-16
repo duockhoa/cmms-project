@@ -5,96 +5,114 @@ import {
   clearAuthTokens,
   getRawAccessToken,
   getTokenExpiry,
-  getSessionVersion, getVerifiedHrmId, isSessionVerified, markSessionVerified, AUTH_CHANGED_EVENT,
+  getSessionVersion, getVerifiedHrmId, isSessionVerified, markSessionVerified, AUTH_CHANGED_EVENT, isLocallyLoggedOut,
 } from '../utils/authStorage';
 import { catalogCache } from './catalogCache';
 
 export const API_HOST = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_BASE = API_HOST + '/api/v1';
 let cookieSession: { csrfToken: string; hrmId: string } | null = null;
+let pendingHandoff: { token: string; refreshToken: string; operationId: string; version: number; expires: number } | null = null;
 
-async function getCookieSession(expectedHrmId?: string) {
-  if (!cookieSession || cookieSession.hrmId !== expectedHrmId) {
+async function getCookieSession(expectedHrmId?: string, force = false) {
+  if (force || !cookieSession || cookieSession.hrmId !== expectedHrmId) {
+    const version = getSessionVersion();
     const response = await fetch(`${API_BASE}/auth/session`, { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(10000) });
-    if (!response.ok) throw new Error('AUTH_REQUIRED');
+    if (!response.ok) {
+      if (response.status === 401 && expectedHrmId && version === getSessionVersion()) clearAuthTokens();
+      throw new Error(response.status === 401 ? 'AUTH_REQUIRED' : 'SESSION_REFRESH_UNAVAILABLE');
+    }
     cookieSession = await response.json();
   }
   if (!cookieSession?.csrfToken || (expectedHrmId && cookieSession.hrmId !== expectedHrmId)) throw new Error('SESSION_CHANGED');
   return cookieSession;
 }
 
-export async function restoreBrowserSession(): Promise<string | null> {
-  const version = getSessionVersion();
-  try {
-    if (getRawAccessToken() && !getVerifiedHrmId()) return null;
-    const session = await getCookieSession();
-    const response = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken },
-      body: JSON.stringify({ expectedHrmId: session.hrmId }), signal: AbortSignal.timeout(20000),
-    });
-    if (!response.ok || version !== getSessionVersion()) return null;
-    const data = await response.json();
-    if (version !== getSessionVersion()) return null;
-    saveAuthTokens(data.accessToken, null, session.hrmId);
-    markCookieSession(session.hrmId);
-    return data.accessToken;
-  } catch { return null; }
+export async function withAuthSessionLock<T>(work: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== 'undefined' && navigator.locks) return await navigator.locks.request('qltb-auth-session', work);
+  return await work(); // Backend locking and idempotency remain authoritative.
 }
 
-export async function logoutSession(): Promise<boolean> {
+export async function restoreBrowserSession(): Promise<string | null> {
+  if (isLocallyLoggedOut() || (getRawAccessToken() && !getVerifiedHrmId())) return null;
+  return refreshBrowserSession(true);
+}
+
+export interface LogoutResult {
+  localLoggedOut: boolean;
+  hrmRevocation: 'not_requested_shared' | 'revoked' | 'pending' | 'unknown';
+  sessionChanged?: boolean;
+}
+export async function logoutSession(): Promise<LogoutResult> {
   const version = getSessionVersion();
   const expectedHrmId = getVerifiedHrmId();
   try {
-    if (!expectedHrmId) return false;
-    const session = await getCookieSession(expectedHrmId);
-    if (version !== getSessionVersion()) return false;
+    if (!expectedHrmId) return { localLoggedOut: false, hrmRevocation: 'unknown' };
+    const session = await getCookieSession(expectedHrmId, true);
+    if (version !== getSessionVersion()) return { localLoggedOut: false, hrmRevocation: 'unknown', sessionChanged: true };
     const response = await fetch(`${API_BASE}/auth/logout`, {
       method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken },
       body: JSON.stringify({ expectedHrmId }), signal: AbortSignal.timeout(20000),
     });
-    return response.ok && (await response.json()).revoked === true;
-  } catch { return false; }
+    if (!response.ok) return { localLoggedOut: false, hrmRevocation: 'unknown' };
+    const data = await response.json();
+    if (version !== getSessionVersion()) return { localLoggedOut: false, hrmRevocation: 'unknown', sessionChanged: true };
+    return { localLoggedOut: data.localLoggedOut === true || data.revoked === true,
+      hrmRevocation: data.hrmRevocation || (data.revoked === true ? 'revoked' : 'unknown') };
+  } catch { return { localLoggedOut: false, hrmRevocation: 'unknown', sessionChanged: version !== getSessionVersion() }; }
   finally { if (version === getSessionVersion()) { cookieSession = null; clearAuthTokens(); invalidateMeCache(); } }
 }
 
 let refreshPromise: Promise<string | null> | null = null;
 let refreshVersion = -1;
 let silentRefreshTimer: any = null;
+let refreshFailures = 0;
 
 export async function refreshAccessToken(): Promise<string | null> {
+  return refreshBrowserSession(false);
+}
+async function refreshBrowserSession(restore: boolean): Promise<string | null> {
+  if (isLocallyLoggedOut()) return null;
   const version = getSessionVersion();
   if (refreshPromise && refreshVersion === version) return refreshPromise;
   const expectedHrmId = getVerifiedHrmId();
-  if (!hasRefreshSession() || !expectedHrmId) return null;
-  const pending = (async () => {
+  if (!restore && (!hasRefreshSession() || !expectedHrmId)) return null;
+  const pending = withAuthSessionLock(async () => {
+    if (version !== getSessionVersion()) return expectedHrmId && getVerifiedHrmId() === expectedHrmId ? getAccessToken() : null;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     try {
-      const session = await getCookieSession(expectedHrmId);
+      const session = await getCookieSession(expectedHrmId || undefined, true);
       if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
       // The backend verifies that the refreshed access token still belongs to this HRM user.
       const response = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken },
-        body: JSON.stringify({ expectedHrmId }), signal: controller.signal,
+        body: JSON.stringify({ expectedHrmId: session.hrmId }), signal: controller.signal,
       });
-      if (getSessionVersion() !== version) throw new Error('SESSION_CHANGED');
+      if (getSessionVersion() !== version) {
+        return getVerifiedHrmId() === session.hrmId ? getAccessToken() : null;
+      }
       if (!response.ok) {
-        if (response.status === 401) clearAuthTokens();
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 401 || response.status === 403 || error.code === 'SESSION_REAUTH_REQUIRED') clearAuthTokens();
         throw new Error('SESSION_REFRESH_FAILED');
       }
       const data = await response.json();
       if (getSessionVersion() !== version) throw new Error('SESSION_CHANGED');
-      saveAuthTokens(data.accessToken, null, expectedHrmId);
-      markCookieSession(expectedHrmId);
-      setupSilentRefresh();
+      if (typeof data.accessToken !== 'string') throw new Error('SESSION_REFRESH_FAILED');
+      saveAuthTokens(data.accessToken, null, session.hrmId);
+      markCookieSession(session.hrmId);
+      refreshFailures = 0;
       return data.accessToken;
     } catch {
       return null;
     } finally { clearTimeout(timeoutId); }
-  })();
+  });
   refreshPromise = pending;
   refreshVersion = version;
-  try { return await pending; } finally { if (refreshPromise === pending) refreshPromise = null; }
+  try { return await pending; } finally {
+    if (refreshPromise === pending) refreshPromise = null;
+  }
 }
 
 /**
@@ -110,7 +128,7 @@ export async function ensureValidAccessToken(): Promise<string | null> {
 }
 
 /**
- * Proactive background refresh timer that renews access tokens 2 minutes before expiration
+ * Renew relative to the actual lifetime; short-lived tokens must not refresh every five seconds.
  */
 export function setupSilentRefresh() {
   if (typeof window === 'undefined') return;
@@ -132,13 +150,17 @@ export function setupSilentRefresh() {
   if (!expMs) return;
 
   const now = Date.now();
-  // Refresh 2 minutes before expiration, or in 5 seconds if already near expiration
-  const delay = Math.max(5000, expMs - now - 2 * 60 * 1000);
+  const remaining = expMs - now;
+  const lead = Math.min(2 * 60 * 1000, Math.max(1000, remaining * 0.2));
+  const delay = Math.max(1000, remaining - lead);
 
   silentRefreshTimer = setTimeout(async () => {
     const res = await refreshAccessToken();
     if (res) {
       setupSilentRefresh();
+    } else if (hasRefreshSession() && !isLocallyLoggedOut() && refreshFailures < 3) {
+      const retryDelay = [5000, 15000, 60000][refreshFailures++];
+      silentRefreshTimer = setTimeout(setupSilentRefresh, retryDelay);
     }
   }, delay);
 }
@@ -195,13 +217,21 @@ export async function ensureSessionVerified(): Promise<boolean> {
 
 const responseVersions = new WeakMap<Response, number>();
 export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}) => {
+  const selectedVersion = getSessionVersion();
+  const selectedHrmId = getVerifiedHrmId();
   let token = await ensureValidAccessToken();
   if (!token) throw new Error('AUTH_REQUIRED');
   let version = getSessionVersion();
+  if (selectedVersion !== version) {
+    if (!selectedHrmId || selectedHrmId !== getVerifiedHrmId()) throw new Error('SESSION_CHANGED');
+    token = getAccessToken();
+    if (!token) throw new Error('AUTH_REQUIRED');
+  }
   const isProfile = String(url) === `${API_BASE}/auth/me`;
   if (!isProfile && !isSessionVerified()) {
     const verified = await ensureSessionVerified();
-    if (!verified && !isSessionVerified()) {
+    if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
+    if (!verified) {
       throw new Error('SESSION_NOT_VERIFIED');
     }
     version = getSessionVersion();
@@ -214,7 +244,8 @@ export const fetchWithAuth = async (url: string | URL, options: RequestInit = {}
   if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
   if (response.status === 401) {
     const nextToken = await refreshAccessToken();
-    if (!nextToken) {
+      if (!nextToken) {
+        if (hasRefreshSession()) throw new Error('SESSION_REFRESH_UNAVAILABLE');
       if (version === getSessionVersion()) handleAuthFailure();
       throw new Error('AUTH_REQUIRED');
     }
@@ -245,11 +276,15 @@ async function request(endpoint: string, options: RequestInit = {}) {
 if (typeof window !== 'undefined') {
   window.addEventListener(AUTH_CHANGED_EVENT, () => {
     cookieSession = null;
-    invalidateMeCache();
+    pendingHandoff = null;
+    if (cachedMeVersion !== getSessionVersion()) invalidateMeCache();
     catalogCache.invalidate('all');
     if (silentRefreshTimer) clearTimeout(silentRefreshTimer);
+    silentRefreshTimer = null;
+    refreshFailures = 0;
     refreshPromise = null;
     verificationPromise = null;
+    queueMicrotask(setupSilentRefresh);
   });
 }
 
@@ -612,7 +647,7 @@ export const api = {
     request(`/checklist-executions/${executionId}/cancel`, { method: 'POST', body: JSON.stringify(body) }),
   getMe: async (force = false) => {
     await ensureValidAccessToken();
-    const version = getSessionVersion();
+    let version = getSessionVersion();
     if (force) invalidateMeCache();
     if (cachedMeData && cachedMeVersion === version && Date.now() - cachedMeTimestamp < ME_CACHE_TTL_MS) return cachedMeData;
     if (inFlightMePromise && cachedMeVersion === version) return inFlightMePromise;
@@ -621,16 +656,27 @@ export const api = {
       if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
       const token = getRawAccessToken();
       const handoff = token ? takeHandoffRefreshToken(token) : null;
-      if (handoff) {
-        const response = await fetch(`${API_BASE}/auth/session`, {
-          method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ refreshToken: handoff }), signal: AbortSignal.timeout(20000),
+      if (handoff) pendingHandoff = { token: token!, refreshToken: handoff, operationId: crypto.randomUUID(), version, expires: Date.now() + 120000 };
+      const operation = pendingHandoff;
+      if (operation && operation.token === token && operation.version === version && operation.expires > Date.now()) {
+        const session = await withAuthSessionLock(async () => {
+          if (version !== getSessionVersion()) throw new Error('SESSION_CHANGED');
+          const response = await fetch(`${API_BASE}/auth/session`, {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`,
+              'X-Auth-Operation': operation.operationId },
+            body: JSON.stringify({ refreshToken: operation.refreshToken }), signal: AbortSignal.timeout(20000),
+          });
+          if (!response.ok || version !== getSessionVersion()) throw new Error('SSO_SESSION_IMPORT_FAILED');
+          return response.json();
         });
-        if (!response.ok || version !== getSessionVersion()) throw new Error('SSO_SESSION_IMPORT_FAILED');
-        const session = await response.json();
         if (version !== getSessionVersion() || session.hrmId !== res.identity?.subject) throw new Error('SESSION_CHANGED');
+        if (typeof session.accessToken !== 'string') throw new Error('SSO_SESSION_IMPORT_FAILED');
+        pendingHandoff = null;
+        saveAuthTokens(session.accessToken, null, session.hrmId);
         cookieSession = session;
         markCookieSession(session.hrmId);
+        version = getSessionVersion();
+        cachedMeVersion = version;
       }
       cachedMeData = res;
       cachedMeTimestamp = Date.now();

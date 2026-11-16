@@ -5,6 +5,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { isHrmProfileActive, selectHrmIdentity } from './identity-resolution';
 import { hrmApplicationConfig } from './hrm-application.config';
 
+export class HrmRefreshUncertainException extends ServiceUnavailableException {
+  constructor() { super({ code: 'SESSION_REAUTH_REQUIRED', message: 'Chưa xác định được kết quả gia hạn HRM. Vui lòng đăng nhập lại.' }); }
+}
+export class HrmIdentityMismatchException extends UnauthorizedException {}
+
 @Injectable()
 export class HrmIdentityService {
   private static profiles = new Map<string, { profile: any; expires: number }>();
@@ -71,47 +76,63 @@ export class HrmIdentityService {
     return { accessToken: data.accessToken, refreshToken: data.refreshToken, profile, user };
   }
 
-  async logout(refreshToken: string, expectedHrmId: string) {
-    // Không gửi lệnh thu hồi refresh token lên máy chủ HRM trung tâm khi đăng xuất ở QLTB,
-    // để tránh làm mất phiên đăng nhập của các ứng dụng nội bộ khác đang chạy cùng tài khoản này.
+  applicationOwnsTokens() { return this.config.get<string>('HRM_REFRESH_TOKEN_SCOPE') === 'application'; }
+
+  async logout(refreshToken: string, expectedHrmId: string, source = 'UNKNOWN') {
     HrmIdentityService.invalidateCache();
-    return { revoked: false };
+    // Enable only after HRM confirms tokens from direct login can be revoked independently.
+    if (!this.applicationOwnsTokens() || !['DIRECT_LOGIN', 'MCP_LOGIN'].includes(source)) {
+      return { revoked: false, hrmRevocation: 'not_requested_shared' as const };
+    }
+    if (!refreshToken || !expectedHrmId) throw new UnauthorizedException('Thiếu phiên HRM cần thu hồi.');
+    const root = this.config.get<string>('HRM_API_URL') || 'https://hrmserver.dkpharma.io.vn';
+    let response: Response;
+    try {
+      response = await fetch(`${root.replace(/\/$/, '')}/auth/logout`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }), signal: AbortSignal.timeout(5000),
+      });
+    } catch { throw new ServiceUnavailableException('Chưa thu hồi được phiên HRM.'); }
+    if (!response.ok) throw new ServiceUnavailableException('HRM chưa xác nhận thu hồi phiên.');
+    return { revoked: true, hrmRevocation: 'revoked' as const };
   }
 
   async refreshSession(refreshToken: string, expectedHrmId: string) {
-    return this.refreshPair(refreshToken, expectedHrmId, true);
+    if (!expectedHrmId) throw new UnauthorizedException('Thiếu định danh phiên.');
+    const pair = await this.exchangeRefreshToken(refreshToken);
+    await this.validateRefreshedSession(pair.accessToken, expectedHrmId);
+    return pair;
   }
 
-  private async refreshPair(refreshToken: string, expectedHrmId: string, requireApplication: boolean) {
-    if (typeof refreshToken !== 'string' || !refreshToken || typeof expectedHrmId !== 'string' || !expectedHrmId) {
+  async validateRefreshedSession(accessToken: string, expectedHrmId: string) {
+    const profile = await this.validateSession(accessToken, true);
+    if (String(profile.id) !== expectedHrmId) throw new HrmIdentityMismatchException('Refresh token không thuộc người dùng hiện tại.');
+    return profile;
+  }
+
+  async exchangeRefreshToken(refreshToken: string) {
+    if (typeof refreshToken !== 'string' || !refreshToken) {
       throw new UnauthorizedException('Vui lòng đăng nhập lại để xác nhận phiên.');
     }
     const root = this.config.get<string>('HRM_API_URL') || 'https://hrmserver.dkpharma.io.vn';
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
     try {
       const response = await fetch(`${root.replace(/\/$/, '')}/auth/refresh-token`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }), signal: controller.signal,
+        body: JSON.stringify({ refreshToken }), signal: AbortSignal.timeout(5000),
       });
       if (response.status === 400 || response.status === 401 || response.status === 403) {
         throw new UnauthorizedException('Phiên đã hết hạn. Vui lòng đăng nhập lại.');
       }
-      if (!response.ok) throw new ServiceUnavailableException('Chưa gia hạn được phiên HRM.');
+      if (!response.ok) throw new HrmRefreshUncertainException();
       const data: any = await response.json();
       const accessToken = data.accessToken || data.access_token || data.token;
-      if (typeof accessToken !== 'string' || !accessToken) throw new UnauthorizedException('HRM không trả về token hợp lệ.');
-      const profile = requireApplication
-        ? await this.validateSession(accessToken, true)
-        : await this.getProfile(accessToken, true);
-      if (String(profile.id) !== expectedHrmId) {
-        throw new UnauthorizedException('Refresh token không thuộc người dùng hiện tại. Vui lòng đăng nhập lại.');
-      }
-      return { accessToken, refreshToken: data.refreshToken || data.refresh_token || refreshToken };
+      const nextRefresh = data.refreshToken || data.refresh_token || refreshToken;
+      if (typeof accessToken !== 'string' || !accessToken || typeof nextRefresh !== 'string') throw new HrmRefreshUncertainException();
+      return { accessToken, refreshToken: nextRefresh };
     } catch (error) {
       if (error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof ServiceUnavailableException) throw error;
-      throw new ServiceUnavailableException('Không kết nối được HRM để gia hạn phiên.');
-    } finally { clearTimeout(timeout); }
+      throw new HrmRefreshUncertainException();
+    }
   }
 
   async getProfile(token: string, force = false) {

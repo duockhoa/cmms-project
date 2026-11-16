@@ -34,6 +34,11 @@ export class MailService {
     this.fromAddress = `"${fromName}" <${fromEmail}>`;
     this.frontendUrl = (process.env.APP_FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 
+    if (process.env.NODE_ENV === 'development' && process.env.LOCAL_REVIEW_MODE === 'true') {
+      this.logger.log('[MAIL] Disabled for local review.');
+      return;
+    }
+
     if (host && user && pass) {
       try {
         this.transporter = nodemailer.createTransport({

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useToast } from '../components/common/Toast';
 
-import { extractAndSaveTokensFromUrl, getAccessToken, markCookieSession, saveAuthTokens, getSessionError } from '../utils/authStorage';
-import { API_HOST, api, invalidateMeCache, restoreBrowserSession, setupSilentRefresh } from '../services/api';
+import { extractAndSaveTokensFromUrl, getAccessToken, markCookieSession, saveAuthTokens, getSessionError, isLocallyLoggedOut } from '../utils/authStorage';
+import { API_HOST, api, invalidateMeCache, restoreBrowserSession, setupSilentRefresh, withAuthSessionLock } from '../services/api';
 import { invalidatePermissionsCache } from '../hooks/usePermissions';
 
 const HRM_API_URL = import.meta.env.VITE_HRM_ROOT_URL || 'https://hrmserver.dkpharma.io.vn';
@@ -30,14 +30,21 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const submitting = useRef(false);
 
   // Auto-login if token present in URL or shared root domain cookies (*.dkpharma.io.vn) or refreshable
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('logout') === 'unconfirmed') {
-      setErrorMessage('Đã đăng xuất trên thiết bị này. Chưa xác nhận được việc thu hồi phiên HRM; vui lòng kiểm tra lại trên cổng nhân sự.');
+      setErrorMessage('Đã xóa thông tin đăng nhập trên trình duyệt. Chưa xác nhận được việc kết thúc phiên tại máy chủ QLTB.');
       return;
     }
     extractAndSaveTokensFromUrl();
+    if (isLocallyLoggedOut()) {
+      const hrm = new URLSearchParams(window.location.search).get('hrm');
+      if (hrm === 'pending') setErrorMessage('Đã kết thúc phiên QLTB. Việc thu hồi phiên HRM riêng của ứng dụng đang được thử lại.');
+      if (hrm === 'unknown') setErrorMessage('Đã kết thúc phiên QLTB. Chưa xác nhận được trạng thái thu hồi phiên HRM.');
+      return;
+    }
     if (getSessionError()) setErrorMessage('Các phiên đăng nhập đang mâu thuẫn. Vui lòng đăng nhập lại để xác nhận đúng tài khoản.');
     const token = getAccessToken();
     if (token) {
@@ -46,7 +53,7 @@ export function LoginPage() {
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
       setIsLoading(true);
-      api.getMe().then(() => performRedirect(redirectTo, token)).catch(() => {
+      api.getMe().then(() => performRedirect(redirectTo, getAccessToken())).catch(() => {
         setErrorMessage('Chưa xác minh được phiên đăng nhập. Vui lòng đăng nhập lại.');
       }).finally(() => setIsLoading(false));
       return;
@@ -74,6 +81,7 @@ export function LoginPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting.current) return;
     setErrorMessage('');
 
     if (!username.trim() || !password.trim()) {
@@ -82,13 +90,15 @@ export function LoginPage() {
     }
 
     try {
+      submitting.current = true;
       setIsLoading(true);
 
-      const response = await fetch(`${API_HOST}/api/v1/auth/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+      await withAuthSessionLock(async () => {
+        const response = await fetch(`${API_HOST}/api/v1/auth/login`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'X-Auth-Operation': crypto.randomUUID() },
+          body: JSON.stringify({ username, password }),
       });
 
       if (!response.ok) {
@@ -115,12 +125,14 @@ export function LoginPage() {
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect') || '/';
       performRedirect(redirectTo, accessToken);
+      });
     } catch (error: any) {
       const msg = error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
       setErrorMessage(msg);
       toast.error('Đăng nhập thất bại', msg);
       console.error('Login failed:', error);
     } finally {
+      submitting.current = false;
       setIsLoading(false);
     }
   };

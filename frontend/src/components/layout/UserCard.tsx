@@ -15,8 +15,9 @@ export default function UserCard({ user }: { user: any }) {
   }, [user?.avatar]);
 
   const handleLogout = async () => {
-    const revoked = await logoutSession();
-    window.location.href = revoked ? '/login' : '/login?logout=unconfirmed';
+    const result = await logoutSession();
+    if (result.sessionChanged) return;
+    window.location.href = result.localLoggedOut ? `/login?logout=local&hrm=${encodeURIComponent(result.hrmRevocation)}` : '/login?logout=unconfirmed';
   };
 
   // Click outside to close dropdown

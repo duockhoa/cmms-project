@@ -79,24 +79,29 @@ describe('HrmIdentityService', () => {
     global.fetch = jest.fn().mockResolvedValueOnce(response({ accessToken: 'new-b' })).mockResolvedValueOnce(response(profile)).mockResolvedValueOnce(response([{ id: 7, key: 'equipment', is_active: true }])) as any;
     await expect(service.refreshSession('refresh-b', '1120')).resolves.toEqual({ accessToken: 'new-b', refreshToken: 'refresh-b' });
   });
-  it('revokes the rotated refresh token even after application access has been removed', async () => {
-    global.fetch = jest.fn().mockResolvedValueOnce(response({ accessToken: 'new-b', refreshToken: 'rotated-b' }))
-      .mockResolvedValueOnce(response(profile)).mockResolvedValueOnce(response({})) as any;
-    await expect(service.logout('refresh-b', '1120')).resolves.toEqual({ revoked: true });
-    expect(global.fetch).toHaveBeenLastCalledWith('https://hrm.example.test/auth/logout', expect.objectContaining({
-      body: JSON.stringify({ refreshToken: 'rotated-b' }),
-    }));
-    expect((global.fetch as jest.Mock).mock.calls.some(([url]) => url.endsWith('/users/me/applications'))).toBe(false);
+  it('ends shared or unknown sessions locally without revoking another application session', async () => {
+    global.fetch = jest.fn() as any;
+    await expect(service.logout('refresh-b', '1120')).resolves.toEqual({ revoked: false, hrmRevocation: 'not_requested_shared' });
+    await expect(service.logout('refresh-b', '1120', 'DIRECT_LOGIN')).resolves.toHaveProperty('revoked', false);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
-  it('does not report successful revocation when HRM logout fails', async () => {
-    global.fetch = jest.fn().mockResolvedValueOnce(response({ accessToken: 'new-b' }))
-      .mockResolvedValueOnce(response(profile)).mockResolvedValueOnce(response({}, 503)) as any;
-    await expect(service.logout('refresh-b', '1120')).rejects.toBeInstanceOf(ServiceUnavailableException);
+  it('revokes a confirmed application token directly without minting another token', async () => {
+    const configured = new HrmIdentityService({ get: (key: string) => ({ HRM_API_URL: 'https://hrm.example.test', HRM_REFRESH_TOKEN_SCOPE: 'application' }[key]) } as any, prisma);
+    global.fetch = jest.fn().mockResolvedValue(response({})) as any;
+    await expect(configured.logout('refresh-b', '1120', 'DIRECT_LOGIN')).resolves.toEqual({ revoked: true, hrmRevocation: 'revoked' });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith('https://hrm.example.test/auth/logout', expect.objectContaining({ body: JSON.stringify({ refreshToken: 'refresh-b' }) }));
   });
-  it('never revokes a refresh token belonging to a different verified identity', async () => {
-    global.fetch = jest.fn().mockResolvedValueOnce(response({ accessToken: 'new-a' }))
-      .mockResolvedValueOnce(response({ ...profile, id: 'another-user' })) as any;
-    await expect(service.logout('refresh-a', '1120')).rejects.toBeInstanceOf(UnauthorizedException);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+  it('never revokes SSO or migrated unknown tokens even when application mode is enabled', async () => {
+    const configured = new HrmIdentityService({ get: (key: string) => key === 'HRM_REFRESH_TOKEN_SCOPE' ? 'application' : undefined } as any, prisma);
+    global.fetch = jest.fn() as any;
+    await expect(configured.logout('refresh-b', '1120', 'LEGACY_SSO')).resolves.toHaveProperty('revoked', false);
+    await expect(configured.logout('refresh-b', '1120', 'UNKNOWN')).resolves.toHaveProperty('revoked', false);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+  it('reports revocation failure for the durable retry task', async () => {
+    const configured = new HrmIdentityService({ get: (key: string) => key === 'HRM_REFRESH_TOKEN_SCOPE' ? 'application' : undefined } as any, prisma);
+    global.fetch = jest.fn().mockResolvedValue(response({}, 503)) as any;
+    await expect(configured.logout('refresh-b', '1120', 'DIRECT_LOGIN')).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });

@@ -14,11 +14,14 @@ async function run() {
   const { BrowserSessionService } = require(path.join(backend, 'src/modules/auth/browser-session.service.ts'));
   const settings = { NODE_ENV: 'test', SESSION_ENCRYPTION_KEY: 'ab'.repeat(32) };
   const sessions = new Map();
-  const cookieService = new BrowserSessionService({ get: key => settings[key] }, { browserSession: {
+  const delegate = {
     create: async ({ data }) => { sessions.set(data.id, data); return data; },
     findUnique: async ({ where }) => sessions.get(where.id),
     deleteMany: async ({ where }) => ({ count: Number(sessions.delete(where.id)) }),
-  } }, {});
+  };
+  const cookieService = new BrowserSessionService({ get: key => settings[key] }, {
+    browserSession: delegate, $transaction: callback => callback({ browserSession: delegate }),
+  }, { applicationOwnsTokens: () => false });
   const cookieApp = express();
   cookieApp.get('/tests/http-only', async (request, response, next) => {
     try { response.json(await cookieService.open(request, response, 'test-access', 'never-readable-refresh', 'browser-test')); } catch (error) { next(error); }
@@ -103,7 +106,7 @@ async function run() {
         awaitPromise: true, returnByValue: true,
       });
       const value = result.result?.result?.value;
-      assert.equal(value?.passed, true);
+      assert.equal(value?.passed, true, JSON.stringify(value));
       const target = await call('Target.createTarget', { url: base + '/tests/auth-observer.html' });
       const attached = await call('Target.attachToTarget', { targetId: target.result.targetId, flatten: true });
       const observerSession = attached.result.sessionId;
@@ -154,7 +157,9 @@ async function run() {
       });
     }
     await server?.close();
-    await fs.rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {});
+    const resolvedProfile = path.resolve(profile);
+    if (path.dirname(resolvedProfile) !== path.resolve(os.tmpdir()) || !path.basename(resolvedProfile).startsWith('cmms-auth-browser-')) throw new Error('Unexpected browser profile cleanup path');
+    await fs.rm(resolvedProfile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {});
   }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

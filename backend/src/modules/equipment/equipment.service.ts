@@ -13,6 +13,7 @@ export class EquipmentService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    if (process.env.NODE_ENV === 'development' && process.env.LOCAL_REVIEW_MODE === 'true') return;
     try {
       // 1. Chuẩn hóa dữ liệu cũ: chuyển các giá trị accountingCode là chuỗi rỗng '' thành null để không bị kẹt unique constraint
       await this.prisma.$executeRawUnsafe(

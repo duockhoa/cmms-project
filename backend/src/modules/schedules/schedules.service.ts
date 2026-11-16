@@ -34,6 +34,7 @@ export class SchedulesService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    if (process.env.NODE_ENV === 'development' && process.env.LOCAL_REVIEW_MODE === 'true') return;
     // Non-blocking boot-time scan for due maintenance schedules
     setImmediate(async () => {
       try {

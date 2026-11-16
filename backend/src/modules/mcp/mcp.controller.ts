@@ -1,5 +1,7 @@
 import { HrmIdentityService } from '../auth/hrm-identity.service';
-import { Controller, Get, Post, Req, Res, Body, Query, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
+import { BrowserSessionService } from '../auth/browser-session.service';
+import { allowedBrowserOrigins } from '../../common/auth/browser-origin';
+import { Controller, Get, Post, Req, Res, Body, Query, HttpCode, HttpStatus, UnauthorizedException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
@@ -23,19 +25,26 @@ interface AuthCodeData {
 
 // Process-local OAuth stores; restarting requires clients to authorize again.
 const globalOAuthCodes = new Map<string, AuthCodeData>();
-const globalOAuthSessions = new Map<string, { redirectUri: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string; expiresAt: number; clientId: string }>();
 const globalOAuthClients = new Map<string, any>();
 
 @Controller('mcp')
-export class McpController {
+export class McpController implements OnModuleInit, OnModuleDestroy {
   private sseTransports = new Map<string, { transport: SSEServerTransport; actor: any }>();
+  private cleanupTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly mcpService: McpService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly identities: HrmIdentityService,
+    private readonly sessions: BrowserSessionService,
   ) {}
+
+  private pruneCodes() {
+    for (const [code, value] of globalOAuthCodes) if (value.expiresAt <= Date.now()) globalOAuthCodes.delete(code);
+  }
+  onModuleInit() { this.cleanupTimer = setInterval(() => this.pruneCodes(), 60000); this.cleanupTimer.unref(); }
+  onModuleDestroy() { if (this.cleanupTimer) clearInterval(this.cleanupTimer); }
 
   private safeRedirect(uri: any) {
     try { const url = new URL(uri); return !url.hash && !url.username && !url.password &&
@@ -96,6 +105,7 @@ export class McpController {
   @Post('oauth/register')
   @HttpCode(HttpStatus.CREATED)
   registerClient(@Body() body: any) {
+    if (globalOAuthClients.size >= 1000) throw new UnauthorizedException('OAuth client limit reached');
     const clientId = 'cmms-' + crypto.randomBytes(8).toString('hex');
     const clientSecret = 'secret-' + crypto.randomBytes(16).toString('hex');
     const redirectUris = body.redirect_uris;
@@ -133,6 +143,8 @@ export class McpController {
     @Query('code_challenge_method') codeChallengeMethod: string,
     @Res() res: Response,
   ) {
+    res.setHeader('Cache-Control', 'no-store');
+    this.pruneCodes();
     const client = globalOAuthClients.get(clientId);
     if (!client?.redirectUris?.includes(redirectUri) || !this.safeRedirect(redirectUri) ||
         codeChallengeMethod !== 'S256' || !/^[A-Za-z0-9_-]{43}$/.test(codeChallenge || '')) {
@@ -144,25 +156,30 @@ export class McpController {
 
     // Kiểm tra xem trình duyệt đã có phiên đăng nhập hợp lệ chưa
     let existingUser: any = null;
-    let existingToken: string | null = null;
-    const cookieHeader = req.headers.cookie;
-    if (cookieHeader) {
-      const match = cookieHeader.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
-      if (match) existingToken = decodeURIComponent(match[1]);
-    }
+    let sessionContext: { csrfToken: string; hrmId: string } | null = null;
+    let existingToken = await this.sessions.accessForOAuth(req);
     if (!existingToken && req.headers.authorization?.startsWith('Bearer ')) {
       existingToken = req.headers.authorization.substring(7).trim();
     }
     if (existingToken) {
       try {
         existingUser = await this.verifiedUser(existingToken);
-      } catch {
+      } catch (error) {
+        if (!(error instanceof UnauthorizedException)) throw error;
         existingUser = null;
         existingToken = null;
       }
     }
+    try {
+      sessionContext = await this.sessions.inspect(req);
+      if (!existingUser) {
+        const linked = await this.prisma.user.findUnique({ where: { hrmId: sessionContext.hrmId } });
+        if (linked?.isActive && !linked.accessBlocked && !linked.mergedIntoId) existingUser = linked;
+      }
+    } catch (error) { if (!(error instanceof UnauthorizedException)) throw error; }
 
     // Render trực tiếp form đăng nhập & cấp quyền bảo mật, không chuyển hướng lòng vòng
+    const operationId = crypto.randomUUID();
     const html = `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -233,6 +250,9 @@ export class McpController {
     </ul>
 
     <form action="/api/v1/mcp/oauth/authorize/submit" method="POST">
+      <input type="hidden" name="auth_operation" value="${operationId}">
+      <input type="hidden" name="session_csrf" value="${escapeHtml(sessionContext?.csrfToken)}">
+      <input type="hidden" name="session_hrm_id" value="${escapeHtml(sessionContext?.hrmId)}">
       <input type="hidden" name="client_id" value="${escapeHtml(clientId)}">
       <input type="hidden" name="redirect_uri" value="${escapeHtml(redirectUri)}">
       <input type="hidden" name="state" value="${escapeHtml(state)}">
@@ -272,9 +292,15 @@ export class McpController {
     @Body() body: any,
     @Res() res: Response,
   ) {
+    res.setHeader('Cache-Control', 'no-store');
+    if (!req.headers.origin || !allowedBrowserOrigins().has(req.headers.origin)) return res.status(403).json({ error: 'origin_denied' });
+    this.sessions.throttle(req);
+    this.pruneCodes();
+    if (globalOAuthCodes.size >= 10000) return res.status(429).json({ error: 'authorization_limit' });
     const { client_id, redirect_uri, state, code_challenge, code_challenge_method, decision, username, password } = body;
     const client = globalOAuthClients.get(client_id);
-    if (!client?.redirectUris?.includes(redirect_uri) || !this.safeRedirect(redirect_uri)) {
+    if (!client?.redirectUris?.includes(redirect_uri) || !this.safeRedirect(redirect_uri) ||
+        code_challenge_method !== 'S256' || !/^[A-Za-z0-9_-]{43}$/.test(code_challenge || '')) {
       return res.status(400).json({ error: 'invalid_request' });
     }
 
@@ -286,43 +312,42 @@ export class McpController {
       return res.redirect(url.toString());
     }
 
-    let token: string | null = null;
+    let token = await this.sessions.accessForOAuth(req);
     let user: any = null;
 
-    // 1. Nếu người dùng đã có token hợp lệ trong Cookie
-    const cookieHeader = req.headers.cookie;
-    if (cookieHeader) {
-      const match = cookieHeader.match(/(?:^|;\s*)(?:accessToken|access_token|token)=([^;]+)/);
-      if (match) token = decodeURIComponent(match[1]);
-    }
     if (!token && req.headers.authorization?.startsWith('Bearer ')) {
       token = req.headers.authorization.substring(7).trim();
     }
     if (token) {
       try {
         user = await this.verifiedUser(token);
-      } catch {
+      } catch (error) {
+        if (!(error instanceof UnauthorizedException)) throw error;
         user = null;
         token = null;
       }
     }
+    if (!token && typeof body.session_csrf === 'string' && body.session_csrf && typeof body.session_hrm_id === 'string') {
+      // Adapt the same-origin HTML form to the existing cookie + CSRF refresh contract.
+      const refreshed = await this.sessions.refresh({ ...req,
+        headers: { ...req.headers, 'x-csrf-token': body.session_csrf },
+        body: { expectedHrmId: body.session_hrm_id }, is: () => true,
+      } as unknown as Request);
+      token = refreshed.accessToken;
+      user = await this.verifiedUser(token);
+    }
+    if (user && body.session_hrm_id && body.session_hrm_id !== user.hrmId) return res.status(409).json({ error: 'session_changed' });
 
     // 2. Nếu chưa có token, xác thực qua username/password nhập trên form
     if (!token && username && password) {
-      const hrmApiUrl = this.configService.get<string>('HRM_API_URL') || 'https://hrmserver.dkpharma.io.vn';
       try {
-        const response = await fetch(`${hrmApiUrl.replace(/\/$/, '')}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
-          signal: AbortSignal.timeout(8000),
-        });
-        if (response.ok) {
-          const data: any = await response.json();
-          token = data.accessToken || data.access_token || data.token;
-          if (token) user = await this.verifiedUser(token);
-        }
-      } catch {}
+        if (typeof body.auth_operation !== 'string') throw new UnauthorizedException('Missing login operation');
+        req.headers['x-auth-operation'] = body.auth_operation;
+        const session = await this.sessions.authenticate(req, res, 'MCP_LOGIN', [username, password, client_id, redirect_uri],
+          () => this.identities.login(username, password));
+        token = session.accessToken;
+        user = await this.verifiedUser(token);
+      } catch (error) { if (!(error instanceof UnauthorizedException)) throw error; }
     }
 
     if (!token || !user) {
@@ -353,6 +378,8 @@ export class McpController {
   }
 @Post('oauth/token')
   async exchangeToken(@Body() body: any, @Res() res: Response) {
+    res.setHeader('Cache-Control', 'no-store');
+    this.pruneCodes();
     const { grant_type, code, code_verifier, refresh_token } = body;
 
     if (grant_type !== 'authorization_code') return res.status(400).json({ error: 'unsupported_grant_type' });

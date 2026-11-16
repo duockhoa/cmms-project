@@ -3,6 +3,7 @@ const TOKEN_KEYS = ['accessToken', 'access_token', 'token', 'jwt', 'auth_token']
 const REFRESH_KEYS = ['refreshToken', 'refresh_token'];
 const BINDING_KEY = 'qltb.auth.session.v2';
 const COOKIE_SESSION_KEY = 'qltb.auth.cookie.v1';
+const LOGOUT_KEY = 'qltb.auth.logged-out.v1';
 let pendingRefresh: { accessToken: string; refreshToken: string } | null = null;
 export const AUTH_CHANGED_EVENT = 'qltb:auth-changed';
 let revision = 0;
@@ -47,17 +48,18 @@ export function setCookie(name: string, value: string, days = 7) {
   const domain = getCookieDomain();
   document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${days * 86400}${domain ? `; domain=${domain}` : ''}; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
 }
-function deleteCookie(name: string, shared: boolean) {
-  const domain = shared ? getCookieDomain() : undefined;
+function deleteCookie(name: string) {
   const paths = new Set(['/']);
   const parts = window.location.pathname.split('/').filter(Boolean);
   for (let i = 1; i <= parts.length; i++) {
     paths.add('/' + parts.slice(0, i).join('/'));
     paths.add('/' + parts.slice(0, i).join('/') + '/');
   }
-  for (const path of paths) document.cookie = `${encodeURIComponent(name)}=; path=${path}; max-age=0${domain ? `; domain=${domain}` : ''}; SameSite=Lax`;
+  // Only remove QLTB host cookies. Domain cookies belong to the shared HRM portal.
+  for (const path of paths) document.cookie = `${encodeURIComponent(name)}=; path=${path}; max-age=0; SameSite=Lax`;
 }
-export function removeCookie(name: string) { deleteCookie(name, true); deleteCookie(name, false); }
+export function removeCookie(name: string) { deleteCookie(name); }
+export function isLocallyLoggedOut(): boolean { return Boolean(localStorage.getItem(LOGOUT_KEY)); }
 
 function claims(token: string): any | null {
   try {
@@ -73,7 +75,7 @@ export function getTokenExpiry(token: string): number | null {
 }
 export function isJwtExpired(token: string): boolean {
   const decoded = claims(token);
-  return !decoded || (typeof decoded.exp === 'number' && decoded.exp * 1000 <= Date.now() + 10000);
+  return !decoded || typeof decoded.exp !== 'number' || decoded.exp * 1000 <= Date.now() + 10000;
 }
 function binding(): any {
   try { return JSON.parse(localStorage.getItem(BINDING_KEY) || 'null'); } catch { return null; }
@@ -88,44 +90,42 @@ function notify() {
 function readSession(): { accessToken: string | null } {
   if (typeof window === 'undefined') return { accessToken: null };
   const previous = binding();
-  const accessValues = [...new Set(TOKEN_KEYS.flatMap(cookieValues))];
-  const refreshValues = [...new Set(REFRESH_KEYS.flatMap(cookieValues))];
   let accessToken: string | null = null;
   sessionError = handoffError;
-
-  // Ưu tiên token hợp lệ đã lưu của QLTB trong binding / localStorage
-  if (previous?.accessToken && !isJwtExpired(previous.accessToken)) {
+  const loggedOut = isLocallyLoggedOut();
+  if (!loggedOut && !sessionError && previous?.managed === true) {
+    // Keep the expired token's verified binding so the backend can restore this session.
+    // Cookie changes from another application must never silently replace a managed session.
     accessToken = previous.accessToken;
-  } else if (accessValues.length) {
-    // Nếu chưa có trong local mà có trong cookie, lấy token đầu tiên còn hạn
-    const validCookieToken = accessValues.find(t => !isJwtExpired(t));
-    if (validCookieToken) {
-      accessToken = validCookieToken;
+  } else if (!loggedOut && !sessionError) {
+    // One-time compatibility bootstrap. Explicit URL handoffs remain available afterwards.
+    const accessValues = [...new Set(TOKEN_KEYS.flatMap(cookieValues))];
+    const refreshValues = [...new Set(REFRESH_KEYS.flatMap(cookieValues))];
+    if (accessValues.length > 1 || refreshValues.length > 1) {
+      sessionError = handoffError = 'SSO_SESSION_CONFLICT';
+    } else if (accessValues.length === 1 && !isJwtExpired(accessValues[0])) {
+      accessToken = accessValues[0];
       if (refreshValues[0]) pendingRefresh = { accessToken, refreshToken: refreshValues[0] };
+      [...TOKEN_KEYS, ...REFRESH_KEYS].forEach(removeCookie);
     }
   }
-
-  if (accessToken && previous?.accessToken === accessToken && previous?.refreshToken && !pendingRefresh) {
-    pendingRefresh = { accessToken, refreshToken: previous.refreshToken };
-  }
   if (pendingRefresh?.accessToken !== accessToken) pendingRefresh = null;
-  REFRESH_KEYS.forEach(key => { removeCookie(key); localStorage.removeItem(key); });
-  if (previous?.refreshToken) {
-    const { refreshToken: discarded, ...safe } = previous;
-    localStorage.setItem(BINDING_KEY, JSON.stringify(safe));
-  }
-  const snapshot = JSON.stringify([accessToken, sessionError]);
+  const generation = previous?.managed ? previous.generation : undefined;
+  const snapshot = JSON.stringify([accessToken, sessionError, loggedOut, generation]);
   if (lastSnapshot !== snapshot) {
     const sameAccess = previous?.accessToken === accessToken;
-    localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken,
+    localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken, managed: true, generation,
       ...(sameAccess ? { hrmId: previous?.hrmId, verified: previous?.verified } : {}),
     }));
-    TOKEN_KEYS.forEach(key => localStorage.removeItem(key));
-    REFRESH_KEYS.forEach(key => localStorage.removeItem(key));
-    if (accessToken) localStorage.setItem('accessToken', accessToken);
     const changed = lastSnapshot !== undefined;
     lastSnapshot = snapshot;
     if (changed) notify();
+  }
+  TOKEN_KEYS.forEach(key => localStorage.removeItem(key));
+  REFRESH_KEYS.forEach(key => localStorage.removeItem(key));
+  if (previous?.refreshToken && lastSnapshot === snapshot) {
+    const { refreshToken: discarded, ...safe } = binding() || {};
+    localStorage.setItem(BINDING_KEY, JSON.stringify(safe));
   }
   return { accessToken };
 }
@@ -177,20 +177,20 @@ export function subscribeSession(listener: () => void) {
 }
 export function saveAuthTokens(accessToken: string, refreshToken?: string | null, verifiedHrmId?: string | null) {
   handoffError = null;
-  // Clear both host-only and shared aliases before publishing one consistent pair.
+  localStorage.removeItem(LOGOUT_KEY);
+  // New sessions keep one access-token binding and no JavaScript token cookies.
   [...TOKEN_KEYS, ...REFRESH_KEYS].forEach(removeCookie);
-  setCookie('accessToken', accessToken);
-  setCookie('access_token', accessToken);
   pendingRefresh = refreshToken ? { accessToken, refreshToken } : null;
-  localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken, hrmId: verifiedHrmId || null, verified: Boolean(verifiedHrmId) }));
+  localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken, managed: true, generation: crypto.randomUUID(), hrmId: verifiedHrmId || null, verified: Boolean(verifiedHrmId) }));
   readSession();
 }
 export function clearAuthTokens() {
   markPrincipalVerified(null);
   pendingRefresh = null;
+  localStorage.setItem(LOGOUT_KEY, 'true');
   localStorage.removeItem(COOKIE_SESSION_KEY);
   [...TOKEN_KEYS, ...REFRESH_KEYS].forEach(removeCookie);
-  localStorage.removeItem(BINDING_KEY);
+  localStorage.setItem(BINDING_KEY, JSON.stringify({ accessToken: null, managed: true }));
   readSession();
 }
 export function startSessionMonitor() {

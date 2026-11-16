@@ -5,7 +5,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('../node_modules/typescript');
 const root = path.join(__dirname, '..');
-const token = (sub, exp = Math.floor(Date.now() / 1000) + 3600) =>
+const defaultExpiry = Math.floor(Date.now() / 1000) + 3600;
+const token = (sub, exp = defaultExpiry) =>
   `e30.${Buffer.from(JSON.stringify({ sub, exp })).toString('base64url')}.test`;
 const deferred = () => {
   let resolve;
@@ -46,6 +47,7 @@ function browser(shared = {}) {
   const common = {
     window, document, localStorage, sessionStorage: localStorage, URLSearchParams, Event,
     console, atob, queueMicrotask, Headers, Response, FormData, AbortController, AbortSignal,
+    crypto: require('node:crypto').webcrypto, Date: shared.Date || Date,
     setTimeout: () => 1, clearTimeout() {}, clearInterval() {},
   };
   function load(relative, imports = {}, extras = {}) {
@@ -65,6 +67,8 @@ function browser(shared = {}) {
     setCookie('accessToken', access);
     setCookie('access_token', access);
     if (refresh) { setCookie('refreshToken', refresh); setCookie('refresh_token', refresh); }
+    // An account switch is an explicit handoff, rather than an ambient portal cookie change.
+    auth.saveAuthTokens(access, refresh);
   };
   function api(fetcher) {
     return load('src/services/api.ts', { '../utils/authStorage': auth, './catalogCache': { catalogCache: { invalidate() {} } } }, { fetch: fetcher });
@@ -79,12 +83,14 @@ test('SSO B wins over local legacy A, including expired A', () => {
   assert.equal(b.auth.getAccessToken(), token('B'));
   assert.equal(b.auth.takeHandoffRefreshToken(token('B')), 'refresh-B');
   assert.equal(b.values.get('refreshToken'), undefined);
-  assert.ok(!b.document.cookie.includes('refresh-B'));
+  assert.ok(b.document.cookie.includes('refresh-B')); // HRM owns the shared cookie.
+  assert.equal(b.auth.takeHandoffRefreshToken(token('B')), null);
 });
 
 test('different host/shared cookies or aliases require reauthentication', () => {
   const b = browser();
-  b.setSession(token('B'), 'refresh-B');
+  b.setCookie('accessToken', token('B'));
+  b.setCookie('refreshToken', 'refresh-B');
   b.setCookie('accessToken', token('A'), true);
   assert.equal(b.auth.getAccessToken(), null);
   assert.equal(b.auth.takeHandoffRefreshToken(token('A')), null);
@@ -127,7 +133,7 @@ test('unverified sessions cannot submit requests', async () => {
   let calls = 0;
   const api = b.api(async () => { calls++; return json({}); });
   await assert.rejects(api.fetchWithAuth('https://qltb.example.test/api/v1/requests', { method: 'POST' }), /SESSION_NOT_VERIFIED/);
-  assert.equal(calls, 0);
+  assert.equal(calls, 1); // Profile verification is allowed; the mutation is blocked.
 });
 
 test('request A completing after account B is discarded', async () => {
@@ -270,7 +276,7 @@ test('successful refresh keeps the verified owner without exposing or storing a 
   assert.equal(b.auth.getVerifiedHrmId(), '1125');
 });
 
-test('legacy SSO refresh is consumed once by the backend and removed from all browser storage', async () => {
+test('legacy SSO refresh is consumed once without persisting it in QLTB storage or deleting HRM cookies', async () => {
   const b = browser(); b.setSession(token('B'), 'handoff-refresh');
   const calls = [];
   const api = b.api(async (url, options) => {
@@ -279,13 +285,13 @@ test('legacy SSO refresh is consumed once by the backend and removed from all br
     assert.equal(String(url).endsWith('/auth/session'), true);
     assert.equal(options.credentials, 'include');
     assert.equal(JSON.parse(options.body).refreshToken, 'handoff-refresh');
-    return json({ csrfToken: 'csrf-b', hrmId: 'B', refreshSession: true });
+    return json({ accessToken: token('B'), csrfToken: 'csrf-b', hrmId: 'B', refreshSession: true });
   });
   await api.api.getMe();
   b.auth.markSessionVerified(token('B'), 'B');
   assert.equal(b.auth.hasRefreshSession(), true);
   assert.equal(b.auth.takeHandoffRefreshToken(token('B')), null);
-  assert.ok(!b.document.cookie.includes('handoff-refresh'));
+  assert.ok(b.document.cookie.includes('handoff-refresh'));
   assert.ok(![...b.values.values()].some(value => value.includes('handoff-refresh')));
   await api.api.getMe();
   assert.equal(calls.length, 2);
@@ -302,4 +308,136 @@ test('a different cookie-session owner cannot refresh the current account', asyn
   assert.equal(await api.refreshAccessToken(), null);
   assert.equal(refreshCalls, 0);
   assert.equal(b.auth.getRawAccessToken(), token('B'));
+});
+
+test('logout blocks shared HRM cookies and an existing server cookie across reloads', async () => {
+  const b = browser();
+  b.setSession(token('A'), 'shared-refresh');
+  b.auth.markSessionVerified(token('A'), 'A'); b.auth.markCookieSession('A');
+  b.auth.clearAuthTokens();
+  const other = browser({ values: b.values, cookies: b.cookies });
+  assert.equal(other.auth.getAccessToken(), null);
+  assert.equal(other.auth.takeHandoffRefreshToken(token('A')), null);
+  let calls = 0;
+  const api = other.api(async () => { calls++; return json({}); });
+  assert.equal(await api.restoreBrowserSession(), null);
+  assert.equal(calls, 0);
+  assert.ok(other.document.cookie.includes('shared-refresh'));
+  other.window.location.search = `?accessToken=${token('B')}`;
+  assert.equal(other.auth.extractAndSaveTokensFromUrl(), true);
+  assert.equal(other.auth.getAccessToken(), token('B'));
+});
+
+test('new saves keep one token binding and never write JavaScript token cookies', () => {
+  const b = browser();
+  for (let index = 0; index < 100; index++) b.auth.saveAuthTokens(token('A-' + index), null, 'A');
+  assert.equal(b.cookies.size, 0);
+  assert.equal(b.values.has('accessToken'), false);
+  assert.equal([...b.values.values()].filter(value => value.includes('e30.')).length, 1);
+});
+
+test('managed QLTB sessions ignore ambiguous or changed shared portal cookies', () => {
+  const b = browser(); b.setSession(token('A'));
+  b.setCookie('accessToken', token('B')); b.setCookie('access_token', token('C'));
+  assert.equal(b.auth.getAccessToken(), token('A'));
+  assert.equal(b.auth.getSessionError(), null);
+});
+
+test('access expiry retains the identity needed to refresh the server session', async () => {
+  let now = Date.now();
+  class Clock extends Date { static now() { return now; } }
+  const b = browser({ Date: Clock });
+  b.auth.saveAuthTokens(token('A', Math.floor(now / 1000) + 60), null, 'A');
+  b.auth.markCookieSession('A');
+  now += 60000;
+  assert.equal(b.auth.getAccessToken(), null);
+  assert.equal(b.auth.hasRefreshSession(), true);
+  assert.equal(b.auth.getVerifiedHrmId(), 'A');
+  const next = token('A', Math.floor(now / 1000) + 3600);
+  const api = b.api(async url => String(url).endsWith('/auth/session') ? json({ csrfToken: 'csrf', hrmId: 'A' }) : json({ accessToken: next }));
+  assert.equal(await api.ensureValidAccessToken(), next);
+});
+
+test('temporary HRM refresh failure retains the local session and form owner', async () => {
+  const b = browser(); b.setSession(token('A')); b.auth.markSessionVerified(token('A'), 'A'); b.auth.markCookieSession('A');
+  const api = b.api(async url => String(url).endsWith('/auth/session') ? json({ csrfToken: 'csrf', hrmId: 'A' }) : new Response('{}', { status: 503 }));
+  assert.equal(await api.refreshAccessToken(), null);
+  assert.equal(b.auth.hasRefreshSession(), true);
+  assert.equal(b.auth.getVerifiedHrmId(), 'A');
+  assert.equal(b.auth.isLocallyLoggedOut(), false);
+});
+
+test('SSO adoption installs the rotated access token and consumes refresh only once', async () => {
+  const b = browser(); b.setSession(token('A'), 'handoff');
+  const next = token('A', Math.floor(Date.now() / 1000) + 7200);
+  let imports = 0;
+  const api = b.api(async (url, options) => {
+    if (String(url).endsWith('/auth/me')) return json({ authenticated: true, identity: { provider: 'hrm', subject: 'A' }, user: { id: 'A' } });
+    imports++;
+    assert.ok(options.headers['X-Auth-Operation']);
+    return json({ accessToken: next, hrmId: 'A', csrfToken: 'csrf', refreshSession: true });
+  });
+  await api.api.getMe();
+  assert.equal(b.auth.getAccessToken(), next);
+  await api.api.getMe();
+  assert.equal(imports, 1);
+});
+
+test('an account switch before token selection resumes cannot send the previous account request', async () => {
+  const b = browser(); b.setSession(token('A')); b.auth.markSessionVerified(token('A'), 'A');
+  let calls = 0;
+  const api = b.api(async () => { calls++; return json([]); });
+  const pending = api.api.getRequests();
+  b.auth.saveAuthTokens(token('B'), null, 'B');
+  await assert.rejects(pending, /SESSION_CHANGED/);
+  assert.equal(calls, 0);
+});
+
+test('a late logout cannot clear a new login even when HRM returns the same access token', async () => {
+  const b = browser(); b.setSession(token('A')); b.auth.markSessionVerified(token('A'), 'A'); b.auth.markCookieSession('A');
+  const pending = deferred();
+  const api = b.api(async url => String(url).endsWith('/auth/session') ? json({ csrfToken: 'csrf', hrmId: 'A' }) : pending.promise);
+  const logout = api.logoutSession();
+  await flush();
+  b.auth.saveAuthTokens(token('A'), null, 'A'); b.auth.markCookieSession('A');
+  pending.resolve(json({ localLoggedOut: true, hrmRevocation: 'not_requested_shared' }));
+  assert.equal((await logout).sessionChanged, true);
+  assert.equal(b.auth.isLocallyLoggedOut(), false);
+  assert.equal(b.auth.getAccessToken(), token('A'));
+});
+
+test('SSO retries a lost response using the same operation without re-importing shared cookies', async () => {
+  const b = browser(); b.setSession(token('A'), 'handoff');
+  const operations = [];
+  const api = b.api(async (url, options) => {
+    if (String(url).endsWith('/auth/me')) return json({ authenticated: true, identity: { provider: 'hrm', subject: 'A' }, user: { id: 'A' } });
+    operations.push(options.headers['X-Auth-Operation']);
+    if (operations.length === 1) throw new Error('lost response');
+    return json({ accessToken: token('A'), hrmId: 'A', csrfToken: 'csrf', refreshSession: true });
+  });
+  await assert.rejects(api.api.getMe(), /lost response/);
+  await api.api.getMe();
+  assert.equal(operations.length, 2);
+  assert.equal(operations[0], operations[1]);
+  assert.equal(b.auth.takeHandoffRefreshToken(token('A')), null);
+  assert.ok(![...b.values.values()].some(value => value.includes('handoff')));
+});
+
+test('an uncertain exchange requires a fresh login and stops automatic refresh', async () => {
+  const b = browser(); b.auth.saveAuthTokens(token('A'), null, 'A'); b.auth.markCookieSession('A');
+  const api = b.api(async url => String(url).endsWith('/auth/session') ? json({ csrfToken: 'csrf', hrmId: 'A' })
+    : new Response(JSON.stringify({ code: 'SESSION_REAUTH_REQUIRED' }), { status: 503 }));
+  assert.equal(await api.refreshAccessToken(), null);
+  assert.equal(b.auth.isLocallyLoggedOut(), true);
+  assert.equal(b.auth.hasRefreshSession(), false);
+});
+
+test('a first legacy portal visit imports one pair and never repeats it after reload', () => {
+  const b = browser(); b.setCookie('accessToken', token('A')); b.setCookie('refreshToken', 'portal-refresh');
+  assert.equal(b.auth.getAccessToken(), token('A'));
+  assert.equal(b.auth.takeHandoffRefreshToken(token('A')), 'portal-refresh');
+  const reloaded = browser({ values: b.values, cookies: b.cookies });
+  assert.equal(reloaded.auth.getAccessToken(), token('A'));
+  assert.equal(reloaded.auth.takeHandoffRefreshToken(token('A')), null);
+  assert.ok(reloaded.document.cookie.includes('portal-refresh'));
 });
