@@ -1,9 +1,11 @@
-import { getUserDepartments, isGlobalAdmin, UserWithPermissions } from '../utils/rbac.helper';
+import { getUserDepartments, isGlobalAdmin, UserWithPermissions, hasPermission } from '../utils/rbac.helper';
 
 export function equipmentScope(actor?: UserWithPermissions | null): any {
-  if (!actor || isGlobalAdmin(actor) || actor.role === 'TECHNICIAN') return {};
+  if (!actor || isGlobalAdmin(actor) || actor.role === 'TECHNICIAN' || actor.role === 'MANAGER' || hasPermission(actor, 'equipment:view')) {
+    return {};
+  }
   const departments = getUserDepartments(actor);
-  return departments.length ? { department: { in: departments } } : { id: { in: [] } };
+  return departments.length ? { OR: [{ department: { in: departments } }, { department: null }] } : {};
 }
 export function scheduleScope(actor?: UserWithPermissions | null): any {
   if (!actor || isGlobalAdmin(actor)) return {};

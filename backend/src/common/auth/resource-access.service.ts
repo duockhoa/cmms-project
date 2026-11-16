@@ -15,15 +15,8 @@ export class ResourceAccessService {
     if (controller === 'UsersController' && (body.role !== undefined || body.roleId !== undefined) && !hasPermission(actor, 'settings:roles')) {
       throw new ForbiddenException('Cần quyền quản lý nhóm quyền để thay đổi vai trò.');
     }
-    if (controller === 'EquipmentController' && request.method === 'POST' && !params.id && !body.department && Object.keys(equipmentScope(actor)).length) {
-      throw new ForbiddenException('Cần chọn bộ phận thiết bị thuộc phạm vi được phép.');
-    }
-    const equipmentId = (controller === 'RequestsController' ? undefined : (params.equipmentId || (controller === 'EquipmentController' ? params.id : undefined) || body.equipmentId));
+    const equipmentId = (controller === 'RequestsController' || controller === 'FunctionalUnitsController' ? undefined : (params.equipmentId || (controller === 'EquipmentController' ? params.id : undefined) || body.equipmentId));
     if (equipmentId) await this.assert('equipment', { id: equipmentId }, equipmentScope(actor));
-    if (controller === 'EquipmentController' && body.department) {
-      const scope = equipmentScope(actor);
-      if (Object.keys(scope).length && !scope.department?.in.includes(body.department)) throw new ForbiddenException('Thiết bị nằm ngoài bộ phận được phép.');
-    }
     const sourceId = body.sourceEquipmentId;
     if (sourceId) await this.assert('equipment', { id: sourceId }, equipmentScope(actor));
     if (controller === 'RequestsController' && params.id) await this.assert('maintenanceRequest', { id: params.id }, buildRequestScopeWhere(actor));

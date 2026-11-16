@@ -89,11 +89,22 @@ export class FunctionalUnitsService {
       throw new NotFoundException(`Thiết bị với ID ${equipmentId} không tồn tại.`);
     }
 
-    return this.prisma.equipmentFunctionalUnit.findMany({
+    let units = await this.prisma.equipmentFunctionalUnit.findMany({
       where: { equipmentId },
       include: { libraryItem: true },
       orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }],
     });
+
+    if (units.length === 0) {
+      await this.autoProvisionUnits(equipment);
+      units = await this.prisma.equipmentFunctionalUnit.findMany({
+        where: { equipmentId },
+        include: { libraryItem: true },
+        orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }],
+      });
+    }
+
+    return units;
   }
 
   async createForEquipment(equipmentId: string, dto: CreateFunctionalUnitDto) {
@@ -524,5 +535,30 @@ export class FunctionalUnitsService {
       errors,
       created,
     };
+  }
+
+  private async autoProvisionUnits(equipment: { id: string; code: string; name: string; category?: string }) {
+    try {
+      const elecLib = await this.prisma.functionalUnitLibrary.findFirst({ where: { name: 'Cụm tủ điện điều khiển & PLC' } });
+      const feedLib = await this.prisma.functionalUnitLibrary.findFirst({ where: { name: 'Cụm cấp phôi / nạp liệu' } });
+      const convLib = await this.prisma.functionalUnitLibrary.findFirst({ where: { name: 'Cụm băng tải truyền động' } });
+
+      const unitsToCreate = [elecLib, feedLib, convLib].filter(Boolean);
+      for (let i = 0; i < unitsToCreate.length; i++) {
+        const u = unitsToCreate[i]!;
+        await this.prisma.equipmentFunctionalUnit.create({
+          data: {
+            equipmentId: equipment.id,
+            libraryId: u.id,
+            name: u.name,
+            code: `${equipment.code}-CU${String(i + 1).padStart(2, '0')}`,
+            status: 'OPERATIONAL',
+            orderIndex: i,
+          },
+        });
+      }
+    } catch (err) {
+      // Ignore if concurrent create or constraint
+    }
   }
 }

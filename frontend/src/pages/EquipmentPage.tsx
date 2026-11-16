@@ -11,8 +11,10 @@ import { TableSkeleton } from '../components/common/Skeleton';
 import { Pagination } from '../components/common/Pagination';
 import { EmptyState, ExportButton, FilterBar, PageHeader, SearchInput } from '../components/common';
 import { useEquipmentPage } from '../hooks/useEquipmentPage';
+import { usePermissions } from '../hooks/usePermissions';
 
 export const EquipmentPage: React.FC = () => {
+  const { can } = usePermissions();
   const { id } = useParams<{ id: string }>();
   const {
     navigate,
@@ -159,29 +161,33 @@ export const EquipmentPage: React.FC = () => {
             </button>
           )}
 
-          <button
-            className="btn btn-secondary"
-            onClick={() => setIsImportModalOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            title="Tải biểu mẫu và nhập thiết bị hàng loạt từ Excel"
-          >
-            <FileSpreadsheet size={15} color="#16a34a" />
-            <span>Import Excel</span>
-          </button>
+          {can('equipment:create') && (
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setIsImportModalOpen(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="Tải biểu mẫu và nhập thiết bị hàng loạt từ Excel"
+              >
+                <FileSpreadsheet size={15} color="#16a34a" />
+                <span>Import Excel</span>
+              </button>
 
-          <button
-            className="btn btn-secondary"
-            onClick={() => setIsUnitImportModalOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            title="Tải biểu mẫu và nhập cụm chức năng theo thiết bị từ Excel"
-          >
-            <Layers size={15} color="#2563eb" />
-            <span>Import Cụm CN</span>
-          </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setIsUnitImportModalOpen(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="Tải biểu mẫu và nhập cụm chức năng theo thiết bị từ Excel"
+              >
+                <Layers size={15} color="#2563eb" />
+                <span>Import Cụm CN</span>
+              </button>
 
-          <button className="btn btn-primary" onClick={() => equipmentModal.open()}>
-            <Plus size={16} /> Thêm thiết bị
-          </button>
+              <button className="btn btn-primary" onClick={() => equipmentModal.open()}>
+                <Plus size={16} /> Thêm thiết bị
+              </button>
+            </>
+          )}
           </>
         }
       />
