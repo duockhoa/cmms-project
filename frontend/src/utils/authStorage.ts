@@ -59,6 +59,32 @@ function deleteCookie(name: string) {
   for (const path of paths) document.cookie = `${encodeURIComponent(name)}=; path=${path}; max-age=0; SameSite=Lax`;
 }
 export function removeCookie(name: string) { deleteCookie(name); }
+
+export function cleanupLegacyDomainCookies() {
+  if (typeof document === 'undefined') return;
+  const legacyNames = ['access_token', 'refresh_token'];
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const domains = [
+    '',
+    '.dkpharma.io.vn',
+    'dkpharma.io.vn',
+    ...(hostname.includes('.')
+      ? ['.' + hostname.split('.').slice(-3).join('.'), '.' + hostname.split('.').slice(-2).join('.')]
+      : []),
+  ];
+  const paths = ['/', typeof window !== 'undefined' ? window.location.pathname : '/'];
+  for (const name of legacyNames) {
+    for (const d of domains) {
+      for (const p of paths) {
+        document.cookie = `${encodeURIComponent(name)}=; path=${p}; max-age=0${d ? `; domain=${d}` : ''}; SameSite=Lax`;
+      }
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  cleanupLegacyDomainCookies();
+}
 export function isLocallyLoggedOut(): boolean { return Boolean(localStorage.getItem(LOGOUT_KEY)); }
 
 function claims(token: string): any | null {
@@ -98,15 +124,24 @@ function readSession(): { accessToken: string | null } {
     // Cookie changes from another application must never silently replace a managed session.
     accessToken = previous.accessToken;
   } else if (!loggedOut && !sessionError) {
-    // One-time compatibility bootstrap. Explicit URL handoffs remain available afterwards.
-    const accessValues = [...new Set(TOKEN_KEYS.flatMap(cookieValues))];
-    const refreshValues = [...new Set(REFRESH_KEYS.flatMap(cookieValues))];
-    if (accessValues.length > 1 || refreshValues.length > 1) {
-      sessionError = handoffError = 'SSO_SESSION_CONFLICT';
-    } else if (accessValues.length === 1 && !isJwtExpired(accessValues[0])) {
-      accessToken = accessValues[0];
-      if (refreshValues[0]) pendingRefresh = { accessToken, refreshToken: refreshValues[0] };
-      [...TOKEN_KEYS, ...REFRESH_KEYS].forEach(removeCookie);
+    // One-time compatibility bootstrap from shared HRM cookies.
+    // 1. Ưu tiên đọc cookie 'accessToken' chuẩn của HRM (camelCase)
+    const hrmAccess = cookieValues('accessToken').find(t => !isJwtExpired(t));
+    const hrmRefresh = cookieValues('refreshToken')[0];
+
+    if (hrmAccess) {
+      accessToken = hrmAccess;
+      if (hrmRefresh) pendingRefresh = { accessToken, refreshToken: hrmRefresh };
+      cleanupLegacyDomainCookies();
+    } else {
+      // Fallback nếu có token hợp lệ khác
+      const accessValues = [...new Set(TOKEN_KEYS.flatMap(cookieValues))].filter(t => !isJwtExpired(t));
+      const refreshValues = [...new Set(REFRESH_KEYS.flatMap(cookieValues))];
+      if (accessValues.length >= 1) {
+        accessToken = accessValues[0];
+        if (refreshValues[0]) pendingRefresh = { accessToken, refreshToken: refreshValues[0] };
+        cleanupLegacyDomainCookies();
+      }
     }
   }
   if (pendingRefresh?.accessToken !== accessToken) pendingRefresh = null;

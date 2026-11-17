@@ -7,19 +7,39 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { HrmIdentityService } from './hrm-identity.service';
 
 const cookieExtractor = (request: any): string | null => {
-  const values = new Set<string>();
   try {
+    const cookies: Record<string, string> = {};
     for (const part of (request?.headers?.cookie || '').split(';')) {
       const index = part.indexOf('=');
-      if (['accessToken', 'access_token', 'token', 'jwt', 'auth_token'].includes(part.slice(0, index).trim())) {
-        values.add(decodeURIComponent(part.slice(index + 1)));
+      if (index > 0) {
+        const name = part.slice(0, index).trim();
+        const value = decodeURIComponent(part.slice(index + 1).trim());
+        cookies[name] = value;
       }
     }
-    if (!request?.headers?.cookie) {
-      for (const key of ['accessToken', 'access_token', 'token']) if (request?.cookies?.[key]) values.add(request.cookies[key]);
+    if (request?.cookies && typeof request.cookies === 'object') {
+      Object.assign(cookies, request.cookies);
     }
-  } catch { return null; }
-  return values.size === 1 ? [...values][0] : null;
+
+    // 1. Ưu tiên cao nhất: accessToken chuẩn của HRM (camelCase)
+    if (cookies.accessToken && typeof cookies.accessToken === 'string' && cookies.accessToken.length > 20) {
+      return cookies.accessToken;
+    }
+    // 2. Fallback sang access_token (snake_case)
+    if (cookies.access_token && typeof cookies.access_token === 'string' && cookies.access_token.length > 20) {
+      return cookies.access_token;
+    }
+    // 3. Fallback sang token hoặc jwt
+    if (cookies.token && typeof cookies.token === 'string' && cookies.token.length > 20) {
+      return cookies.token;
+    }
+    if (cookies.jwt && typeof cookies.jwt === 'string' && cookies.jwt.length > 20) {
+      return cookies.jwt;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 };
 
 @Injectable()
@@ -38,9 +58,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         ? {
             jwtFromRequest: ExtractJwt.fromExtractors([
               ExtractJwt.fromAuthHeaderAsBearerToken(),
+              cookieExtractor,
               (request: any) => request?.query?.token as string,
               (request: any) => request?.query?.accessToken as string,
-              cookieExtractor,
             ]),
             ignoreExpiration: false,
             secretOrKey: hrmJwtSecret,
@@ -49,9 +69,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         : {
             jwtFromRequest: ExtractJwt.fromExtractors([
               ExtractJwt.fromAuthHeaderAsBearerToken(),
+              cookieExtractor,
               (request: any) => request?.query?.token as string,
               (request: any) => request?.query?.accessToken as string,
-              cookieExtractor,
             ]),
             ignoreExpiration: false,
             audience: configService.get<string>('KEYCLOAK_AUDIENCE'),
